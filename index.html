@@ -7,7 +7,6 @@
     <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
     <style>
-        /* touch-action removed from body so native pinch-to-zoom works! */
         body, html {
             margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #87CEEB;
@@ -29,7 +28,7 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* Smaller 3D CSS Car - Reduced by ~40% for better view */
+        /* 3D CSS Car */
         #car-container {
             position: absolute; top: 65%; left: 50%;
             width: 0; height: 0; z-index: 10; perspective: 800px;
@@ -49,8 +48,6 @@
         .car-front { width: 22px; height: 14px; background: #0d1b2a; transform: rotateX(-90deg) translateZ(0px); transform-origin: top; }
         .car-left { width: 14px; height: 48px; background: #142a4a; transform: rotateY(-90deg) translateZ(0px); transform-origin: left; }
         .car-right { width: 14px; height: 48px; background: #142a4a; transform: rotateY(90deg) translateZ(22px); transform-origin: left; }
-
-        /* Taillights */
         .taillight { width: 5px; height: 4px; background: #990000; border-radius: 1px; border: 1px solid #440000; }
         .braking .taillight { background: #ff2222; box-shadow: 0 0 8px #ff0000; border-color: #ff0000; }
 
@@ -66,28 +63,48 @@
         #hud p { margin: 3px 0; font-size: 12px; color: #cbd5e1; }
         #speed-display { font-size: 20px; font-weight: bold; color: #fff; }
 
-        /* Controls (touch-action applied only here so buttons work without scrolling the screen) */
-        #touch-controls {
-            position: absolute; bottom: 20px; left: 0; right: 0;
-            display: flex; justify-content: space-between; padding: 0 20px;
-            z-index: 100; touch-action: none;
+        /* Dedicated Zoom Buttons */
+        #zoom-controls {
+            position: absolute; top: 15px; right: 15px; z-index: 100;
+            display: flex; flex-direction: column; gap: 8px;
         }
-        .control-group { display: flex; gap: 15px; pointer-events: auto; }
-        .touch-btn {
-            width: 70px; height: 70px; border-radius: 50%; color: white; font-size: 18px; font-weight: bold;
-            display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.4); cursor: pointer;
-            user-select: none; transition: transform 0.1s;
+        .zoom-btn {
+            width: 44px; height: 44px; background: rgba(15, 23, 42, 0.85); color: white;
+            border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
+            font-size: 24px; font-weight: bold; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); touch-action: none;
         }
-        .touch-btn:active { transform: scale(0.92); }
-        .btn-steer { background: rgba(15, 23, 42, 0.85); border: 2px solid rgba(56, 189, 248, 0.6); }
-        #btn-gas { background: rgba(22, 101, 52, 0.9); border: 2px solid #22c55e; }
-        #btn-brake { background: rgba(127, 29, 29, 0.9); border: 2px solid #ef4444; }
+        .zoom-btn:active { background: rgba(56, 189, 248, 0.8); transform: scale(0.95); }
+
+        /* Analog Touch Sliders (Virtual Joysticks) */
+        #controls-container {
+            position: absolute; bottom: 30px; left: 0; right: 0;
+            display: flex; justify-content: space-between; padding: 0 30px;
+            z-index: 100; pointer-events: none; touch-action: none;
+        }
+        
+        /* Steering Slider (Horizontal) */
+        .slider-track {
+            background: rgba(15, 23, 42, 0.6); border: 2px solid rgba(255,255,255,0.2);
+            border-radius: 30px; position: relative; pointer-events: auto;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+        }
+        #steer-track { width: 140px; height: 50px; }
+        
+        /* Gas/Brake Slider (Vertical) */
+        #speed-track { width: 50px; height: 140px; }
+
+        .slider-knob {
+            width: 46px; height: 46px; background: #38bdf8; border-radius: 50%;
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5), inset 0 2px 4px rgba(255,255,255,0.4);
+            border: 2px solid #fff; transition: transform 0.1s ease-out;
+        }
+        #speed-track .slider-knob { background: #22c55e; } /* Green for gas */
 
         @media (max-height: 500px) {
-            .touch-btn { width: 55px; height: 55px; font-size: 14px; }
-            #touch-controls { bottom: 10px; }
-            #hud { top: 10px; left: 10px; padding: 8px 12px; }
+            #controls-container { bottom: 15px; padding: 0 15px; }
             #car-container { top: 75%; }
         }
     </style>
@@ -108,7 +125,13 @@
         <p>Area: <span id="area-display">Yorkville, Kendall County</span></p>
     </div>
 
-    <!-- 3D CSS Vehicle (Chase Cam) -->
+    <!-- Zoom Buttons -->
+    <div id="zoom-controls">
+        <div class="zoom-btn" id="btn-zoom-in">+</div>
+        <div class="zoom-btn" id="btn-zoom-out">−</div>
+    </div>
+
+    <!-- 3D CSS Vehicle -->
     <div id="car-container">
         <div class="car-3d" id="car-mesh">
             <div class="face car-bottom"></div>
@@ -123,50 +146,101 @@
         </div>
     </div>
 
-    <div id="touch-controls">
-        <div class="control-group">
-            <div class="touch-btn btn-steer" id="btn-left">◀</div>
-            <div class="touch-btn btn-steer" id="btn-right">▶</div>
+    <!-- Analog Sliders -->
+    <div id="controls-container">
+        <!-- Horizontal Steering -->
+        <div class="slider-track" id="steer-track">
+            <div class="slider-knob" id="steer-knob"></div>
         </div>
-        <div class="control-group">
-            <div class="touch-btn" id="btn-brake">REV</div>
-            <div class="touch-btn" id="btn-gas">GAS</div>
+        <!-- Vertical Gas/Brake -->
+        <div class="slider-track" id="speed-track">
+            <div class="slider-knob" id="speed-knob"></div>
         </div>
     </div>
 
     <script>
-        // Init MapLibre - 3D Pitch with Chase Cam
+        // Init MapLibre - 3D Pitch
         const map = new maplibregl.Map({
             container: 'map',
             style: 'https://tiles.openfreemap.org/styles/liberty', 
             center: [-88.446, 41.642], 
-            zoom: 18,
-            pitch: 65,              // 3D Tilt
-            bearing: 0,
-            interactive: true,
-            scrollZoom: true,       // Mouse Wheel Zoom
-            touchZoomRotate: true,  // Pinch to Zoom
-            dragPan: false,         // Locked so the car controls panning
-            dragRotate: false,      // Locked so the car controls bearing
-            keyboard: false         
+            zoom: 18, pitch: 65, bearing: 0,
+            interactive: true, scrollZoom: true, touchZoomRotate: true,
+            dragPan: false, dragRotate: false, keyboard: false         
         });
 
-        // Vehicle Physics State - Throttle Based
+        // Zoom Button Logic
+        document.getElementById('btn-zoom-in').addEventListener('click', () => {
+            map.flyTo({ zoom: map.getZoom() + 1, duration: 300 });
+        });
+        document.getElementById('btn-zoom-out').addEventListener('click', () => {
+            map.flyTo({ zoom: map.getZoom() - 1, duration: 300 });
+        });
+
+        // Virtual Joysticks Logic
+        let touchSteerValue = 0; // -1 (Left) to 1 (Right)
+        let touchSpeedValue = 0; // -1 (Brake) to 1 (Gas)
+
+        function setupJoystick(trackId, knobId, axis) {
+            const track = document.getElementById(trackId);
+            const knob = document.getElementById(knobId);
+            let active = false, maxDist = axis === 'x' ? 45 : 45;
+
+            function updateKnob(e) {
+                if (!active) return;
+                e.preventDefault();
+                const rect = track.getBoundingClientRect();
+                const center = { x: rect.left + rect.width/2, y: rect.top + rect.height/2 };
+                const pointer = e.touches ? e.touches[0] : e;
+                
+                if (axis === 'x') {
+                    let dx = pointer.clientX - center.x;
+                    touchSteerValue = Math.max(-1, Math.min(1, dx / maxDist));
+                    knob.style.transform = `translate(calc(-50% + ${touchSteerValue * maxDist}px), -50%)`;
+                    knob.style.transition = 'none';
+                } else {
+                    let dy = pointer.clientY - center.y;
+                    // For Y axis: pushing UP is negative pixels, but we want POSITIVE gas.
+                    touchSpeedValue = Math.max(-1, Math.min(1, -dy / maxDist));
+                    knob.style.transform = `translate(-50%, calc(-50% - ${touchSpeedValue * maxDist}px))`;
+                    knob.style.transition = 'none';
+                }
+            }
+            
+            function resetKnob() {
+                active = false;
+                if (axis === 'x') touchSteerValue = 0; else touchSpeedValue = 0;
+                knob.style.transition = 'transform 0.2s ease-out';
+                knob.style.transform = `translate(-50%, -50%)`;
+            }
+
+            const start = (e) => { active = true; updateKnob(e); };
+            track.addEventListener('touchstart', start, {passive: false});
+            track.addEventListener('mousedown', start);
+            window.addEventListener('touchmove', updateKnob, {passive: false});
+            window.addEventListener('mousemove', updateKnob);
+            window.addEventListener('touchend', resetKnob);
+            window.addEventListener('mouseup', resetKnob);
+        }
+
+        setupJoystick('steer-track', 'steer-knob', 'x');
+        setupJoystick('speed-track', 'speed-knob', 'y');
+
+        // Physics State
         let car = { 
-            lng: -88.446, 
-            lat: 41.642, 
-            throttle: 0, 
-            maxThrottle: 1.0, 
-            acceleration: 0.02, 
-            friction: 0.95, 
-            bearing: 0, // This directly controls the Map's bearing in 3D
-            turnSpeed: 3.5 
+            lng: -88.446, lat: 41.642, 
+            throttle: 0, maxThrottle: 1.0, 
+            acceleration: 0.02, friction: 0.95, 
+            bearing: 0, turnSpeed: 4.5 
         };
 
-        const BASE_SPEED = 0.00003; // Much faster base speed
+        const BASE_SPEED = 0.00003; 
         const BASE_ZOOM = 18;
         
+        // Keyboard State (with smooth ramping)
         const keys = { W: false, A: false, S: false, D: false };
+        let kbSteerValue = 0;
+        let kbSpeedValue = 0;
 
         window.addEventListener('keydown', (e) => {
             if (['w', 'W', 'ArrowUp'].includes(e.key)) keys.W = true;
@@ -181,48 +255,47 @@
             if (['d', 'D', 'ArrowRight'].includes(e.key)) keys.D = false;
         });
 
-        function bindTouch(id, keyName) {
-            const el = document.getElementById(id);
-            if(!el) return;
-            const press = (e) => { e.preventDefault(); keys[keyName] = true; };
-            const release = (e) => { e.preventDefault(); keys[keyName] = false; };
-            el.addEventListener('touchstart', press, {passive: false});
-            el.addEventListener('touchend', release, {passive: false});
-            el.addEventListener('mousedown', press);
-            el.addEventListener('mouseup', release);
-            el.addEventListener('mouseleave', release);
-        }
-        bindTouch('btn-left', 'A');
-        bindTouch('btn-right', 'D');
-        bindTouch('btn-gas', 'W');
-        bindTouch('btn-brake', 'S');
-
         const carMesh = document.getElementById('car-mesh');
 
         function updateGame() {
-            // Steering changes the bearing
-            if (keys.A && Math.abs(car.throttle) > 0.01) car.bearing -= car.turnSpeed * (car.throttle > 0 ? 1 : -1);
-            if (keys.D && Math.abs(car.throttle) > 0.01) car.bearing += car.turnSpeed * (car.throttle > 0 ? 1 : -1);
+            // 1. Process Smooth Keyboard Inputs
+            if (keys.A) kbSteerValue -= 0.08;
+            if (keys.D) kbSteerValue += 0.08;
+            if (!keys.A && !keys.D) kbSteerValue *= 0.7; // Smooth return to center
+            kbSteerValue = Math.max(-1, Math.min(1, kbSteerValue));
 
-            let isBraking = false;
+            if (keys.W) kbSpeedValue += 0.08;
+            if (keys.S) kbSpeedValue -= 0.08;
+            if (!keys.W && !keys.S) kbSpeedValue *= 0.7;
+            kbSpeedValue = Math.max(-1, Math.min(1, kbSpeedValue));
 
-            // Gas / Reverse
-            if (keys.W) {
-                car.throttle += car.acceleration;
+            // Combine Touch Sliders + Keyboard (whichever is active)
+            const finalSteer = Math.abs(touchSteerValue) > 0.05 ? touchSteerValue : kbSteerValue;
+            const finalGas = Math.abs(touchSpeedValue) > 0.05 ? touchSpeedValue : kbSpeedValue;
+
+            // 2. Apply Steering (only if moving)
+            if (Math.abs(car.throttle) > 0.01) {
+                // If moving backwards, steering reverses to feel natural
+                car.bearing += finalSteer * car.turnSpeed * (car.throttle >= 0 ? 1 : -1);
+            }
+
+            // 3. Apply Acceleration / Braking
+            if (finalGas > 0) {
+                car.throttle += finalGas * car.acceleration;
                 if (car.throttle > car.maxThrottle) car.throttle = car.maxThrottle;
-            } else if (keys.S) {
-                car.throttle -= car.acceleration * 1.5;
+            } else if (finalGas < 0) {
+                car.throttle += finalGas * (car.acceleration * 1.5); // Brake faster
                 if (car.throttle < -0.4) car.throttle = -0.4;
-                isBraking = true;
             } else {
-                car.throttle *= car.friction; 
+                car.throttle *= car.friction; // Coast to a stop
                 if (Math.abs(car.throttle) < 0.001) car.throttle = 0;
             }
 
-            if (isBraking) carMesh.classList.add('braking');
+            // Brake Light Visuals
+            if (finalGas < -0.1 && car.throttle > -0.1) carMesh.classList.add('braking');
             else carMesh.classList.remove('braking');
 
-            // Apply Earth Curvature Correction & Dynamic Zoom Speed
+            // 4. Move Coordinates
             if (car.throttle !== 0) {
                 const currentZoom = map.getZoom();
                 const zoomMultiplier = Math.pow(2, BASE_ZOOM - currentZoom); 
@@ -235,26 +308,21 @@
                 car.lng += (Math.sin(rad) * effectiveSpeed) / latCorrection; 
             }
 
-            // Move Map (Updates BOTH center and bearing for 3D Chase Cam)
+            // 5. Update Map Camera
             if(map.loaded()){
-                map.jumpTo({ 
-                    center: [car.lng, car.lat],
-                    bearing: car.bearing
-                });
+                map.jumpTo({ center: [car.lng, car.lat], bearing: car.bearing });
             }
 
-            // Update Speed HUD
+            // 6. Update HUD
             const displayMph = Math.round(Math.abs(car.throttle) * 75); 
             document.getElementById('speed-display').innerText = displayMph;
 
-            // Area logic
-            let locName = "Local Roads";
-            let cityName = "Yorkville";
+            let locName = "Local Roads", cityName = "Yorkville";
             if (car.lng > -88.380 && car.lat >= 41.640) cityName = "Oswego";
             else if (car.lng < -88.485) cityName = "Plano";
             else {
                 if (car.lng >= -88.455 && car.lng <= -88.440 && car.lat >= 41.638 && car.lat <= 41.648) locName = "Downtown Yorkville / Riverfront";
-                else if (car.lng >= -88.465 && car.lng < -88.445 && car.lat > 41.648 && car.lat <= 41.665) locName = "Yorkville High School Campus";
+                else if (car.lng >= -88.465 && car.lng < -88.445 && car.lat > 41.648 && car.lat <= 41.665) locName = "YHS Campus";
                 else if (car.lng >= -88.410 && car.lng <= -88.380 && car.lat >= 41.628 && car.lat < 41.645) locName = "Fields of Farm Colony"; 
                 else if (car.lng >= -88.480 && car.lng < -88.446 && car.lat >= 41.600 && car.lat <= 41.632) locName = "Country Hills";
             }
@@ -272,7 +340,6 @@
             }, 500);
         }
 
-        // Add 3D Buildings and start game when map loads
         map.on('load', () => {
             try {
                 if (map.getSource('openmaptiles')) {
@@ -290,15 +357,12 @@
                         }
                     });
                 }
-            } catch(e) { console.warn("3D Buildings layer skipped", e); }
+            } catch(e) { }
             startGameLoop();
         });
         
-        // Failsafe in case map tile server is slow
         setTimeout(() => {
-            if (document.getElementById('loading').style.display !== 'none') {
-                startGameLoop();
-            }
+            if (document.getElementById('loading').style.display !== 'none') startGameLoop();
         }, 3000);
 
         window.addEventListener('resize', () => map.resize());
