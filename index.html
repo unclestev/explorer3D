@@ -28,30 +28,66 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* 3D CSS Car */
+        /* =========================================
+           ADVANCED 3D CSS FORD EXPLORER MODEL
+           ========================================= */
         #car-container {
             position: absolute; top: 65%; left: 50%;
-            width: 0; height: 0; z-index: 10; perspective: 800px;
+            width: 0; height: 0; z-index: 10; perspective: 1200px;
         }
         .car-3d {
-            position: absolute; width: 22px; height: 48px;
-            transform-style: preserve-3d; transform: translate(-50%, -100%) rotateX(60deg);
+            position: absolute; width: 28px; height: 60px;
+            transform-style: preserve-3d; 
+            transform: translate(-50%, -100%) rotateX(60deg);
         }
-        .face { position: absolute; border: 1px solid rgba(0,0,0,0.5); }
-        .car-top { width: 22px; height: 48px; background: #1b365d; transform: translateZ(14px); border-radius: 3px; }
-        .car-bottom { width: 22px; height: 48px; background: #081018; transform: translateZ(2px); box-shadow: 0 0 15px rgba(0,0,0,0.8); }
-        .car-back { 
-            width: 22px; height: 14px; background: #0d1b2a;
-            transform: rotateX(-90deg) translateZ(-48px); transform-origin: top;
-            display: flex; justify-content: space-between; align-items: flex-end; padding: 1px 2px; box-sizing: border-box;
+        .car-shadow {
+            position: absolute; width: 36px; height: 64px; top: -2px; left: -4px;
+            background: rgba(0,0,0,0.7); filter: blur(4px); border-radius: 8px;
+            transform: translateZ(1px);
         }
-        .car-front { width: 22px; height: 14px; background: #0d1b2a; transform: rotateX(-90deg) translateZ(0px); transform-origin: top; }
-        .car-left { width: 14px; height: 48px; background: #142a4a; transform: rotateY(-90deg) translateZ(0px); transform-origin: left; }
-        .car-right { width: 14px; height: 48px; background: #142a4a; transform: rotateY(90deg) translateZ(22px); transform-origin: left; }
-        .taillight { width: 5px; height: 4px; background: #990000; border-radius: 1px; border: 1px solid #440000; }
-        .braking .taillight { background: #ff2222; box-shadow: 0 0 8px #ff0000; border-color: #ff0000; }
+        .face { position: absolute; box-sizing: border-box; }
+        .ch-box, .cab-box { position: absolute; width: 100%; height: 100%; transform-style: preserve-3d; }
+        
+        /* Lower Chassis Body (Atlas Blue Metallic) */
+        .ch-top { width: 28px; height: 60px; background: #1d4ed8; transform: translateZ(16px); border-radius: 6px 6px 4px 4px; box-shadow: inset 0 0 8px rgba(0,0,0,0.3); }
+        .ch-bottom { width: 28px; height: 60px; background: #020617; transform: translateZ(2px); }
+        .ch-front { 
+            width: 28px; height: 14px; background: #1e3a8a; transform: rotateX(-90deg) translateZ(0px); transform-origin: top;
+            border-radius: 6px 6px 0 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .ch-back { 
+            width: 28px; height: 14px; background: #1e3a8a; transform: rotateX(-90deg) translateZ(-60px); transform-origin: top;
+            border-radius: 4px 4px 0 0; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden;
+        }
+        .ch-left { width: 14px; height: 60px; background: #1e40af; transform: rotateY(-90deg) translateZ(0px); transform-origin: left; }
+        .ch-right { width: 14px; height: 60px; background: #1e40af; transform: rotateY(90deg) translateZ(28px); transform-origin: left; }
+        
+        /* Exterior Details (Grille, Lights, Trims) */
+        .grille { width: 22px; height: 6px; background: #020617; border: 1px solid #64748b; border-radius: 2px; display: flex; justify-content: space-between; align-items: center; padding: 0 1px; }
+        .headlight { width: 4px; height: 2px; background: #f8fafc; border-radius: 1px; box-shadow: 0 0 6px #bae6fd; }
+        .back-trim { width: 100%; height: 2px; background: #cbd5e1; position: absolute; top: 3px; left: 0; box-shadow: 0 1px 2px rgba(0,0,0,0.5); }
+        .taillight-row { width: 100%; position: absolute; top: 2px; display: flex; justify-content: space-between; padding: 0; }
+        .taillight { width: 8px; height: 4px; background: #991b1b; border-radius: 1px; border: 1px solid #450a0a; z-index: 2; }
+        .braking .taillight { background: #ef4444; box-shadow: 0 0 12px #ef4444; border-color: #fca5a5; }
+        .bumper { width: 100%; height: 5px; background: #020617; }
 
-        /* HUD */
+        /* Upper Greenhouse Cabin */
+        .cab-box { top: 18px; left: 3px; width: 22px; height: 32px; transform: translateZ(16px); }
+        .cab-top { 
+            width: 22px; height: 32px; background: #1d4ed8; transform: translateZ(12px); border-radius: 4px;
+            display: flex; justify-content: space-between; padding: 0 2px; box-sizing: border-box;
+        }
+        .cab-front { width: 22px; height: 12px; background: #0f172a; transform: rotateX(-90deg) translateZ(0px); transform-origin: top; border-radius: 2px 2px 0 0; border: 1px solid #1e3a8a;}
+        .cab-back { width: 22px; height: 12px; background: #0f172a; transform: rotateX(-90deg) translateZ(-32px); transform-origin: top; border-radius: 2px 2px 0 0; border: 1px solid #1e3a8a;}
+        .cab-left { width: 12px; height: 32px; background: #0f172a; transform: rotateY(-90deg) translateZ(0px); transform-origin: left; border-top: 3px solid #1d4ed8; }
+        .cab-right { width: 12px; height: 32px; background: #0f172a; transform: rotateY(90deg) translateZ(22px); transform-origin: left; border-top: 3px solid #1d4ed8; }
+        
+        /* Roof Rails & Spoiler */
+        .roof-rail { width: 2px; height: 26px; background: #cbd5e1; margin-top: 3px; border-radius: 1px; box-shadow: 1px 0 2px rgba(0,0,0,0.4); }
+        .spoiler { position: absolute; top: -1px; left: -1px; width: 24px; height: 4px; background: #1d4ed8; border-radius: 2px; transform: translateZ(12px); box-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+
+
+        /* HUD and Controls */
         #hud {
             position: absolute; top: 15px; left: 15px; max-width: 240px;
             background: rgba(15, 23, 42, 0.85); color: white; padding: 12px 16px;
@@ -63,7 +99,6 @@
         #hud p { margin: 3px 0; font-size: 12px; color: #cbd5e1; }
         #speed-display { font-size: 20px; font-weight: bold; color: #fff; }
 
-        /* Dedicated Zoom Buttons */
         #zoom-controls {
             position: absolute; top: 15px; right: 15px; z-index: 100;
             display: flex; flex-direction: column; gap: 8px;
@@ -76,7 +111,6 @@
         }
         .zoom-btn:active { background: rgba(56, 189, 248, 0.8); transform: scale(0.95); }
 
-        /* Analog Touch Sliders */
         #controls-container {
             position: absolute; bottom: 30px; left: 0; right: 0;
             display: flex; justify-content: space-between; padding: 0 30px;
@@ -127,17 +161,40 @@
         <div class="zoom-btn" id="btn-zoom-out">−</div>
     </div>
 
+    <!-- 3D CSS Ford Explorer -->
     <div id="car-container">
         <div class="car-3d" id="car-mesh">
-            <div class="face car-bottom"></div>
-            <div class="face car-front"></div>
-            <div class="face car-left"></div>
-            <div class="face car-right"></div>
-            <div class="face car-back">
-                <div class="taillight"></div>
-                <div class="taillight"></div>
+            <div class="car-shadow"></div>
+            
+            <!-- Lower Chassis Body -->
+            <div class="ch-box">
+                <div class="face ch-top"></div>
+                <div class="face ch-bottom"></div>
+                <div class="face ch-front">
+                    <div class="grille"><div class="headlight"></div><div class="headlight"></div></div>
+                </div>
+                <div class="face ch-back">
+                    <div class="back-trim"></div>
+                    <div class="taillight-row"><div class="taillight"></div><div class="taillight"></div></div>
+                    <div class="bumper"></div>
+                </div>
+                <div class="face ch-left"></div>
+                <div class="face ch-right"></div>
             </div>
-            <div class="face car-top"></div>
+
+            <!-- Upper Cabin Greenhouse -->
+            <div class="cab-box">
+                <div class="face cab-top">
+                    <div class="roof-rail left"></div>
+                    <div class="roof-rail right"></div>
+                </div>
+                <div class="face cab-front"></div>
+                <div class="face cab-back">
+                    <div class="spoiler"></div>
+                </div>
+                <div class="face cab-left"></div>
+                <div class="face cab-right"></div>
+            </div>
         </div>
     </div>
 
@@ -151,7 +208,7 @@
     </div>
 
     <script>
-        // Init MapLibre - WITH PERFORMANCE OPTIMIZATIONS
+        // Init MapLibre with Performance Optimizations
         const map = new maplibregl.Map({
             container: 'map',
             style: 'https://tiles.openfreemap.org/styles/liberty', 
@@ -159,12 +216,12 @@
             zoom: 18, pitch: 65, bearing: 0,
             interactive: true, scrollZoom: true, touchZoomRotate: true,
             dragPan: false, dragRotate: false, keyboard: false,
-            // 1. Performance tweaks
             fadeDuration: 0, 
-            maxTileCacheSize: 50,
-            cancelPendingTileRequestsWhileZooming: true 
+            crossSourceCollisions: false,
+            maxTileCacheSize: 30
         });
 
+        // Zoom Button Logic
         document.getElementById('btn-zoom-in').addEventListener('click', () => {
             map.flyTo({ zoom: map.getZoom() + 1, duration: 300 });
         });
@@ -172,7 +229,7 @@
             map.flyTo({ zoom: map.getZoom() - 1, duration: 300 });
         });
 
-        // Flawless Pointer Event Joysticks
+        // Virtual Joysticks (Pointer Events)
         let touchSteerValue = 0; 
         let touchSpeedValue = 0; 
 
@@ -180,7 +237,7 @@
             const track = document.getElementById(trackId);
             const knob = document.getElementById(knobId);
             let activePointerId = null;
-            let maxDist = 45; 
+            let maxDist = 45;
 
             function updateKnob(e) {
                 if (activePointerId !== e.pointerId) return;
@@ -232,6 +289,7 @@
         const BASE_SPEED = 0.00003; 
         const BASE_ZOOM = 18;
         
+        // Keyboard State
         const keys = { W: false, A: false, S: false, D: false };
         let kbSteerValue = 0;
         let kbSpeedValue = 0;
@@ -252,12 +310,13 @@
         const carMesh = document.getElementById('car-mesh');
         const speedKnob = document.getElementById('speed-knob');
 
-        // State trackers for map optimization
-        let lastMapLng = car.lng;
-        let lastMapLat = car.lat;
-        let lastMapBearing = car.bearing;
+        // Render Tracking
+        let lastRenderLng = car.lng;
+        let lastRenderLat = car.lat;
+        let lastRenderBearing = car.bearing;
 
         function updateGame() {
+            // Keyboard Smooth Ramp
             if (keys.A) kbSteerValue -= 0.08;
             if (keys.D) kbSteerValue += 0.08;
             if (!keys.A && !keys.D) kbSteerValue *= 0.7; 
@@ -268,21 +327,23 @@
             if (!keys.W && !keys.S) kbSpeedValue *= 0.7;
             kbSpeedValue = Math.max(-1, Math.min(1, kbSpeedValue));
 
+            // Final Merge
             const finalSteer = Math.abs(touchSteerValue) > 0.05 ? touchSteerValue : kbSteerValue;
             const finalGas = Math.abs(touchSpeedValue) > 0.05 ? touchSpeedValue : kbSpeedValue;
 
-            // Dynamic Gas Knob Color
+            // Knob Colors
             if (finalGas > 0.1) {
-                speedKnob.style.background = '#22c55e'; // Green
+                speedKnob.style.background = '#22c55e';
                 speedKnob.style.borderColor = '#15803d';
             } else if (finalGas < -0.1) {
-                speedKnob.style.background = '#ef4444'; // Red
+                speedKnob.style.background = '#ef4444';
                 speedKnob.style.borderColor = '#b91c1c';
             } else {
-                speedKnob.style.background = '#38bdf8'; // Blue
+                speedKnob.style.background = '#38bdf8';
                 speedKnob.style.borderColor = '#fff';
             }
 
+            // Move
             if (Math.abs(car.throttle) > 0.01) {
                 car.bearing += finalSteer * car.turnSpeed * (car.throttle >= 0 ? 1 : -1);
             }
@@ -313,18 +374,16 @@
                 car.lng += (Math.sin(rad) * effectiveSpeed) / latCorrection; 
             }
 
-            // 2. Map Jump Optimization - ONLY trigger if physically moved
-            const distLng = Math.abs(car.lng - lastMapLng);
-            const distLat = Math.abs(car.lat - lastMapLat);
-            const distBear = Math.abs(car.bearing - lastMapBearing);
-
-            if (distLng > 0.0000005 || distLat > 0.0000005 || distBear > 0.1) {
-                if (map.loaded()) {
+            if(map.loaded()){
+                const distMoved = Math.abs(car.lng - lastRenderLng) + Math.abs(car.lat - lastRenderLat);
+                const bearingDiff = Math.abs(car.bearing - lastRenderBearing);
+                
+                if (distMoved > 0.0000005 || bearingDiff > 0.1 || car.throttle === 0) {
                     map.jumpTo({ center: [car.lng, car.lat], bearing: car.bearing });
+                    lastRenderLng = car.lng;
+                    lastRenderLat = car.lat;
+                    lastRenderBearing = car.bearing;
                 }
-                lastMapLng = car.lng;
-                lastMapLat = car.lat;
-                lastMapBearing = car.bearing;
             }
 
             const displayMph = Math.round(Math.abs(car.throttle) * 75); 
