@@ -28,30 +28,36 @@
         @keyframes spin { to { transform: rotate(360deg); } }
 
         /* =========================================
-           EMBEDDED VECTOR IMAGE RENDERER
+           REALISTIC IMAGE RENDERING
            ========================================= */
         #car-container {
             position: absolute; top: 65%; left: 50%;
-            width: 44px; height: 96px; 
-            transform: translate(-50%, -50%) rotateX(60deg);
+            /* Dimensions adjusted to fit image_2.png proportions */
+            width: 75px; height: 85px; 
+            /* The image naturally has a 3D perspective, so it just needs to be centered flat */
+            transform: translate(-50%, -50%);
             z-index: 10;
         }
         
         #car-image {
             width: 100%; height: 100%; 
-            filter: drop-shadow(0px 8px 6px rgba(0,0,0,0.6));
+            object-fit: contain;
+            filter: drop-shadow(0px 10px 12px rgba(0,0,0,0.6));
         }
 
-        #brake-glow {
-            position: absolute; bottom: 4px; left: 10%; width: 80%; height: 6px;
+        /* Dual Brake Lights corresponding to image_2.png */
+        .brake-glow {
+            position: absolute; bottom: 28%; width: 10px; height: 18px;
             background: transparent; border-radius: 4px;
-            transition: box-shadow 0.1s, background 0.1s;
+            transition: background 0.1s, box-shadow 0.1s;
             z-index: 11;
         }
+        #brake-glow-left { left: 4px; }
+        #brake-glow-right { right: 4px; }
         
-        .braking #brake-glow {
-            background: rgba(255, 0, 0, 0.5);
-            box-shadow: 0 10px 25px 15px rgba(255, 0, 0, 0.85);
+        .braking .brake-glow {
+            background: rgba(255, 50, 50, 0.6);
+            box-shadow: 0 0 20px 12px rgba(255, 0, 0, 0.85);
         }
 
         #hud {
@@ -127,98 +133,11 @@
         <div class="zoom-btn" id="btn-zoom-out">−</div>
     </div>
 
-    <!-- CUSTOM FORD EXPLORER ST VECTOR -->
+    <!-- User-provided exact vehicle image -->
     <div id="car-container">
-        <svg id="car-image" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 220">
-            <defs>
-                <!-- Blue Metallic Paint Gradient (Matched to Atlas Blue) -->
-                <linearGradient id="paint" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stop-color="#053ea8" />
-                    <stop offset="20%" stop-color="#1e58d1" />
-                    <stop offset="50%" stop-color="#3b76f5" />
-                    <stop offset="80%" stop-color="#1e58d1" />
-                    <stop offset="100%" stop-color="#053ea8" />
-                </linearGradient>
-                <linearGradient id="hoodGlare" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stop-color="rgba(255,255,255,0.4)" />
-                    <stop offset="100%" stop-color="rgba(255,255,255,0)" />
-                </linearGradient>
-                <linearGradient id="glass" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stop-color="#3b82f6" />
-                    <stop offset="50%" stop-color="#0f172a" />
-                    <stop offset="100%" stop-color="#020617" />
-                </linearGradient>
-                <linearGradient id="rearGlass" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stop-color="#020617" />
-                    <stop offset="100%" stop-color="#1e293b" />
-                </linearGradient>
-            </defs>
-
-            <!-- Blacked-out Side Mirrors (ST Trim) -->
-            <rect x="2" y="70" width="10" height="15" rx="3" fill="#0f172a"/>
-            <rect x="88" y="70" width="10" height="15" rx="3" fill="#0f172a"/>
-
-            <!-- Main Body Chassis -->
-            <rect x="8" y="10" width="84" height="200" rx="20" fill="url(#paint)"/>
-
-            <!-- Front Bumper & Black Mesh Grille -->
-            <rect x="20" y="8" width="60" height="8" rx="2" fill="#020617"/>
-            <path d="M 10 14 Q 15 10 20 10 L 20 18 L 10 18 Z" fill="#e0f2fe"/>
-            <path d="M 90 14 Q 85 10 80 10 L 80 18 L 90 18 Z" fill="#e0f2fe"/>
-
-            <!-- Hood Details -->
-            <path d="M 15 20 L 85 20 L 80 65 L 20 65 Z" fill="url(#hoodGlare)"/>
-            <line x1="25" y1="20" x2="30" y2="60" stroke="rgba(0,0,0,0.3)" stroke-width="2"/>
-            <line x1="75" y1="20" x2="70" y2="60" stroke="rgba(0,0,0,0.3)" stroke-width="2"/>
-
-            <!-- Front Windshield -->
-            <path d="M 12 70 C 40 60, 60 60, 88 70 L 82 100 L 18 100 Z" fill="url(#glass)"/>
-            
-            <!-- Roof -->
-            <rect x="18" y="100" width="64" height="80" fill="url(#paint)"/>
-            
-            <!-- Panoramic Sunroof -->
-            <rect x="25" y="105" width="50" height="30" rx="4" fill="#020617"/>
-            <rect x="27" y="107" width="46" height="26" rx="2" fill="url(#glass)"/>
-
-            <!-- Blacked-out Roof Rails (ST Trim) -->
-            <rect x="20" y="102" width="4" height="75" rx="2" fill="#111111"/>
-            <rect x="76" y="102" width="4" height="75" rx="2" fill="#111111"/>
-
-            <!-- Deep Tint Side Windows -->
-            <path d="M 12 75 L 18 100 L 18 175 L 14 175 Z" fill="#020617"/>
-            <path d="M 88 75 L 82 100 L 82 175 L 86 175 Z" fill="#020617"/>
-
-            <!-- Deep Tint Rear Window -->
-            <path d="M 14 175 L 86 175 L 80 195 C 60 200, 40 200, 20 195 Z" fill="url(#rearGlass)"/>
-
-            <!-- Black Rear Spoiler Overhang (ST Trim) -->
-            <path d="M 18 190 L 82 190 L 80 195 L 20 195 Z" fill="#0f172a"/>
-
-            <!-- Wraparound Red Tail Lights -->
-            <rect x="10" y="202" width="20" height="7" rx="2" fill="#991b1b"/>
-            <rect x="70" y="202" width="20" height="7" rx="2" fill="#991b1b"/>
-            
-            <!-- Black Applique Trim Bar (ST Trim) -->
-            <rect x="30" y="204" width="40" height="3" fill="#111111"/>
-
-            <!-- RED ST BADGE on Right Liftgate -->
-            <rect x="64" y="202" width="5" height="3" rx="1" fill="#dc2626"/>
-
-            <!-- Black Lower Bumper -->
-            <rect x="18" y="210" width="64" height="5" rx="2" fill="#020617"/>
-
-            <!-- Quad Exhaust Tips (ST Trim) -->
-            <rect x="22" y="212" width="5" height="3" rx="1.5" fill="#94a3b8"/>
-            <rect x="28" y="212" width="5" height="3" rx="1.5" fill="#94a3b8"/>
-            <rect x="67" y="212" width="5" height="3" rx="1.5" fill="#94a3b8"/>
-            <rect x="73" y="212" width="5" height="3" rx="1.5" fill="#94a3b8"/>
-            
-            <!-- Shark Fin Antenna -->
-            <path d="M 49 180 L 51 180 L 50 188 Z" fill="#0f172a"/>
-        </svg>
-
-        <div id="brake-glow"></div>
+        <img id="car-image" src="image_2.png" alt="Ford Explorer ST">
+        <div id="brake-glow-left" class="brake-glow"></div>
+        <div id="brake-glow-right" class="brake-glow"></div>
     </div>
 
     <div id="controls-container">
@@ -231,7 +150,6 @@
     </div>
 
     <script>
-        // Init MapLibre with Performance Optimizations
         const map = new maplibregl.Map({
             container: 'map',
             style: 'https://tiles.openfreemap.org/styles/liberty', 
@@ -244,7 +162,6 @@
             maxTileCacheSize: 30
         });
 
-        // Zoom Button Logic
         document.getElementById('btn-zoom-in').addEventListener('click', () => {
             map.flyTo({ zoom: map.getZoom() + 1, duration: 300 });
         });
@@ -305,7 +222,6 @@
         let car = { 
             lng: -88.446, lat: 41.642, 
             throttle: 0, maxThrottle: 1.0, 
-            acceleration: 0.02, friction: 0.95, 
             bearing: 0, turnSpeed: 4.5 
         };
 
@@ -338,7 +254,7 @@
         let lastRenderBearing = car.bearing;
 
         function updateGame() {
-            // Keyboard Smooth Ramp
+            // Keyboard Smooth Ramp (simulates analog stick easing)
             if (keys.A) kbSteerValue -= 0.08;
             if (keys.D) kbSteerValue += 0.08;
             if (!keys.A && !keys.D) kbSteerValue *= 0.7; 
@@ -349,11 +265,11 @@
             if (!keys.W && !keys.S) kbSpeedValue *= 0.7;
             kbSpeedValue = Math.max(-1, Math.min(1, kbSpeedValue));
 
-            // Final Merge
+            // Final Analong Slider Values
             const finalSteer = Math.abs(touchSteerValue) > 0.05 ? touchSteerValue : kbSteerValue;
             const finalGas = Math.abs(touchSpeedValue) > 0.05 ? touchSpeedValue : kbSpeedValue;
 
-            // Knob Colors
+            // Knob Colors based on input
             if (finalGas > 0.1) {
                 speedKnob.style.background = '#22c55e';
                 speedKnob.style.borderColor = '#15803d';
@@ -365,26 +281,43 @@
                 speedKnob.style.borderColor = '#fff';
             }
 
-            // Move
+            // ==========================================
+            // ANALOG THROTTLE ENGINE
+            // ==========================================
+            let targetThrottle = 0;
+            
+            // Map the joystick input directly to target speed capacity
+            if (finalGas > 0) {
+                // 50% push = 50% target max speed
+                targetThrottle = finalGas * car.maxThrottle; 
+            } else if (finalGas < 0) {
+                // Reverse speed is capped at 40%
+                targetThrottle = finalGas * 0.4; 
+            }
+
+            // Smoothly interpolate current throttle towards the target limit
+            car.throttle += (targetThrottle - car.throttle) * 0.05;
+
+            // Deadzone to prevent micro-drifting
+            if (Math.abs(car.throttle) < 0.005) {
+                car.throttle = 0;
+            }
+
+            // Turn physics (scaled so you can't turn aggressively while stopped)
             if (Math.abs(car.throttle) > 0.01) {
                 car.bearing += finalSteer * car.turnSpeed * (car.throttle >= 0 ? 1 : -1);
             }
 
-            if (finalGas > 0) {
-                car.throttle += finalGas * car.acceleration;
-                if (car.throttle > car.maxThrottle) car.throttle = car.maxThrottle;
-            } else if (finalGas < 0) {
-                car.throttle += finalGas * (car.acceleration * 1.5); 
-                if (car.throttle < -0.4) car.throttle = -0.4;
+            // Brake Detection: Moving forward but joystick is pulled backwards
+            if (car.throttle > 0.05 && finalGas < -0.1) {
+                carContainer.classList.add('braking');
+                // Apply extra brake friction to slow down faster
+                car.throttle *= 0.85; 
             } else {
-                car.throttle *= car.friction; 
-                if (Math.abs(car.throttle) < 0.001) car.throttle = 0;
+                carContainer.classList.remove('braking');
             }
 
-            // Trigger brake glow overlay
-            if (finalGas < -0.1 && car.throttle > -0.1) carContainer.classList.add('braking');
-            else carContainer.classList.remove('braking');
-
+            // Apply movement to GPS coordinates
             if (car.throttle !== 0) {
                 const currentZoom = map.getZoom();
                 const zoomMultiplier = Math.pow(2, BASE_ZOOM - currentZoom); 
@@ -397,6 +330,7 @@
                 car.lng += (Math.sin(rad) * effectiveSpeed) / latCorrection; 
             }
 
+            // Render camera updates
             if(map.loaded()){
                 const distMoved = Math.abs(car.lng - lastRenderLng) + Math.abs(car.lat - lastRenderLat);
                 const bearingDiff = Math.abs(car.bearing - lastRenderBearing);
@@ -409,9 +343,10 @@
                 }
             }
 
-            const displayMph = Math.round(Math.abs(car.throttle) * 75); 
+            const displayMph = Math.round(Math.abs(car.throttle) * 85); // 85mph max representation
             document.getElementById('speed-display').innerText = displayMph;
 
+            // Real-Time Boundary Detection
             let locName = "Local Roads", cityName = "Yorkville";
             if (car.lng > -88.380 && car.lat >= 41.640) cityName = "Oswego";
             else if (car.lng < -88.485) cityName = "Plano";
