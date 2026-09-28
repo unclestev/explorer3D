@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Yorkville 3D Explorer</title>
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+    <style>
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #87CEEB;
+            user-select: none; -webkit-user-select: none; touch-action: none;
+        }
+        #map { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
+        
+        /* Loading Screen */
+        #loading {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #0f172a; color: #38bdf8; z-index: 999;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            font-size: 24px; font-weight: bold; transition: opacity 0.5s;
+        }
+        .spinner {
+            width: 50px; height: 50px; border: 5px solid rgba(56, 189, 248, 0.3);
+            border-top-color: #38bdf8; border-radius: 50%;
+            animation: spin 1s linear infinite; margin-bottom: 20px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Smaller 3D CSS Car - Reduced by ~40% */
+        #car-container {
+            position: absolute; top: 65%; left: 50%;
+            width: 0; height: 0; z-index: 10; perspective: 800px;
+        }
+        .car-3d {
+            position: absolute; width: 22px; height: 48px;
+            transform-style: preserve-3d; transform: translate(-50%, -100%) rotateX(60deg);
+        }
+        .face { position: absolute; border: 1px solid rgba(0,0,0,0.5); }
+        .car-top { width: 22px; height: 48px; background: #1b365d; transform: translateZ(14px); border-radius: 3px; }
+        .car-bottom { width: 22px; height: 48px; background: #081018; transform: translateZ(2px); box-shadow: 0 0 15px rgba(0,0,0,0.8); }
+        .car-back { 
+            width: 22px; height: 14px; background: #0d1b2a;
+            transform: rotateX(-90deg) translateZ(-48px); transform-origin: top;
+            display: flex; justify-content: space-between; align-items: flex-end; padding: 1px 2px; box-sizing: border-box;
+        }
+        .car-front { width: 22px; height: 14px; background: #0d1b2a; transform: rotateX(-90deg) translateZ(0px); transform-origin: top; }
+        .car-left { width: 14px; height: 48px; background: #142a4a; transform: rotateY(-90deg) translateZ(0px); transform-origin: left; }
+        .car-right { width: 14px; height: 48px; background: #142a4a; transform: rotateY(90deg) translateZ(22px); transform-origin: left; }
+
+        /* Taillights */
+        .taillight { width: 5px; height: 4px; background: #990000; border-radius: 1px; border: 1px solid #440000; }
+        .braking .taillight { background: #ff2222; box-shadow: 0 0 8px #ff0000; border-color: #ff0000; }
+
+        /* HUD */
+        #hud {
+            position: absolute; top: 15px; left: 15px; max-width: 240px;
+            background: rgba(15, 23, 42, 0.85); color: white; padding: 12px 16px;
+            border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,0.1);
+            z-index: 100; pointer-events: none;
+        }
+        #hud h1 { margin: 0 0 4px 0; font-size: 14px; color: #38bdf8; text-transform: uppercase; letter-spacing: 1px;}
+        #hud p { margin: 3px 0; font-size: 12px; color: #cbd5e1; }
+        #speed-display { font-size: 20px; font-weight: bold; color: #fff; }
+
+        /* Controls */
+        #touch-controls {
+            position: absolute; bottom: 20px; left: 0; right: 0;
+            display: flex; justify-content: space-between; padding: 0 20px;
+            z-index: 100; pointer-events: none;
+        }
+        .control-group { display: flex; gap: 15px; pointer-events: auto; }
+        .touch-btn {
+            width: 70px; height: 70px; border-radius: 50%; color: white; font-size: 18px; font-weight: bold;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.4); cursor: pointer;
+            user-select: none; -webkit-user-select: none; transition: transform 0.1s;
+        }
+        .touch-btn:active { transform: scale(0.92); }
+        .btn-steer { background: rgba(15, 23, 42, 0.85); border: 2px solid rgba(56, 189, 248, 0.6); }
+        #btn-gas { background: rgba(22, 101, 52, 0.9); border: 2px solid #22c55e; }
+        #btn-brake { background: rgba(127, 29, 29, 0.9); border: 2px solid #ef4444; }
+
+        @media (max-height: 500px) {
+            .touch-btn { width: 55px; height: 55px; font-size: 14px; }
+            #touch-controls { bottom: 10px; }
+            #hud { top: 10px; left: 10px; padding: 8px 12px; }
+            #car-container { top: 75%; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loading">
+        <div class="spinner"></div>
+        <div>Loading Yorkville Map...</div>
+    </div>
+
+    <div id="map"></div>
+
+    <div id="hud">
+        <h1>Yorkville 3D</h1>
+        <p><span id="speed-display">0</span> MPH</p>
+        <p>Loc: <strong id="location-display">Downtown Yorkville</strong></p>
+        <p>Area: <span id="area-display">Yorkville, Kendall County</span></p>
+    </div>
+
+    <!-- 3D CSS Vehicle -->
+    <div id="car-container">
+        <div class="car-3d" id="car-mesh">
+            <div class="face car-bottom"></div>
+            <div class="face car-front"></div>
+            <div class="face car-left"></div>
+            <div class="face car-right"></div>
+            <div class="face car-back">
+                <div class="taillight"></div>
+                <div class="taillight"></div>
+            </div>
+            <div class="face car-top"></div>
+        </div>
+    </div>
+
+    <div id="touch-controls">
+        <div class="control-group">
+            <div class="touch-btn btn-steer" id="btn-left">◀</div>
+            <div class="touch-btn btn-steer" id="btn-right">▶</div>
+        </div>
+        <div class="control-group">
+            <div class="touch-btn" id="btn-brake">REV</div>
+            <div class="touch-btn" id="btn-gas">GAS</div>
+        </div>
+    </div>
+
+    <script>
+        // Init MapLibre - Locked pitch, allowing pinch-to-zoom
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: 'https://tiles.openfreemap.org/styles/liberty', 
+            center: [-88.446, 41.642], 
+            zoom: 18,
+            pitch: 65,
+            bearing: 0,
+            interactive: true,
+            scrollZoom: true,       // Enable Mouse Wheel Zoom
+            touchZoomRotate: true,  // Enable Pinch to Zoom
+            dragPan: false,         // Lock map panning (car controls movement)
+            dragRotate: false,      // Lock map rotation (car controls bearing)
+            keyboard: false         // Prevent map from capturing arrow keys
+        });
+
+        // Vehicle Physics State - Throttle Based
+        let car = { 
+            lng: -88.446, 
+            lat: 41.642, 
+            throttle: 0, 
+            maxThrottle: 1.0, 
+            acceleration: 0.02, 
+            friction: 0.95, 
+            bearing: 0, 
+            turnSpeed: 3.5 
+        };
+
+        const BASE_SPEED = 0.000008; // Doubled base speed
+        const BASE_ZOOM = 18;
+        
+        const keys = { W: false, A: false, S: false, D: false };
+
+        // Keyboard Controls
+        window.addEventListener('keydown', (e) => {
+            if (['w', 'W', 'ArrowUp'].includes(e.key)) keys.W = true;
+            if (['a', 'A', 'ArrowLeft'].includes(e.key)) keys.A = true;
+            if (['s', 'S', 'ArrowDown'].includes(e.key)) keys.S = true;
+            if (['d', 'D', 'ArrowRight'].includes(e.key)) keys.D = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            if (['w', 'W', 'ArrowUp'].includes(e.key)) keys.W = false;
+            if (['a', 'A', 'ArrowLeft'].includes(e.key)) keys.A = false;
+            if (['s', 'S', 'ArrowDown'].includes(e.key)) keys.S = false;
+            if (['d', 'D', 'ArrowRight'].includes(e.key)) keys.D = false;
+        });
+
+        // Touch Controls
+        function bindTouch(id, keyName) {
+            const el = document.getElementById(id);
+            if(!el) return;
+            const press = (e) => { e.preventDefault(); keys[keyName] = true; };
+            const release = (e) => { e.preventDefault(); keys[keyName] = false; };
+            el.addEventListener('touchstart', press, {passive: false});
+            el.addEventListener('touchend', release, {passive: false});
+            el.addEventListener('mousedown', press);
+            el.addEventListener('mouseup', release);
+            el.addEventListener('mouseleave', release);
+        }
+        bindTouch('btn-left', 'A');
+        bindTouch('btn-right', 'D');
+        bindTouch('btn-gas', 'W');
+        bindTouch('btn-brake', 'S');
+
+        const carMesh = document.getElementById('car-mesh');
+
+        function updateGame() {
+            // Steering
+            if (keys.A && Math.abs(car.throttle) > 0.01) car.bearing -= car.turnSpeed * (car.throttle > 0 ? 1 : -1);
+            if (keys.D && Math.abs(car.throttle) > 0.01) car.bearing += car.turnSpeed * (car.throttle > 0 ? 1 : -1);
+
+            let isBraking = false;
+
+            // Gas / Reverse (Throttle Management)
+            if (keys.W) {
+                car.throttle += car.acceleration;
+                if (car.throttle > car.maxThrottle) car.throttle = car.maxThrottle;
+            } else if (keys.S) {
+                car.throttle -= car.acceleration * 1.5;
+                if (car.throttle < -0.5) car.throttle = -0.5; // Max reverse speed
+                isBraking = true;
+            } else {
+                car.throttle *= car.friction; 
+                if (Math.abs(car.throttle) < 0.001) car.throttle = 0;
+            }
+
+            if (isBraking) carMesh.classList.add('braking');
+            else carMesh.classList.remove('braking');
+
+            // Apply Earth Curvature Correction & Dynamic Zoom Speed
+            if (car.throttle !== 0) {
+                const currentZoom = map.getZoom();
+                // Speed scales exponentially based on how far you zoom out
+                const zoomMultiplier = Math.pow(2, BASE_ZOOM - currentZoom); 
+                
+                const effectiveSpeed = car.throttle * BASE_SPEED * zoomMultiplier;
+                const rad = car.bearing * (Math.PI / 180);
+                const latCorrection = Math.cos(car.lat * (Math.PI / 180)); // Fix Mercator drift
+                
+                car.lat += Math.cos(rad) * effectiveSpeed;
+                car.lng += (Math.sin(rad) * effectiveSpeed) / latCorrection; 
+            }
+
+            // Move Map
+            if(map.loaded()){
+                map.jumpTo({ 
+                    center: [car.lng, car.lat],
+                    bearing: car.bearing 
+                });
+            }
+
+            // Update Speed HUD
+            const displayMph = Math.round(Math.abs(car.throttle) * 75); // Top speed ~75mph visually
+            document.getElementById('speed-display').innerText = displayMph;
+
+            // Area logic
+            let locName = "Local Roads";
+            let cityName = "Yorkville";
+            if (car.lng > -88.380 && car.lat >= 41.640) cityName = "Oswego";
+            else if (car.lng < -88.485) cityName = "Plano";
+            else {
+                if (car.lng >= -88.455 && car.lng <= -88.440 && car.lat >= 41.638 && car.lat <= 41.648) locName = "Downtown Yorkville / Riverfront";
+                else if (car.lng >= -88.465 && car.lng < -88.445 && car.lat > 41.648 && car.lat <= 41.665) locName = "Yorkville High School Campus";
+                else if (car.lng >= -88.410 && car.lng <= -88.380 && car.lat >= 41.628 && car.lat < 41.645) locName = "Fields of Farm Colony"; 
+                else if (car.lng >= -88.480 && car.lng < -88.446 && car.lat >= 41.600 && car.lat <= 41.632) locName = "Country Hills";
+            }
+            document.getElementById('location-display').innerText = locName;
+            document.getElementById('area-display').innerText = `${cityName}, Kendall County`;
+
+            requestAnimationFrame(updateGame);
+        }
+
+        function startGameLoop() {
+            document.getElementById('loading').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('loading').style.display = 'none';
+                requestAnimationFrame(updateGame);
+            }, 500);
+        }
+
+        // Start game when map loads
+        map.on('load', () => {
+            try {
+                // Try to add 3D buildings if available in the style
+                if (map.getSource('openmaptiles')) {
+                    map.addLayer({
+                        'id': '3d-buildings',
+                        'source': 'openmaptiles',
+                        'source-layer': 'building',
+                        'type': 'fill-extrusion',
+                        'minzoom': 15,
+                        'paint': {
+                            'fill-extrusion-color': '#e2e8f0',
+                            'fill-extrusion-height': ['coalesce', ['get', 'render_height'], ['get', 'height'], 6],
+                            'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], ['get', 'min_height'], 0],
+                            'fill-extrusion-opacity': 0.8
+                        }
+                    });
+                }
+            } catch(e) {
+                console.warn("3D Buildings layer skipped", e);
+            }
+            startGameLoop();
+        });
+
+        // Fail-safe: if MapLibre 'load' event hangs, start anyway after 3 seconds
+        setTimeout(() => {
+            if (document.getElementById('loading').style.display !== 'none') {
+                startGameLoop();
+            }
+        }, 3000);
+
+        // Ensure canvas resizes if window is moved
+        window.addEventListener('resize', () => {
+            map.resize();
+        });
+    </script>
+</body>
+</html>
