@@ -28,26 +28,23 @@
         @keyframes spin { to { transform: rotate(360deg); } }
 
         /* =========================================
-           REALISTIC IMAGE RENDERING
+           EMBEDDED VECTOR SUV (NO EXTERNAL IMAGES)
            ========================================= */
         #car-container {
             position: absolute; top: 65%; left: 50%;
-            /* Dimensions adjusted to fit image_2.png proportions */
-            width: 75px; height: 85px; 
-            /* The image naturally has a 3D perspective, so it just needs to be centered flat */
+            width: 60px; height: 110px; 
             transform: translate(-50%, -50%);
             z-index: 10;
         }
         
         #car-image {
             width: 100%; height: 100%; 
-            object-fit: contain;
-            filter: drop-shadow(0px 10px 12px rgba(0,0,0,0.6));
+            filter: drop-shadow(0px 10px 12px rgba(0,0,0,0.7));
         }
 
-        /* Dual Brake Lights corresponding to image_2.png */
+        /* Dual Brake Lights aligned to the SVG taillights */
         .brake-glow {
-            position: absolute; bottom: 28%; width: 10px; height: 18px;
+            position: absolute; bottom: 20px; width: 12px; height: 16px;
             background: transparent; border-radius: 4px;
             transition: background 0.1s, box-shadow 0.1s;
             z-index: 11;
@@ -57,9 +54,10 @@
         
         .braking .brake-glow {
             background: rgba(255, 50, 50, 0.6);
-            box-shadow: 0 0 20px 12px rgba(255, 0, 0, 0.85);
+            box-shadow: 0 0 18px 10px rgba(255, 0, 0, 0.85);
         }
 
+        /* HUD & Controls */
         #hud {
             position: absolute; top: 15px; left: 15px; max-width: 240px;
             background: rgba(15, 23, 42, 0.85); color: white; padding: 12px 16px;
@@ -133,9 +131,99 @@
         <div class="zoom-btn" id="btn-zoom-out">−</div>
     </div>
 
-    <!-- User-provided exact vehicle image -->
+    <!-- 100% SELF-CONTAINED SVG VECTOR OF EXPLORER ST (MATCHES IMAGE_3.PNG) -->
     <div id="car-container">
-        <img id="car-image" src="image_2.png" alt="Ford Explorer ST">
+        <svg id="car-image" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 210">
+            <defs>
+                <!-- Slate Blue Metallic Paint -->
+                <linearGradient id="bodyPaint" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#3b4a59" />
+                    <stop offset="15%" stop-color="#556b82" />
+                    <stop offset="50%" stop-color="#7a92ad" />
+                    <stop offset="85%" stop-color="#556b82" />
+                    <stop offset="100%" stop-color="#3b4a59" />
+                </linearGradient>
+                
+                <!-- Black Glass Tint -->
+                <linearGradient id="glass" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#1e293b" />
+                    <stop offset="50%" stop-color="#0f172a" />
+                    <stop offset="100%" stop-color="#020617" />
+                </linearGradient>
+            </defs>
+
+            <!-- Black Mirrors -->
+            <rect x="2" y="45" width="12" height="18" rx="6" fill="#0f172a"/>
+            <rect x="86" y="45" width="12" height="18" rx="6" fill="#0f172a"/>
+
+            <!-- Main Chassis -->
+            <rect x="10" y="10" width="80" height="190" rx="25" fill="url(#bodyPaint)"/>
+
+            <!-- Front Hood & Grille Details -->
+            <rect x="20" y="8" width="60" height="6" rx="2" fill="#020617"/>
+            <path d="M 15 25 Q 50 40 85 25 L 75 60 L 25 60 Z" fill="#556b82"/>
+            <line x1="25" y1="20" x2="32" y2="60" stroke="#3b4a59" stroke-width="2"/>
+            <line x1="75" y1="20" x2="68" y2="60" stroke="#3b4a59" stroke-width="2"/>
+
+            <!-- Windshield -->
+            <path d="M 12 55 Q 50 45 88 55 L 82 85 L 18 85 Z" fill="url(#glass)"/>
+            
+            <!-- Roof Frame -->
+            <rect x="16" y="85" width="68" height="75" fill="url(#bodyPaint)"/>
+            
+            <!-- Panoramic Sunroof (Dark Tint) -->
+            <rect x="24" y="90" width="52" height="35" rx="4" fill="#020617"/>
+            <rect x="26" y="92" width="48" height="31" rx="2" fill="url(#glass)"/>
+            
+            <!-- Roof Ridges -->
+            <line x1="32" y1="130" x2="32" y2="155" stroke="#3b4a59" stroke-width="3" stroke-linecap="round"/>
+            <line x1="44" y1="130" x2="44" y2="155" stroke="#3b4a59" stroke-width="3" stroke-linecap="round"/>
+            <line x1="56" y1="130" x2="56" y2="155" stroke="#3b4a59" stroke-width="3" stroke-linecap="round"/>
+            <line x1="68" y1="130" x2="68" y2="155" stroke="#3b4a59" stroke-width="3" stroke-linecap="round"/>
+
+            <!-- Shark Fin Antenna -->
+            <path d="M 48 145 L 52 145 L 50 155 Z" fill="#0f172a"/>
+
+            <!-- Blacked-out Roof Rails (ST Trim) -->
+            <rect x="18" y="80" width="4" height="75" rx="2" fill="#111111"/>
+            <rect x="78" y="80" width="4" height="75" rx="2" fill="#111111"/>
+
+            <!-- Side Windows -->
+            <path d="M 12 60 L 16 85 L 16 160 L 10 160 Z" fill="#020617"/>
+            <path d="M 88 60 L 84 85 L 84 160 L 90 160 Z" fill="#020617"/>
+
+            <!-- Rear Liftgate Window (Deep Tint with wiper) -->
+            <path d="M 12 160 L 88 160 L 82 175 Q 50 180 18 175 Z" fill="url(#glass)"/>
+            <!-- Wiper Blade -->
+            <line x1="45" y1="172" x2="70" y2="170" stroke="#111" stroke-width="2" stroke-linecap="round"/>
+
+            <!-- Body-colored Spoiler Overhang -->
+            <path d="M 16 158 L 84 158 L 82 166 L 18 166 Z" fill="url(#bodyPaint)"/>
+
+            <!-- Ford Oval (Centered) -->
+            <ellipse cx="50" cy="180" rx="4" ry="2" fill="#0f172a" stroke="#cbd5e1" stroke-width="0.5"/>
+
+            <!-- Black Rear Applique (Explorer Text Trim) -->
+            <rect x="25" y="184" width="50" height="4" rx="1" fill="#111111"/>
+
+            <!-- Red ST Badge -->
+            <path d="M 72 195 L 77 195 L 75 198 L 70 198 Z" fill="#dc2626"/>
+
+            <!-- Signature C-Clamp Tail Lights (Red) -->
+            <path d="M 10 178 L 18 178 L 18 195 L 12 195 Z" fill="#dc2626"/>
+            <path d="M 90 178 L 82 178 L 82 195 L 88 195 Z" fill="#dc2626"/>
+
+            <!-- Black Lower Bumper -->
+            <rect x="14" y="200" width="72" height="6" rx="2" fill="#020617"/>
+
+            <!-- Dual-Quad Exhaust Tips -->
+            <circle cx="24" cy="206" r="3" fill="#020617" stroke="#cbd5e1" stroke-width="1.5"/>
+            <circle cx="32" cy="206" r="3" fill="#020617" stroke="#cbd5e1" stroke-width="1.5"/>
+            <circle cx="68" cy="206" r="3" fill="#020617" stroke="#cbd5e1" stroke-width="1.5"/>
+            <circle cx="76" cy="206" r="3" fill="#020617" stroke="#cbd5e1" stroke-width="1.5"/>
+
+        </svg>
+
         <div id="brake-glow-left" class="brake-glow"></div>
         <div id="brake-glow-right" class="brake-glow"></div>
     </div>
