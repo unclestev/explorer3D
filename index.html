@@ -80,19 +80,16 @@
         #controls-container {
             position: absolute; bottom: 30px; left: 0; right: 0;
             display: flex; justify-content: space-between; padding: 0 30px;
-            align-items: center; /* Centers the controls vertically against each other */
+            align-items: center; 
             z-index: 100; pointer-events: none; touch-action: none;
         }
         
-        /* Steering Slider (Horizontal) */
         .slider-track {
             background: rgba(15, 23, 42, 0.6); border: 2px solid rgba(255,255,255,0.2);
             border-radius: 30px; position: relative; pointer-events: auto;
             box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
         }
         #steer-track { width: 140px; height: 50px; }
-        
-        /* Gas/Brake Slider (Vertical) */
         #speed-track { width: 50px; height: 140px; }
 
         .slider-knob {
@@ -125,13 +122,11 @@
         <p>Area: <span id="area-display">Yorkville, Kendall County</span></p>
     </div>
 
-    <!-- Zoom Buttons -->
     <div id="zoom-controls">
         <div class="zoom-btn" id="btn-zoom-in">+</div>
         <div class="zoom-btn" id="btn-zoom-out">−</div>
     </div>
 
-    <!-- 3D CSS Vehicle -->
     <div id="car-container">
         <div class="car-3d" id="car-mesh">
             <div class="face car-bottom"></div>
@@ -146,30 +141,30 @@
         </div>
     </div>
 
-    <!-- Analog Sliders -->
     <div id="controls-container">
-        <!-- Horizontal Steering -->
         <div class="slider-track" id="steer-track">
             <div class="slider-knob" id="steer-knob"></div>
         </div>
-        <!-- Vertical Gas/Brake -->
         <div class="slider-track" id="speed-track">
             <div class="slider-knob" id="speed-knob"></div>
         </div>
     </div>
 
     <script>
-        // Init MapLibre
+        // Init MapLibre - WITH PERFORMANCE OPTIMIZATIONS
         const map = new maplibregl.Map({
             container: 'map',
             style: 'https://tiles.openfreemap.org/styles/liberty', 
             center: [-88.446, 41.642], 
             zoom: 18, pitch: 65, bearing: 0,
             interactive: true, scrollZoom: true, touchZoomRotate: true,
-            dragPan: false, dragRotate: false, keyboard: false         
+            dragPan: false, dragRotate: false, keyboard: false,
+            // 1. Performance tweaks
+            fadeDuration: 0, 
+            maxTileCacheSize: 50,
+            cancelPendingTileRequestsWhileZooming: true 
         });
 
-        // Zoom Button Logic
         document.getElementById('btn-zoom-in').addEventListener('click', () => {
             map.flyTo({ zoom: map.getZoom() + 1, duration: 300 });
         });
@@ -177,7 +172,7 @@
             map.flyTo({ zoom: map.getZoom() - 1, duration: 300 });
         });
 
-        // Virtual Joysticks Logic - Rebuilt with Pointer Events for perfect Multi-touch
+        // Flawless Pointer Event Joysticks
         let touchSteerValue = 0; 
         let touchSpeedValue = 0; 
 
@@ -185,7 +180,7 @@
             const track = document.getElementById(trackId);
             const knob = document.getElementById(knobId);
             let activePointerId = null;
-            let maxDist = 45; // Max pixels knob can travel from center
+            let maxDist = 45; 
 
             function updateKnob(e) {
                 if (activePointerId !== e.pointerId) return;
@@ -199,7 +194,6 @@
                     knob.style.transition = 'none';
                 } else {
                     let dy = e.clientY - center.y;
-                    // Y axis inverted: pushing up is negative pixels, but positive gas
                     touchSpeedValue = Math.max(-1, Math.min(1, -dy / maxDist));
                     knob.style.transform = `translate(-50%, calc(-50% - ${touchSpeedValue * maxDist}px))`;
                     knob.style.transition = 'none';
@@ -238,7 +232,6 @@
         const BASE_SPEED = 0.00003; 
         const BASE_ZOOM = 18;
         
-        // Keyboard State
         const keys = { W: false, A: false, S: false, D: false };
         let kbSteerValue = 0;
         let kbSpeedValue = 0;
@@ -259,8 +252,12 @@
         const carMesh = document.getElementById('car-mesh');
         const speedKnob = document.getElementById('speed-knob');
 
+        // State trackers for map optimization
+        let lastMapLng = car.lng;
+        let lastMapLat = car.lat;
+        let lastMapBearing = car.bearing;
+
         function updateGame() {
-            // Smooth Keyboard Ramping
             if (keys.A) kbSteerValue -= 0.08;
             if (keys.D) kbSteerValue += 0.08;
             if (!keys.A && !keys.D) kbSteerValue *= 0.7; 
@@ -271,28 +268,25 @@
             if (!keys.W && !keys.S) kbSpeedValue *= 0.7;
             kbSpeedValue = Math.max(-1, Math.min(1, kbSpeedValue));
 
-            // Merge Touch & Keyboard Inputs
             const finalSteer = Math.abs(touchSteerValue) > 0.05 ? touchSteerValue : kbSteerValue;
             const finalGas = Math.abs(touchSpeedValue) > 0.05 ? touchSpeedValue : kbSpeedValue;
 
-            // Apply Knob Colors Dynamically
+            // Dynamic Gas Knob Color
             if (finalGas > 0.1) {
-                speedKnob.style.background = '#22c55e'; // Green for Gas
+                speedKnob.style.background = '#22c55e'; // Green
                 speedKnob.style.borderColor = '#15803d';
             } else if (finalGas < -0.1) {
-                speedKnob.style.background = '#ef4444'; // Red for Brake/Reverse
+                speedKnob.style.background = '#ef4444'; // Red
                 speedKnob.style.borderColor = '#b91c1c';
             } else {
-                speedKnob.style.background = '#38bdf8'; // Blue for Idle
+                speedKnob.style.background = '#38bdf8'; // Blue
                 speedKnob.style.borderColor = '#fff';
             }
 
-            // Apply Steering (only works if vehicle has momentum)
             if (Math.abs(car.throttle) > 0.01) {
                 car.bearing += finalSteer * car.turnSpeed * (car.throttle >= 0 ? 1 : -1);
             }
 
-            // Apply Acceleration / Braking
             if (finalGas > 0) {
                 car.throttle += finalGas * car.acceleration;
                 if (car.throttle > car.maxThrottle) car.throttle = car.maxThrottle;
@@ -304,11 +298,9 @@
                 if (Math.abs(car.throttle) < 0.001) car.throttle = 0;
             }
 
-            // Tail lights visuals
             if (finalGas < -0.1 && car.throttle > -0.1) carMesh.classList.add('braking');
             else carMesh.classList.remove('braking');
 
-            // Move Coordinates
             if (car.throttle !== 0) {
                 const currentZoom = map.getZoom();
                 const zoomMultiplier = Math.pow(2, BASE_ZOOM - currentZoom); 
@@ -321,12 +313,20 @@
                 car.lng += (Math.sin(rad) * effectiveSpeed) / latCorrection; 
             }
 
-            // Update Map Viewport
-            if(map.loaded()){
-                map.jumpTo({ center: [car.lng, car.lat], bearing: car.bearing });
+            // 2. Map Jump Optimization - ONLY trigger if physically moved
+            const distLng = Math.abs(car.lng - lastMapLng);
+            const distLat = Math.abs(car.lat - lastMapLat);
+            const distBear = Math.abs(car.bearing - lastMapBearing);
+
+            if (distLng > 0.0000005 || distLat > 0.0000005 || distBear > 0.1) {
+                if (map.loaded()) {
+                    map.jumpTo({ center: [car.lng, car.lat], bearing: car.bearing });
+                }
+                lastMapLng = car.lng;
+                lastMapLat = car.lat;
+                lastMapBearing = car.bearing;
             }
 
-            // Update HUD Data
             const displayMph = Math.round(Math.abs(car.throttle) * 75); 
             document.getElementById('speed-display').innerText = displayMph;
 
