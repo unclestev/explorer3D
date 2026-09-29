@@ -24,6 +24,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#9cc8ec;font-family:sy
 #miniArrow{position:absolute;left:50%;top:50%;width:0;height:0;margin:-11px 0 0 -8px;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:22px solid #ef4444;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6));transform-origin:50% 60%;pointer-events:none;z-index:2}
 #zoom{position:absolute;top:12px;right:12px;z-index:20;display:flex;flex-direction:column;gap:8px}
 #zoom button{width:44px;height:44px;border:0;border-radius:10px;background:rgba(15,23,42,.8);color:#fff;font-size:24px}
+#zoom button.on{background:#15803d;box-shadow:0 0 0 2px #86efac inset}
 #ctl{position:absolute;bottom:28px;left:0;right:0;display:flex;justify-content:space-between;padding:0 28px;z-index:20;pointer-events:none}
 .track{position:relative;background:rgba(15,23,42,.55);border:2px solid rgba(255,255,255,.25);border-radius:30px;pointer-events:auto;touch-action:none}
 #st{width:150px;height:52px}#sp{width:52px;height:150px}
@@ -37,7 +38,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#9cc8ec;font-family:sy
 <canvas id="car3d"></canvas>
 <div id="hud"><span id="mph">0</span> mph<br><span id="road">On road</span><br><span id="place">Locating…</span><br><span id="surf"></span><br><span id="near"></span></div>
 <div id="mini"><div id="miniArrow"></div></div>
-<div id="zoom"><button id="zi">+</button><button id="zo">−</button><button id="cp" style="font-size:14px">🚗+</button><button id="cm" style="font-size:14px">🚗−</button></div>
+<div id="zoom"><button id="zi">+</button><button id="zo">−</button><button id="cp" style="font-size:14px">🚗+</button><button id="cm" style="font-size:14px">🚗−</button><button id="pw" title="Battery saver" style="font-size:18px">🔋</button></div>
 <div id="ctl">
   <div class="track" id="st"><div class="knob" id="stk"></div></div>
   <div class="track" id="sp"><div class="knob" id="spk"></div></div>
@@ -61,8 +62,14 @@ html,body{margin:0;height:100%;overflow:hidden;background:#9cc8ec;font-family:sy
 })();
 </script>
 <script>
+/* ---------- BATTERY SAVER (on by default on phones) ----------
+   30 fps cap, lower render resolution, flat terrain, fewer trees, slower minimap, and no redraw while parked. */
+let POWER=false;
+try{ const v=localStorage.getItem('ydPower'); POWER = v===null ? matchMedia('(pointer: coarse)').matches : v==='1'; }
+catch(e){ try{ POWER=matchMedia('(pointer: coarse)').matches; }catch(_){} }
+const mapPR=on=>Math.min(devicePixelRatio||1, on?1.5:2);
 /* ---------- MAP ---------- */
-const map = new maplibregl.Map({
+const map = new maplibregl.Map({ pixelRatio:mapPR(POWER),
   container:'map', style:'https://tiles.openfreemap.org/styles/liberty',
   center:[-88.446,41.642], zoom:19.3, pitch:68, maxPitch:80, maxZoom:22,
   interactive:false, fadeDuration:0, attributionControl:{compact:true}
@@ -194,7 +201,7 @@ map.on('load',()=>{ try{ initMini();
     map.addSource('dem',dem); map.addSource('dem-hs',Object.assign({},dem));
     map.addLayer({id:'hillshade',type:'hillshade',source:'dem-hs',
       paint:{'hillshade-exaggeration':.4,'hillshade-shadow-color':'#5a4f3f','hillshade-highlight-color':'#fffaf0'}},before);
-    map.setTerrain({source:'dem',exaggeration:TERRAIN_X}); terrainOn=true;
+    if(!POWER){ map.setTerrain({source:'dem',exaggeration:TERRAIN_X}); terrainOn=true; }
   }catch(e){ console.warn('terrain',e); }
   try{
     const TW=16, D=new Uint8Array(TW*TW*4);                      // crop-row stripes for farmland
@@ -234,8 +241,9 @@ setTimeout(()=>{const ld=document.getElementById('load'); if(ld){ld.style.opacit
 
 /* ---------- THREE: EXPLORER-STYLE SUV ---------- */
 const cv=document.getElementById('car3d');
-const renderer=new THREE.WebGLRenderer({canvas:cv,alpha:true,antialias:true});
-renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+const renderer=new THREE.WebGLRenderer({canvas:cv,alpha:true,antialias:(devicePixelRatio||1)<2,powerPreference:'low-power'});
+const carPR=on=>on?Math.min(devicePixelRatio||1,1.25):Math.min(devicePixelRatio||1,2);
+renderer.setPixelRatio(carPR(POWER));
 const scene=new THREE.Scene();
 const camera=new THREE.PerspectiveCamera(36.87,1,10,50000);
 scene.add(new THREE.HemisphereLight(0xdfeeff,0x556070,.85));
@@ -377,9 +385,11 @@ function spawn(nDeb,nDust,dir,col){
 }
 function updateFx(dt,dm,carRotY){
   const k=dm/EXAG, sy=Math.sin(carRotY), cy=Math.cos(carRotY);       // world slides past as the car drives
+  let live=0;
   for(const q of parts){
     if(q.life<=0) continue;
     q.life-=dt; if(q.life<=0){ q.m.visible=false; continue; }
+    live++;
     const m=q.m;
     if(q.dust){ q.vy*=Math.exp(-dt*1.2); q.sz+=dt*3.2; m.scale.setScalar(q.sz); m.material.opacity=.6*(q.life/q.max); }
     else { q.vy-=32*dt; m.rotation.x+=q.rx*dt; m.rotation.y+=q.ry*dt;
@@ -390,6 +400,7 @@ function updateFx(dt,dm,carRotY){
     mapEl.style.transform=cv.style.transform='translate('+tx+'px,'+ty+'px)'; }
   else if(shake===0 && updateFx.on){ mapEl.style.transform=cv.style.transform=''; updateFx.on=false; }
   if(shake>0) updateFx.on=true;
+  return live;
 }
 
 /* ---------- INPUT ---------- */
@@ -406,8 +417,23 @@ function joy(trackId,knobId,axis){
 joy('st','stk','x'); joy('sp','spk','y');
 const K={}; addEventListener('keydown',e=>{K[e.key.toLowerCase()]=1; if(e.key.startsWith('Arrow')||e.key===' ')e.preventDefault();}); addEventListener('keyup',e=>K[e.key.toLowerCase()]=0);
 let kS=0,kG=0; let zoomOff=0;
-cp.onclick=()=>EXAG=Math.min(EXAG*1.25,2.5); cm.onclick=()=>EXAG=Math.max(EXAG/1.25,.25);
-zi.onclick=()=>zoomOff=Math.min(zoomOff+.5,2); zo.onclick=()=>zoomOff=Math.max(zoomOff-.5,-3);
+let dirty=true;
+cp.onclick=()=>{EXAG=Math.min(EXAG*1.25,2.5); dirty=true;}; cm.onclick=()=>{EXAG=Math.max(EXAG/1.25,.25); dirty=true;};
+function applyPower(on){
+  POWER=on; try{ localStorage.setItem('ydPower',on?'1':'0'); }catch(e){}
+  pw.classList.toggle('on',on);
+  try{ map.setPixelRatio(mapPR(on)); }catch(e){}
+  renderer.setPixelRatio(carPR(on)); step.W=0;                  // forces canvas resize next frame
+  if(styleReady){
+    try{ if(on){ map.setTerrain(null); terrainOn=false; }
+         else if(map.getSource('dem')){ map.setTerrain({source:'dem',exaggeration:TERRAIN_X}); terrainOn=true; } }catch(e){ console.warn('terrain toggle',e); }
+    decorAt=null;                                               // rebuild trees at the new density
+  }
+  dirty=true;
+}
+pw.onclick=()=>applyPower(!POWER);
+pw.classList.toggle('on',POWER);
+zi.onclick=()=>{zoomOff=Math.min(zoomOff+.5,2); dirty=true;}; zo.onclick=()=>{zoomOff=Math.max(zoomOff-.5,-3); dirty=true;};
 
 /* ---------- PHYSICS ---------- */
 const S={lng:-88.446,lat:41.642,hdg:0,v:0,steer:0,camB:0,zoom:19.3,roll:0,pitch:0,wheel:0,dist:0,sp:0,sr:0};
@@ -450,7 +476,7 @@ let mini=null, miniZ=13.5;
 function initMini(){
   try{
     mini=new maplibregl.Map({container:'mini',style:'https://tiles.openfreemap.org/styles/liberty',center:[S.lng,S.lat],zoom:miniZ,
-      interactive:false,attributionControl:false,fadeDuration:0,pitch:0});
+      interactive:false,attributionControl:false,fadeDuration:0,pitch:0,pixelRatio:1});
     mini.on('error',e=>{ console.warn('MINI:',e&&e.error&&e.error.message); });
     document.getElementById('mini').addEventListener('click',()=>{ miniZ=miniZ>=15?11.5:miniZ+1.5; mini.easeTo({zoom:miniZ,duration:250}); });
   }catch(e){ document.getElementById('mini').style.display='none'; }
@@ -469,7 +495,7 @@ function ngon(lng,lat,r,n,rot){ const k=Math.cos(lat*Math.PI/180)*111320, ring=[
   for(let i=0;i<=n;i++){ const t=rot+(i%n)/n*2*Math.PI; ring.push([lng+Math.cos(t)*r/k,lat+Math.sin(t)*r/111320]); } return [ring]; }
 function buildDecor(){
   if(!styleReady||!map.getSource('decor')) return;
-  const t0=performance.now(), cx=S.lng, cy=S.lat, R=650, feats=[], seenT=new Set();
+  const t0=performance.now(), cx=S.lng, cy=S.lat, R=POWER?450:650, TMAX=POWER?900:2500, feats=[], seenT=new Set();
   const wx0=cx-R/MLNG, wx1=cx+R/MLNG, wy0=cy-R/MLAT, wy1=cy+R/MLAT;
   let trees=0;
   try{
@@ -491,7 +517,7 @@ function buildDecor(){
           feats.push({type:'Feature',properties:{k:'trunk',h:th+.6,b:0},geometry:{type:'Polygon',coordinates:ngon(lng,lat,.35,5,0)}});
           feats.push({type:'Feature',properties:{k:'crown',h:top,b:th,c:TREEC[Math.floor(hash(ix+3,iy+9)*TREEC.length)]},
             geometry:{type:'Polygon',coordinates:ngon(lng,lat,cr,7,r1*6)}});
-          if(++trees>=2500 || performance.now()-t0>35) break outer;
+          if(++trees>=TMAX || performance.now()-t0>35) break outer;
         }
       }
     }
@@ -544,7 +570,12 @@ function setMode(m){
   roadEl.textContent=m==='boat'?'Boating':'Driving'; roadEl.className='';
 }
 function setBoat(v){ setMode(v?'boat':'car'); }
+const tick={};
+function every(k,sec){ const t=last/1000; if(tick[k]===undefined||t-tick[k]>=sec){ tick[k]=t; return true; } return false; }
+let lastStep=0;
 function loop(now){
+  if(POWER && now-lastStep<30){ requestAnimationFrame(loop); return; }   // ~30 fps in battery saver
+  lastStep=now;
   try{ step(now); }catch(e){ if(!loop.err){loop.err=1; const d=document.createElement('pre'); d.style.cssText='position:fixed;left:8px;right:8px;top:8px;z-index:9999;background:#7f1d1d;color:#fff;font:12px monospace;padding:10px;white-space:pre-wrap;border-radius:8px'; d.textContent='LOOP ERROR: '+e.message+'\n'+(e.stack||'').split('\n').slice(0,4).join('\n'); document.body.appendChild(d);} }
   requestAnimationFrame(loop);
 }
@@ -596,39 +627,51 @@ function step(now){
   if(blocked){ S.v=-S.v*.3; } else { S.lat=nLat; S.lng=nLng; }
 
   // road detection
-  if(frame%60===0) updatePlace();
-  if(mini && frame%6===0){ try{ mini.jumpTo({center:[S.lng,S.lat]}); }catch(e){} }
-  if(frame%3===0) miniArrowEl.style.transform='rotate('+S.hdg.toFixed(1)+'deg)';
-  if(frame%4===0 && styleReady){
+  if(every('place',1)) updatePlace();
+  if(mini && every('mini',POWER?1:.12) && (!step.mLat || meters(step.mLat,step.mLng,S.lat,S.lng)>2)){
+    step.mLat=S.lat; step.mLng=S.lng; try{ mini.jumpTo({center:[S.lng,S.lat]}); }catch(e){} }
+  const ah=S.hdg.toFixed(1); if(ah!==step.ah && every('arrow',.05)){ step.ah=ah; miniArrowEl.style.transform='rotate('+ah+'deg)'; }
+  const parked=Math.abs(S.v)<.05 && step.detOnce;
+  if(!parked && styleReady && every('det',.12)){ step.detOnce=true;
     const p=map.project([S.lng,S.lat]); const f=hitRoad(p.x,p.y,48);
     const el=roadEl;
     if(f===null){ onRoad=true; el.textContent='Driving'; el.className=''; }      // road data unavailable: never punish
     else if(f.length>0){ miss=0; onRoad=true; const nm=f.find(x=>x.properties&&x.properties.name); roadName=nm?nm.properties.name:''; el.textContent=roadName||'On road'; el.className=''; }
-    else if(++miss>=15){ onRoad=false; el.textContent='Off road'; el.className='off'; }   // ~1s of sustained misses
+    else if(++miss>=8){ onRoad=false; el.textContent='Off road'; el.className='off'; }   // ~1s of sustained misses
     // water <-> land switching (a bridge counts as land)
     const inW=waterIds.length>0 && hit(p.x,p.y,2,waterIds).length>0 && !hit(p.x,p.y,5,bridgeIds).length;
     if(inW){ landC=0; if(!boat && ++waterC>=2) setBoat(true); }
     else { waterC=0; if(boat && ++landC>=3) setBoat(false); }
     if(boat){ onRoad=true; el.textContent='Boating'; el.className=''; }
     else {
-      // farmland (and not on a road) -> tractor
-      const onFarm=hit(p.x,p.y,2,['lc-farm']).length>0 && !(hitRoad(p.x,p.y,4)||[]).length;
-      if(onFarm){ offFarmC=0; if(mode!=='tractor' && ++farmC>=3) setMode('tractor'); }
-      else { farmC=0; if(mode==='tractor' && ++offFarmC>=3) setMode('car'); }
+      // farmland -> tractor, with hysteresis so it doesn't flicker mid-field:
+      //  - farm tracks/paths through a field don't count as roads
+      //  - small probe to become a tractor, wide probe to stay one (bridges gaps between neighbouring fields)
+      //  - ~0.4 s in a field to switch in; ~1.2 s clearly out of it (or ~0.5 s on a real road) to switch back
+      const realRoad=(hitRoad(p.x,p.y,4)||[]).some(f=>!/^(track|path)$/.test(String(f.properties&&f.properties.class||'')));
+      const inField=hit(p.x,p.y,mode==='tractor'?14:2,['lc-farm']).length>0;
+      if(mode!=='tractor'){ if(inField&&!realRoad){ if(++farmC>=3){ farmC=0; setMode('tractor'); } } else farmC=0; }
+      else if(realRoad){ offFarmC+=2.5; if(offFarmC>=10){ offFarmC=0; setMode('car'); } }
+      else if(!inField){
+        // field still just behind us => a real exit; no land data anywhere nearby => tiles reloading, count slowly
+        const noData=!hit(p.x,p.y,40,['lc-farm']).length && !hit(p.x,p.y,2,landIds).length;
+        offFarmC+=noData?.4:1; if(offFarmC>=10){ offFarmC=0; setMode('car'); } }
+      else offFarmC=0;
       if(mode==='tractor'){ onRoad=true; el.textContent='In the field'; el.className=''; }
     }
-    if(frame%12===0){
+    if(every('surf',.4)){
       const lt=boat?'Water':landHere(p);
       const txt=lt+(mode==='tractor'?' · Tractor':mode==='boat'?' · Bass boat':'');
       if(txt!==step.surf){ step.surf=txt; surfEl.textContent=txt; }
     }
   }
-  if(frame%30===0){
+  if(every('decor',.5)){
     if(styleReady && (!decorAt || meters(decorAt[1],decorAt[0],S.lat,S.lng)>250)) buildDecor();
     const nt=nearestPoi(); if(nt!==step.near){ step.near=nt; nearEl.textContent=nt; }
   }
   // terrain slope under the vehicle (tilts it up and down hills)
-  if(terrainOn && frame%2===0){
+  if(!terrainOn){ S.sp*=.9; S.sr*=.9; }
+  else if(!parked && every('slope',.05)){
     try{
       const d=3, c=Math.cos(h), s=Math.sin(h), kx=1/(111320*Math.cos(rad(S.lat))), ky=1/111320;
       const e=(dx,dy)=>map.queryTerrainElevation([S.lng+dx*kx,S.lat+dy*ky]);
@@ -645,7 +688,10 @@ function step(now){
   const dB=((S.hdg-S.camB+540)%360)-180; S.camB+=dB*(1-Math.exp(-dt*7));
   const tz=19.3+zoomOff-Math.min(Math.abs(S.v)/MAXV,1)*2.0; S.zoom+=(tz-S.zoom)*Math.min(1,dt*3);
   const W=innerWidth,H=innerHeight,padTop=H*.34;
-  map.jumpTo({center:[S.lng,S.lat],bearing:S.camB,zoom:S.zoom,pitch:68,padding:{top:padTop,bottom:0,left:0,right:0}});
+  const cm0=step.cam||{};
+  const camMoved=dirty||W!==cm0.W||H!==cm0.H||Math.abs(S.lng-cm0.lng)>1e-8||Math.abs(S.lat-cm0.lat)>1e-8||Math.abs(S.camB-cm0.b)>.005||Math.abs(S.zoom-cm0.z)>.0003;
+  if(camMoved){ step.cam={lng:S.lng,lat:S.lat,b:S.camB,z:S.zoom,W,H};
+    map.jumpTo({center:[S.lng,S.lat],bearing:S.camB,zoom:S.zoom,pitch:68,padding:{top:padTop,bottom:0,left:0,right:0}}); }
 
   // 3D car — pixel-scale match with map camera
   if(W!==step.W||H!==step.H){ step.W=W; step.H=H;               // only touch the GL canvas / camera on resize
@@ -660,16 +706,20 @@ function step(now){
   body.rotation.z=S.roll+S.sr; body.rotation.x=S.pitch+S.sp;
   tractorG.rotation.z=S.roll*.6+S.sr; tractorG.rotation.x=S.pitch*.6+S.sp;
   if(boat){ boatG.rotation.z=S.roll*1.6+Math.sin(now/420)*.03; boatG.rotation.x=S.pitch+Math.sin(now/510)*.025; boatG.position.y=-.1+Math.sin(now/360)*.05;
-    if(Math.abs(S.v)>3 && frame%2===0) spawn(0,Math.min(3,1+Math.floor(Math.abs(S.v)/15)),1,0xf4fbff); }
+    if(Math.abs(S.v)>3 && every('wake',.035)) spawn(0,Math.min(3,1+Math.floor(Math.abs(S.v)/15)),1,0xf4fbff); }
   S.dist+=S.v*dt;
   if(mode==='car') wheels.forEach(w=>{ w.spin.rotation.x=-S.dist/.38; if(w.front) w.pivot.rotation.y=-S.steer; });
   else if(mode==='tractor'){
     tWheels.forEach(w=>{ w.spin.rotation.x=-S.dist/w.r; if(w.front) w.pivot.rotation.y=-S.steer; });
-    if(Math.abs(S.v)>4 && frame%4===0) spawn(0,1,1,0xa0825a);     // dirt kicked up behind
+    if(Math.abs(S.v)>4 && every('dirt',.07)) spawn(0,1,1,0xa0825a);     // dirt kicked up behind
   }
   tails.forEach(t=>t.material=braking?tailOn:tailOff);
-  updateFx(dt,dm,car.rotation.y);
-  renderer.render(scene,camera);
+  const live=updateFx(dt,dm,car.rotation.y);
+  const settling=Math.abs(tRoll-S.roll)>1e-3||Math.abs(tPitch-S.pitch)>1e-3||Math.abs(S.steer-(step.pst||0))>1e-4||braking!==step.pbr||Math.abs(S.sp)>1e-3&&!terrainOn;
+  step.pst=S.steer; step.pbr=braking;
+  const bob=boat&&(!POWER||frame%2===0);                         // parked boat still bobs, at half rate in saver
+  if(camMoved||settling||live>0||shake>0||bob){ renderer.render(scene,camera); }
+  dirty=false;
 
   const mph=Math.round(Math.abs(S.v)*2.237); if(mph!==step.mph){ step.mph=mph; mphEl.textContent=mph; }
 }
