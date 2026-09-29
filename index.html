@@ -162,7 +162,7 @@ zi.onclick=()=>zoomOff=Math.min(zoomOff+.5,2); zo.onclick=()=>zoomOff=Math.max(z
 
 /* ---------- PHYSICS ---------- */
 const S={lng:-88.446,lat:41.642,hdg:0,v:0,steer:0,camB:0,zoom:19.3,roll:0,pitch:0,wheel:0};
-const WB=3.05, MAXV=60; let EXAG=0.6;
+const WB=3.05, MAXV=60, REVMAX=28, SPEEDUP=3; let EXAG=0.6;   // SPEEDUP: world distance per game metre
 let last=0,frame=0,onRoad=true,roadName='';
 const rad=d=>d*Math.PI/180;
 const mpp=(lat,z)=>78271.517*Math.cos(rad(lat))/Math.pow(2,z);
@@ -204,14 +204,14 @@ function step(now){
 
   // longitudinal
   let a=0, braking=false;
-  if(gas>0.05) a=gas*(S.v<0?25:11)*(1-Math.min(S.v/MAXV,1)**2);
-  else if(gas<-0.05){ if(S.v>.5){a=-28*(-gas);braking=true;} else a=gas*3.5; }
+  if(gas>0.05) a=gas*(S.v<0?30:12)*(1-Math.min(S.v/MAXV,1)**2);
+  else if(gas<-0.05){ if(S.v>.5){a=-28*(-gas);braking=true;} else a=gas*14; }
   if(hand){a-=Math.sign(S.v)*30; braking=Math.abs(S.v)>.5;}
   const cap=onRoad?MAXV:28;
   a-=Math.sign(S.v)*(.35+.0032*S.v*S.v);                // rolling + aero drag
   if(!onRoad) a-=S.v*.4;                                // grass drag
   const prevV=S.v; S.v+=a*dt; if(prevV*S.v<0&&Math.abs(gas)<.05) S.v=0;
-  S.v=Math.max(-9,Math.min(cap*(S.v>0?1:0)+ (S.v<0?9:0),S.v)); if(Math.abs(S.v)<.05&&Math.abs(gas)<.05)S.v=0;
+  S.v=Math.max(-REVMAX,Math.min(cap,S.v)); if(Math.abs(S.v)<.05&&Math.abs(gas)<.05)S.v=0;
 
   // steering (bicycle model, less lock at speed)
   const lock=rad(34)/(1+Math.abs(S.v)/7);
@@ -219,7 +219,7 @@ function step(now){
   S.hdg+=(S.v/WB)*Math.tan(S.steer)*dt*180/Math.PI;
 
   // move, with collision against buildings & water
-  const dm=S.v*dt, h=rad(S.hdg);
+  const dm=S.v*dt*SPEEDUP, h=rad(S.hdg);
   const nLat=S.lat+Math.cos(h)*dm/111320, nLng=S.lng+Math.sin(h)*dm/(111320*Math.cos(rad(S.lat)));
   let blocked=false;
   if(Math.abs(S.v)>.5 && map.loaded()){
