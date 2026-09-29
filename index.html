@@ -161,10 +161,12 @@ zi.onclick=()=>zoomOff=Math.min(zoomOff+.5,2); zo.onclick=()=>zoomOff=Math.max(z
 
 /* ---------- PHYSICS ---------- */
 const S={lng:-88.446,lat:41.642,hdg:0,v:0,steer:0,camB:0,zoom:19.3,roll:0,pitch:0,wheel:0};
-const WB=3.05, MAXV=45, EXAG=1.5;
+const WB=3.05, MAXV=60, EXAG=1.5;
 let last=0,frame=0,onRoad=true,roadName='';
 const rad=d=>d*Math.PI/180;
 const mpp=(lat,z)=>78271.517*Math.cos(rad(lat))/Math.pow(2,z);
+let roadFails=0, miss=0;
+const hitRoad=(x,y,r)=>{ try{ const ids=roadIds.filter(i=>map.getLayer(i)); if(!ids.length) return null; return map.queryRenderedFeatures([[x-r,y-r],[x+r,y+r]],{layers:ids}); }catch(e){ roadFails++; return null; } };
 const hit=(x,y,r,ids)=>{ try{ ids=ids.filter(i=>map.getLayer(i)); return ids.length?map.queryRenderedFeatures([[x-r,y-r],[x+r,y+r]],{layers:ids}):[]; }catch(e){ return []; } };
 
 function loop(now){
@@ -180,12 +182,12 @@ function step(now){
 
   // longitudinal
   let a=0, braking=false;
-  if(gas>0.05) a=gas*(S.v<0?25:8.5)*(1-Math.min(S.v/MAXV,1)**2);
+  if(gas>0.05) a=gas*(S.v<0?25:11)*(1-Math.min(S.v/MAXV,1)**2);
   else if(gas<-0.05){ if(S.v>.5){a=-28*(-gas);braking=true;} else a=gas*3.5; }
   if(hand){a-=Math.sign(S.v)*30; braking=Math.abs(S.v)>.5;}
-  const cap=onRoad?MAXV:11;
+  const cap=onRoad?MAXV:28;
   a-=Math.sign(S.v)*(.35+.0032*S.v*S.v);                // rolling + aero drag
-  if(!onRoad) a-=S.v*1.2;                                // grass drag
+  if(!onRoad) a-=S.v*.4;                                // grass drag
   const prevV=S.v; S.v+=a*dt; if(prevV*S.v<0&&Math.abs(gas)<.05) S.v=0;
   S.v=Math.max(-9,Math.min(cap*(S.v>0?1:0)+ (S.v<0?9:0),S.v)); if(Math.abs(S.v)<.05&&Math.abs(gas)<.05)S.v=0;
 
@@ -208,14 +210,16 @@ function step(now){
 
   // road detection
   if(frame%4===0 && map.loaded()){
-    const p=map.project([S.lng,S.lat]); const f=hit(p.x,p.y,7,roadIds)||[];
-    onRoad=f.length>0; const nm=f.find(x=>x.properties&&x.properties.name); roadName=nm?nm.properties.name:'';
-    const el=document.getElementById('road'); el.textContent=onRoad?(roadName||'On road'):'Off road'; el.className=onRoad?'':'off';
+    const p=map.project([S.lng,S.lat]); const f=hitRoad(p.x,p.y,16);
+    const el=document.getElementById('road');
+    if(f===null){ onRoad=true; el.textContent='Driving'; el.className=''; }      // road data unavailable: never punish
+    else if(f.length>0){ miss=0; onRoad=true; const nm=f.find(x=>x.properties&&x.properties.name); roadName=nm?nm.properties.name:''; el.textContent=roadName||'On road'; el.className=''; }
+    else if(++miss>=4){ onRoad=false; el.textContent='Off road'; el.className='off'; }
   }
 
   // camera: lagged chase, zooms out with speed
   const dB=((S.hdg-S.camB+540)%360)-180; S.camB+=dB*(1-Math.exp(-dt*7));
-  const tz=19.3+zoomOff-Math.min(Math.abs(S.v)/MAXV,1)*1.4; S.zoom+=(tz-S.zoom)*Math.min(1,dt*3);
+  const tz=19.3+zoomOff-Math.min(Math.abs(S.v)/MAXV,1)*2.0; S.zoom+=(tz-S.zoom)*Math.min(1,dt*3);
   const W=innerWidth,H=innerHeight,padTop=H*.34;
   map.jumpTo({center:[S.lng,S.lat],bearing:S.camB,zoom:S.zoom,pitch:68,padding:{top:padTop,bottom:0,left:0,right:0}});
 
