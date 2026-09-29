@@ -68,10 +68,14 @@ let POWER=false;
 try{ const v=localStorage.getItem('ydPower'); POWER = v===null ? matchMedia('(pointer: coarse)').matches : v==='1'; }
 catch(e){ try{ POWER=matchMedia('(pointer: coarse)').matches; }catch(_){} }
 const mapPR=on=>Math.min(devicePixelRatio||1, on?1.5:2);
+// Start on Route 47 just south of Raging Waves waterpark, pointed at it
+const RAGING_WAVES={lng:-88.44446,lat:41.6989};
+const START=(()=>{ const lng=-88.4474, lat=41.6955, dN=(RAGING_WAVES.lat-lat)*111320, dE=(RAGING_WAVES.lng-lng)*111320*Math.cos(lat*Math.PI/180);
+  return {lng,lat,hdg:(Math.atan2(dE,dN)*180/Math.PI+360)%360}; })();
 /* ---------- MAP ---------- */
 const map = new maplibregl.Map({ pixelRatio:mapPR(POWER),
   container:'map', style:'https://tiles.openfreemap.org/styles/liberty',
-  center:[-88.446,41.642], zoom:19.3, pitch:68, maxPitch:80, maxZoom:22,
+  center:[START.lng,START.lat], bearing:START.hdg, zoom:19.3, pitch:68, maxPitch:80, maxZoom:22,
   interactive:false, fadeDuration:0, attributionControl:{compact:true}
 });
 let roadIds=[], blockIds=[], waterIds=[], bridgeIds=[], hideIds=[];
@@ -229,6 +233,17 @@ map.on('load',()=>{ try{ initMini();
       if(decorN>60 && performance.now()-decorT<4000) return;       // don't rebuild constantly while tiles stream
       clearTimeout(decorTimer); decorTimer=setTimeout(buildDecor,700); });
   }catch(e){ console.warn('decor',e); }
+  try{
+    const fl=(all.find(l=>l.layout&&l.layout['text-font'])||{}).layout;
+    map.addSource('towers',{type:'geojson',data:towerFC(false)});
+    map.addLayer({id:'tower-3d',type:'fill-extrusion',source:'towers',filter:['==',['get','k'],'tw'],
+      paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-height':['get','h'],'fill-extrusion-base':['get','b']}});
+    map.addLayer({id:'tower-label',type:'symbol',source:'towers',filter:['==',['get','k'],'lbl'],
+      layout:{'text-field':['get','name'],'text-font':fl?fl['text-font']:['Noto Sans Regular'],'text-size':14,'text-anchor':'bottom',
+        'text-offset':[0,-.5],'text-allow-overlap':true,'text-ignore-placement':true},
+      paint:{'text-color':'#0c4a6e','text-halo-color':'#fff','text-halo-width':2}});
+  }catch(e){ console.warn('tower layers',e); }
+  loadTowers();
   styleReady=true;
   const ld=document.getElementById('load'); ld.style.opacity=0; setTimeout(()=>ld.remove(),500);
   }catch(err){ console.error(err); var d=document.createElement('pre'); d.style.cssText='position:fixed;left:8px;right:8px;top:8px;z-index:9999;background:#7f1d1d;color:#fff;font:12px monospace;padding:10px;white-space:pre-wrap'; d.textContent='LOAD ERROR: '+err.message; document.body.appendChild(d); }
@@ -436,10 +451,10 @@ pw.classList.toggle('on',POWER);
 zi.onclick=()=>{zoomOff=Math.min(zoomOff+.5,2); dirty=true;}; zo.onclick=()=>{zoomOff=Math.max(zoomOff-.5,-3); dirty=true;};
 
 /* ---------- PHYSICS ---------- */
-const S={lng:-88.446,lat:41.642,hdg:0,v:0,steer:0,camB:0,zoom:19.3,roll:0,pitch:0,wheel:0,dist:0,sp:0,sr:0};
+const S={lng:START.lng,lat:START.lat,hdg:START.hdg,v:0,steer:0,camB:START.hdg,zoom:19.3,roll:0,pitch:0,wheel:0,dist:0,sp:0,sr:0};
 let boat=false, waterC=0, landC=0, mode='car', farmC=0, offFarmC=0, terrainOn=false, landIds=[];
 const TERRAIN_X=1.5, TRACTOR=0.75;   // tractor runs at 75% of car speed
-const BOATMAX=48, WB=3.05, MAXV=60, REVMAX=28, SPEEDUP=3; let EXAG=0.6;   // SPEEDUP: world distance per game metre
+const BOATMAX=48, WB=3.05, MAXV=60, REVMAX=28, SPEEDUP=3; let EXAG=1.6;   // two steps below the largest size (2.5)   // SPEEDUP: world distance per game metre
 let last=0,frame=0,onRoad=true,roadName='';
 const rad=d=>d*Math.PI/180;
 const mpp=(lat,z)=>78271.517*Math.cos(rad(lat))/Math.pow(2,z);
@@ -478,6 +493,10 @@ function initMini(){
     mini=new maplibregl.Map({container:'mini',style:'https://tiles.openfreemap.org/styles/liberty',center:[S.lng,S.lat],zoom:miniZ,
       interactive:false,attributionControl:false,fadeDuration:0,pitch:0,pixelRatio:1});
     mini.on('error',e=>{ console.warn('MINI:',e&&e.error&&e.error.message); });
+    mini.on('load',()=>{ try{
+      mini.addSource('towers',{type:'geojson',data:towerFC(true)});
+      mini.addLayer({id:'tw',type:'circle',source:'towers',paint:{'circle-radius':4.5,'circle-color':'#0ea5e9','circle-stroke-color':'#fff','circle-stroke-width':1.5}});
+      miniReady=true; }catch(e){ console.warn('mini towers',e); } });
     document.getElementById('mini').addEventListener('click',()=>{ miniZ=miniZ>=15?11.5:miniZ+1.5; mini.easeTo({zoom:miniZ,duration:250}); });
   }catch(e){ document.getElementById('mini').style.display='none'; }
 }
@@ -558,8 +577,70 @@ function landHere(p){
 function nearestPoi(){
   let best=null, bd=200;
   for(const q of pois){ const d=meters(S.lat,S.lng,q.lat,q.lng); if(d<bd){ bd=d; best=q; } }
+  if(!best) for(const q of towers){ const d=meters(S.lat,S.lng,q.lat,q.lng); if(d<600&&d<(bd===200?1e9:bd)){ bd=d; best=q; } }
   return best?('Near: '+best.name+(best.cls?' ('+best.cls+')':'')+' · '+Math.round(bd)+' m'):'';
 }
+/* ---------- LAND CACHE: farmland + water polygons near the car ---------- */
+let candMode=null, candT=0;
+const landCache={farm:[],water:[],at:null};
+function rebuildLandCache(){
+  try{
+    const cx=S.lng, cy=S.lat, R=1500, w=[cx-R/MLNG,cy-R/MLAT,cx+R/MLNG,cy+R/MLAT];
+    const pick=feats=>{ const out=[]; for(const f of feats) for(const pl of partsOf(f.geometry)){ const bb=bboxOf(pl[0]);
+      if(bb[2]<w[0]||bb[0]>w[2]||bb[3]<w[1]||bb[1]>w[3]) continue; out.push({bb,pl}); } return out; };
+    const farm=pick(map.querySourceFeatures(bSrc,{sourceLayer:'landcover',filter:['==',['get','class'],'farmland']}));
+    const water=pick(map.querySourceFeatures(bSrc,{sourceLayer:'water'}));
+    // keep the old lists if tiles are mid-reload and returned nothing
+    if(farm.length||!landCache.at) landCache.farm=farm;
+    if(water.length||!landCache.at) landCache.water=water;
+    landCache.at=[cx,cy];
+  }catch(e){ console.warn('land cache',e); }
+}
+function inAny(list,lng,lat){ for(const q of list){ const b=q.bb; if(lng<b[0]||lng>b[2]||lat<b[1]||lat>b[3]) continue; if(inPoly(lng,lat,q.pl)) return true; } return false; }
+
+/* ---------- WATER TOWERS (OpenStreetMap man_made=water_tower via Overpass, keyless) ---------- */
+let towers=[], towerAt=null, towerBusy=false, miniReady=false;
+const towerSeen=new Set();
+const OVERPASS=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
+function loadTowers(ep=0){
+  if(towerBusy) return; towerBusy=true;
+  const cx=S.lng, cy=S.lat, dy=.3, dx=.4;                          // ~33 km x 33 km around the car
+  const bb=`(${(cy-dy).toFixed(4)},${(cx-dx).toFixed(4)},${(cy+dy).toFixed(4)},${(cx+dx).toFixed(4)})`;
+  const q=`[out:json][timeout:25];(node["man_made"="water_tower"]${bb};way["man_made"="water_tower"]${bb};relation["man_made"="water_tower"]${bb};);out center tags;`;
+  fetch(OVERPASS[ep],{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'}})
+    .then(r=>{ if(!r.ok) throw new Error('overpass '+r.status); return r.json(); })
+    .then(j=>{
+      for(const el of j.elements||[]){
+        const lat=el.lat??(el.center&&el.center.lat), lng=el.lon??(el.center&&el.center.lon);
+        if(lat==null||lng==null) continue;
+        const k=el.type+el.id; if(towerSeen.has(k)) continue; towerSeen.add(k);
+        const t=el.tags||{};
+        towers.push({lng,lat,name:t.name||t['name:en']||(t.operator?t.operator+' water tower':'Water tower'),cls:'water tower'});
+      }
+      towerAt=[cx,cy]; drawTowers();
+    })
+    .catch(e=>{ console.warn('towers',e); if(ep+1<OVERPASS.length){ towerBusy=false; loadTowers(ep+1); return; } towerAt=[cx,cy]; })
+    .finally(()=>{ towerBusy=false; });
+}
+function towerFC(pointsOnly){
+  const feats=[];
+  for(const t of towers){
+    feats.push({type:'Feature',properties:{k:'lbl',name:t.name},geometry:{type:'Point',coordinates:[t.lng,t.lat]}});
+    if(pointsOnly) continue;
+    feats.push({type:'Feature',properties:{k:'tw',h:34,b:0,c:'#cfd8e3'},geometry:{type:'Polygon',coordinates:ngon(t.lng,t.lat,2.2,10,0)}});   // stem
+    const C=42, R=8;                                                  // spherical tank from stacked rings
+    for(let z=C-R+.6;z<C+R;z+=1.6){ const zm=z+.8, r=Math.sqrt(Math.max(0,R*R-(zm-C)*(zm-C)));
+      if(r<.6) continue;
+      feats.push({type:'Feature',properties:{k:'tw',h:z+1.6,b:z,c:'#e6eef6'},geometry:{type:'Polygon',coordinates:ngon(t.lng,t.lat,r,16,0)}}); }
+    feats.push({type:'Feature',properties:{k:'tw',h:C+R+2.5,b:C+R-.4,c:'#9fb3c8'},geometry:{type:'Polygon',coordinates:ngon(t.lng,t.lat,.5,6,0)}});   // finial
+  }
+  return {type:'FeatureCollection',features:feats};
+}
+function drawTowers(){
+  try{ const src=map.getSource('towers'); if(src) src.setData(towerFC(false)); }catch(e){}
+  try{ if(miniReady) mini.getSource('towers').setData(towerFC(true)); }catch(e){}
+}
+
 function setMode(m){
   if(m===mode) return;
   const was=mode; mode=m; boat=(m==='boat');
@@ -614,12 +695,15 @@ function step(now){
     // tall extrusions overlap the car on screen, so candidates are filtered by real footprint under the car's nose.
     // A small box is enough: fill-extrusion queries hit the whole projected prism, including its base footprint.
     const bh=hit(p.x,p.y,6,blockIds).filter(f=>contains(f.geometry,ahead[0],ahead[1]));
-    if(bh.length){ inBuilding=true; smashFeature(bh[0],ahead); }
+    if(bh.length){ inBuilding=true;                                 // buildings stay standing; you just plow through
+      const b0=bh[0], bid=b0.id!=null?b0.id:JSON.stringify(bboxOf(partsOf(b0.geometry)[0]?.[0]||[[0,0]]));
+      if(bid!==step.bid){ step.bid=bid; step.newHit=true; } }
+    else step.bid=null;
   }
   smashCool-=dt;
   if(inBuilding){
     const dir=S.v>=0?-1:1;
-    if(!smashing){ spawn(34,14,dir); shake=1; smashCool=.05; }
+    if(!smashing||step.newHit){ step.newHit=false; spawn(34,14,dir); shake=1; smashCool=.05; }
     else if(smashCool<=0){ spawn(5,2,dir); smashCool=.06; shake=Math.max(shake,.35); }
     S.v*=Math.exp(-dt*1.6);                                    // buildings slow you, but you plow through
   }
@@ -638,25 +722,23 @@ function step(now){
     if(f===null){ onRoad=true; el.textContent='Driving'; el.className=''; }      // road data unavailable: never punish
     else if(f.length>0){ miss=0; onRoad=true; const nm=f.find(x=>x.properties&&x.properties.name); roadName=nm?nm.properties.name:''; el.textContent=roadName||'On road'; el.className=''; }
     else if(++miss>=8){ onRoad=false; el.textContent='Off road'; el.className='off'; }   // ~1s of sustained misses
-    // water <-> land switching (a bridge counts as land)
-    const inW=waterIds.length>0 && hit(p.x,p.y,2,waterIds).length>0 && !hit(p.x,p.y,5,bridgeIds).length;
-    if(inW){ landC=0; if(!boat && ++waterC>=2) setBoat(true); }
-    else { waterC=0; if(boat && ++landC>=3) setBoat(false); }
+    // ---- which vehicle? Decided from the map's real water/farmland polygons (point-in-polygon on
+    //      lng/lat), not from what happens to be drawn under a screen pixel, then debounced by time.
+    if(!landCache.at || every('landcache',3) || meters(landCache.at[1],landCache.at[0],S.lat,S.lng)>400) rebuildLandCache();
+    const water=inAny(landCache.water,S.lng,S.lat) && !hit(p.x,p.y,5,bridgeIds).length;
+    const farm=!water && inAny(landCache.farm,S.lng,S.lat);
+    const realRoad=farm && (hitRoad(p.x,p.y,4)||[]).some(f=>!/^(track|path)$/.test(String(f.properties&&f.properties.class||'')));
+    const want=water?'boat':(farm&&!realRoad)?'tractor':'car';
+    const tNow=last/1000, gap=Math.min(.5,tNow-(step.detT||tNow)); step.detT=tNow;
+    if(want===mode){ candMode=null; candT=0; }
+    else {
+      if(want!==candMode){ candMode=want; candT=0; }
+      candT+=gap;
+      const need=want==='boat'?.25 : mode==='boat'?.4 : want==='tractor'?.5 : 1.0;   // seconds the new answer must hold
+      if(candT>=need){ setMode(want); candMode=null; candT=0; }
+    }
     if(boat){ onRoad=true; el.textContent='Boating'; el.className=''; }
     else {
-      // farmland -> tractor, with hysteresis so it doesn't flicker mid-field:
-      //  - farm tracks/paths through a field don't count as roads
-      //  - small probe to become a tractor, wide probe to stay one (bridges gaps between neighbouring fields)
-      //  - ~0.4 s in a field to switch in; ~1.2 s clearly out of it (or ~0.5 s on a real road) to switch back
-      const realRoad=(hitRoad(p.x,p.y,4)||[]).some(f=>!/^(track|path)$/.test(String(f.properties&&f.properties.class||'')));
-      const inField=hit(p.x,p.y,mode==='tractor'?14:2,['lc-farm']).length>0;
-      if(mode!=='tractor'){ if(inField&&!realRoad){ if(++farmC>=3){ farmC=0; setMode('tractor'); } } else farmC=0; }
-      else if(realRoad){ offFarmC+=2.5; if(offFarmC>=10){ offFarmC=0; setMode('car'); } }
-      else if(!inField){
-        // field still just behind us => a real exit; no land data anywhere nearby => tiles reloading, count slowly
-        const noData=!hit(p.x,p.y,40,['lc-farm']).length && !hit(p.x,p.y,2,landIds).length;
-        offFarmC+=noData?.4:1; if(offFarmC>=10){ offFarmC=0; setMode('car'); } }
-      else offFarmC=0;
       if(mode==='tractor'){ onRoad=true; el.textContent='In the field'; el.className=''; }
     }
     if(every('surf',.4)){
@@ -665,6 +747,7 @@ function step(now){
       if(txt!==step.surf){ step.surf=txt; surfEl.textContent=txt; }
     }
   }
+  if(every('towers',5) && !towerBusy && towerAt && meters(towerAt[1],towerAt[0],S.lat,S.lng)>15000) loadTowers();
   if(every('decor',.5)){
     if(styleReady && (!decorAt || meters(decorAt[1],decorAt[0],S.lat,S.lng)>250)) buildDecor();
     const nt=nearestPoi(); if(nt!==step.near){ step.near=nt; nearEl.textContent=nt; }
