@@ -18,6 +18,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#9cc8ec;font-family:sy
 #hud{position:absolute;top:12px;left:12px;z-index:20;background:rgba(15,23,42,.8);color:#e2e8f0;padding:10px 14px;border-radius:12px;pointer-events:none;font-size:13px;line-height:1.5}
 #mph{font-size:30px;font-weight:700;color:#fff}
 #road.off{color:#fbbf24}
+#surf{color:#bef264}#near{color:#7dd3fc}
 #mini{position:absolute;left:50%;bottom:26px;width:104px;height:104px;margin-left:-52px;z-index:19;border-radius:50%;overflow:hidden;border:3px solid rgba(255,255,255,.85);box-shadow:0 4px 14px rgba(0,0,0,.45);background:#dfe6ee;touch-action:manipulation}
 #mini .maplibregl-canvas{outline:none}
 #miniArrow{position:absolute;left:50%;top:50%;width:0;height:0;margin:-11px 0 0 -8px;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:22px solid #ef4444;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6));transform-origin:50% 60%;pointer-events:none;z-index:2}
@@ -34,7 +35,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#9cc8ec;font-family:sy
 <div id="load">Loading map…</div>
 <div id="map"></div>
 <canvas id="car3d"></canvas>
-<div id="hud"><span id="mph">0</span> mph<br><span id="road">On road</span><br><span id="place">Locating…</span></div>
+<div id="hud"><span id="mph">0</span> mph<br><span id="road">On road</span><br><span id="place">Locating…</span><br><span id="surf"></span><br><span id="near"></span></div>
 <div id="mini"><div id="miniArrow"></div></div>
 <div id="zoom"><button id="zi">+</button><button id="zo">−</button><button id="cp" style="font-size:14px">🚗+</button><button id="cm" style="font-size:14px">🚗−</button></div>
 <div id="ctl">
@@ -184,6 +185,43 @@ map.on('load',()=>{ try{ initMini();
     map.on('sourcedata',e=>{ if(e.sourceId!==bSrc||!e.tile||!destroyed.length) return;
       clearTimeout(rbTimer); rbTimer=setTimeout(collectSurvivors,300); });
   }catch(e){ console.warn('rebuilt layer',e); }
+  // ---------- terrain, land cover / land use, trees, POI pins ----------
+  const firstRoad=(all.find(l=>l['source-layer']==='transportation')||{}).id;
+  const before=firstRoad&&map.getLayer(firstRoad)?firstRoad:undefined;
+  try{
+    const dem={type:'raster-dem',tiles:['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+      encoding:'terrarium',tileSize:256,maxzoom:15,attribution:'Terrain: Mapzen / AWS Terrain Tiles'};
+    map.addSource('dem',dem); map.addSource('dem-hs',Object.assign({},dem));
+    map.addLayer({id:'hillshade',type:'hillshade',source:'dem-hs',
+      paint:{'hillshade-exaggeration':.4,'hillshade-shadow-color':'#5a4f3f','hillshade-highlight-color':'#fffaf0'}},before);
+    map.setTerrain({source:'dem',exaggeration:TERRAIN_X}); terrainOn=true;
+  }catch(e){ console.warn('terrain',e); }
+  try{
+    const TW=16, D=new Uint8Array(TW*TW*4);                      // crop-row stripes for farmland
+    for(let y=0;y<TW;y++) for(let x=0;x<TW;x++){ const i=(y*TW+x)*4, g=(y%8)<4; D[i]=g?139:214; D[i+1]=g?163:190; D[i+2]=g?82:112; D[i+3]=255; }
+    map.addImage('croprows',{width:TW,height:TW,data:D});
+    map.addLayer({id:'lu-tint',type:'fill',source:bSrc,'source-layer':'landuse',
+      paint:{'fill-color':['match',['get','class'],['commercial','retail'],'#f1c4c4','industrial','#d6cce6',['farmyard','farm'],'#e2cd96','residential','#ebe4d8','#e3e3e3'],'fill-opacity':.35}},before);
+    map.addLayer({id:'lc-farm',type:'fill',source:bSrc,'source-layer':'landcover',filter:['==',['get','class'],'farmland'],
+      paint:{'fill-pattern':'croprows','fill-opacity':.8}},before);
+    // near-invisible layers used only to ask "what land am I on?"
+    map.addLayer({id:'lc-detect',type:'fill',source:bSrc,'source-layer':'landcover',paint:{'fill-color':'#000','fill-opacity':.01}},before);
+    map.addLayer({id:'lu-detect',type:'fill',source:bSrc,'source-layer':'landuse',paint:{'fill-color':'#000','fill-opacity':.01}},before);
+    landIds=['lc-detect','lu-detect'].concat(map.getLayer('park')?['park']:[]);
+  }catch(e){ console.warn('landcover',e); }
+  try{
+    const top=map.getLayer('hn-big')?'hn-big':undefined;
+    map.addSource('decor',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+    map.addLayer({id:'tree-trunk',type:'fill-extrusion',source:'decor',filter:['==',['get','k'],'trunk'],
+      paint:{'fill-extrusion-color':'#6b4a2b','fill-extrusion-height':['get','h'],'fill-extrusion-base':['get','b']}},top);
+    map.addLayer({id:'tree-crown',type:'fill-extrusion',source:'decor',filter:['==',['get','k'],'crown'],
+      paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-height':['get','h'],'fill-extrusion-base':['get','b'],'fill-extrusion-opacity':.95}},top);
+    map.addLayer({id:'poi-pin',type:'fill-extrusion',source:'decor',filter:['==',['get','k'],'pin'],
+      paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-height':['get','h'],'fill-extrusion-base':['get','b']}},top);
+    map.on('sourcedata',e=>{ if(e.sourceId!==bSrc||!e.tile) return;
+      if(decorN>60 && performance.now()-decorT<4000) return;       // don't rebuild constantly while tiles stream
+      clearTimeout(decorTimer); decorTimer=setTimeout(buildDecor,700); });
+  }catch(e){ console.warn('decor',e); }
   styleReady=true;
   const ld=document.getElementById('load'); ld.style.opacity=0; setTimeout(()=>ld.remove(),500);
   }catch(err){ console.error(err); var d=document.createElement('pre'); d.style.cssText='position:fixed;left:8px;right:8px;top:8px;z-index:9999;background:#7f1d1d;color:#fff;font:12px monospace;padding:10px;white-space:pre-wrap'; d.textContent='LOAD ERROR: '+err.message; document.body.appendChild(d); }
@@ -280,6 +318,36 @@ seat(0,-1.85); seat(-.4,.6); seat(.4,.6);
 bx(.1,.6,.1,metalM,0,.72,-2.6); bx(.35,.16,.3,seatM,0,1.05,-2.55);               // bow trolling motor
 bx(.55,.6,.6,hullM,0,1.1,2.85); bx(.2,.7,.35,metalM,0,.3,2.95);                  // outboard
 
+/* ---------- FARM TRACTOR (swaps in on farmland) ---------- */
+const tractorG=new THREE.Group(); tractorG.visible=false; car.add(tractorG);
+const tRed=new THREE.MeshPhongMaterial({color:0xb3261e,specular:0xffd0c0,shininess:70});
+const tCream=new THREE.MeshPhongMaterial({color:0xe9dfc6,shininess:40});
+const tGlass=new THREE.MeshPhongMaterial({color:0x9fc3d9,transparent:true,opacity:.35,shininess:120,depthWrite:false});
+function tb(w,h,d,mat,x,y,z){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); tractorG.add(m); return m; }
+tb(.9,.78,2.1,tRed,0,1.18,-.78);                        // hood / engine
+tb(.7,.35,1.4,black,0,.72,-.9);                          // frame
+tb(.84,.58,.08,black,0,1.14,-1.84);                      // grille
+[-.3,.3].forEach(x=>tb(.18,.12,.05,headM,x,1.4,-1.87));  // headlights
+tb(1.3,.55,1.35,tRed,0,1.18,.72);                        // cab base
+[-1.0,1.0].forEach(x=>tb(.55,.1,1.7,tRed,x,1.8,.95));    // rear fenders
+[[-.62,.18],[.62,.18],[-.62,1.42],[.62,1.42]].forEach(([x,z])=>tb(.07,1.3,.07,black,x,2.1,z));  // cab posts
+tb(1.5,.1,1.5,tRed,0,2.8,.8);                            // roof
+tb(1.22,1.1,.03,tGlass,0,2.05,.18); tb(1.22,1.1,.03,tGlass,0,2.05,1.42);
+tb(.03,1.1,1.2,tGlass,-.62,2.05,.8); tb(.03,1.1,1.2,tGlass,.62,2.05,.8);
+tb(.5,.14,.45,black,0,1.62,.95); tb(.5,.5,.1,black,0,1.9,1.18);   // seat
+const sw=new THREE.Mesh(new THREE.TorusGeometry(.18,.03,6,16),black); sw.position.set(0,1.95,.42); sw.rotation.x=-1.0; tractorG.add(sw);
+const ex=new THREE.Mesh(new THREE.CylinderGeometry(.07,.07,1.3,10),black); ex.position.set(.3,2.2,-1.3); tractorG.add(ex);
+const tWheels=[];
+[[-1.0,.95,.85,.5,0],[1.0,.95,.85,.5,0],[-.72,-1.35,.48,.3,1],[.72,-1.35,.48,.3,1]].forEach(([x,z,r,w,front])=>{
+  const pivot=new THREE.Group(); pivot.position.set(x,r,z); tractorG.add(pivot);
+  const spin=new THREE.Group(); pivot.add(spin);
+  const t=new THREE.Mesh(new THREE.CylinderGeometry(r,r,w,20),tire); t.rotation.z=Math.PI/2; spin.add(t);
+  const hub=new THREE.Mesh(new THREE.CylinderGeometry(r*.55,r*.55,w+.02,12),tCream); hub.rotation.z=Math.PI/2; spin.add(hub);
+  for(let i=0;i<6;i++){ const lug=new THREE.Mesh(new THREE.BoxGeometry(w+.04,.08,r*.25),black); const a=i/6*Math.PI*2;   // tread lugs
+    lug.position.set(0,Math.cos(a)*r*.95,Math.sin(a)*r*.95); lug.rotation.x=-a; spin.add(lug); }
+  tWheels.push({pivot,spin,front,r});
+});
+
 /* ---------- SMASH EFFECTS ---------- */
 const debris=new THREE.Group(); scene.add(debris);
 const dMats=[0xb45f4a,0x9a4a3a,0xc9c2b4,0x8b8f96,0x6b5b4b,0xd9d2c5].map(c=>new THREE.MeshPhongMaterial({color:c}));
@@ -342,8 +410,9 @@ cp.onclick=()=>EXAG=Math.min(EXAG*1.25,2.5); cm.onclick=()=>EXAG=Math.max(EXAG/1
 zi.onclick=()=>zoomOff=Math.min(zoomOff+.5,2); zo.onclick=()=>zoomOff=Math.max(zoomOff-.5,-3);
 
 /* ---------- PHYSICS ---------- */
-const S={lng:-88.446,lat:41.642,hdg:0,v:0,steer:0,camB:0,zoom:19.3,roll:0,pitch:0,wheel:0};
-let boat=false, waterC=0, landC=0;
+const S={lng:-88.446,lat:41.642,hdg:0,v:0,steer:0,camB:0,zoom:19.3,roll:0,pitch:0,wheel:0,dist:0,sp:0,sr:0};
+let boat=false, waterC=0, landC=0, mode='car', farmC=0, offFarmC=0, terrainOn=false, landIds=[];
+const TERRAIN_X=1.5, TRACTOR=0.75;   // tractor runs at 75% of car speed
 const BOATMAX=48, WB=3.05, MAXV=60, REVMAX=28, SPEEDUP=3; let EXAG=0.6;   // SPEEDUP: world distance per game metre
 let last=0,frame=0,onRoad=true,roadName='';
 const rad=d=>d*Math.PI/180;
@@ -387,12 +456,94 @@ function initMini(){
   }catch(e){ document.getElementById('mini').style.display='none'; }
 }
 
-function setBoat(v){
-  boat=v; body.visible=!v; boatG.visible=v; shadow.visible=!v;
-  if(!v) boatG.position.y=boatG.rotation.x=boatG.rotation.z=0;
-  spawn(0,22,-1,0xcfe9ff); shake=Math.max(shake,.5);
-  roadEl.textContent=v?'Boating':'Driving'; roadEl.className='';
+/* ---------- TREES + POI PINS (built from the map's own data around the car) ---------- */
+let decorTimer=null, decorAt=null, decorN=0, decorT=0, pois=[];
+const MLAT=111320, MLNG=111320*Math.cos(41.64*Math.PI/180);
+const TREEC=['#2f6b2f','#3d7a35','#4a8a3c','#2c5e34','#5b8f3a','#35703a'];
+const POIC={fuel:'#dc2626',restaurant:'#f97316',fast_food:'#f97316',cafe:'#f97316',bar:'#f97316',beer:'#f97316',ice_cream:'#f97316',
+  shop:'#a855f7',grocery:'#a855f7',clothing_store:'#a855f7',school:'#2563eb',college:'#2563eb',place_of_worship:'#f5f5f4',
+  hospital:'#ef4444',doctors:'#ef4444',bank:'#16a34a',lodging:'#0ea5e9',town_hall:'#eab308',library:'#eab308',post:'#eab308',
+  police:'#1d4ed8',fire_station:'#b91c1c',car:'#64748b',park:'#22c55e'};
+function hash(a,b){ let h=(a*374761393+b*668265263)|0; h=Math.imul(h^(h>>>13),1274126177); return ((h^(h>>>16))>>>0)/4294967296; }
+function ngon(lng,lat,r,n,rot){ const k=Math.cos(lat*Math.PI/180)*111320, ring=[];
+  for(let i=0;i<=n;i++){ const t=rot+(i%n)/n*2*Math.PI; ring.push([lng+Math.cos(t)*r/k,lat+Math.sin(t)*r/111320]); } return [ring]; }
+function buildDecor(){
+  if(!styleReady||!map.getSource('decor')) return;
+  const t0=performance.now(), cx=S.lng, cy=S.lat, R=650, feats=[], seenT=new Set();
+  const wx0=cx-R/MLNG, wx1=cx+R/MLNG, wy0=cy-R/MLAT, wy1=cy+R/MLAT;
+  let trees=0;
+  try{
+    const wood=map.querySourceFeatures(bSrc,{sourceLayer:'landcover',filter:['==',['get','class'],'wood']});
+    const park=map.querySourceFeatures(bSrc,{sourceLayer:'park'});
+    outer: for(const [list,step,dens] of [[wood,12,.9],[park,22,.5]]){
+      for(const f of list) for(const pl of partsOf(f.geometry)){
+        const bb=bboxOf(pl[0]);
+        const x0=Math.max(bb[0],wx0), x1=Math.min(bb[2],wx1), y0=Math.max(bb[1],wy0), y1=Math.min(bb[3],wy1);
+        if(x0>=x1||y0>=y1) continue;
+        const ix0=Math.floor(x0*MLNG/step), ix1=Math.floor(x1*MLNG/step), iy0=Math.floor(y0*MLAT/step), iy1=Math.floor(y1*MLAT/step);
+        for(let ix=ix0;ix<=ix1;ix++) for(let iy=iy0;iy<=iy1;iy++){
+          const key=step+':'+ix+','+iy; if(seenT.has(key)) continue;
+          const r1=hash(ix,iy); if(r1>dens) continue;
+          const lng=(ix+hash(iy+11,ix))*step/MLNG, lat=(iy+hash(ix+7,iy+3))*step/MLAT;   // same spot every time
+          if(!inPoly(lng,lat,pl)) continue;
+          seenT.add(key);
+          const cr=2.2+hash(ix+1,iy)*1.8, th=2.2+hash(ix,iy+1)*1.3, top=th+4+hash(ix+2,iy+5)*7;
+          feats.push({type:'Feature',properties:{k:'trunk',h:th+.6,b:0},geometry:{type:'Polygon',coordinates:ngon(lng,lat,.35,5,0)}});
+          feats.push({type:'Feature',properties:{k:'crown',h:top,b:th,c:TREEC[Math.floor(hash(ix+3,iy+9)*TREEC.length)]},
+            geometry:{type:'Polygon',coordinates:ngon(lng,lat,cr,7,r1*6)}});
+          if(++trees>=2500 || performance.now()-t0>35) break outer;
+        }
+      }
+    }
+  }catch(e){ console.warn('trees',e); }
+  const np=[];
+  try{
+    const seenP=new Set();
+    for(const f of map.querySourceFeatures(bSrc,{sourceLayer:'poi'})){
+      const g=f.geometry, pr=f.properties||{};
+      if(!g||g.type!=='Point'||!pr.name) continue;
+      const lng=g.coordinates[0], lat=g.coordinates[1];
+      if(lng<wx0-R/MLNG||lng>wx1+R/MLNG||lat<wy0-R/MLAT||lat>wy1+R/MLAT) continue;
+      const key=pr.name+'|'+lng.toFixed(4)+','+lat.toFixed(4); if(seenP.has(key)) continue; seenP.add(key);
+      const c=POIC[pr.class]||POIC[pr.subclass]||'#14b8a6';
+      np.push({name:pr.name,cls:String(pr.subclass||pr.class||'').replace(/_/g,' '),lng,lat});
+      feats.push({type:'Feature',properties:{k:'pin',h:7,b:0,c:'#e5e7eb'},geometry:{type:'Polygon',coordinates:ngon(lng,lat,.45,6,0)}});
+      feats.push({type:'Feature',properties:{k:'pin',h:10.5,b:7,c},geometry:{type:'Polygon',coordinates:ngon(lng,lat,1.9,8,.2)}});
+    }
+  }catch(e){ console.warn('poi',e); }
+  pois=np; decorN=feats.length; decorT=performance.now(); decorAt=[cx,cy];
+  try{ map.getSource('decor').setData({type:'FeatureCollection',features:feats}); }catch(e){}
 }
+const LAND={wood:'Forest',grass:'Grassland',farmland:'Farmland',wetland:'Wetland',sand:'Sand',ice:'Ice',rock:'Rock',
+  residential:'Residential',commercial:'Commercial',retail:'Retail',industrial:'Industrial',school:'School grounds',
+  cemetery:'Cemetery',hospital:'Hospital',pitch:'Sports field',track:'Track',farmyard:'Farmyard',railway:'Rail yard',
+  quarry:'Quarry',military:'Military',university:'Campus',college:'Campus',stadium:'Stadium',zoo:'Zoo',playground:'Playground'};
+const surfEl=document.getElementById('surf'), nearEl=document.getElementById('near');
+function landHere(p){
+  if(!landIds.length) return '';
+  const fs=hit(p.x,p.y,1,landIds);
+  const pick=id=>fs.find(f=>f.layer&&f.layer.id===id);
+  const f=pick('lc-detect')||pick('lu-detect')||pick('park');
+  if(!f) return '';
+  if(f.layer.id==='park') return (f.properties&&f.properties.name)||'Park';
+  const c=f.properties&&f.properties.class; if(!c) return '';
+  return LAND[c]||(c.charAt(0).toUpperCase()+c.slice(1).replace(/_/g,' '));
+}
+function nearestPoi(){
+  let best=null, bd=200;
+  for(const q of pois){ const d=meters(S.lat,S.lng,q.lat,q.lng); if(d<bd){ bd=d; best=q; } }
+  return best?('Near: '+best.name+(best.cls?' ('+best.cls+')':'')+' · '+Math.round(bd)+' m'):'';
+}
+function setMode(m){
+  if(m===mode) return;
+  const was=mode; mode=m; boat=(m==='boat');
+  body.visible=(m==='car'); boatG.visible=(m==='boat'); tractorG.visible=(m==='tractor'); shadow.visible=(m!=='boat');
+  if(m!=='boat') boatG.position.y=boatG.rotation.x=boatG.rotation.z=0;
+  if(m==='boat'||was==='boat'){ spawn(0,22,-1,0xcfe9ff); shake=Math.max(shake,.5); }
+  else { spawn(0,16,-1,0xa0825a); shake=Math.max(shake,.3); }            // puff of field dirt
+  roadEl.textContent=m==='boat'?'Boating':'Driving'; roadEl.className='';
+}
+function setBoat(v){ setMode(v?'boat':'car'); }
 function loop(now){
   try{ step(now); }catch(e){ if(!loop.err){loop.err=1; const d=document.createElement('pre'); d.style.cssText='position:fixed;left:8px;right:8px;top:8px;z-index:9999;background:#7f1d1d;color:#fff;font:12px monospace;padding:10px;white-space:pre-wrap;border-radius:8px'; d.textContent='LOOP ERROR: '+e.message+'\n'+(e.stack||'').split('\n').slice(0,4).join('\n'); document.body.appendChild(d);} }
   requestAnimationFrame(loop);
@@ -406,15 +557,16 @@ function step(now){
 
   // longitudinal
   let a=0, braking=false;
-  if(gas>0.05) a=gas*(S.v<0?30:12)*(1-Math.min(S.v/MAXV,1)**2);
-  else if(gas<-0.05){ if(S.v>.5){a=-28*(-gas);braking=true;} else a=gas*14; }
+  const tractor=(mode==='tractor'), pw=tractor?TRACTOR:1, vmax=MAXV*pw;
+  if(gas>0.05) a=gas*(S.v<0?30:12)*pw*(1-Math.min(S.v/vmax,1)**2);
+  else if(gas<-0.05){ if(S.v>.5){a=-28*(-gas);braking=true;} else a=gas*14*pw; }
   if(hand){a-=Math.sign(S.v)*30; braking=Math.abs(S.v)>.5;}
-  const cap=boat?BOATMAX:(onRoad?MAXV:34);
+  const cap=boat?BOATMAX:tractor?vmax:(onRoad?MAXV:34);
   a-=Math.sign(S.v)*(boat?(.25+.0022*S.v*S.v):(.35+.0032*S.v*S.v));                // rolling + aero drag
-  if(!onRoad&&!boat) a-=S.v*.15;                               // mild grass drag
+  if(!onRoad&&!boat&&!tractor) a-=S.v*.15;                               // mild grass drag
   const prevV=S.v; S.v+=a*dt; if(prevV*S.v<0&&Math.abs(gas)<.05) S.v=0;
   if(S.v>cap) S.v=Math.max(cap,S.v-25*dt);                     // ease down to a lower cap instead of snapping
-  S.v=Math.max(-REVMAX,Math.min(MAXV,S.v)); if(Math.abs(S.v)<.05&&Math.abs(gas)<.05)S.v=0;
+  S.v=Math.max(-REVMAX*pw,Math.min(MAXV,S.v)); if(Math.abs(S.v)<.05&&Math.abs(gas)<.05)S.v=0;
 
   // steering (bicycle model, less lock at speed)
   const lock=boat?rad(30)/(1+Math.abs(S.v)/12):rad(34)/(1+Math.abs(S.v)/7);
@@ -458,6 +610,35 @@ function step(now){
     if(inW){ landC=0; if(!boat && ++waterC>=2) setBoat(true); }
     else { waterC=0; if(boat && ++landC>=3) setBoat(false); }
     if(boat){ onRoad=true; el.textContent='Boating'; el.className=''; }
+    else {
+      // farmland (and not on a road) -> tractor
+      const onFarm=hit(p.x,p.y,2,['lc-farm']).length>0 && !(hitRoad(p.x,p.y,4)||[]).length;
+      if(onFarm){ offFarmC=0; if(mode!=='tractor' && ++farmC>=3) setMode('tractor'); }
+      else { farmC=0; if(mode==='tractor' && ++offFarmC>=3) setMode('car'); }
+      if(mode==='tractor'){ onRoad=true; el.textContent='In the field'; el.className=''; }
+    }
+    if(frame%12===0){
+      const lt=boat?'Water':landHere(p);
+      const txt=lt+(mode==='tractor'?' · Tractor':mode==='boat'?' · Bass boat':'');
+      if(txt!==step.surf){ step.surf=txt; surfEl.textContent=txt; }
+    }
+  }
+  if(frame%30===0){
+    if(styleReady && (!decorAt || meters(decorAt[1],decorAt[0],S.lat,S.lng)>250)) buildDecor();
+    const nt=nearestPoi(); if(nt!==step.near){ step.near=nt; nearEl.textContent=nt; }
+  }
+  // terrain slope under the vehicle (tilts it up and down hills)
+  if(terrainOn && frame%2===0){
+    try{
+      const d=3, c=Math.cos(h), s=Math.sin(h), kx=1/(111320*Math.cos(rad(S.lat))), ky=1/111320;
+      const e=(dx,dy)=>map.queryTerrainElevation([S.lng+dx*kx,S.lat+dy*ky]);
+      const eF=e(s*d,c*d), eB=e(-s*d,-c*d), eR=e(c*d,-s*d), eL=e(-c*d,s*d);
+      if(eF!=null&&eB!=null&&eR!=null&&eL!=null){
+        const cl=v=>Math.max(-.35,Math.min(.35,v));
+        const tp=cl(Math.atan2(eF-eB,2*d)), tr=cl(Math.atan2(eR-eL,2*d));
+        S.sp+=(tp-S.sp)*Math.min(1,dt*10); S.sr+=(tr-S.sr)*Math.min(1,dt*10);
+      }
+    }catch(e){}
   }
 
   // camera: lagged chase, zooms out with speed
@@ -476,11 +657,16 @@ function step(now){
   car.rotation.y=-rad(S.hdg-S.camB);
   const tRoll=S.steer*Math.min(Math.abs(S.v)/12,1.2)*.35, tPitch=Math.max(-.05,Math.min(.05,a*.004));
   S.roll+=(tRoll-S.roll)*Math.min(1,dt*6); S.pitch+=(tPitch-S.pitch)*Math.min(1,dt*6);
-  body.rotation.z=S.roll; body.rotation.x=S.pitch;
+  body.rotation.z=S.roll+S.sr; body.rotation.x=S.pitch+S.sp;
+  tractorG.rotation.z=S.roll*.6+S.sr; tractorG.rotation.x=S.pitch*.6+S.sp;
   if(boat){ boatG.rotation.z=S.roll*1.6+Math.sin(now/420)*.03; boatG.rotation.x=S.pitch+Math.sin(now/510)*.025; boatG.position.y=-.1+Math.sin(now/360)*.05;
     if(Math.abs(S.v)>3 && frame%2===0) spawn(0,Math.min(3,1+Math.floor(Math.abs(S.v)/15)),1,0xf4fbff); }
-  S.wheel+=S.v*dt/.38;
-  wheels.forEach(w=>{ w.spin.rotation.x=-S.wheel; if(w.front) w.pivot.rotation.y=-S.steer; });
+  S.dist+=S.v*dt;
+  if(mode==='car') wheels.forEach(w=>{ w.spin.rotation.x=-S.dist/.38; if(w.front) w.pivot.rotation.y=-S.steer; });
+  else if(mode==='tractor'){
+    tWheels.forEach(w=>{ w.spin.rotation.x=-S.dist/w.r; if(w.front) w.pivot.rotation.y=-S.steer; });
+    if(Math.abs(S.v)>4 && frame%4===0) spawn(0,1,1,0xa0825a);     // dirt kicked up behind
+  }
   tails.forEach(t=>t.material=braking?tailOn:tailOff);
   updateFx(dt,dm,car.rotation.y);
   renderer.render(scene,camera);
