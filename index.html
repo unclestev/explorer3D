@@ -4,26 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Yorkville Driver</title>
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>window.L||document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"><\/script>')</script>
-<script>window.L||document.write('<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>')</script>
-<link href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet">
-<link href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+<script>window.maplibregl||document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/3.6.2/maplibre-gl.js"><\/script>')</script>
+<script>window.maplibregl||document.write('<script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"><\/script>')</script>
+<link href="https://cdn.jsdelivr.net/npm/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/3.6.2/maplibre-gl.css" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>window.THREE||document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"><\/script>')</script>
 <style>
 html,body{margin:0;height:100%;overflow:hidden;background:#9cc8ec;font-family:system-ui,Segoe UI,sans-serif;user-select:none;-webkit-user-select:none;touch-action:none}
-#stage{position:absolute;inset:0;overflow:hidden;background:linear-gradient(#7fb4e6 0%,#cfe3f5 38%,#e6eef5 100%)}
-#tilt{position:absolute;left:50%;top:67%;width:2600px;height:2600px;margin:-1300px 0 0 -1300px;will-change:transform}
-#map{width:100%;height:100%;background-color:#e8e4da;background-image:linear-gradient(rgba(0,0,0,.13) 2px,transparent 2px),linear-gradient(90deg,rgba(0,0,0,.13) 2px,transparent 2px);background-size:100px 100px}
-#fog{position:absolute;left:0;right:0;top:0;height:36%;background:linear-gradient(#cfe3f5,rgba(207,227,245,0));pointer-events:none}
-#attr{position:absolute;bottom:2px;right:6px;z-index:30;font-size:9px;color:#334155;background:rgba(255,255,255,.6);padding:1px 4px;border-radius:4px;pointer-events:none}
-#car3d{position:absolute;inset:0;width:100%;height:100%}
-.leaflet-container{overflow:hidden;position:relative}
-.leaflet-pane,.leaflet-tile,.leaflet-tile-container,.leaflet-layer{position:absolute;left:0;top:0}
-.leaflet-tile{user-select:none;width:256px;height:256px;max-width:none!important;max-height:none!important}
-.leaflet-zoom-animated{transform-origin:0 0}
-#tstat{position:absolute;top:96px;left:12px;max-width:220px;z-index:20;background:rgba(15,23,42,.75);color:#cbd5e1;font:11px monospace;padding:4px 8px;border-radius:8px;pointer-events:none}
+#map,#car3d{position:absolute;inset:0;width:100%;height:100%}
 #car3d{pointer-events:none;z-index:5}
 #hud{position:absolute;top:12px;left:12px;z-index:20;background:rgba(15,23,42,.8);color:#e2e8f0;padding:10px 14px;border-radius:12px;pointer-events:none;font-size:13px;line-height:1.5}
 #mph{font-size:30px;font-weight:700;color:#fff}
@@ -39,11 +29,9 @@ html,body{margin:0;height:100%;overflow:hidden;background:#9cc8ec;font-family:sy
 </head>
 <body>
 <div id="load">Loading map…</div>
-<div id="stage"><div id="tilt"><div id="map"></div></div><div id="fog"></div></div>
-<div id="attr">© OpenStreetMap © CARTO</div>
+<div id="map"></div>
 <canvas id="car3d"></canvas>
-<div id="hud"><span id="mph">0</span> mph<br><span id="road">Driving</span></div>
-<div id="tstat">tiles: waiting…</div>
+<div id="hud"><span id="mph">0</span> mph<br><span id="road">On road</span></div>
 <div id="zoom"><button id="zi">+</button><button id="zo">−</button></div>
 <div id="ctl">
   <div class="track" id="st"><div class="knob" id="stk"></div></div>
@@ -57,46 +45,44 @@ html,body{margin:0;height:100%;overflow:hidden;background:#9cc8ec;font-family:sy
   window.addEventListener('error',function(e){show('ERROR: '+e.message+(e.lineno?' (line '+e.lineno+')':'')+(e.error&&e.error.stack?'\n'+e.error.stack.split('\n').slice(0,5).join('\n'):''));});
   window.addEventListener('unhandledrejection',function(e){show('PROMISE: '+(e.reason&&e.reason.message||e.reason));});
   window.addEventListener('load',function(){
-    if(typeof L==='undefined')show('Leaflet failed to load from jsdelivr, cdnjs and unpkg. Check your network or ad blocker.');
+    if(typeof maplibregl==='undefined')show('MapLibre failed to load from jsdelivr, cdnjs and unpkg. Check your network or ad blocker.');
     if(typeof THREE==='undefined')show('Three.js failed to load from cdnjs.cloudflare.com');
   });
 })();
 </script>
 <script>
-/* ---------- MAP (Leaflet raster tiles, tilted with CSS 3D; no web workers) ---------- */
-const stage=document.getElementById('stage'), tilt=document.getElementById('tilt');
-const map=L.map('map',{zoomControl:false,attributionControl:false,dragging:false,touchZoom:false,scrollWheelZoom:false,doubleClickZoom:false,boxZoom:false,keyboard:false,zoomAnimation:false,fadeAnimation:false,markerZoomAnimation:false,inertia:false});
-const FetchLayer=L.TileLayer.extend({createTile:function(c,done){
-  const img=document.createElement('img'); const url=this.getTileUrl(c);
-  fetch(url).then(r=>{ if(!r.ok) throw new Error('http '+r.status); return r.blob(); })
-    .then(b=>{ img.onload=()=>done(null,img); img.onerror=e=>done(e,img); img.src=URL.createObjectURL(b); })
-    .catch(e=>{ lastErr=(e&&e.message)||'blocked'; done(e,img); }); return img; }});
-const PROV=[
-  {n:'CARTO',u:'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',o:{subdomains:'abcd',maxNativeZoom:19}},
-  {n:'OpenStreetMap',u:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',o:{maxNativeZoom:19}},
-  {n:'CARTO (fetch)',f:1,u:'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',o:{subdomains:'abcd',maxNativeZoom:19}},
-  {n:'OSM (fetch)',f:1,u:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',o:{maxNativeZoom:19}}
-];
-let pi=0, okT=0, badT=0, tl=null, lastErr='';
-const tstat=document.getElementById('tstat');
-function useProvider(i){
-  if(tl) map.removeLayer(tl);
-  okT=0; badT=0; pi=i; const P=PROV[i];
-  tl=(P.f?new FetchLayer(P.u,Object.assign({maxZoom:20,keepBuffer:4,updateWhenIdle:false,updateInterval:100},P.o)):L.tileLayer(P.u,Object.assign({maxZoom:20,keepBuffer:4,updateWhenIdle:false,updateInterval:100},P.o))).addTo(map);
-  tl.on('tileload',()=>{okT++; tstat.textContent='tiles: '+P.n+' ok '+okT+' / failed '+badT+' | map '+map.getSize().x+'px';});
-  tl.on('tileerror',()=>{badT++; if(!lastErr)lastErr='image request blocked'; tstat.textContent='tiles: '+P.n+' ok '+okT+' / failed '+badT;
-    if(okT===0 && badT>=8 && pi<PROV.length-1) useProvider(pi+1);});
-  tstat.textContent='tiles: loading '+P.n+'… map '+map.getSize().x+'px';
-}
-map.setView([41.642,-88.446],19,{animate:false});
-useProvider(0);
-setTimeout(()=>{ if(okT===0){ const b=document.createElement('div');
-  b.style.cssText='position:fixed;left:12px;right:12px;top:38%;z-index:9999;background:#7f1d1d;color:#fff;font:15px system-ui;padding:16px;border-radius:12px;text-align:center';
-  b.innerHTML='<b>No map tiles could load.</b><br>Reason: '+(lastErr||'no response')+'<br>This page is being blocked from downloading map images. Open the file in a normal browser tab or host it on a static site.';
-  document.body.appendChild(b); setTimeout(()=>b.remove(),15000);} },8000);
-setTimeout(()=>map.invalidateSize(),200);
-let last=0;
-setTimeout(()=>{const ld=document.getElementById('load'); if(ld){ld.style.opacity=0; setTimeout(()=>ld.remove(),500);} last=performance.now(); requestAnimationFrame(loop);},600);
+/* ---------- MAP ---------- */
+const map = new maplibregl.Map({
+  container:'map', style:'https://tiles.openfreemap.org/styles/liberty',
+  center:[-88.446,41.642], zoom:19.3, pitch:68, maxPitch:80, maxZoom:22,
+  interactive:false, fadeDuration:0, attributionControl:{compact:true}
+});
+let roadIds=[], blockIds=[], waterIds=[];
+const seen={};
+map.on('error',e=>{ const m=((e&&e.error&&(e.error.message||e.error.status))||'unknown map error')+((e&&e.error&&e.error.stack)?'\n'+e.error.stack.split('\n').slice(0,4).join('\n'):''); const k=String(m).slice(0,60);
+  if(seen[k])return; seen[k]=1; console.warn('MAP:',m);
+  let d=document.getElementById('maperr'); if(!d){d=document.createElement('pre'); d.id='maperr';
+    d.style.cssText='position:fixed;left:8px;right:8px;top:70px;z-index:9998;background:#7c2d12;color:#fff;font:11px monospace;padding:8px;white-space:pre-wrap;border-radius:8px;max-height:30%;overflow:auto;pointer-events:none';
+    document.body.appendChild(d);} d.textContent+='MAP: '+m+'\n'; });
+map.on('load',()=>{ try{
+  try{ map.setSky({'sky-color':'#7ab8ea','horizon-color':'#eaf3fb','fog-color':'#eaf3fb','sky-horizon-blend':.6,'horizon-fog-blend':.7,'fog-ground-blend':.4}); }catch(e){}
+  const layers = map.getStyle().layers;
+  const src = layers.find(l=>l['source-layer']==='building')?.source || 'openmaptiles';
+  if(!map.getLayer('building-3d') && map.getSource(src)){
+    map.addLayer({id:'building-3d',source:src,'source-layer':'building',type:'fill-extrusion',minzoom:14,
+      paint:{'fill-extrusion-color':'#d6dbe2','fill-extrusion-height':['coalesce',['get','render_height'],['get','height'],6],
+      'fill-extrusion-base':['coalesce',['get','render_min_height'],['get','min_height'],0],'fill-extrusion-opacity':.95}});
+  }
+  const all = map.getStyle().layers;
+  roadIds  = all.filter(l=>l['source-layer']==='transportation' && (l.type==='line'||l.type==='fill')).map(l=>l.id);
+  waterIds = all.filter(l=>l['source-layer']==='water' && l.type==='fill').map(l=>l.id);
+  blockIds = all.filter(l=>l['source-layer']==='building' && (l.type==='fill-extrusion')).map(l=>l.id);
+  const ld=document.getElementById('load'); ld.style.opacity=0; setTimeout(()=>ld.remove(),500);
+  }catch(err){ console.error(err); var d=document.createElement('pre'); d.style.cssText='position:fixed;left:8px;right:8px;top:8px;z-index:9999;background:#7f1d1d;color:#fff;font:12px monospace;padding:10px;white-space:pre-wrap'; d.textContent='LOAD ERROR: '+err.message; document.body.appendChild(d); }
+  const ld2=document.getElementById('load'); if(ld2){ld2.style.opacity=0; setTimeout(()=>ld2.remove(),500);}
+  last=performance.now(); requestAnimationFrame(loop);
+});
+setTimeout(()=>{const ld=document.getElementById('load'); if(ld){ld.style.opacity=0; setTimeout(()=>ld.remove(),500); if(!last){last=performance.now(); requestAnimationFrame(loop);}}},6000);
 
 /* ---------- THREE: EXPLORER-STYLE SUV ---------- */
 const cv=document.getElementById('car3d');
@@ -171,56 +157,74 @@ function joy(trackId,knobId,axis){
 joy('st','stk','x'); joy('sp','spk','y');
 const K={}; addEventListener('keydown',e=>{K[e.key.toLowerCase()]=1; if(e.key.startsWith('Arrow')||e.key===' ')e.preventDefault();}); addEventListener('keyup',e=>K[e.key.toLowerCase()]=0);
 let kS=0,kG=0; let zoomOff=0;
-zi.onclick=()=>zoomOff=Math.min(zoomOff+.5,1); zo.onclick=()=>zoomOff=Math.max(zoomOff-.5,-2);
+zi.onclick=()=>zoomOff=Math.min(zoomOff+.5,2); zo.onclick=()=>zoomOff=Math.max(zoomOff-.5,-3);
 
 /* ---------- PHYSICS ---------- */
-const S={lng:-88.446,lat:41.642,hdg:0,v:0,steer:0,camB:0,zoom:0,roll:0,pitch:0,wheel:0};
-const WB=3.05, MAXV=45, EXAG=1.5, TILT=68, BASEZ=19;
+const S={lng:-88.446,lat:41.642,hdg:0,v:0,steer:0,camB:0,zoom:19.3,roll:0,pitch:0,wheel:0};
+const WB=3.05, MAXV=45, EXAG=1.5;
+let last=0,frame=0,onRoad=true,roadName='';
 const rad=d=>d*Math.PI/180;
-const mpp=(lat,z)=>156543.034*Math.cos(rad(lat))/Math.pow(2,z);   // 256px tiles
+const mpp=(lat,z)=>78271.517*Math.cos(rad(lat))/Math.pow(2,z);
+const hit=(x,y,r,ids)=>{ try{ ids=ids.filter(i=>map.getLayer(i)); return ids.length?map.queryRenderedFeatures([[x-r,y-r],[x+r,y+r]],{layers:ids}):[]; }catch(e){ return []; } };
 
 function loop(now){
   try{ step(now); }catch(e){ if(!loop.err){loop.err=1; const d=document.createElement('pre'); d.style.cssText='position:fixed;left:8px;right:8px;top:8px;z-index:9999;background:#7f1d1d;color:#fff;font:12px monospace;padding:10px;white-space:pre-wrap;border-radius:8px'; d.textContent='LOOP ERROR: '+e.message+'\n'+(e.stack||'').split('\n').slice(0,4).join('\n'); document.body.appendChild(d);} }
   requestAnimationFrame(loop);
 }
 function step(now){
-  const dt=Math.min((now-last)/1000,.05); last=now;
+  const dt=Math.min((now-last)/1000,.05); last=now; frame++;
+  // inputs (keyboard eases like an analog stick)
   const ease=(v,p,n)=>{ if(p)v+=dt*4; else if(n)v-=dt*4; else v*=Math.exp(-dt*8); return Math.max(-1,Math.min(1,v)); };
   kS=ease(kS,K.d||K.arrowright,K.a||K.arrowleft); kG=ease(kG,K.w||K.arrowup,K.s||K.arrowdown);
   const st=Math.abs(tSteer)>.05?tSteer:kS, gas=Math.abs(tGas)>.05?tGas:kG, hand=!!K[' '];
 
+  // longitudinal
   let a=0, braking=false;
-  if(gas>0.05) a=gas*(S.v<0?25:8.5)*(1-Math.min(Math.max(S.v,0)/MAXV,1)**2);
+  if(gas>0.05) a=gas*(S.v<0?25:8.5)*(1-Math.min(S.v/MAXV,1)**2);
   else if(gas<-0.05){ if(S.v>.5){a=-28*(-gas);braking=true;} else a=gas*3.5; }
   if(hand){a-=Math.sign(S.v)*30; braking=Math.abs(S.v)>.5;}
-  a-=Math.sign(S.v)*(.35+.0032*S.v*S.v);
+  const cap=onRoad?MAXV:11;
+  a-=Math.sign(S.v)*(.35+.0032*S.v*S.v);                // rolling + aero drag
+  if(!onRoad) a-=S.v*1.2;                                // grass drag
   const prevV=S.v; S.v+=a*dt; if(prevV*S.v<0&&Math.abs(gas)<.05) S.v=0;
-  S.v=Math.max(-9,Math.min(MAXV,S.v)); if(Math.abs(S.v)<.05&&Math.abs(gas)<.05)S.v=0;
+  S.v=Math.max(-9,Math.min(cap*(S.v>0?1:0)+ (S.v<0?9:0),S.v)); if(Math.abs(S.v)<.05&&Math.abs(gas)<.05)S.v=0;
 
+  // steering (bicycle model, less lock at speed)
   const lock=rad(34)/(1+Math.abs(S.v)/7);
   S.steer+=(st*lock-S.steer)*Math.min(1,dt*9);
   S.hdg+=(S.v/WB)*Math.tan(S.steer)*dt*180/Math.PI;
 
+  // move, with collision against buildings & water
   const dm=S.v*dt, h=rad(S.hdg);
-  S.lat+=Math.cos(h)*dm/111320; S.lng+=Math.sin(h)*dm/(111320*Math.cos(rad(S.lat)));
+  const nLat=S.lat+Math.cos(h)*dm/111320, nLng=S.lng+Math.sin(h)*dm/(111320*Math.cos(rad(S.lat)));
+  let blocked=false;
+  if(Math.abs(S.v)>.5 && map.loaded()){
+    const ahead=[nLng+Math.sin(h)*2.4/(111320*Math.cos(rad(S.lat)))*Math.sign(S.v), nLat+Math.cos(h)*2.4/111320*Math.sign(S.v)];
+    const p=map.project(ahead);
+    if(hit(p.x,p.y,1,blockIds).length) blocked=true;
+    else if(hit(p.x,p.y,1,waterIds).length && !hit(p.x,p.y,4,roadIds).length) blocked=true;
+  }
+  if(blocked){ S.v=-S.v*.3; } else { S.lat=nLat; S.lng=nLng; }
+
+  // road detection
+  if(frame%4===0 && map.loaded()){
+    const p=map.project([S.lng,S.lat]); const f=hit(p.x,p.y,7,roadIds)||[];
+    onRoad=f.length>0; const nm=f.find(x=>x.properties&&x.properties.name); roadName=nm?nm.properties.name:'';
+    const el=document.getElementById('road'); el.textContent=onRoad?(roadName||'On road'):'Off road'; el.className=onRoad?'':'off';
+  }
 
   // camera: lagged chase, zooms out with speed
   const dB=((S.hdg-S.camB+540)%360)-180; S.camB+=dB*(1-Math.exp(-dt*7));
-  const tz=1.4+zoomOff-Math.min(Math.abs(S.v)/MAXV,1)*1.1; S.zoom+=(tz-S.zoom)*Math.min(1,dt*3);
-  const sf=Math.pow(2,S.zoom);
+  const tz=19.3+zoomOff-Math.min(Math.abs(S.v)/MAXV,1)*1.4; S.zoom+=(tz-S.zoom)*Math.min(1,dt*3);
   const W=innerWidth,H=innerHeight,padTop=H*.34;
-  map.setView([S.lat,S.lng],BASEZ,{animate:false});
-  const gp=map.project([S.lat,S.lng],BASEZ); document.getElementById('map').style.backgroundPosition=((1300-gp.x)%100)+'px '+((1300-gp.y)%100)+'px';
-  const dist=.5*H/Math.tan(rad(36.87)/2);
-  stage.style.perspective=dist+'px'; stage.style.perspectiveOrigin='50% 67%';
-  tilt.style.transform=`scale3d(${sf},${sf},${sf}) rotateX(${TILT}deg) rotateZ(${-S.camB}deg)`;
+  map.jumpTo({center:[S.lng,S.lat],bearing:S.camB,zoom:S.zoom,pitch:68,padding:{top:padTop,bottom:0,left:0,right:0}});
 
-  // 3D car — same camera geometry as the CSS-tilted map
+  // 3D car — pixel-scale match with map camera
   renderer.setSize(W,H,false); camera.aspect=W/H;
   camera.setViewOffset(W,H,0,-padTop/2,W,H);
-  const p=rad(TILT);
+  const fovR=rad(camera.fov), dist=.5*H/Math.tan(fovR/2), p=rad(68);
   camera.position.set(0,dist*Math.cos(p),dist*Math.sin(p)); camera.lookAt(0,0,0); camera.updateProjectionMatrix();
-  car.scale.setScalar(EXAG*sf/mpp(S.lat,BASEZ));
+  const sc=EXAG/mpp(S.lat,S.zoom); car.scale.setScalar(sc);
   car.rotation.y=-rad(S.hdg-S.camB);
   const tRoll=S.steer*Math.min(Math.abs(S.v)/12,1.2)*.35, tPitch=Math.max(-.05,Math.min(.05,a*.004));
   S.roll+=(tRoll-S.roll)*Math.min(1,dt*6); S.pitch+=(tPitch-S.pitch)*Math.min(1,dt*6);
@@ -229,6 +233,7 @@ function step(now){
   wheels.forEach(w=>{ w.spin.rotation.x=-S.wheel; if(w.front) w.pivot.rotation.y=-S.steer; });
   tails.forEach(t=>t.material=braking?tailOn:tailOff);
   renderer.render(scene,camera);
+
   document.getElementById('mph').textContent=Math.round(Math.abs(S.v)*2.237);
 }
 </script>
