@@ -6,7 +6,7 @@
 <title>Yorkville Driver</title>
 <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
 <script>window.maplibregl||document.write('<script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/3.6.2/maplibre-gl.js"><\/script>')</script>
-<script>window.maplibregl||document.write('<script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"><\/script>')</script>
+<script>window.maplibregl||document.write('<script crossorigin="anonymous" src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"><\/script>')</script>
 <link href="https://cdn.jsdelivr.net/npm/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/3.6.2/maplibre-gl.css" rel="stylesheet">
 <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -46,8 +46,13 @@ html,body{margin:0;height:100%;overflow:hidden;background:#9cc8ec;font-family:sy
   function show(m){var d=document.getElementById('dbg');if(!d){d=document.createElement('pre');d.id='dbg';
     d.style.cssText='position:fixed;left:8px;right:8px;bottom:8px;max-height:40%;overflow:auto;z-index:9999;margin:0;padding:10px;background:#7f1d1d;color:#fff;font:12px monospace;white-space:pre-wrap;border-radius:8px';
     document.body.appendChild(d);} d.textContent+=m+"\n";}
-  window.addEventListener('error',function(e){show('ERROR: '+e.message+(e.filename?' @ '+e.filename.split('/').slice(-3).join('/')+':'+e.lineno+':'+e.colno:'')+(e.message==='Script error.'?' (hidden by the browser: it came from a library on another domain; check the console for details)':'')+(e.lineno?' (line '+e.lineno+')':'')+(e.error&&e.error.stack?'\n'+e.error.stack.split('\n').slice(0,5).join('\n'):''));});
-  window.addEventListener('unhandledrejection',function(e){show('PROMISE: '+(e.reason&&e.reason.message||e.reason));});
+  var seenE={}, nE=0;
+  function once(m){ var k=String(m).slice(0,80); if(seenE[k]||nE>=8) return; seenE[k]=1; nE++; show(m); }
+  window.addEventListener('error',function(e){
+    // bare cross-origin "Script error." carries no file/line/stack: log it, don't show a useless box
+    if(e.message==='Script error.' && !e.filename && !e.lineno && !e.error){ console.warn('Opaque cross-origin "Script error." (no details available)',e); return; }
+    once('ERROR: '+e.message+(e.filename?' @ '+e.filename.split('/').slice(-3).join('/')+':'+e.lineno+':'+e.colno:'')+(e.message==='Script error.'?' (hidden by the browser: it came from a library on another domain; check the console for details)':'')+(e.lineno?' (line '+e.lineno+')':'')+(e.error&&e.error.stack?'\n'+e.error.stack.split('\n').slice(0,5).join('\n'):''));});
+  window.addEventListener('unhandledrejection',function(e){once('PROMISE: '+(e.reason&&e.reason.message||e.reason));});
   window.addEventListener('load',function(){
     if(typeof maplibregl==='undefined')show('MapLibre failed to load from jsdelivr, cdnjs and unpkg. Check your network or ad blocker.');
     if(typeof THREE==='undefined')show('Three.js failed to load from cdnjs.cloudflare.com');
@@ -61,16 +66,44 @@ const map = new maplibregl.Map({
   center:[-88.446,41.642], zoom:19.3, pitch:68, maxPitch:80, maxZoom:22,
   interactive:false, fadeDuration:0, attributionControl:{compact:true}
 });
-let roadIds=[], blockIds=[], waterIds=[];
-let origBFilter=null; const destroyed=[];
+let roadIds=[], blockIds=[], waterIds=[], bridgeIds=[], hideIds=[];
+function inRing(x,y,r){ let c=false; for(let i=0,j=r.length-1;i<r.length;j=i++){ const xi=r[i][0],yi=r[i][1],xj=r[j][0],yj=r[j][1]; if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi)) c=!c; } return c; }
+function inPoly(x,y,pl){ if(!inRing(x,y,pl[0])) return false; for(let k=1;k<pl.length;k++) if(inRing(x,y,pl[k])) return false; return true; }
+function contains(g,x,y){ if(!g) return false; if(g.type==='Polygon') return inPoly(x,y,g.coordinates); if(g.type==='MultiPolygon') return g.coordinates.some(pl=>inPoly(x,y,pl)); return false; }
+const destroyed=[];
+// The style's own building filter may use legacy syntax (e.g. ["!has","hide_3d"]); it can't be nested inside an
+// expression ["all",...] (MapLibre rejects it with a validation error), so convert it to an expression first.
+const CMP=['==','!=','<','>','<=','>='];
+function isLegacy(f){ if(!Array.isArray(f)) return false; const o=f[0];
+  if(o==='all'||o==='any') return f.slice(1).some(isLegacy);
+  if(o==='none'||o==='!has') return true;
+  if(CMP.includes(o)) return typeof f[1]==='string';
+  if(o==='in'||o==='!in') return typeof f[1]==='string' && (o==='!in'||f.length!==3||!Array.isArray(f[2]));
+  return false; }
+function toExpr(f){ if(!isLegacy(f)) return f; const o=f[0];
+  if(o==='all'||o==='any') return [o,...f.slice(1).map(toExpr)];
+  if(o==='none') return ['!',['any',...f.slice(1).map(toExpr)]];
+  const k=f[1], g=k==='$type'?['geometry-type']:k==='$id'?['id']:['get',k];
+  if(o==='has') return k==='$id'?['!=',['id'],null]:['has',k];
+  if(o==='!has') return ['!',toExpr(['has',k])];
+  if(o==='in'||o==='!in'){ const e=['in',g,['literal',f.slice(2)]]; return o==='in'?e:['!',e]; }
+  return [o,g,f[2]]; }
+const origFilters={};   // layer id -> original filter (as expression) for every building extrusion layer
 function destroyBuilding(id){
+  // Features with no stable id can't be targeted by filter: skip hiding (the smash effect still plays).
   if(id==null||destroyed.includes(id)) return; destroyed.push(id);
-  const f=['!',['in',['id'],['literal',destroyed]]];
-  try{ map.setFilter('building-3d',origBFilter?['all',origBFilter,f]:f); }catch(e){}
+  const f=['!',['in',['id'],['literal',destroyed.slice()]]];   // same id across tiles => split buildings vanish together
+  for(const lid of hideIds){
+    if(!map.getLayer(lid)) continue;
+    const of=origFilters[lid], nf=of?['all',of,f]:f;
+    try{ map.setFilter(lid,nf);
+      if(of && JSON.stringify(map.getFilter(lid))!==JSON.stringify(nf)) map.setFilter(lid,f); // rejected: drop original
+    }catch(e){ console.warn('destroyBuilding',e); }
+  }
 }
-const seen={};
+const seen={}; let nSeen=0;
 map.on('error',e=>{ const m=((e&&e.error&&(e.error.message||e.error.status))||'unknown map error')+((e&&e.error&&e.error.stack)?'\n'+e.error.stack.split('\n').slice(0,4).join('\n'):''); const k=String(m).slice(0,60);
-  if(seen[k])return; seen[k]=1; console.warn('MAP:',m);
+  console.warn('MAP:',m); if(seen[k]||nSeen>=6)return; seen[k]=1; nSeen++;
   let d=document.getElementById('maperr'); if(!d){d=document.createElement('pre'); d.id='maperr';
     d.style.cssText='position:fixed;left:8px;right:8px;top:70px;z-index:9998;background:#7c2d12;color:#fff;font:11px monospace;padding:8px;white-space:pre-wrap;border-radius:8px;max-height:30%;overflow:auto;pointer-events:none';
     document.body.appendChild(d);} d.textContent+='MAP: '+m+'\n'; });
@@ -85,24 +118,29 @@ map.on('load',()=>{ try{ initMini();
   }
   const all = map.getStyle().layers;
   roadIds  = all.filter(l=>l['source-layer']==='transportation' && (l.type==='line'||l.type==='fill')).map(l=>l.id);
+  bridgeIds= roadIds.filter(id=>!/tunnel|ferry|rail|aeroway/i.test(id));   // tunnels/ferry lines over water don't make it land
   waterIds = all.filter(l=>l['source-layer']==='water' && l.type==='fill').map(l=>l.id);
   blockIds = all.filter(l=>l['source-layer']==='building' && (l.type==='fill-extrusion')).map(l=>l.id);
   try{
     const fl=all.find(l=>l.layout&&l.layout['text-font']);
     const hs=(all.find(l=>l['source-layer']==='housenumber')||{}).source||src;
-    map.addLayer({id:'hn-big',type:'symbol',source:hs,'source-layer':'housenumber',minzoom:15.5,
+    if(map.getSource(hs) && !map.getLayer('hn-big')) map.addLayer({id:'hn-big',type:'symbol',source:hs,'source-layer':'housenumber',minzoom:15.5,
       layout:{'text-field':['to-string',['get','housenumber']],'text-font':fl?fl.layout['text-font']:['Noto Sans Regular'],
         'text-size':['interpolate',['linear'],['zoom'],15.5,10,19,18,21,26],'text-allow-overlap':true,'text-ignore-placement':true,
         'text-pitch-alignment':'viewport','text-rotation-alignment':'viewport'},
       paint:{'text-color':'#111827','text-halo-color':'rgba(255,255,255,.95)','text-halo-width':2}});
   }catch(e){ console.warn('house numbers:',e&&e.message); }
-  try{ origBFilter=map.getFilter('building-3d')||null; }catch(e){}
+  hideIds = all.filter(l=>l['source-layer']==='building' && (l.type==='fill-extrusion'||l.type==='fill')).map(l=>l.id);
+  hideIds.forEach(lid=>{ try{ const of=map.getFilter(lid); origFilters[lid]=of?toExpr(of):null; }catch(e){ origFilters[lid]=null; } });
+  styleReady=true;
   const ld=document.getElementById('load'); ld.style.opacity=0; setTimeout(()=>ld.remove(),500);
   }catch(err){ console.error(err); var d=document.createElement('pre'); d.style.cssText='position:fixed;left:8px;right:8px;top:8px;z-index:9999;background:#7f1d1d;color:#fff;font:12px monospace;padding:10px;white-space:pre-wrap'; d.textContent='LOAD ERROR: '+err.message; document.body.appendChild(d); }
   const ld2=document.getElementById('load'); if(ld2){ld2.style.opacity=0; setTimeout(()=>ld2.remove(),500);}
-  last=performance.now(); requestAnimationFrame(loop);
+  startLoop();
 });
-setTimeout(()=>{const ld=document.getElementById('load'); if(ld){ld.style.opacity=0; setTimeout(()=>ld.remove(),500); if(!last){last=performance.now(); requestAnimationFrame(loop);}}},6000);
+let started=false, styleReady=false;
+function startLoop(){ if(started) return; started=true; last=performance.now(); requestAnimationFrame(loop); }
+setTimeout(()=>{const ld=document.getElementById('load'); if(ld){ld.style.opacity=0; setTimeout(()=>ld.remove(),500);} startLoop();},6000);
 
 /* ---------- THREE: EXPLORER-STYLE SUV ---------- */
 const cv=document.getElementById('car3d');
@@ -164,6 +202,32 @@ const shadow=new THREE.Mesh(new THREE.PlaneGeometry(3.4,6.6),new THREE.MeshBasic
 shadow.rotation.x=-Math.PI/2; shadow.position.y=.03; car.add(shadow);
 
 
+
+/* ---------- BASS BOAT (swaps in when the car enters water) ---------- */
+const boatG=new THREE.Group(); boatG.visible=false; car.add(boatG);
+const hullM=new THREE.MeshPhongMaterial({color:0x0f7a4a,specular:0xd8ffe8,shininess:110});
+const trimM=new THREE.MeshPhongMaterial({color:0xf2c14e,shininess:80});
+const deckM=new THREE.MeshPhongMaterial({color:0x5b6470,shininess:8});
+const seatM=new THREE.MeshPhongMaterial({color:0x1b1f27,shininess:40});
+const metalM=new THREE.MeshPhongMaterial({color:0xaeb6c0,specular:0xffffff,shininess:100});
+function plan(sx,sy,depth,mat,y0,bev){
+  const sh=new THREE.Shape(), L=2.6, B=3.0, W=1.05;
+  sh.moveTo(-W*sx,-L*sy); sh.lineTo(W*sx,-L*sy); sh.lineTo(W*sx,.2*sy);
+  sh.quadraticCurveTo(.9*sx,1.8*sy,0,B*sy); sh.quadraticCurveTo(-.9*sx,1.8*sy,-W*sx,.2*sy); sh.closePath();
+  const g=new THREE.ExtrudeGeometry(sh,{depth:depth,bevelEnabled:bev>0,bevelThickness:bev,bevelSize:bev,bevelSegments:2});
+  g.rotateX(-Math.PI/2); const m=new THREE.Mesh(g,mat); m.position.y=y0; boatG.add(m); return m;   // bow points to -z
+}
+function bx(w,h,d,mat,x,y,z){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); boatG.add(m); return m; }
+plan(1,1,.46,hullM,0,.05); plan(1,1,.05,trimM,.5,0); plan(.9,.93,.05,deckM,.55,0);
+bx(1.5,.16,1.2,deckM,0,.72,-1.75); bx(1.75,.16,1.1,deckM,0,.72,1.55);          // casting decks
+bx(1.0,.45,.5,hullM,0,.88,-.25);                                                 // console
+bx(1.15,.42,.04,glass,0,1.22,-.52).rotation.x=.45;                               // windshield
+function seat(x,z){ const c=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,.3,8),metalM); c.position.set(x,.85,z); boatG.add(c);
+  bx(.5,.14,.5,seatM,x,1.02,z); bx(.5,.42,.1,seatM,x,1.27,z+.24); }
+seat(0,-1.85); seat(-.4,.6); seat(.4,.6);
+bx(.1,.6,.1,metalM,0,.72,-2.6); bx(.35,.16,.3,seatM,0,1.05,-2.55);               // bow trolling motor
+bx(.55,.6,.6,hullM,0,1.1,2.85); bx(.2,.7,.35,metalM,0,.3,2.95);                  // outboard
+
 /* ---------- SMASH EFFECTS ---------- */
 const debris=new THREE.Group(); scene.add(debris);
 const dMats=[0xb45f4a,0x9a4a3a,0xc9c2b4,0x8b8f96,0x6b5b4b,0xd9d2c5].map(c=>new THREE.MeshPhongMaterial({color:c}));
@@ -172,7 +236,7 @@ const parts=[];
 for(let i=0;i<90;i++){ const m=new THREE.Mesh(boxG,dMats[i%dMats.length]); m.visible=false; debris.add(m); parts.push({m,dust:false,life:0,max:1,vx:0,vy:0,vz:0,rx:0,ry:0,sz:.4}); }
 for(let i=0;i<36;i++){ const m=new THREE.Mesh(dustG,new THREE.MeshBasicMaterial({color:0xd6cfc4,transparent:true,opacity:0,depthWrite:false})); m.visible=false; debris.add(m); parts.push({m,dust:true,life:0,max:1,vx:0,vy:0,vz:0,rx:0,ry:0,sz:1}); }
 let shake=0, smashing=false, smashCool=0;
-function spawn(nDeb,nDust,dir){
+function spawn(nDeb,nDust,dir,col){
   let d=0,u=0;
   for(const q of parts){
     if(q.life>0) continue;
@@ -183,7 +247,11 @@ function spawn(nDeb,nDust,dir){
     else if(q.dust && u<nDust){ u++; q.max=q.life=.8+Math.random()*.7;
       q.m.position.set((Math.random()-.5)*3,.8+Math.random()*1.2,dir*(2.4+Math.random()*1.2));
       q.vx=(Math.random()-.5)*5; q.vy=1.5+Math.random()*3; q.vz=dir*(1+Math.random()*3);
-      q.sz=.9; q.m.scale.setScalar(q.sz); q.m.material.opacity=.6; q.m.visible=true; }
+      q.sz=.9; q.m.material.color.setHex(col||0xd6cfc4); q.m.scale.setScalar(q.sz); q.m.material.opacity=.6; q.m.visible=true; }
+    else continue;
+    // debris lives in scene space, not car space: rotate spawn position/velocity into the car's yaw
+    const ry=car.rotation.y, c=Math.cos(ry), s=Math.sin(ry), P=q.m.position, px=P.x, pz=P.z, vx=q.vx, vz=q.vz;
+    P.x=px*c+pz*s; P.z=-px*s+pz*c; q.vx=vx*c+vz*s; q.vz=-vx*s+vz*c;
     if(d>=nDeb&&u>=nDust) break;
   }
 }
@@ -199,8 +267,8 @@ function updateFx(dt,dm,carRotY){
     m.position.x+=q.vx*dt+sy*k; m.position.y+=q.vy*dt; m.position.z+=q.vz*dt+cy*k;
   }
   if(shake>0){ shake=Math.max(0,shake-dt*2.2); const a=shake*9, tx=(Math.random()-.5)*a, ty=(Math.random()-.5)*a;
-    document.getElementById('map').style.transform=document.getElementById('car3d').style.transform='translate('+tx+'px,'+ty+'px)'; }
-  else if(shake===0 && updateFx.on){ document.getElementById('map').style.transform=document.getElementById('car3d').style.transform=''; updateFx.on=false; }
+    mapEl.style.transform=cv.style.transform='translate('+tx+'px,'+ty+'px)'; }
+  else if(shake===0 && updateFx.on){ mapEl.style.transform=cv.style.transform=''; updateFx.on=false; }
   if(shake>0) updateFx.on=true;
 }
 
@@ -223,13 +291,16 @@ zi.onclick=()=>zoomOff=Math.min(zoomOff+.5,2); zo.onclick=()=>zoomOff=Math.max(z
 
 /* ---------- PHYSICS ---------- */
 const S={lng:-88.446,lat:41.642,hdg:0,v:0,steer:0,camB:0,zoom:19.3,roll:0,pitch:0,wheel:0};
-const WB=3.05, MAXV=60, REVMAX=28, SPEEDUP=3; let EXAG=0.6;   // SPEEDUP: world distance per game metre
+let boat=false, waterC=0, landC=0;
+const BOATMAX=48, WB=3.05, MAXV=60, REVMAX=28, SPEEDUP=3; let EXAG=0.6;   // SPEEDUP: world distance per game metre
 let last=0,frame=0,onRoad=true,roadName='';
 const rad=d=>d*Math.PI/180;
 const mpp=(lat,z)=>78271.517*Math.cos(rad(lat))/Math.pow(2,z);
 let roadFails=0, miss=0;
-const hitRoad=(x,y,r)=>{ try{ const ids=roadIds.filter(i=>map.getLayer(i)); if(!ids.length) return null; return map.queryRenderedFeatures([[x-r,y-r],[x+r,y+r]],{layers:ids}); }catch(e){ roadFails++; return null; } };
-const hit=(x,y,r,ids)=>{ try{ ids=ids.filter(i=>map.getLayer(i)); return ids.length?map.queryRenderedFeatures([[x-r,y-r],[x+r,y+r]],{layers:ids}):[]; }catch(e){ return []; } };
+const hitRoad=(x,y,r)=>{ try{ if(!roadIds.length) return null; return map.queryRenderedFeatures([[x-r,y-r],[x+r,y+r]],{layers:roadIds}); }catch(e){ roadFails++; return null; } };
+const hit=(x,y,r,ids)=>{ try{ return ids.length?map.queryRenderedFeatures([[x-r,y-r],[x+r,y+r]],{layers:ids}):[]; }catch(e){ return []; } };
+const roadEl=document.getElementById('road'), mphEl=document.getElementById('mph'), miniArrowEl=document.getElementById('miniArrow');
+const mapEl=document.getElementById('map');
 
 
 /* ---------- TOWN / COUNTY ---------- */
@@ -264,6 +335,12 @@ function initMini(){
   }catch(e){ document.getElementById('mini').style.display='none'; }
 }
 
+function setBoat(v){
+  boat=v; body.visible=!v; boatG.visible=v; shadow.visible=!v;
+  if(!v) boatG.position.y=boatG.rotation.x=boatG.rotation.z=0;
+  spawn(0,22,-1,0xcfe9ff); shake=Math.max(shake,.5);
+  roadEl.textContent=v?'Boating':'Driving'; roadEl.className='';
+}
 function loop(now){
   try{ step(now); }catch(e){ if(!loop.err){loop.err=1; const d=document.createElement('pre'); d.style.cssText='position:fixed;left:8px;right:8px;top:8px;z-index:9999;background:#7f1d1d;color:#fff;font:12px monospace;padding:10px;white-space:pre-wrap;border-radius:8px'; d.textContent='LOOP ERROR: '+e.message+'\n'+(e.stack||'').split('\n').slice(0,4).join('\n'); document.body.appendChild(d);} }
   requestAnimationFrame(loop);
@@ -280,27 +357,29 @@ function step(now){
   if(gas>0.05) a=gas*(S.v<0?30:12)*(1-Math.min(S.v/MAXV,1)**2);
   else if(gas<-0.05){ if(S.v>.5){a=-28*(-gas);braking=true;} else a=gas*14; }
   if(hand){a-=Math.sign(S.v)*30; braking=Math.abs(S.v)>.5;}
-  const cap=onRoad?MAXV:28;
-  a-=Math.sign(S.v)*(.35+.0032*S.v*S.v);                // rolling + aero drag
-  if(!onRoad) a-=S.v*.4;                                // grass drag
+  const cap=boat?BOATMAX:(onRoad?MAXV:34);
+  a-=Math.sign(S.v)*(boat?(.25+.0022*S.v*S.v):(.35+.0032*S.v*S.v));                // rolling + aero drag
+  if(!onRoad&&!boat) a-=S.v*.15;                               // mild grass drag
   const prevV=S.v; S.v+=a*dt; if(prevV*S.v<0&&Math.abs(gas)<.05) S.v=0;
-  S.v=Math.max(-REVMAX,Math.min(cap,S.v)); if(Math.abs(S.v)<.05&&Math.abs(gas)<.05)S.v=0;
+  if(S.v>cap) S.v=Math.max(cap,S.v-25*dt);                     // ease down to a lower cap instead of snapping
+  S.v=Math.max(-REVMAX,Math.min(MAXV,S.v)); if(Math.abs(S.v)<.05&&Math.abs(gas)<.05)S.v=0;
 
   // steering (bicycle model, less lock at speed)
-  const lock=rad(34)/(1+Math.abs(S.v)/7);
+  const lock=boat?rad(30)/(1+Math.abs(S.v)/12):rad(34)/(1+Math.abs(S.v)/7);
   S.steer+=(st*lock-S.steer)*Math.min(1,dt*9);
-  S.hdg+=(S.v/WB)*Math.tan(S.steer)*dt*180/Math.PI;
+  S.hdg+=(S.v/(boat?7:WB))*Math.tan(S.steer)*dt*180/Math.PI;
 
   // move, with collision against buildings & water
   const dm=S.v*dt*SPEEDUP, h=rad(S.hdg);
   const nLat=S.lat+Math.cos(h)*dm/111320, nLng=S.lng+Math.sin(h)*dm/(111320*Math.cos(rad(S.lat)));
   let blocked=false, inBuilding=false;
-  if(Math.abs(S.v)>.5 && map.loaded()){
+  if(Math.abs(S.v)>.5 && styleReady && blockIds.length){
     const ahead=[nLng+Math.sin(h)*2.4/(111320*Math.cos(rad(S.lat)))*Math.sign(S.v), nLat+Math.cos(h)*2.4/111320*Math.sign(S.v)];
     const p=map.project(ahead);
-    const bh=hit(p.x,p.y,5,blockIds);
-    if(bh.length){ inBuilding=true; bh.forEach(f=>destroyBuilding(f.id)); }
-    else if(hit(p.x,p.y,1,waterIds).length && !hit(p.x,p.y,4,roadIds).length) blocked=true;
+    // tall extrusions overlap the car on screen, so candidates are filtered by real footprint under the car's nose.
+    // A small box is enough: fill-extrusion queries hit the whole projected prism, including its base footprint.
+    const bh=hit(p.x,p.y,6,blockIds).filter(f=>contains(f.geometry,ahead[0],ahead[1]));
+    if(bh.length){ inBuilding=true; destroyBuilding(bh[0].id); }
   }
   smashCool-=dt;
   if(inBuilding){
@@ -315,13 +394,18 @@ function step(now){
   // road detection
   if(frame%60===0) updatePlace();
   if(mini && frame%6===0){ try{ mini.jumpTo({center:[S.lng,S.lat]}); }catch(e){} }
-  document.getElementById('miniArrow').style.transform='rotate('+S.hdg+'deg)';
-  if(frame%4===0 && map.loaded()){
+  if(frame%3===0) miniArrowEl.style.transform='rotate('+S.hdg.toFixed(1)+'deg)';
+  if(frame%4===0 && styleReady){
     const p=map.project([S.lng,S.lat]); const f=hitRoad(p.x,p.y,48);
-    const el=document.getElementById('road');
+    const el=roadEl;
     if(f===null){ onRoad=true; el.textContent='Driving'; el.className=''; }      // road data unavailable: never punish
     else if(f.length>0){ miss=0; onRoad=true; const nm=f.find(x=>x.properties&&x.properties.name); roadName=nm?nm.properties.name:''; el.textContent=roadName||'On road'; el.className=''; }
-    else if(++miss>=8){ onRoad=false; el.textContent='Off road'; el.className='off'; }
+    else if(++miss>=15){ onRoad=false; el.textContent='Off road'; el.className='off'; }   // ~1s of sustained misses
+    // water <-> land switching (a bridge counts as land)
+    const inW=waterIds.length>0 && hit(p.x,p.y,2,waterIds).length>0 && !hit(p.x,p.y,5,bridgeIds).length;
+    if(inW){ landC=0; if(!boat && ++waterC>=2) setBoat(true); }
+    else { waterC=0; if(boat && ++landC>=3) setBoat(false); }
+    if(boat){ onRoad=true; el.textContent='Boating'; el.className=''; }
   }
 
   // camera: lagged chase, zooms out with speed
@@ -331,22 +415,25 @@ function step(now){
   map.jumpTo({center:[S.lng,S.lat],bearing:S.camB,zoom:S.zoom,pitch:68,padding:{top:padTop,bottom:0,left:0,right:0}});
 
   // 3D car — pixel-scale match with map camera
-  renderer.setSize(W,H,false); camera.aspect=W/H;
-  camera.setViewOffset(W,H,0,-padTop/2,W,H);
-  const fovR=rad(camera.fov), dist=.5*H/Math.tan(fovR/2), p=rad(68);
-  camera.position.set(0,dist*Math.cos(p),dist*Math.sin(p)); camera.lookAt(0,0,0); camera.updateProjectionMatrix();
+  if(W!==step.W||H!==step.H){ step.W=W; step.H=H;               // only touch the GL canvas / camera on resize
+    renderer.setSize(W,H,false); camera.aspect=W/H;
+    camera.setViewOffset(W,H,0,-padTop/2,W,H);
+    const fovR=rad(camera.fov), dist=.5*H/Math.tan(fovR/2), p=rad(68);
+    camera.position.set(0,dist*Math.cos(p),dist*Math.sin(p)); camera.lookAt(0,0,0); camera.updateProjectionMatrix(); }
   const sc=EXAG/mpp(S.lat,S.zoom); car.scale.setScalar(sc); debris.scale.setScalar(sc);
   car.rotation.y=-rad(S.hdg-S.camB);
   const tRoll=S.steer*Math.min(Math.abs(S.v)/12,1.2)*.35, tPitch=Math.max(-.05,Math.min(.05,a*.004));
   S.roll+=(tRoll-S.roll)*Math.min(1,dt*6); S.pitch+=(tPitch-S.pitch)*Math.min(1,dt*6);
   body.rotation.z=S.roll; body.rotation.x=S.pitch;
+  if(boat){ boatG.rotation.z=S.roll*1.6+Math.sin(now/420)*.03; boatG.rotation.x=S.pitch+Math.sin(now/510)*.025; boatG.position.y=-.1+Math.sin(now/360)*.05;
+    if(Math.abs(S.v)>3 && frame%2===0) spawn(0,Math.min(3,1+Math.floor(Math.abs(S.v)/15)),1,0xf4fbff); }
   S.wheel+=S.v*dt/.38;
   wheels.forEach(w=>{ w.spin.rotation.x=-S.wheel; if(w.front) w.pivot.rotation.y=-S.steer; });
   tails.forEach(t=>t.material=braking?tailOn:tailOff);
   updateFx(dt,dm,car.rotation.y);
   renderer.render(scene,camera);
 
-  document.getElementById('mph').textContent=Math.round(Math.abs(S.v)*2.237);
+  const mph=Math.round(Math.abs(S.v)*2.237); if(mph!==step.mph){ step.mph=mph; mphEl.textContent=mph; }
 }
 </script>
 </body>
