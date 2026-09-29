@@ -46,7 +46,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#9cc8ec;font-family:sy
   function show(m){var d=document.getElementById('dbg');if(!d){d=document.createElement('pre');d.id='dbg';
     d.style.cssText='position:fixed;left:8px;right:8px;bottom:8px;max-height:40%;overflow:auto;z-index:9999;margin:0;padding:10px;background:#7f1d1d;color:#fff;font:12px monospace;white-space:pre-wrap;border-radius:8px';
     document.body.appendChild(d);} d.textContent+=m+"\n";}
-  window.addEventListener('error',function(e){show('ERROR: '+e.message+(e.message==='Script error.'?' (hidden by the browser: it came from a library on another domain; check the console for details)':'')+(e.lineno?' (line '+e.lineno+')':'')+(e.error&&e.error.stack?'\n'+e.error.stack.split('\n').slice(0,5).join('\n'):''));});
+  window.addEventListener('error',function(e){show('ERROR: '+e.message+(e.filename?' @ '+e.filename.split('/').slice(-3).join('/')+':'+e.lineno+':'+e.colno:'')+(e.message==='Script error.'?' (hidden by the browser: it came from a library on another domain; check the console for details)':'')+(e.lineno?' (line '+e.lineno+')':'')+(e.error&&e.error.stack?'\n'+e.error.stack.split('\n').slice(0,5).join('\n'):''));});
   window.addEventListener('unhandledrejection',function(e){show('PROMISE: '+(e.reason&&e.reason.message||e.reason));});
   window.addEventListener('load',function(){
     if(typeof maplibregl==='undefined')show('MapLibre failed to load from jsdelivr, cdnjs and unpkg. Check your network or ad blocker.');
@@ -202,6 +202,7 @@ function initMini(){
   try{
     mini=new maplibregl.Map({container:'mini',style:'https://tiles.openfreemap.org/styles/liberty',center:[S.lng,S.lat],zoom:miniZ,
       interactive:false,attributionControl:false,fadeDuration:0,pitch:0});
+    mini.on('error',e=>{ console.warn('MINI:',e&&e.error&&e.error.message); });
     document.getElementById('mini').addEventListener('click',()=>{ miniZ=miniZ>=15?11.5:miniZ+1.5; mini.easeTo({zoom:miniZ,duration:250}); });
   }catch(e){ document.getElementById('mini').style.display='none'; }
 }
@@ -247,7 +248,7 @@ function step(now){
 
   // road detection
   if(frame%60===0) updatePlace();
-  if(mini && frame%6===0){ mini.jumpTo({center:[S.lng,S.lat]}); }
+  if(mini && frame%6===0){ try{ mini.jumpTo({center:[S.lng,S.lat]}); }catch(e){} }
   document.getElementById('miniArrow').style.transform='rotate('+S.hdg+'deg)';
   if(frame%4===0 && map.loaded()){
     const p=map.project([S.lng,S.lat]); const f=hitRoad(p.x,p.y,48);
