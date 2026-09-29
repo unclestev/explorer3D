@@ -62,6 +62,12 @@ const map = new maplibregl.Map({
   interactive:false, fadeDuration:0, attributionControl:{compact:true}
 });
 let roadIds=[], blockIds=[], waterIds=[];
+let origBFilter=null; const destroyed=[];
+function destroyBuilding(id){
+  if(id==null||destroyed.includes(id)) return; destroyed.push(id);
+  const f=['!',['in',['id'],['literal',destroyed]]];
+  try{ map.setFilter('building-3d',origBFilter?['all',origBFilter,f]:f); }catch(e){}
+}
 const seen={};
 map.on('error',e=>{ const m=((e&&e.error&&(e.error.message||e.error.status))||'unknown map error')+((e&&e.error&&e.error.stack)?'\n'+e.error.stack.split('\n').slice(0,4).join('\n'):''); const k=String(m).slice(0,60);
   if(seen[k])return; seen[k]=1; console.warn('MAP:',m);
@@ -81,6 +87,16 @@ map.on('load',()=>{ try{ initMini();
   roadIds  = all.filter(l=>l['source-layer']==='transportation' && (l.type==='line'||l.type==='fill')).map(l=>l.id);
   waterIds = all.filter(l=>l['source-layer']==='water' && l.type==='fill').map(l=>l.id);
   blockIds = all.filter(l=>l['source-layer']==='building' && (l.type==='fill-extrusion')).map(l=>l.id);
+  try{
+    const fl=all.find(l=>l.layout&&l.layout['text-font']);
+    const hs=(all.find(l=>l['source-layer']==='housenumber')||{}).source||src;
+    map.addLayer({id:'hn-big',type:'symbol',source:hs,'source-layer':'housenumber',minzoom:15.5,
+      layout:{'text-field':['to-string',['get','housenumber']],'text-font':fl?fl.layout['text-font']:['Noto Sans Regular'],
+        'text-size':['interpolate',['linear'],['zoom'],15.5,10,19,18,21,26],'text-allow-overlap':true,'text-ignore-placement':true,
+        'text-pitch-alignment':'viewport','text-rotation-alignment':'viewport'},
+      paint:{'text-color':'#111827','text-halo-color':'rgba(255,255,255,.95)','text-halo-width':2}});
+  }catch(e){ console.warn('house numbers:',e&&e.message); }
+  try{ origBFilter=map.getFilter('building-3d')||null; }catch(e){}
   const ld=document.getElementById('load'); ld.style.opacity=0; setTimeout(()=>ld.remove(),500);
   }catch(err){ console.error(err); var d=document.createElement('pre'); d.style.cssText='position:fixed;left:8px;right:8px;top:8px;z-index:9999;background:#7f1d1d;color:#fff;font:12px monospace;padding:10px;white-space:pre-wrap'; d.textContent='LOAD ERROR: '+err.message; document.body.appendChild(d); }
   const ld2=document.getElementById('load'); if(ld2){ld2.style.opacity=0; setTimeout(()=>ld2.remove(),500);}
@@ -146,6 +162,47 @@ const gr=sx.createRadialGradient(64,64,10,64,64,64); gr.addColorStop(0,'rgba(0,0
 sx.fillStyle=gr; sx.fillRect(0,0,128,128);
 const shadow=new THREE.Mesh(new THREE.PlaneGeometry(3.4,6.6),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(sc),transparent:true,depthWrite:false}));
 shadow.rotation.x=-Math.PI/2; shadow.position.y=.03; car.add(shadow);
+
+
+/* ---------- SMASH EFFECTS ---------- */
+const debris=new THREE.Group(); scene.add(debris);
+const dMats=[0xb45f4a,0x9a4a3a,0xc9c2b4,0x8b8f96,0x6b5b4b,0xd9d2c5].map(c=>new THREE.MeshPhongMaterial({color:c}));
+const boxG=new THREE.BoxGeometry(1,1,1), dustG=new THREE.SphereGeometry(1,8,6);
+const parts=[];
+for(let i=0;i<90;i++){ const m=new THREE.Mesh(boxG,dMats[i%dMats.length]); m.visible=false; debris.add(m); parts.push({m,dust:false,life:0,max:1,vx:0,vy:0,vz:0,rx:0,ry:0,sz:.4}); }
+for(let i=0;i<36;i++){ const m=new THREE.Mesh(dustG,new THREE.MeshBasicMaterial({color:0xd6cfc4,transparent:true,opacity:0,depthWrite:false})); m.visible=false; debris.add(m); parts.push({m,dust:true,life:0,max:1,vx:0,vy:0,vz:0,rx:0,ry:0,sz:1}); }
+let shake=0, smashing=false, smashCool=0;
+function spawn(nDeb,nDust,dir){
+  let d=0,u=0;
+  for(const q of parts){
+    if(q.life>0) continue;
+    if(!q.dust && d<nDeb){ d++; q.max=q.life=.9+Math.random()*.8; q.sz=.25+Math.random()*.6;
+      q.m.position.set((Math.random()-.5)*2.2,.6+Math.random()*1.4,dir*(2.2+Math.random()*.8));
+      q.vx=(Math.random()-.5)*16; q.vy=6+Math.random()*12; q.vz=dir*(4+Math.random()*12)*(Math.random()<.35?-1:1);
+      q.rx=(Math.random()-.5)*14; q.ry=(Math.random()-.5)*14; q.m.scale.setScalar(q.sz); q.m.visible=true; }
+    else if(q.dust && u<nDust){ u++; q.max=q.life=.8+Math.random()*.7;
+      q.m.position.set((Math.random()-.5)*3,.8+Math.random()*1.2,dir*(2.4+Math.random()*1.2));
+      q.vx=(Math.random()-.5)*5; q.vy=1.5+Math.random()*3; q.vz=dir*(1+Math.random()*3);
+      q.sz=.9; q.m.scale.setScalar(q.sz); q.m.material.opacity=.6; q.m.visible=true; }
+    if(d>=nDeb&&u>=nDust) break;
+  }
+}
+function updateFx(dt,dm,carRotY){
+  const k=dm/EXAG, sy=Math.sin(carRotY), cy=Math.cos(carRotY);       // world slides past as the car drives
+  for(const q of parts){
+    if(q.life<=0) continue;
+    q.life-=dt; if(q.life<=0){ q.m.visible=false; continue; }
+    const m=q.m;
+    if(q.dust){ q.vy*=Math.exp(-dt*1.2); q.sz+=dt*3.2; m.scale.setScalar(q.sz); m.material.opacity=.6*(q.life/q.max); }
+    else { q.vy-=32*dt; m.rotation.x+=q.rx*dt; m.rotation.y+=q.ry*dt;
+      if(m.position.y<q.sz*.5&&q.vy<0){ m.position.y=q.sz*.5; q.vy*=-.35; q.vx*=.7; q.vz*=.7; } }
+    m.position.x+=q.vx*dt+sy*k; m.position.y+=q.vy*dt; m.position.z+=q.vz*dt+cy*k;
+  }
+  if(shake>0){ shake=Math.max(0,shake-dt*2.2); const a=shake*9, tx=(Math.random()-.5)*a, ty=(Math.random()-.5)*a;
+    document.getElementById('map').style.transform=document.getElementById('car3d').style.transform='translate('+tx+'px,'+ty+'px)'; }
+  else if(shake===0 && updateFx.on){ document.getElementById('map').style.transform=document.getElementById('car3d').style.transform=''; updateFx.on=false; }
+  if(shake>0) updateFx.on=true;
+}
 
 /* ---------- INPUT ---------- */
 let tSteer=0,tGas=0;
@@ -237,13 +294,22 @@ function step(now){
   // move, with collision against buildings & water
   const dm=S.v*dt*SPEEDUP, h=rad(S.hdg);
   const nLat=S.lat+Math.cos(h)*dm/111320, nLng=S.lng+Math.sin(h)*dm/(111320*Math.cos(rad(S.lat)));
-  let blocked=false;
+  let blocked=false, inBuilding=false;
   if(Math.abs(S.v)>.5 && map.loaded()){
     const ahead=[nLng+Math.sin(h)*2.4/(111320*Math.cos(rad(S.lat)))*Math.sign(S.v), nLat+Math.cos(h)*2.4/111320*Math.sign(S.v)];
     const p=map.project(ahead);
-    if(hit(p.x,p.y,1,blockIds).length) blocked=true;
+    const bh=hit(p.x,p.y,5,blockIds);
+    if(bh.length){ inBuilding=true; bh.forEach(f=>destroyBuilding(f.id)); }
     else if(hit(p.x,p.y,1,waterIds).length && !hit(p.x,p.y,4,roadIds).length) blocked=true;
   }
+  smashCool-=dt;
+  if(inBuilding){
+    const dir=S.v>=0?-1:1;
+    if(!smashing){ spawn(34,14,dir); shake=1; smashCool=.05; }
+    else if(smashCool<=0){ spawn(5,2,dir); smashCool=.06; shake=Math.max(shake,.35); }
+    S.v*=Math.exp(-dt*1.6);                                    // buildings slow you, but you plow through
+  }
+  smashing=inBuilding;
   if(blocked){ S.v=-S.v*.3; } else { S.lat=nLat; S.lng=nLng; }
 
   // road detection
@@ -269,7 +335,7 @@ function step(now){
   camera.setViewOffset(W,H,0,-padTop/2,W,H);
   const fovR=rad(camera.fov), dist=.5*H/Math.tan(fovR/2), p=rad(68);
   camera.position.set(0,dist*Math.cos(p),dist*Math.sin(p)); camera.lookAt(0,0,0); camera.updateProjectionMatrix();
-  const sc=EXAG/mpp(S.lat,S.zoom); car.scale.setScalar(sc);
+  const sc=EXAG/mpp(S.lat,S.zoom); car.scale.setScalar(sc); debris.scale.setScalar(sc);
   car.rotation.y=-rad(S.hdg-S.camB);
   const tRoll=S.steer*Math.min(Math.abs(S.v)/12,1.2)*.35, tPitch=Math.max(-.05,Math.min(.05,a*.004));
   S.roll+=(tRoll-S.roll)*Math.min(1,dt*6); S.pitch+=(tPitch-S.pitch)*Math.min(1,dt*6);
@@ -277,6 +343,7 @@ function step(now){
   S.wheel+=S.v*dt/.38;
   wheels.forEach(w=>{ w.spin.rotation.x=-S.wheel; if(w.front) w.pivot.rotation.y=-S.steer; });
   tails.forEach(t=>t.material=braking?tailOn:tailOff);
+  updateFx(dt,dm,car.rotation.y);
   renderer.render(scene,camera);
 
   document.getElementById('mph').textContent=Math.round(Math.abs(S.v)*2.237);
