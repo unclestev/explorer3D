@@ -29,11 +29,14 @@ html,body{margin:0;height:100%;overflow:hidden;background:#9cc8ec;font-family:sy
 .track{position:relative;background:rgba(15,23,42,.55);border:2px solid rgba(255,255,255,.25);border-radius:30px;pointer-events:auto;touch-action:none}
 #st{width:150px;height:52px}#sp{width:52px;height:150px}
 .knob{position:absolute;top:50%;left:50%;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;background:#38bdf8;border:2px solid #fff}
+#toast{position:absolute;left:50%;top:22%;transform:translateX(-50%);z-index:30;max-width:84vw;background:rgba(15,23,42,.85);color:#fff;padding:10px 16px;border-radius:12px;font-size:15px;text-align:center;opacity:0;transition:opacity .35s;pointer-events:none}
+#toast.show{opacity:1}
 #load{position:absolute;inset:0;z-index:99;background:#0f172a;color:#7dd3fc;display:flex;align-items:center;justify-content:center;font-size:20px;transition:opacity .5s}
 </style>
 </head>
 <body>
 <div id="load">Loading map…</div>
+<div id="toast"></div>
 <div id="map"></div>
 <canvas id="car3d"></canvas>
 <div id="hud"><span id="mph">0</span> mph<br><span id="road">On road</span><br><span id="place">Locating…</span><br><span id="surf"></span><br><span id="near"></span></div>
@@ -243,7 +246,12 @@ map.on('load',()=>{ try{ initMini();
         'text-offset':[0,-.5],'text-allow-overlap':true,'text-ignore-placement':true},
       paint:{'text-color':'#0c4a6e','text-halo-color':'#fff','text-halo-width':2}});
   }catch(e){ console.warn('tower layers',e); }
+  try{ map.addSource('clouds',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+    map.addLayer({id:'clouds',type:'fill-extrusion',source:'clouds',
+      paint:{'fill-extrusion-color':'#ffffff','fill-extrusion-height':['get','h'],'fill-extrusion-base':['get','b'],'fill-extrusion-opacity':.6}}); }
+  catch(e){ console.warn('clouds',e); }
   loadTowers();
+  setTimeout(()=>toast('Tip: triple-tap the gas to take off in a hang glider',5000),1500);
   styleReady=true;
   const ld=document.getElementById('load'); ld.style.opacity=0; setTimeout(()=>ld.remove(),500);
   }catch(err){ console.error(err); var d=document.createElement('pre'); d.style.cssText='position:fixed;left:8px;right:8px;top:8px;z-index:9999;background:#7f1d1d;color:#fff;font:12px monospace;padding:10px;white-space:pre-wrap'; d.textContent='LOAD ERROR: '+err.message; document.body.appendChild(d); }
@@ -343,13 +351,14 @@ bx(.55,.6,.6,hullM,0,1.1,2.85); bx(.2,.7,.35,metalM,0,.3,2.95);                 
 
 /* ---------- FARM TRACTOR (swaps in on farmland) ---------- */
 const tractorG=new THREE.Group(); tractorG.visible=false; car.add(tractorG);
-const tRed=new THREE.MeshPhongMaterial({color:0xb3261e,specular:0xffd0c0,shininess:70});
-const tCream=new THREE.MeshPhongMaterial({color:0xe9dfc6,shininess:40});
+const tRed=new THREE.MeshPhongMaterial({color:0x367c2b,specular:0xd9f5c8,shininess:70});   // tractor green
+const tCream=new THREE.MeshPhongMaterial({color:0xffde00,shininess:50});                        // yellow wheels & trim
 const tGlass=new THREE.MeshPhongMaterial({color:0x9fc3d9,transparent:true,opacity:.35,shininess:120,depthWrite:false});
 function tb(w,h,d,mat,x,y,z){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); tractorG.add(m); return m; }
 tb(.9,.78,2.1,tRed,0,1.18,-.78);                        // hood / engine
 tb(.7,.35,1.4,black,0,.72,-.9);                          // frame
 tb(.84,.58,.08,black,0,1.14,-1.84);                      // grille
+[-.46,.46].forEach(x=>tb(.02,.07,2.0,tCream,x,1.38,-.78));   // yellow hood stripes
 [-.3,.3].forEach(x=>tb(.18,.12,.05,headM,x,1.4,-1.87));  // headlights
 tb(1.3,.55,1.35,tRed,0,1.18,.72);                        // cab base
 [-1.0,1.0].forEach(x=>tb(.55,.1,1.7,tRed,x,1.8,.95));    // rear fenders
@@ -370,6 +379,41 @@ const tWheels=[];
     lug.position.set(0,Math.cos(a)*r*.95,Math.sin(a)*r*.95); lug.rotation.x=-a; spin.add(lug); }
   tWheels.push({pivot,spin,front,r});
 });
+
+/* ---------- HANG GLIDER (attached to the camera: a chase view from just behind the pilot) ---------- */
+scene.add(camera);
+const gliderG=new THREE.Group(); gliderG.visible=false; camera.add(gliderG);
+const gMdl=new THREE.Group(); gliderG.add(gMdl);
+const sailA=new THREE.MeshPhongMaterial({color:0xf97316,side:THREE.DoubleSide,shininess:30});
+const sailB=new THREE.MeshPhongMaterial({color:0x1d4ed8,side:THREE.DoubleSide,shininess:30});
+const suitM=new THREE.MeshPhongMaterial({color:0x1f2937,shininess:20});
+const helmM=new THREE.MeshPhongMaterial({color:0xfacc15,shininess:90});
+function wing(sgn,mat,inner){
+  const sh=new THREE.Shape();                                    // x = span, y = chord (nose at -y)
+  sh.moveTo(0,-2.6); sh.lineTo(sgn*5.2,1.0); sh.lineTo(sgn*4.7,1.35); sh.quadraticCurveTo(sgn*2.4,1.05,0,1.3); sh.closePath();
+  const g=new THREE.ExtrudeGeometry(sh,{depth:.04,bevelEnabled:false}); g.rotateX(Math.PI/2);   // chord -> z, nose -z
+  const m=new THREE.Mesh(g,mat); m.rotation.z=sgn*.05; gMdl.add(m);                           // a little dihedral
+  if(inner){ const s2=new THREE.Shape(); s2.moveTo(0,-2.2); s2.lineTo(sgn*2.2,-.1); s2.lineTo(sgn*1.9,.9); s2.lineTo(0,1.1); s2.closePath();
+    const g2=new THREE.ExtrudeGeometry(s2,{depth:.045,bevelEnabled:false}); g2.rotateX(Math.PI/2);
+    const m2=new THREE.Mesh(g2,sailB); m2.position.y=.01; m2.rotation.z=sgn*.05; gMdl.add(m2); }
+}
+wing(1,sailA,true); wing(-1,sailA,true);
+function tube(a,b,r,mat){ const A=new THREE.Vector3(...a), B=new THREE.Vector3(...b), d=B.clone().sub(A), L=d.length();
+  const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,L,6),mat); m.position.copy(A).add(B).multiplyScalar(.5);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize()); gMdl.add(m); return m; }
+tube([0,-.03,-2.6],[0,-.03,1.4],.04,metalM);                     // keel
+tube([0,0,-.1],[0,.75,-.1],.03,metalM);                          // king post
+tube([0,-.05,-.15],[-.75,-1.5,-.4],.03,metalM); tube([0,-.05,-.15],[.75,-1.5,-.4],.03,metalM);   // A-frame
+tube([-.75,-1.5,-.4],[.75,-1.5,-.4],.035,metalM);                // base bar
+tube([0,-.1,.3],[0,-1.0,.35],.012,black);                        // hang strap
+const pod=new THREE.Mesh(new THREE.CylinderGeometry(.24,.2,1.75,10),suitM); pod.rotation.x=Math.PI/2; pod.position.set(0,-1.12,.45); gMdl.add(pod);
+const helm=new THREE.Mesh(new THREE.SphereGeometry(.17,12,10),helmM); helm.position.set(0,-1.05,-.5); gMdl.add(helm);
+[-.35,.35].forEach(x=>tube([x*.4,-1.1,-.3],[x,-1.48,-.4],.05,suitM));   // arms on the base bar
+function placeGlider(){
+  const D=400, visH=2*D*Math.tan(rad(camera.fov)/2), visW=visH*camera.aspect;
+  gMdl.scale.setScalar(Math.min(visW*.62,visH*1.05)/10.4);
+  gliderG.position.set(0,visH*.05,-D);
+}
 
 /* ---------- SMASH EFFECTS ---------- */
 const debris=new THREE.Group(); scene.add(debris);
@@ -430,6 +474,15 @@ function joy(trackId,knobId,axis){
   tr.addEventListener('pointermove',upd); tr.addEventListener('pointerup',end); tr.addEventListener('pointercancel',end);
 }
 joy('st','stk','x'); joy('sp','spk','y');
+// triple-tap the gas (slider or W / up arrow) to launch or land the hang glider
+const taps=[];
+function gasTap(){ const t=performance.now(); taps.push(t); while(taps.length&&t-taps[0]>750) taps.shift();
+  if(taps.length>=3){ taps.length=0; toggleGlider(); } }
+document.getElementById('sp').addEventListener('pointerdown',gasTap);
+addEventListener('keydown',e=>{ const k=e.key.toLowerCase(); if(!e.repeat&&(k==='w'||k==='arrowup')) gasTap(); });
+let toastT=null;
+function toast(msg,ms){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show');
+  clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('show'),ms||2600); }
 const K={}; addEventListener('keydown',e=>{K[e.key.toLowerCase()]=1; if(e.key.startsWith('Arrow')||e.key===' ')e.preventDefault();}); addEventListener('keyup',e=>K[e.key.toLowerCase()]=0);
 let kS=0,kG=0; let zoomOff=0;
 let dirty=true;
@@ -644,13 +697,109 @@ function drawTowers(){
 function setMode(m){
   if(m===mode) return;
   const was=mode; mode=m; boat=(m==='boat');
-  body.visible=(m==='car'); boatG.visible=(m==='boat'); tractorG.visible=(m==='tractor'); shadow.visible=(m!=='boat');
+  body.visible=(m==='car'); boatG.visible=(m==='boat'); tractorG.visible=(m==='tractor'); shadow.visible=(m!=='boat'&&m!=='glider');
+  car.visible=(m!=='glider'); gliderG.visible=(m==='glider'); surfEl.style.color=''; step.surf=null;
   if(m!=='boat') boatG.position.y=boatG.rotation.x=boatG.rotation.z=0;
-  if(m==='boat'||was==='boat'){ spawn(0,22,-1,0xcfe9ff); shake=Math.max(shake,.5); }
+  if(m==='glider'){ /* no ground puff in the air */ }
+  else if(m==='boat'||was==='boat'){ spawn(0,22,-1,0xcfe9ff); shake=Math.max(shake,.5); }
   else { spawn(0,16,-1,0xa0825a); shake=Math.max(shake,.3); }            // puff of field dirt
   roadEl.textContent=m==='boat'?'Boating':'Driving'; roadEl.className='';
 }
 function setBoat(v){ setMode(v?'boat':'car'); }
+
+/* ---------- HANG GLIDING ----------
+   Weight-shift flying: steering banks the wing (sluggish, slower at speed) and the bank makes you turn;
+   gas up = pull the bar in (nose down, faster, more sink), gas down = push out (slower, less sink, stalls
+   below ~8 m/s). You always sink a little; thermals under the white clouds lift you. Launch and landing
+   are straight up and straight down from where you are. */
+const G={alt:0,air:11,bank:0,vs:0,lift:0,phase:'',t:0};
+const GP=74, GSPEED=2.2, GVERT=1.6, GTOP=300, GMAX=1100;
+function polarSink(v){ return .95+.02*(v-10)*(v-10); }
+function thermalAt(i,j){ const C=600; if(hash(i*3+1,j*7+2)>.5) return null;
+  return {x:(i+.2+.6*hash(i,j+5))*C, y:(j+.2+.6*hash(i+9,j))*C, r:90+120*hash(i+2,j+2), s:1.6+2.6*hash(i+4,j+1)}; }
+function thermalLift(lng,lat){
+  const x=lng*MLNG, y=lat*MLAT, ix=Math.floor(x/600), iy=Math.floor(y/600); let L=0;
+  for(let di=-1;di<=1;di++) for(let dj=-1;dj<=1;dj++){ const t=thermalAt(ix+di,iy+dj); if(!t) continue;
+    const d=Math.hypot(x-t.x,y-t.y); if(d<t.r) L+=t.s*(1-(d/t.r)**2); else if(d<1.7*t.r) L-=.12*t.s; }
+  return L;
+}
+let cloudAt=null;
+function buildClouds(force){
+  const src=map.getSource&&map.getSource('clouds'); if(!src) return;
+  if(!force&&cloudAt&&meters(cloudAt[1],cloudAt[0],S.lat,S.lng)<800) return;
+  const x=S.lng*MLNG, y=S.lat*MLAT, ix=Math.floor(x/600), iy=Math.floor(y/600), feats=[];
+  for(let i=ix-6;i<=ix+6;i++) for(let j=iy-6;j<=iy+6;j++){ const t=thermalAt(i,j); if(!t) continue;
+    const n=3+Math.floor(hash(i+5,j+5)*3);
+    for(let k=0;k<n;k++){ const a=hash(i+k,j-k)*6.28, o=t.r*.6*hash(j+k,i), base=1150+hash(i-k,j+k)*120;
+      feats.push({type:'Feature',properties:{h:base+110+t.s*45,b:base},geometry:{type:'Polygon',
+        coordinates:ngon((t.x+Math.cos(a)*o)/MLNG,(t.y+Math.sin(a)*o)/MLAT,t.r*(.5+.45*hash(k+3,i+j)),12,a)}}); } }
+  try{ src.setData({type:'FeatureCollection',features:feats}); }catch(e){}
+  cloudAt=[S.lng,S.lat];
+}
+function clearClouds(){ try{ map.getSource('clouds').setData({type:'FeatureCollection',features:[]}); }catch(e){} cloudAt=null; }
+function toggleGlider(){
+  if(mode==='glider'){ if(G.phase!=='land'){ G.phase='land'; toast('Landing: straight down'); } return; }
+  Object.assign(G,{alt:0,air:11,bank:0,vs:0,lift:0,phase:'launch',t:0});
+  S.v=0; S.steer=0; setMode('glider'); dirty=true; step.W=0; buildClouds(true);
+  toast('Taking off…');
+}
+function touchDown(){
+  G.phase=''; setMode('car'); S.v=0; S.zoom=19.3; step.detOnce=false; step.W=0; dirty=true; step.cam=null;
+  clearClouds(); shake=Math.max(shake,.4); toast('Landed');
+}
+function glideStep(dt,st,gas,now){
+  G.t+=dt;
+  if(G.phase==='launch'){                                        // straight up from where you were
+    const k=Math.min(1,G.t/2.8); G.alt=GTOP*(1-Math.pow(1-k,3)); G.vs=GTOP*3*Math.pow(1-k,2)/2.8; G.air=11;
+    if(k>=1){ G.phase='fly'; toast('Lean to turn · gas up to dive faster · gas down to slow · triple-tap to land',4500); }
+  } else if(G.phase==='land'){                                   // straight down to the spot below you
+    const d=Math.max(35,G.alt*1.6)*dt; G.alt=Math.max(0,G.alt-d); G.vs=-d/Math.max(dt,1e-3);
+    G.bank*=Math.exp(-dt*3); G.air*=Math.exp(-dt*1.5);
+    if(G.alt<=0){ touchDown(); return; }
+  } else {
+    const tb=st*rad(45);
+    G.bank+=(tb-G.bank)*Math.min(1,dt*1.8*11/Math.max(G.air,8));
+    const ts=gas>0?11+gas*9:11+gas*3.5; G.air+=(ts-G.air)*Math.min(1,dt*.8);
+    let stall=false; if(G.air<8.2){ stall=true; G.air+=dt*2.5; }
+    const sink=polarSink(G.air)/Math.pow(Math.cos(G.bank),1.5)+(stall?3:0);
+    G.lift=thermalLift(S.lng,S.lat)*(G.alt>GMAX-60?Math.max(0,(GMAX-G.alt)/60):1);
+    G.vs=(G.lift-sink)*GVERT; G.alt=Math.min(GMAX,G.alt+G.vs*dt);
+    S.hdg=(S.hdg+(9.81*Math.tan(G.bank)/G.air)*dt*180/Math.PI+360)%360;
+    const dm=G.air*dt*GSPEED, h=rad(S.hdg);
+    S.lat+=Math.cos(h)*dm/111320; S.lng+=Math.sin(h)*dm/(111320*Math.cos(rad(S.lat)));
+    if(G.alt<=0){ G.alt=0; touchDown(); return; }
+  }
+  // camera: at the pilot's height, just behind and above, looking ahead and down
+  const dB=((S.hdg-S.camB+540)%360)-180; S.camB+=dB*(1-Math.exp(-dt*2.5));
+  const W=innerWidth,H=innerHeight,padTop=H*.34;
+  if(W!==step.W||H!==step.H){ step.W=W; step.H=H;
+    renderer.setSize(W,H,false); camera.aspect=W/H; camera.setViewOffset(W,H,0,-padTop/2,W,H);
+    const dist=.5*H/Math.tan(rad(camera.fov)/2), p=rad(68);
+    camera.position.set(0,dist*Math.cos(p),dist*Math.sin(p)); camera.lookAt(0,0,0); camera.updateProjectionMatrix(); placeGlider(); }
+  const camAlt=Math.max(6,G.alt+14)*Math.pow(2,-zoomOff*.5), pr=rad(GP), hb=rad(S.camB), fwd=camAlt*Math.tan(pr);
+  const cLat=S.lat+Math.cos(hb)*fwd/111320, cLng=S.lng+Math.sin(hb)*fwd/(111320*Math.cos(rad(S.lat)));
+  const mppNeed=(camAlt/Math.cos(pr))/(.5*H/Math.tan(rad(36.87)/2));
+  const z=Math.max(10,Math.min(21,Math.log2(78271.517*Math.cos(rad(S.lat))/mppNeed)));
+  map.jumpTo({center:[cLng,cLat],bearing:S.camB,zoom:z,pitch:GP,padding:{top:padTop,bottom:0,left:0,right:0}});
+  // glider attitude as seen from behind: level with the horizon, banked, nose follows the bar
+  const bob=Math.sin(now/900)*.02;
+  gMdl.rotation.set(rad(90-GP)-(G.phase==='fly'?gas*.12:0)+(G.phase==='land'?-.2:0)+bob, -rad(dB)*.6, -G.bank);
+  updateFx(dt,0,0);
+  renderer.render(scene,camera);
+  // HUD + the usual background jobs
+  if(every('ghud',.2)){
+    const v=G.vs/GVERT;
+    roadEl.textContent='Altitude '+Math.round(G.alt*3.281)+' ft'; roadEl.className='';
+    surfEl.textContent='Hang glider · '+(v>=0?'▲ ':'▼ ')+Math.abs(v).toFixed(1)+' m/s'; surfEl.style.color=v>=0?'#86efac':'#fca5a5';
+    nearEl.textContent=G.phase==='fly'&&G.lift>.8?'Thermal! Circle to climb':(G.phase==='fly'&&G.alt<60?'Getting low: find a thermal or triple-tap to land':nearestPoi());
+    const mph=Math.round(G.air*2.237); if(mph!==step.mph){ step.mph=mph; mphEl.textContent=mph; }
+  }
+  if(every('place',1)) updatePlace();
+  if(mini && every('mini',POWER?1:.12)){ try{ mini.jumpTo({center:[S.lng,S.lat]}); }catch(e){} }
+  const ah=S.hdg.toFixed(1); if(ah!==step.ah && every('arrow',.05)){ step.ah=ah; miniArrowEl.style.transform='rotate('+ah+'deg)'; }
+  if(every('clouds',2)) buildClouds(false);
+  if(every('decor',.5) && styleReady && (!decorAt || meters(decorAt[1],decorAt[0],S.lat,S.lng)>250)) buildDecor();
+}
 const tick={};
 function every(k,sec){ const t=last/1000; if(tick[k]===undefined||t-tick[k]>=sec){ tick[k]=t; return true; } return false; }
 let lastStep=0;
@@ -666,6 +815,7 @@ function step(now){
   const ease=(v,p,n)=>{ if(p)v+=dt*4; else if(n)v-=dt*4; else v*=Math.exp(-dt*8); return Math.max(-1,Math.min(1,v)); };
   kS=ease(kS,K.d||K.arrowright,K.a||K.arrowleft); kG=ease(kG,K.w||K.arrowup,K.s||K.arrowdown);
   const st=Math.abs(tSteer)>.05?tSteer:kS, gas=Math.abs(tGas)>.05?tGas:kG, hand=!!K[' '];
+  if(mode==='glider'){ glideStep(dt,st,gas,now); return; }
 
   // longitudinal
   let a=0, braking=false;
@@ -781,7 +931,7 @@ function step(now){
     renderer.setSize(W,H,false); camera.aspect=W/H;
     camera.setViewOffset(W,H,0,-padTop/2,W,H);
     const fovR=rad(camera.fov), dist=.5*H/Math.tan(fovR/2), p=rad(68);
-    camera.position.set(0,dist*Math.cos(p),dist*Math.sin(p)); camera.lookAt(0,0,0); camera.updateProjectionMatrix(); }
+    camera.position.set(0,dist*Math.cos(p),dist*Math.sin(p)); camera.lookAt(0,0,0); camera.updateProjectionMatrix(); placeGlider(); }
   const sc=EXAG/mpp(S.lat,S.zoom); car.scale.setScalar(sc); debris.scale.setScalar(sc);
   car.rotation.y=-rad(S.hdg-S.camB);
   const tRoll=S.steer*Math.min(Math.abs(S.v)/12,1.2)*.35, tPitch=Math.max(-.05,Math.min(.05,a*.004));
