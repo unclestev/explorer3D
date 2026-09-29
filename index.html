@@ -89,6 +89,46 @@ function toExpr(f){ if(!isLegacy(f)) return f; const o=f[0];
   if(o==='in'||o==='!in'){ const e=['in',g,['literal',f.slice(2)]]; return o==='in'?e:['!',e]; }
   return [o,g,f[2]]; }
 const origFilters={};   // layer id -> original filter (as expression) for every building extrusion layer
+/* OpenFreeMap packs many neighbouring buildings into ONE feature (a MultiPolygon with one id).
+   Hiding that id would flatten the whole block, so after hiding it we redraw every other building
+   of the group from a GeoJSON layer ('rebuilt-3d') and leave out only the one the car hit. */
+let bSrc='openmaptiles';
+const rebuilt={type:'FeatureCollection',features:[]}, rebuiltKeys=new Set(), holes=[];
+let rbSeq=0, rbTimer=null;
+const PADDEG=0.000006;                                        // ~0.5 m: touching neighbours don't count as overlap
+function bboxOf(r){ let a=[1e9,1e9,-1e9,-1e9]; for(const c of r){ if(c[0]<a[0])a[0]=c[0]; if(c[1]<a[1])a[1]=c[1]; if(c[0]>a[2])a[2]=c[0]; if(c[1]>a[3])a[3]=c[1]; } return a; }
+function overlaps(a,b){ return a[0]<b[2]-PADDEG && a[2]>b[0]+PADDEG && a[1]<b[3]-PADDEG && a[3]>b[1]+PADDEG; }
+function partsOf(g){ return !g?[]:g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[]; }
+function addSurvivors(feats){
+  let n=0;
+  for(const f of feats){ const pr=f.properties||{};
+    for(const pl of partsOf(f.geometry)){
+      const bb=bboxOf(pl[0]);
+      if(holes.some(h=>overlaps(bb,h))) continue;            // the smashed building (incl. its copies in neighbouring tiles)
+      const key=bb.map(v=>v.toFixed(6)).join(',');
+      if(rebuiltKeys.has(key)) continue; rebuiltKeys.add(key);
+      rbSeq++; rebuilt.features.push({type:'Feature',id:rbSeq,geometry:{type:'Polygon',coordinates:pl},
+        properties:{rid:rbSeq,h:+(pr.render_height??pr.height??6)||6,b:+(pr.render_min_height??pr.min_height??0)||0}});
+      n++;
+    } }
+  return n;
+}
+function refreshRebuilt(){ const s=map.getSource('rebuilt'); if(s) s.setData(rebuilt); }
+function collectSurvivors(){
+  if(!destroyed.length) return;
+  try{ const n=addSurvivors(map.querySourceFeatures(bSrc,{sourceLayer:'building',filter:['in',['id'],['literal',destroyed.slice()]]}));
+    if(n) refreshRebuilt(); }catch(e){ console.warn('rebuild',e); }
+}
+function smashFeature(f,pt){
+  const part=partsOf(f.geometry).find(pl=>inPoly(pt[0],pt[1],pl));
+  if(part) holes.push(bboxOf(part[0]));
+  if(f.layer && f.layer.id==='rebuilt-3d'){                  // hitting a redrawn building: just drop that one
+    const rid=f.properties&&f.properties.rid;
+    rebuilt.features=rebuilt.features.filter(x=>x.properties.rid!==rid); refreshRebuilt(); return;
+  }
+  destroyBuilding(f.id);
+  collectSurvivors();
+}
 function destroyBuilding(id){
   // Features with no stable id can't be targeted by filter: skip hiding (the smash effect still plays).
   if(id==null||destroyed.includes(id)) return; destroyed.push(id);
@@ -132,6 +172,18 @@ map.on('load',()=>{ try{ initMini();
   }catch(e){ console.warn('house numbers:',e&&e.message); }
   hideIds = all.filter(l=>l['source-layer']==='building' && (l.type==='fill-extrusion'||l.type==='fill')).map(l=>l.id);
   hideIds.forEach(lid=>{ try{ const of=map.getFilter(lid); origFilters[lid]=of?toExpr(of):null; }catch(e){ origFilters[lid]=null; } });
+  bSrc=src;
+  try{
+    const b3=blockIds[0], col=b3?map.getPaintProperty(b3,'fill-extrusion-color'):null, op=b3?map.getPaintProperty(b3,'fill-extrusion-opacity'):null;
+    map.addSource('rebuilt',{type:'geojson',data:rebuilt});
+    map.addLayer({id:'rebuilt-3d',type:'fill-extrusion',source:'rebuilt',
+      paint:{'fill-extrusion-color':col||'hsl(35,8%,85%)','fill-extrusion-height':['get','h'],'fill-extrusion-base':['get','b'],
+        'fill-extrusion-opacity':(typeof op==='number')?op:.8}}, map.getLayer('hn-big')?'hn-big':undefined);
+    blockIds.push('rebuilt-3d');
+    // tiles that stream in later may contain more of a hidden group: redraw those survivors too
+    map.on('sourcedata',e=>{ if(e.sourceId!==bSrc||!e.tile||!destroyed.length) return;
+      clearTimeout(rbTimer); rbTimer=setTimeout(collectSurvivors,300); });
+  }catch(e){ console.warn('rebuilt layer',e); }
   styleReady=true;
   const ld=document.getElementById('load'); ld.style.opacity=0; setTimeout(()=>ld.remove(),500);
   }catch(err){ console.error(err); var d=document.createElement('pre'); d.style.cssText='position:fixed;left:8px;right:8px;top:8px;z-index:9999;background:#7f1d1d;color:#fff;font:12px monospace;padding:10px;white-space:pre-wrap'; d.textContent='LOAD ERROR: '+err.message; document.body.appendChild(d); }
@@ -379,7 +431,7 @@ function step(now){
     // tall extrusions overlap the car on screen, so candidates are filtered by real footprint under the car's nose.
     // A small box is enough: fill-extrusion queries hit the whole projected prism, including its base footprint.
     const bh=hit(p.x,p.y,6,blockIds).filter(f=>contains(f.geometry,ahead[0],ahead[1]));
-    if(bh.length){ inBuilding=true; destroyBuilding(bh[0].id); }
+    if(bh.length){ inBuilding=true; smashFeature(bh[0],ahead); }
   }
   smashCool-=dt;
   if(inBuilding){
