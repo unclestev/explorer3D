@@ -82,6 +82,17 @@ const map = new maplibregl.Map({ pixelRatio:mapPR(POWER),
   interactive:false, fadeDuration:0, attributionControl:{compact:true}
 });
 let roadIds=[], blockIds=[], waterIds=[], bridgeIds=[], hideIds=[];
+/* house numbers: only within HOUSE_R metres of the car, never overlapping */
+let houseIds=[]; const HOUSE_R=70; let hLat=null,hLng=null;
+function updateHouseFilter(force){
+  if(!houseIds.length) return;
+  if(!force && hLat!==null && meters(hLat,hLng,S.lat,S.lng)<12) return;
+  hLat=S.lat; hLng=S.lng;
+  const ring=[], dLat=HOUSE_R/111320, dLng=HOUSE_R/(111320*Math.cos(rad(S.lat)));
+  for(let i=0;i<=24;i++){ const t=i/24*2*Math.PI; ring.push([S.lng+Math.cos(t)*dLng, S.lat+Math.sin(t)*dLat]); }
+  const f=['within',{type:'Polygon',coordinates:[ring]}];
+  houseIds.forEach(id=>{ try{ map.setFilter(id,f); }catch(e){ try{ map.setLayoutProperty(id,'visibility','none'); }catch(_){} } });
+}
 function inRing(x,y,r){ let c=false; for(let i=0,j=r.length-1;i<r.length;j=i++){ const xi=r[i][0],yi=r[i][1],xj=r[j][0],yj=r[j][1]; if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi)) c=!c; } return c; }
 function inPoly(x,y,pl){ if(!inRing(x,y,pl[0])) return false; for(let k=1;k<pl.length;k++) if(inRing(x,y,pl[k])) return false; return true; }
 function contains(g,x,y){ if(!g) return false; if(g.type==='Polygon') return inPoly(x,y,g.coordinates); if(g.type==='MultiPolygon') return g.coordinates.some(pl=>inPoly(x,y,pl)); return false; }
@@ -181,10 +192,13 @@ map.on('load',()=>{ try{ initMini();
     const hs=(all.find(l=>l['source-layer']==='housenumber')||{}).source||src;
     if(map.getSource(hs) && !map.getLayer('hn-big')) map.addLayer({id:'hn-big',type:'symbol',source:hs,'source-layer':'housenumber',minzoom:15.5,
       layout:{'text-field':['to-string',['get','housenumber']],'text-font':fl?fl.layout['text-font']:['Noto Sans Regular'],
-        'text-size':['interpolate',['linear'],['zoom'],15.5,10,19,18,21,26],'text-allow-overlap':true,'text-ignore-placement':true,
+        'text-size':['interpolate',['linear'],['zoom'],15.5,10,19,18,21,26],'text-allow-overlap':false,'text-ignore-placement':false,'text-padding':6,
         'text-pitch-alignment':'viewport','text-rotation-alignment':'viewport'},
       paint:{'text-color':'#111827','text-halo-color':'rgba(255,255,255,.95)','text-halo-width':2}});
   }catch(e){ console.warn('house numbers:',e&&e.message); }
+  houseIds = map.getStyle().layers.filter(l=>l.type==='symbol' && (l['source-layer']==='housenumber' || /housenum/i.test(l.id))).map(l=>l.id);
+  houseIds.forEach(id=>{ try{ map.setLayoutProperty(id,'text-allow-overlap',false); map.setLayoutProperty(id,'text-ignore-placement',false); }catch(e){} });
+  updateHouseFilter(true);
   hideIds = all.filter(l=>l['source-layer']==='building' && (l.type==='fill-extrusion'||l.type==='fill')).map(l=>l.id);
   hideIds.forEach(lid=>{ try{ const of=map.getFilter(lid); origFilters[lid]=of?toExpr(of):null; }catch(e){ origFilters[lid]=null; } });
   bSrc=src;
@@ -794,7 +808,7 @@ function glideStep(dt,st,gas,now){
     nearEl.textContent=G.phase==='fly'&&G.lift>.8?'Thermal! Circle to climb':(G.phase==='fly'&&G.alt<60?'Getting low: find a thermal or triple-tap to land':nearestPoi());
     const mph=Math.round(G.air*2.237); if(mph!==step.mph){ step.mph=mph; mphEl.textContent=mph; }
   }
-  if(every('place',1)) updatePlace();
+  if(every('place',1)) updatePlace(); if(every('house',.25)) updateHouseFilter(false);
   if(mini && every('mini',POWER?1:.12)){ try{ mini.jumpTo({center:[S.lng,S.lat]}); }catch(e){} }
   const ah=S.hdg.toFixed(1); if(ah!==step.ah && every('arrow',.05)){ step.ah=ah; miniArrowEl.style.transform='rotate('+ah+'deg)'; }
   if(every('clouds',2)) buildClouds(false);
@@ -861,7 +875,7 @@ function step(now){
   if(blocked){ S.v=-S.v*.3; } else { S.lat=nLat; S.lng=nLng; }
 
   // road detection
-  if(every('place',1)) updatePlace();
+  if(every('place',1)) updatePlace(); if(every('house',.25)) updateHouseFilter(false);
   if(mini && every('mini',POWER?1:.12) && (!step.mLat || meters(step.mLat,step.mLng,S.lat,S.lng)>2)){
     step.mLat=S.lat; step.mLng=S.lng; try{ mini.jumpTo({center:[S.lng,S.lat]}); }catch(e){} }
   const ah=S.hdg.toFixed(1); if(ah!==step.ah && every('arrow',.05)){ step.ah=ah; miniArrowEl.style.transform='rotate('+ah+'deg)'; }
