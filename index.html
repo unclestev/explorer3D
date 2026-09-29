@@ -31,8 +31,8 @@ html,body{margin:0;height:100%;overflow:hidden;background:#9cc8ec;font-family:sy
 <div id="load">Loading map…</div>
 <div id="map"></div>
 <canvas id="car3d"></canvas>
-<div id="hud"><span id="mph">0</span> mph<br><span id="road">On road</span></div>
-<div id="zoom"><button id="zi">+</button><button id="zo">−</button></div>
+<div id="hud"><span id="mph">0</span> mph<br><span id="road">On road</span><br><span id="place">Locating…</span></div>
+<div id="zoom"><button id="zi">+</button><button id="zo">−</button><button id="cp" style="font-size:14px">🚗+</button><button id="cm" style="font-size:14px">🚗−</button></div>
 <div id="ctl">
   <div class="track" id="st"><div class="knob" id="stk"></div></div>
   <div class="track" id="sp"><div class="knob" id="spk"></div></div>
@@ -157,17 +157,39 @@ function joy(trackId,knobId,axis){
 joy('st','stk','x'); joy('sp','spk','y');
 const K={}; addEventListener('keydown',e=>{K[e.key.toLowerCase()]=1; if(e.key.startsWith('Arrow')||e.key===' ')e.preventDefault();}); addEventListener('keyup',e=>K[e.key.toLowerCase()]=0);
 let kS=0,kG=0; let zoomOff=0;
+cp.onclick=()=>EXAG=Math.min(EXAG*1.25,2.5); cm.onclick=()=>EXAG=Math.max(EXAG/1.25,.25);
 zi.onclick=()=>zoomOff=Math.min(zoomOff+.5,2); zo.onclick=()=>zoomOff=Math.max(zoomOff-.5,-3);
 
 /* ---------- PHYSICS ---------- */
 const S={lng:-88.446,lat:41.642,hdg:0,v:0,steer:0,camB:0,zoom:19.3,roll:0,pitch:0,wheel:0};
-const WB=3.05, MAXV=60, EXAG=1.5;
+const WB=3.05, MAXV=60; let EXAG=0.6;
 let last=0,frame=0,onRoad=true,roadName='';
 const rad=d=>d*Math.PI/180;
 const mpp=(lat,z)=>78271.517*Math.cos(rad(lat))/Math.pow(2,z);
 let roadFails=0, miss=0;
 const hitRoad=(x,y,r)=>{ try{ const ids=roadIds.filter(i=>map.getLayer(i)); if(!ids.length) return null; return map.queryRenderedFeatures([[x-r,y-r],[x+r,y+r]],{layers:ids}); }catch(e){ roadFails++; return null; } };
 const hit=(x,y,r,ids)=>{ try{ ids=ids.filter(i=>map.getLayer(i)); return ids.length?map.queryRenderedFeatures([[x-r,y-r],[x+r,y+r]],{layers:ids}):[]; }catch(e){ return []; } };
+
+
+/* ---------- TOWN / COUNTY ---------- */
+let gLat=null,gLng=null,gBusy=false,gTime=0;
+function meters(a,b,c,d){ const dy=(c-a)*111320, dx=(d-b)*111320*Math.cos(rad(a)); return Math.hypot(dx,dy); }
+function updatePlace(){
+  const now=Date.now();
+  if(gBusy || now-gTime<4000) return;
+  if(gLat!==null && meters(gLat,gLng,S.lat,S.lng)<250) return;
+  gBusy=true; gTime=now; const qLat=S.lat,qLng=S.lng;
+  const ctl=new AbortController(); const to=setTimeout(()=>ctl.abort(),6000);
+  fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&addressdetails=1&accept-language=en&lat='+qLat+'&lon='+qLng,{signal:ctl.signal})
+    .then(r=>r.json()).then(j=>{
+      const a=j.address||{};
+      const town=a.city||a.town||a.village||a.hamlet||a.municipality||a.suburb||'Unincorporated';
+      const county=a.county||a.state_district||'';
+      const st=a.state||'';
+      document.getElementById('place').textContent=town+(county?', '+county:'')+(st?', '+st:'');
+      gLat=qLat; gLng=qLng;
+    }).catch(()=>{}).finally(()=>{ clearTimeout(to); gBusy=false; });
+}
 
 function loop(now){
   try{ step(now); }catch(e){ if(!loop.err){loop.err=1; const d=document.createElement('pre'); d.style.cssText='position:fixed;left:8px;right:8px;top:8px;z-index:9999;background:#7f1d1d;color:#fff;font:12px monospace;padding:10px;white-space:pre-wrap;border-radius:8px'; d.textContent='LOOP ERROR: '+e.message+'\n'+(e.stack||'').split('\n').slice(0,4).join('\n'); document.body.appendChild(d);} }
@@ -209,12 +231,13 @@ function step(now){
   if(blocked){ S.v=-S.v*.3; } else { S.lat=nLat; S.lng=nLng; }
 
   // road detection
+  if(frame%60===0) updatePlace();
   if(frame%4===0 && map.loaded()){
-    const p=map.project([S.lng,S.lat]); const f=hitRoad(p.x,p.y,16);
+    const p=map.project([S.lng,S.lat]); const f=hitRoad(p.x,p.y,48);
     const el=document.getElementById('road');
     if(f===null){ onRoad=true; el.textContent='Driving'; el.className=''; }      // road data unavailable: never punish
     else if(f.length>0){ miss=0; onRoad=true; const nm=f.find(x=>x.properties&&x.properties.name); roadName=nm?nm.properties.name:''; el.textContent=roadName||'On road'; el.className=''; }
-    else if(++miss>=4){ onRoad=false; el.textContent='Off road'; el.className='off'; }
+    else if(++miss>=8){ onRoad=false; el.textContent='Off road'; el.className='off'; }
   }
 
   // camera: lagged chase, zooms out with speed
