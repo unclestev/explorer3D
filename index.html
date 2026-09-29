@@ -1,489 +1,236 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Yorkville 3D Explorer ST</title>
-    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
-    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
-    <style>
-        body, html {
-            margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #87CEEB;
-            user-select: none; -webkit-user-select: none; 
-        }
-        #map { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
-        
-        #loading {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: #0f172a; color: #38bdf8; z-index: 999;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            font-size: 24px; font-weight: bold; transition: opacity 0.5s;
-        }
-        .spinner {
-            width: 50px; height: 50px; border: 5px solid rgba(56, 189, 248, 0.3);
-            border-top-color: #38bdf8; border-radius: 50%;
-            animation: spin 1s linear infinite; margin-bottom: 20px;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        /* =========================================
-           EMBEDDED VECTOR SUV (NO EXTERNAL IMAGES)
-           ========================================= */
-        #car-container {
-            position: absolute; top: 65%; left: 50%;
-            width: 60px; height: 110px; 
-            transform: translate(-50%, -50%);
-            z-index: 10;
-        }
-        
-        #car-image {
-            width: 100%; height: 100%; 
-            filter: drop-shadow(0px 10px 12px rgba(0,0,0,0.7));
-        }
-
-        /* Dual Brake Lights aligned to the SVG taillights */
-        .brake-glow {
-            position: absolute; bottom: 20px; width: 12px; height: 16px;
-            background: transparent; border-radius: 4px;
-            transition: background 0.1s, box-shadow 0.1s;
-            z-index: 11;
-        }
-        #brake-glow-left { left: 4px; }
-        #brake-glow-right { right: 4px; }
-        
-        .braking .brake-glow {
-            background: rgba(255, 50, 50, 0.6);
-            box-shadow: 0 0 18px 10px rgba(255, 0, 0, 0.85);
-        }
-
-        /* HUD & Controls */
-        #hud {
-            position: absolute; top: 15px; left: 15px; max-width: 240px;
-            background: rgba(15, 23, 42, 0.85); color: white; padding: 12px 16px;
-            border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-            backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,0.1);
-            z-index: 100; pointer-events: none;
-        }
-        #hud h1 { margin: 0 0 4px 0; font-size: 14px; color: #38bdf8; text-transform: uppercase; letter-spacing: 1px;}
-        #hud p { margin: 3px 0; font-size: 12px; color: #cbd5e1; }
-        #speed-display { font-size: 20px; font-weight: bold; color: #fff; }
-
-        #zoom-controls {
-            position: absolute; top: 15px; right: 15px; z-index: 100;
-            display: flex; flex-direction: column; gap: 8px;
-        }
-        .zoom-btn {
-            width: 44px; height: 44px; background: rgba(15, 23, 42, 0.85); color: white;
-            border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
-            font-size: 24px; font-weight: bold; display: flex; align-items: center; justify-content: center;
-            cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); touch-action: none;
-        }
-        .zoom-btn:active { background: rgba(56, 189, 248, 0.8); transform: scale(0.95); }
-
-        #controls-container {
-            position: absolute; bottom: 30px; left: 0; right: 0;
-            display: flex; justify-content: space-between; padding: 0 30px;
-            align-items: center; 
-            z-index: 100; pointer-events: none; touch-action: none;
-        }
-        
-        .slider-track {
-            background: rgba(15, 23, 42, 0.6); border: 2px solid rgba(255,255,255,0.2);
-            border-radius: 30px; position: relative; pointer-events: auto;
-            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
-        }
-        #steer-track { width: 140px; height: 50px; }
-        #speed-track { width: 50px; height: 140px; }
-
-        .slider-knob {
-            width: 46px; height: 46px; background: #38bdf8; border-radius: 50%;
-            position: absolute; top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5), inset 0 2px 4px rgba(255,255,255,0.4);
-            border: 2px solid #fff; transition: transform 0.1s ease-out, background 0.2s, border-color 0.2s;
-        }
-
-        @media (max-height: 500px) {
-            #controls-container { bottom: 15px; padding: 0 15px; }
-            #car-container { top: 75%; }
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Yorkville Driver</title>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>window.L||document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"><\/script>')</script>
+<script>window.L||document.write('<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>')</script>
+<link href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>window.THREE||document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"><\/script>')</script>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#9cc8ec;font-family:system-ui,Segoe UI,sans-serif;user-select:none;-webkit-user-select:none;touch-action:none}
+#stage{position:absolute;inset:0;overflow:hidden;background:linear-gradient(#7fb4e6 0%,#cfe3f5 38%,#e6eef5 100%)}
+#tilt{position:absolute;left:50%;top:67%;width:2600px;height:2600px;margin:-1300px 0 0 -1300px;will-change:transform}
+#map{width:100%;height:100%;background-color:#e8e4da;background-image:linear-gradient(rgba(0,0,0,.13) 2px,transparent 2px),linear-gradient(90deg,rgba(0,0,0,.13) 2px,transparent 2px);background-size:100px 100px}
+#fog{position:absolute;left:0;right:0;top:0;height:36%;background:linear-gradient(#cfe3f5,rgba(207,227,245,0));pointer-events:none}
+#attr{position:absolute;bottom:2px;right:6px;z-index:30;font-size:9px;color:#334155;background:rgba(255,255,255,.6);padding:1px 4px;border-radius:4px;pointer-events:none}
+#car3d{position:absolute;inset:0;width:100%;height:100%}
+.leaflet-container{overflow:hidden;position:relative}
+.leaflet-pane,.leaflet-tile,.leaflet-tile-container,.leaflet-layer{position:absolute;left:0;top:0}
+.leaflet-tile{user-select:none;width:256px;height:256px;max-width:none!important;max-height:none!important}
+.leaflet-zoom-animated{transform-origin:0 0}
+#tstat{position:absolute;top:96px;left:12px;max-width:220px;z-index:20;background:rgba(15,23,42,.75);color:#cbd5e1;font:11px monospace;padding:4px 8px;border-radius:8px;pointer-events:none}
+#car3d{pointer-events:none;z-index:5}
+#hud{position:absolute;top:12px;left:12px;z-index:20;background:rgba(15,23,42,.8);color:#e2e8f0;padding:10px 14px;border-radius:12px;pointer-events:none;font-size:13px;line-height:1.5}
+#mph{font-size:30px;font-weight:700;color:#fff}
+#road.off{color:#fbbf24}
+#zoom{position:absolute;top:12px;right:12px;z-index:20;display:flex;flex-direction:column;gap:8px}
+#zoom button{width:44px;height:44px;border:0;border-radius:10px;background:rgba(15,23,42,.8);color:#fff;font-size:24px}
+#ctl{position:absolute;bottom:28px;left:0;right:0;display:flex;justify-content:space-between;padding:0 28px;z-index:20;pointer-events:none}
+.track{position:relative;background:rgba(15,23,42,.55);border:2px solid rgba(255,255,255,.25);border-radius:30px;pointer-events:auto;touch-action:none}
+#st{width:150px;height:52px}#sp{width:52px;height:150px}
+.knob{position:absolute;top:50%;left:50%;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;background:#38bdf8;border:2px solid #fff}
+#load{position:absolute;inset:0;z-index:99;background:#0f172a;color:#7dd3fc;display:flex;align-items:center;justify-content:center;font-size:20px;transition:opacity .5s}
+</style>
 </head>
 <body>
+<div id="load">Loading map…</div>
+<div id="stage"><div id="tilt"><div id="map"></div></div><div id="fog"></div></div>
+<div id="attr">© OpenStreetMap © CARTO</div>
+<canvas id="car3d"></canvas>
+<div id="hud"><span id="mph">0</span> mph<br><span id="road">Driving</span></div>
+<div id="tstat">tiles: waiting…</div>
+<div id="zoom"><button id="zi">+</button><button id="zo">−</button></div>
+<div id="ctl">
+  <div class="track" id="st"><div class="knob" id="stk"></div></div>
+  <div class="track" id="sp"><div class="knob" id="spk"></div></div>
+</div>
+<script>
+(function(){
+  function show(m){var d=document.getElementById('dbg');if(!d){d=document.createElement('pre');d.id='dbg';
+    d.style.cssText='position:fixed;left:8px;right:8px;bottom:8px;max-height:40%;overflow:auto;z-index:9999;margin:0;padding:10px;background:#7f1d1d;color:#fff;font:12px monospace;white-space:pre-wrap;border-radius:8px';
+    document.body.appendChild(d);} d.textContent+=m+"\n";}
+  window.addEventListener('error',function(e){show('ERROR: '+e.message+(e.lineno?' (line '+e.lineno+')':'')+(e.error&&e.error.stack?'\n'+e.error.stack.split('\n').slice(0,5).join('\n'):''));});
+  window.addEventListener('unhandledrejection',function(e){show('PROMISE: '+(e.reason&&e.reason.message||e.reason));});
+  window.addEventListener('load',function(){
+    if(typeof L==='undefined')show('Leaflet failed to load from jsdelivr, cdnjs and unpkg. Check your network or ad blocker.');
+    if(typeof THREE==='undefined')show('Three.js failed to load from cdnjs.cloudflare.com');
+  });
+})();
+</script>
+<script>
+/* ---------- MAP (Leaflet raster tiles, tilted with CSS 3D; no web workers) ---------- */
+const stage=document.getElementById('stage'), tilt=document.getElementById('tilt');
+const map=L.map('map',{zoomControl:false,attributionControl:false,dragging:false,touchZoom:false,scrollWheelZoom:false,doubleClickZoom:false,boxZoom:false,keyboard:false,zoomAnimation:false,fadeAnimation:false,markerZoomAnimation:false,inertia:false});
+const FetchLayer=L.TileLayer.extend({createTile:function(c,done){
+  const img=document.createElement('img'); const url=this.getTileUrl(c);
+  fetch(url).then(r=>{ if(!r.ok) throw new Error('http '+r.status); return r.blob(); })
+    .then(b=>{ img.onload=()=>done(null,img); img.onerror=e=>done(e,img); img.src=URL.createObjectURL(b); })
+    .catch(e=>{ lastErr=(e&&e.message)||'blocked'; done(e,img); }); return img; }});
+const PROV=[
+  {n:'CARTO',u:'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',o:{subdomains:'abcd',maxNativeZoom:19}},
+  {n:'OpenStreetMap',u:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',o:{maxNativeZoom:19}},
+  {n:'CARTO (fetch)',f:1,u:'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',o:{subdomains:'abcd',maxNativeZoom:19}},
+  {n:'OSM (fetch)',f:1,u:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',o:{maxNativeZoom:19}}
+];
+let pi=0, okT=0, badT=0, tl=null, lastErr='';
+const tstat=document.getElementById('tstat');
+function useProvider(i){
+  if(tl) map.removeLayer(tl);
+  okT=0; badT=0; pi=i; const P=PROV[i];
+  tl=(P.f?new FetchLayer(P.u,Object.assign({maxZoom:20,keepBuffer:4,updateWhenIdle:false,updateInterval:100},P.o)):L.tileLayer(P.u,Object.assign({maxZoom:20,keepBuffer:4,updateWhenIdle:false,updateInterval:100},P.o))).addTo(map);
+  tl.on('tileload',()=>{okT++; tstat.textContent='tiles: '+P.n+' ok '+okT+' / failed '+badT+' | map '+map.getSize().x+'px';});
+  tl.on('tileerror',()=>{badT++; if(!lastErr)lastErr='image request blocked'; tstat.textContent='tiles: '+P.n+' ok '+okT+' / failed '+badT;
+    if(okT===0 && badT>=8 && pi<PROV.length-1) useProvider(pi+1);});
+  tstat.textContent='tiles: loading '+P.n+'… map '+map.getSize().x+'px';
+}
+map.setView([41.642,-88.446],19,{animate:false});
+useProvider(0);
+setTimeout(()=>{ if(okT===0){ const b=document.createElement('div');
+  b.style.cssText='position:fixed;left:12px;right:12px;top:38%;z-index:9999;background:#7f1d1d;color:#fff;font:15px system-ui;padding:16px;border-radius:12px;text-align:center';
+  b.innerHTML='<b>No map tiles could load.</b><br>Reason: '+(lastErr||'no response')+'<br>This page is being blocked from downloading map images. Open the file in a normal browser tab or host it on a static site.';
+  document.body.appendChild(b); setTimeout(()=>b.remove(),15000);} },8000);
+setTimeout(()=>map.invalidateSize(),200);
+let last=0;
+setTimeout(()=>{const ld=document.getElementById('load'); if(ld){ld.style.opacity=0; setTimeout(()=>ld.remove(),500);} last=performance.now(); requestAnimationFrame(loop);},600);
 
-    <div id="loading">
-        <div class="spinner"></div>
-        <div>Loading Yorkville Map...</div>
-    </div>
+/* ---------- THREE: EXPLORER-STYLE SUV ---------- */
+const cv=document.getElementById('car3d');
+const renderer=new THREE.WebGLRenderer({canvas:cv,alpha:true,antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(36.87,1,10,50000);
+scene.add(new THREE.HemisphereLight(0xdfeeff,0x556070,.85));
+const sun=new THREE.DirectionalLight(0xfff2dd,.9); sun.position.set(-4,8,3); scene.add(sun);
 
-    <div id="map"></div>
+const paint=new THREE.MeshPhongMaterial({color:0x4d647c,specular:0xbcd0e6,shininess:90});
+const glass=new THREE.MeshPhongMaterial({color:0x0b1220,specular:0x8899bb,shininess:120});
+const black=new THREE.MeshPhongMaterial({color:0x111214,shininess:30});
+const tire =new THREE.MeshPhongMaterial({color:0x141414,shininess:10});
+const rim  =new THREE.MeshPhongMaterial({color:0x9aa3ad,specular:0xffffff,shininess:100});
+const tailOff=new THREE.MeshBasicMaterial({color:0x8a1216}), tailOn=new THREE.MeshBasicMaterial({color:0xff2a2a});
+const headM=new THREE.MeshBasicMaterial({color:0xf4f8ff});
 
-    <div id="hud">
-        <h1>Yorkville Explorer ST</h1>
-        <p><span id="speed-display">0</span> MPH</p>
-        <p>Loc: <strong id="location-display">Downtown Yorkville</strong></p>
-        <p>Area: <span id="area-display">Yorkville, Kendall County</span></p>
-    </div>
+const car=new THREE.Group(); scene.add(car);       // yaw + scale
+const body=new THREE.Group(); car.add(body);       // roll + pitch
 
-    <div id="zoom-controls">
-        <div class="zoom-btn" id="btn-zoom-in">+</div>
-        <div class="zoom-btn" id="btn-zoom-out">−</div>
-    </div>
+function profile(pts,w,mat,bevel){
+  const s=new THREE.Shape(); pts.forEach((p,i)=>i?s.lineTo(p[0],p[1]):s.moveTo(p[0],p[1]));
+  const g=new THREE.ExtrudeGeometry(s,{depth:w-bevel*2,bevelEnabled:true,bevelThickness:bevel,bevelSize:bevel,bevelSegments:3});
+  g.translate(0,0,-(w-bevel*2)/2); g.rotateY(Math.PI/2);   // shape +x -> car front (-z)
+  const m=new THREE.Mesh(g,mat); body.add(m); return m;
+}
+// lower body (side profile: x = length, y = height), front is +x
+profile([[-2.5,.42],[2.5,.42],[2.58,.72],[2.42,.98],[1.05,1.12],[-.6,1.14],[-2.4,1.14],[-2.55,.9]],2.0,paint,.06);
+// cabin glass + roof
+profile([[.95,1.1],[.3,1.7],[-2.2,1.72],[-2.48,1.14]],1.84,glass,.04);
+const roof=new THREE.Mesh(new THREE.BoxGeometry(1.8,.07,2.55),paint); roof.position.set(0,1.75,.95); body.add(roof);
+[-.82,.82].forEach(x=>{const r=new THREE.Mesh(new THREE.BoxGeometry(.05,.05,2.5),black); r.position.set(x,1.81,.95); body.add(r);});
+// spoiler lip
+const sp=new THREE.Mesh(new THREE.BoxGeometry(1.8,.06,.3),paint); sp.position.set(0,1.72,2.45); body.add(sp);
+// front: grille, bumper, headlights
+const grille=new THREE.Mesh(new THREE.BoxGeometry(1.1,.3,.06),black); grille.position.set(0,.82,-2.52); body.add(grille);
+const fb=new THREE.Mesh(new THREE.BoxGeometry(1.96,.28,.1),black); fb.position.set(0,.52,-2.5); body.add(fb);
+[-.78,.78].forEach(x=>{const h=new THREE.Mesh(new THREE.BoxGeometry(.5,.1,.06),headM); h.position.set(x,.93,-2.5); body.add(h);});
+// rear: light bar, bumper
+const tails=[]; 
+[[-.82,.7],[.82,.7]].forEach(([x,w])=>{const t=new THREE.Mesh(new THREE.BoxGeometry(.32,.5,.06),tailOff); t.position.set(x,1.02,2.53); body.add(t); tails.push(t);});
+const bar=new THREE.Mesh(new THREE.BoxGeometry(1.2,.05,.05),tailOff); bar.position.set(0,1.1,2.55); body.add(bar); tails.push(bar);
+const rb=new THREE.Mesh(new THREE.BoxGeometry(1.96,.3,.1),black); rb.position.set(0,.55,2.52); body.add(rb);
+// wheels
+const wheels=[]; 
+[[-.98,-1.55,1],[.98,-1.55,1],[-.98,1.5,0],[.98,1.5,0]].forEach(([x,z,front])=>{
+  const pivot=new THREE.Group(); pivot.position.set(x,.38,z); body.add(pivot);
+  const spin=new THREE.Group(); pivot.add(spin);
+  const t=new THREE.Mesh(new THREE.CylinderGeometry(.38,.38,.3,24),tire); t.rotation.z=Math.PI/2; spin.add(t);
+  const r=new THREE.Mesh(new THREE.CylinderGeometry(.24,.24,.32,10),rim); r.rotation.z=Math.PI/2; spin.add(r);
+  wheels.push({pivot,spin,front});
+});
+// soft ground shadow
+const sc=document.createElement('canvas'); sc.width=sc.height=128; const sx=sc.getContext('2d');
+const gr=sx.createRadialGradient(64,64,10,64,64,64); gr.addColorStop(0,'rgba(0,0,0,.65)'); gr.addColorStop(1,'rgba(0,0,0,0)');
+sx.fillStyle=gr; sx.fillRect(0,0,128,128);
+const shadow=new THREE.Mesh(new THREE.PlaneGeometry(3.4,6.6),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(sc),transparent:true,depthWrite:false}));
+shadow.rotation.x=-Math.PI/2; shadow.position.y=.03; car.add(shadow);
 
-    <!-- 100% SELF-CONTAINED SVG VECTOR OF EXPLORER ST (MATCHES IMAGE_3.PNG) -->
-    <div id="car-container">
-        <svg id="car-image" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 210">
-            <defs>
-                <!-- Slate Blue Metallic Paint -->
-                <linearGradient id="bodyPaint" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stop-color="#3b4a59" />
-                    <stop offset="15%" stop-color="#556b82" />
-                    <stop offset="50%" stop-color="#7a92ad" />
-                    <stop offset="85%" stop-color="#556b82" />
-                    <stop offset="100%" stop-color="#3b4a59" />
-                </linearGradient>
-                
-                <!-- Black Glass Tint -->
-                <linearGradient id="glass" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stop-color="#1e293b" />
-                    <stop offset="50%" stop-color="#0f172a" />
-                    <stop offset="100%" stop-color="#020617" />
-                </linearGradient>
-            </defs>
+/* ---------- INPUT ---------- */
+let tSteer=0,tGas=0;
+function joy(trackId,knobId,axis){
+  const tr=document.getElementById(trackId),kb=document.getElementById(knobId),R=45; let pid=null;
+  const upd=e=>{ if(e.pointerId!==pid)return; const r=tr.getBoundingClientRect();
+    if(axis==='x'){tSteer=Math.max(-1,Math.min(1,(e.clientX-(r.left+r.width/2))/R)); kb.style.transform=`translateX(${tSteer*R}px)`;}
+    else{tGas=Math.max(-1,Math.min(1,-(e.clientY-(r.top+r.height/2))/R)); kb.style.transform=`translateY(${-tGas*R}px)`;} };
+  const end=e=>{ if(e.pointerId!==pid)return; pid=null; axis==='x'?tSteer=0:tGas=0; kb.style.transform='none'; };
+  tr.addEventListener('pointerdown',e=>{pid=e.pointerId; tr.setPointerCapture(pid); upd(e);});
+  tr.addEventListener('pointermove',upd); tr.addEventListener('pointerup',end); tr.addEventListener('pointercancel',end);
+}
+joy('st','stk','x'); joy('sp','spk','y');
+const K={}; addEventListener('keydown',e=>{K[e.key.toLowerCase()]=1; if(e.key.startsWith('Arrow')||e.key===' ')e.preventDefault();}); addEventListener('keyup',e=>K[e.key.toLowerCase()]=0);
+let kS=0,kG=0; let zoomOff=0;
+zi.onclick=()=>zoomOff=Math.min(zoomOff+.5,1); zo.onclick=()=>zoomOff=Math.max(zoomOff-.5,-2);
 
-            <!-- Black Mirrors -->
-            <rect x="2" y="45" width="12" height="18" rx="6" fill="#0f172a"/>
-            <rect x="86" y="45" width="12" height="18" rx="6" fill="#0f172a"/>
+/* ---------- PHYSICS ---------- */
+const S={lng:-88.446,lat:41.642,hdg:0,v:0,steer:0,camB:0,zoom:0,roll:0,pitch:0,wheel:0};
+const WB=3.05, MAXV=45, EXAG=1.5, TILT=68, BASEZ=19;
+const rad=d=>d*Math.PI/180;
+const mpp=(lat,z)=>156543.034*Math.cos(rad(lat))/Math.pow(2,z);   // 256px tiles
 
-            <!-- Main Chassis -->
-            <rect x="10" y="10" width="80" height="190" rx="25" fill="url(#bodyPaint)"/>
+function loop(now){
+  try{ step(now); }catch(e){ if(!loop.err){loop.err=1; const d=document.createElement('pre'); d.style.cssText='position:fixed;left:8px;right:8px;top:8px;z-index:9999;background:#7f1d1d;color:#fff;font:12px monospace;padding:10px;white-space:pre-wrap;border-radius:8px'; d.textContent='LOOP ERROR: '+e.message+'\n'+(e.stack||'').split('\n').slice(0,4).join('\n'); document.body.appendChild(d);} }
+  requestAnimationFrame(loop);
+}
+function step(now){
+  const dt=Math.min((now-last)/1000,.05); last=now;
+  const ease=(v,p,n)=>{ if(p)v+=dt*4; else if(n)v-=dt*4; else v*=Math.exp(-dt*8); return Math.max(-1,Math.min(1,v)); };
+  kS=ease(kS,K.d||K.arrowright,K.a||K.arrowleft); kG=ease(kG,K.w||K.arrowup,K.s||K.arrowdown);
+  const st=Math.abs(tSteer)>.05?tSteer:kS, gas=Math.abs(tGas)>.05?tGas:kG, hand=!!K[' '];
 
-            <!-- Front Hood & Grille Details -->
-            <rect x="20" y="8" width="60" height="6" rx="2" fill="#020617"/>
-            <path d="M 15 25 Q 50 40 85 25 L 75 60 L 25 60 Z" fill="#556b82"/>
-            <line x1="25" y1="20" x2="32" y2="60" stroke="#3b4a59" stroke-width="2"/>
-            <line x1="75" y1="20" x2="68" y2="60" stroke="#3b4a59" stroke-width="2"/>
+  let a=0, braking=false;
+  if(gas>0.05) a=gas*(S.v<0?25:8.5)*(1-Math.min(Math.max(S.v,0)/MAXV,1)**2);
+  else if(gas<-0.05){ if(S.v>.5){a=-28*(-gas);braking=true;} else a=gas*3.5; }
+  if(hand){a-=Math.sign(S.v)*30; braking=Math.abs(S.v)>.5;}
+  a-=Math.sign(S.v)*(.35+.0032*S.v*S.v);
+  const prevV=S.v; S.v+=a*dt; if(prevV*S.v<0&&Math.abs(gas)<.05) S.v=0;
+  S.v=Math.max(-9,Math.min(MAXV,S.v)); if(Math.abs(S.v)<.05&&Math.abs(gas)<.05)S.v=0;
 
-            <!-- Windshield -->
-            <path d="M 12 55 Q 50 45 88 55 L 82 85 L 18 85 Z" fill="url(#glass)"/>
-            
-            <!-- Roof Frame -->
-            <rect x="16" y="85" width="68" height="75" fill="url(#bodyPaint)"/>
-            
-            <!-- Panoramic Sunroof (Dark Tint) -->
-            <rect x="24" y="90" width="52" height="35" rx="4" fill="#020617"/>
-            <rect x="26" y="92" width="48" height="31" rx="2" fill="url(#glass)"/>
-            
-            <!-- Roof Ridges -->
-            <line x1="32" y1="130" x2="32" y2="155" stroke="#3b4a59" stroke-width="3" stroke-linecap="round"/>
-            <line x1="44" y1="130" x2="44" y2="155" stroke="#3b4a59" stroke-width="3" stroke-linecap="round"/>
-            <line x1="56" y1="130" x2="56" y2="155" stroke="#3b4a59" stroke-width="3" stroke-linecap="round"/>
-            <line x1="68" y1="130" x2="68" y2="155" stroke="#3b4a59" stroke-width="3" stroke-linecap="round"/>
+  const lock=rad(34)/(1+Math.abs(S.v)/7);
+  S.steer+=(st*lock-S.steer)*Math.min(1,dt*9);
+  S.hdg+=(S.v/WB)*Math.tan(S.steer)*dt*180/Math.PI;
 
-            <!-- Shark Fin Antenna -->
-            <path d="M 48 145 L 52 145 L 50 155 Z" fill="#0f172a"/>
+  const dm=S.v*dt, h=rad(S.hdg);
+  S.lat+=Math.cos(h)*dm/111320; S.lng+=Math.sin(h)*dm/(111320*Math.cos(rad(S.lat)));
 
-            <!-- Blacked-out Roof Rails (ST Trim) -->
-            <rect x="18" y="80" width="4" height="75" rx="2" fill="#111111"/>
-            <rect x="78" y="80" width="4" height="75" rx="2" fill="#111111"/>
+  // camera: lagged chase, zooms out with speed
+  const dB=((S.hdg-S.camB+540)%360)-180; S.camB+=dB*(1-Math.exp(-dt*7));
+  const tz=1.4+zoomOff-Math.min(Math.abs(S.v)/MAXV,1)*1.1; S.zoom+=(tz-S.zoom)*Math.min(1,dt*3);
+  const sf=Math.pow(2,S.zoom);
+  const W=innerWidth,H=innerHeight,padTop=H*.34;
+  map.setView([S.lat,S.lng],BASEZ,{animate:false});
+  const gp=map.project([S.lat,S.lng],BASEZ); document.getElementById('map').style.backgroundPosition=((1300-gp.x)%100)+'px '+((1300-gp.y)%100)+'px';
+  const dist=.5*H/Math.tan(rad(36.87)/2);
+  stage.style.perspective=dist+'px'; stage.style.perspectiveOrigin='50% 67%';
+  tilt.style.transform=`scale3d(${sf},${sf},${sf}) rotateX(${TILT}deg) rotateZ(${-S.camB}deg)`;
 
-            <!-- Side Windows -->
-            <path d="M 12 60 L 16 85 L 16 160 L 10 160 Z" fill="#020617"/>
-            <path d="M 88 60 L 84 85 L 84 160 L 90 160 Z" fill="#020617"/>
-
-            <!-- Rear Liftgate Window (Deep Tint with wiper) -->
-            <path d="M 12 160 L 88 160 L 82 175 Q 50 180 18 175 Z" fill="url(#glass)"/>
-            <!-- Wiper Blade -->
-            <line x1="45" y1="172" x2="70" y2="170" stroke="#111" stroke-width="2" stroke-linecap="round"/>
-
-            <!-- Body-colored Spoiler Overhang -->
-            <path d="M 16 158 L 84 158 L 82 166 L 18 166 Z" fill="url(#bodyPaint)"/>
-
-            <!-- Ford Oval (Centered) -->
-            <ellipse cx="50" cy="180" rx="4" ry="2" fill="#0f172a" stroke="#cbd5e1" stroke-width="0.5"/>
-
-            <!-- Black Rear Applique (Explorer Text Trim) -->
-            <rect x="25" y="184" width="50" height="4" rx="1" fill="#111111"/>
-
-            <!-- Red ST Badge -->
-            <path d="M 72 195 L 77 195 L 75 198 L 70 198 Z" fill="#dc2626"/>
-
-            <!-- Signature C-Clamp Tail Lights (Red) -->
-            <path d="M 10 178 L 18 178 L 18 195 L 12 195 Z" fill="#dc2626"/>
-            <path d="M 90 178 L 82 178 L 82 195 L 88 195 Z" fill="#dc2626"/>
-
-            <!-- Black Lower Bumper -->
-            <rect x="14" y="200" width="72" height="6" rx="2" fill="#020617"/>
-
-            <!-- Dual-Quad Exhaust Tips -->
-            <circle cx="24" cy="206" r="3" fill="#020617" stroke="#cbd5e1" stroke-width="1.5"/>
-            <circle cx="32" cy="206" r="3" fill="#020617" stroke="#cbd5e1" stroke-width="1.5"/>
-            <circle cx="68" cy="206" r="3" fill="#020617" stroke="#cbd5e1" stroke-width="1.5"/>
-            <circle cx="76" cy="206" r="3" fill="#020617" stroke="#cbd5e1" stroke-width="1.5"/>
-
-        </svg>
-
-        <div id="brake-glow-left" class="brake-glow"></div>
-        <div id="brake-glow-right" class="brake-glow"></div>
-    </div>
-
-    <div id="controls-container">
-        <div class="slider-track" id="steer-track">
-            <div class="slider-knob" id="steer-knob"></div>
-        </div>
-        <div class="slider-track" id="speed-track">
-            <div class="slider-knob" id="speed-knob"></div>
-        </div>
-    </div>
-
-    <script>
-        const map = new maplibregl.Map({
-            container: 'map',
-            style: 'https://tiles.openfreemap.org/styles/liberty', 
-            center: [-88.446, 41.642], 
-            zoom: 18, pitch: 65, bearing: 0,
-            interactive: true, scrollZoom: true, touchZoomRotate: true,
-            dragPan: false, dragRotate: false, keyboard: false,
-            fadeDuration: 0, 
-            crossSourceCollisions: false,
-            maxTileCacheSize: 30
-        });
-
-        document.getElementById('btn-zoom-in').addEventListener('click', () => {
-            map.flyTo({ zoom: map.getZoom() + 1, duration: 300 });
-        });
-        document.getElementById('btn-zoom-out').addEventListener('click', () => {
-            map.flyTo({ zoom: map.getZoom() - 1, duration: 300 });
-        });
-
-        // Virtual Joysticks
-        let touchSteerValue = 0; 
-        let touchSpeedValue = 0; 
-
-        function setupJoystick(trackId, knobId, axis) {
-            const track = document.getElementById(trackId);
-            const knob = document.getElementById(knobId);
-            let activePointerId = null;
-            let maxDist = 45;
-
-            function updateKnob(e) {
-                if (activePointerId !== e.pointerId) return;
-                const rect = track.getBoundingClientRect();
-                const center = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-                
-                if (axis === 'x') {
-                    let dx = e.clientX - center.x;
-                    touchSteerValue = Math.max(-1, Math.min(1, dx / maxDist));
-                    knob.style.transform = `translate(calc(-50% + ${touchSteerValue * maxDist}px), -50%)`;
-                    knob.style.transition = 'none';
-                } else {
-                    let dy = e.clientY - center.y;
-                    touchSpeedValue = Math.max(-1, Math.min(1, -dy / maxDist));
-                    knob.style.transform = `translate(-50%, calc(-50% - ${touchSpeedValue * maxDist}px))`;
-                    knob.style.transition = 'none';
-                }
-            }
-            
-            function resetKnob(e) {
-                if (activePointerId !== e.pointerId) return;
-                activePointerId = null;
-                if (axis === 'x') touchSteerValue = 0; else touchSpeedValue = 0;
-                knob.style.transition = 'transform 0.2s ease-out';
-                knob.style.transform = `translate(-50%, -50%)`;
-            }
-
-            track.addEventListener('pointerdown', (e) => {
-                activePointerId = e.pointerId;
-                track.setPointerCapture(e.pointerId);
-                updateKnob(e);
-            });
-            track.addEventListener('pointermove', updateKnob);
-            track.addEventListener('pointerup', resetKnob);
-            track.addEventListener('pointercancel', resetKnob);
-        }
-
-        setupJoystick('steer-track', 'steer-knob', 'x');
-        setupJoystick('speed-track', 'speed-knob', 'y');
-
-        // Physics State
-        let car = { 
-            lng: -88.446, lat: 41.642, 
-            throttle: 0, maxThrottle: 1.0, 
-            bearing: 0, turnSpeed: 4.5 
-        };
-
-        const BASE_SPEED = 0.00003; 
-        const BASE_ZOOM = 18;
-        
-        // Keyboard State
-        const keys = { W: false, A: false, S: false, D: false };
-        let kbSteerValue = 0;
-        let kbSpeedValue = 0;
-
-        window.addEventListener('keydown', (e) => {
-            if (['w', 'W', 'ArrowUp'].includes(e.key)) keys.W = true;
-            if (['a', 'A', 'ArrowLeft'].includes(e.key)) keys.A = true;
-            if (['s', 'S', 'ArrowDown'].includes(e.key)) keys.S = true;
-            if (['d', 'D', 'ArrowRight'].includes(e.key)) keys.D = true;
-        });
-        window.addEventListener('keyup', (e) => {
-            if (['w', 'W', 'ArrowUp'].includes(e.key)) keys.W = false;
-            if (['a', 'A', 'ArrowLeft'].includes(e.key)) keys.A = false;
-            if (['s', 'S', 'ArrowDown'].includes(e.key)) keys.S = false;
-            if (['d', 'D', 'ArrowRight'].includes(e.key)) keys.D = false;
-        });
-
-        const carContainer = document.getElementById('car-container');
-        const speedKnob = document.getElementById('speed-knob');
-
-        let lastRenderLng = car.lng;
-        let lastRenderLat = car.lat;
-        let lastRenderBearing = car.bearing;
-
-        function updateGame() {
-            // Keyboard Smooth Ramp (simulates analog stick easing)
-            if (keys.A) kbSteerValue -= 0.08;
-            if (keys.D) kbSteerValue += 0.08;
-            if (!keys.A && !keys.D) kbSteerValue *= 0.7; 
-            kbSteerValue = Math.max(-1, Math.min(1, kbSteerValue));
-
-            if (keys.W) kbSpeedValue += 0.08;
-            if (keys.S) kbSpeedValue -= 0.08;
-            if (!keys.W && !keys.S) kbSpeedValue *= 0.7;
-            kbSpeedValue = Math.max(-1, Math.min(1, kbSpeedValue));
-
-            // Final Analong Slider Values
-            const finalSteer = Math.abs(touchSteerValue) > 0.05 ? touchSteerValue : kbSteerValue;
-            const finalGas = Math.abs(touchSpeedValue) > 0.05 ? touchSpeedValue : kbSpeedValue;
-
-            // Knob Colors based on input
-            if (finalGas > 0.1) {
-                speedKnob.style.background = '#22c55e';
-                speedKnob.style.borderColor = '#15803d';
-            } else if (finalGas < -0.1) {
-                speedKnob.style.background = '#ef4444';
-                speedKnob.style.borderColor = '#b91c1c';
-            } else {
-                speedKnob.style.background = '#38bdf8';
-                speedKnob.style.borderColor = '#fff';
-            }
-
-            // ==========================================
-            // ANALOG THROTTLE ENGINE
-            // ==========================================
-            let targetThrottle = 0;
-            
-            // Map the joystick input directly to target speed capacity
-            if (finalGas > 0) {
-                // 50% push = 50% target max speed
-                targetThrottle = finalGas * car.maxThrottle; 
-            } else if (finalGas < 0) {
-                // Reverse speed is capped at 40%
-                targetThrottle = finalGas * 0.4; 
-            }
-
-            // Smoothly interpolate current throttle towards the target limit
-            car.throttle += (targetThrottle - car.throttle) * 0.05;
-
-            // Deadzone to prevent micro-drifting
-            if (Math.abs(car.throttle) < 0.005) {
-                car.throttle = 0;
-            }
-
-            // Turn physics (scaled so you can't turn aggressively while stopped)
-            if (Math.abs(car.throttle) > 0.01) {
-                car.bearing += finalSteer * car.turnSpeed * (car.throttle >= 0 ? 1 : -1);
-            }
-
-            // Brake Detection: Moving forward but joystick is pulled backwards
-            if (car.throttle > 0.05 && finalGas < -0.1) {
-                carContainer.classList.add('braking');
-                // Apply extra brake friction to slow down faster
-                car.throttle *= 0.85; 
-            } else {
-                carContainer.classList.remove('braking');
-            }
-
-            // Apply movement to GPS coordinates
-            if (car.throttle !== 0) {
-                const currentZoom = map.getZoom();
-                const zoomMultiplier = Math.pow(2, BASE_ZOOM - currentZoom); 
-                const effectiveSpeed = car.throttle * BASE_SPEED * zoomMultiplier;
-                
-                const rad = car.bearing * (Math.PI / 180);
-                const latCorrection = Math.cos(car.lat * (Math.PI / 180));
-                
-                car.lat += Math.cos(rad) * effectiveSpeed;
-                car.lng += (Math.sin(rad) * effectiveSpeed) / latCorrection; 
-            }
-
-            // Render camera updates
-            if(map.loaded()){
-                const distMoved = Math.abs(car.lng - lastRenderLng) + Math.abs(car.lat - lastRenderLat);
-                const bearingDiff = Math.abs(car.bearing - lastRenderBearing);
-                
-                if (distMoved > 0.0000005 || bearingDiff > 0.1 || car.throttle === 0) {
-                    map.jumpTo({ center: [car.lng, car.lat], bearing: car.bearing });
-                    lastRenderLng = car.lng;
-                    lastRenderLat = car.lat;
-                    lastRenderBearing = car.bearing;
-                }
-            }
-
-            const displayMph = Math.round(Math.abs(car.throttle) * 85); // 85mph max representation
-            document.getElementById('speed-display').innerText = displayMph;
-
-            // Real-Time Boundary Detection
-            let locName = "Local Roads", cityName = "Yorkville";
-            if (car.lng > -88.380 && car.lat >= 41.640) cityName = "Oswego";
-            else if (car.lng < -88.485) cityName = "Plano";
-            else {
-                if (car.lng >= -88.455 && car.lng <= -88.440 && car.lat >= 41.638 && car.lat <= 41.648) locName = "Downtown Yorkville";
-                else if (car.lng >= -88.465 && car.lng < -88.445 && car.lat > 41.648 && car.lat <= 41.665) locName = "YHS Campus";
-                else if (car.lng >= -88.410 && car.lng <= -88.380 && car.lat >= 41.628 && car.lat < 41.645) locName = "Fields of Farm Colony"; 
-                else if (car.lng >= -88.480 && car.lng < -88.446 && car.lat >= 41.600 && car.lat <= 41.632) locName = "Country Hills";
-            }
-            document.getElementById('location-display').innerText = locName;
-            document.getElementById('area-display').innerText = `${cityName}, Kendall County`;
-
-            requestAnimationFrame(updateGame);
-        }
-
-        function startGameLoop() {
-            document.getElementById('loading').style.opacity = '0';
-            setTimeout(() => {
-                document.getElementById('loading').style.display = 'none';
-                requestAnimationFrame(updateGame);
-            }, 500);
-        }
-
-        map.on('load', () => {
-            try {
-                if (map.getSource('openmaptiles')) {
-                    map.addLayer({
-                        'id': '3d-buildings',
-                        'source': 'openmaptiles',
-                        'source-layer': 'building',
-                        'type': 'fill-extrusion',
-                        'minzoom': 15,
-                        'paint': {
-                            'fill-extrusion-color': '#e2e8f0',
-                            'fill-extrusion-height': ['coalesce', ['get', 'render_height'], ['get', 'height'], 6],
-                            'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], ['get', 'min_height'], 0],
-                            'fill-extrusion-opacity': 0.85
-                        }
-                    });
-                }
-            } catch(e) { }
-            startGameLoop();
-        });
-        
-        setTimeout(() => {
-            if (document.getElementById('loading').style.display !== 'none') startGameLoop();
-        }, 3000);
-
-        window.addEventListener('resize', () => map.resize());
-    </script>
+  // 3D car — same camera geometry as the CSS-tilted map
+  renderer.setSize(W,H,false); camera.aspect=W/H;
+  camera.setViewOffset(W,H,0,-padTop/2,W,H);
+  const p=rad(TILT);
+  camera.position.set(0,dist*Math.cos(p),dist*Math.sin(p)); camera.lookAt(0,0,0); camera.updateProjectionMatrix();
+  car.scale.setScalar(EXAG*sf/mpp(S.lat,BASEZ));
+  car.rotation.y=-rad(S.hdg-S.camB);
+  const tRoll=S.steer*Math.min(Math.abs(S.v)/12,1.2)*.35, tPitch=Math.max(-.05,Math.min(.05,a*.004));
+  S.roll+=(tRoll-S.roll)*Math.min(1,dt*6); S.pitch+=(tPitch-S.pitch)*Math.min(1,dt*6);
+  body.rotation.z=S.roll; body.rotation.x=S.pitch;
+  S.wheel+=S.v*dt/.38;
+  wheels.forEach(w=>{ w.spin.rotation.x=-S.wheel; if(w.front) w.pivot.rotation.y=-S.steer; });
+  tails.forEach(t=>t.material=braking?tailOn:tailOff);
+  renderer.render(scene,camera);
+  document.getElementById('mph').textContent=Math.round(Math.abs(S.v)*2.237);
+}
+</script>
 </body>
 </html>
