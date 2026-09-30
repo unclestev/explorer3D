@@ -4,6 +4,21 @@
 const {ENH,EMPTY,PXM,UNDER,mz,mzE,safe,addUnder,srcName,img,addImg,onReady,onTick,psd,polyDist,segX,abbr,post,octa,rrect,ISZ,BILL}=YD;
 
 /* ---------- 1. ROAD MARKINGS, BRIDGES, RIVERS ---------- */
+// Real-world road widths. The map style draws roads at a fixed screen width that stops growing past zoom 20, so at
+// the chase camera a residential street was only ~1.4 m wide and service roads under 1 m: the ground texture then
+// looked as if it had grown over them. Width (m) per road kind, for the road and a slightly wider edge (casing).
+// Runs before everything else here, so bridge railings and the asphalt texture pick up these widths.
+const ROAD_W=[[/motorway_link|(^|_)link/,6],[/service_track/,4.5],[/path_pedestrian/,2.5],[/secondary_tertiary/,10],
+  [/trunk_primary/,12],[/motorway/,14],[/minor|street/,8]];
+onReady(function realRoadWidths(){
+  for(const l of map.getStyle().layers){
+    if(l['source-layer']!=='transportation'||l.type!=='line'||!/^(road|bridge|tunnel)_/.test(l.id)||/rail|hatching|transit|arrow/.test(l.id)) continue;
+    const hit=ROAD_W.find(([re])=>re.test(l.id)); if(!hit) continue;
+    const casing=/_casing$/.test(l.id), m=hit[1]+(casing?1.4:0);
+    safe('road width',()=>map.setPaintProperty(l.id,'line-width',mz(m,casing?1.5:1)));
+  }
+});
+
 onReady(function roadsAndWater(){
   const src=srcName(), all=map.getStyle().layers, ids=all.map(l=>l.id);
   const after=id=>{ const i=ids.indexOf(id); return i>=0&&i+1<ids.length?ids[i+1]:undefined; };
