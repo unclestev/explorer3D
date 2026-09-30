@@ -92,14 +92,26 @@ function control(dt){
 }
 
 function paint(){ btn.classList.toggle('on',A.on); btn.textContent=A.on?'AUTO ●':'AUTO'; }
+// keep the screen awake while autopilot drives (Screen Wake Lock). The browser drops the lock whenever the app goes
+// to the background, so it's taken again on return if autopilot is still on.
+const WL={lock:null,warned:false};
+async function wakeOn(){
+  if(!A.on||WL.lock||document.hidden) return;
+  if(!('wakeLock' in navigator)){ if(!WL.warned){ WL.warned=true; toast('This browser can\u2019t keep the screen on. Raise the auto-lock time in your phone settings',3500); } return; }
+  try{ WL.lock=await navigator.wakeLock.request('screen'); WL.lock.addEventListener('release',()=>{ WL.lock=null; }); }
+  catch(e){ console.warn('wake lock',e&&e.message||e); }
+}
+function wakeOff(){ const l=WL.lock; WL.lock=null; if(l) l.release().catch(()=>{}); }
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) wakeOn(); });
+
 function start(){
   const N=YD.NAV;
   if(!N.pts){ toast('Set a destination first: tap 🔍',2200); return; }
   if(!CAN()){ toast('Autopilot only drives the SUV and tractor',2200); return; }
-  A.on=true; A.i=0; A.route=null; A.waitT=0; paint(); dirty=true;
+  A.on=true; A.i=0; A.route=null; A.waitT=0; paint(); dirty=true; wakeOn();
   toast('Autopilot on · touch the controls to take over',2600);
 }
-function stop(msg){ if(!A.on) return; A.on=false; A.waitT=0; paint(); if(msg) toast(msg,2200); }
+function stop(msg){ if(!A.on) return; A.on=false; A.waitT=0; paint(); wakeOff(); if(msg) toast(msg,2200); }
 btn.addEventListener('click',e=>{ e.stopPropagation(); A.on?stop('Autopilot off'):start(); });
 btn.addEventListener('pointerdown',e=>e.stopPropagation());
 
