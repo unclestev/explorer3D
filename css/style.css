@@ -32,3 +32,4 @@ html,body{margin:0;height:100%;overflow:hidden;background:#9cc8ec;font-family:sy
 #navStreet{display:block;font-size:12px;color:#cbd5e1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #navX{border:0;background:rgba(255,255,255,.14);color:#fff;width:30px;height:30px;border-radius:8px;font-size:15px;flex:none}
 #load{position:absolute;inset:0;z-index:99;background:#0f172a;color:#7dd3fc;display:flex;align-items:center;justify-content:center;font-size:20px;transition:opacity .5s}
+#me.busy{animation:mePulse 1s ease-in-out infinite}@keyframes mePulse{50%{background:#1d4ed8}}
