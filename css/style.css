@@ -33,3 +33,5 @@ html,body{margin:0;height:100%;overflow:hidden;background:#9cc8ec;font-family:sy
 #navX{border:0;background:rgba(255,255,255,.14);color:#fff;width:30px;height:30px;border-radius:8px;font-size:15px;flex:none}
 #load{position:absolute;inset:0;z-index:99;background:#0f172a;color:#7dd3fc;display:flex;align-items:center;justify-content:center;font-size:20px;transition:opacity .5s}
 #me.busy{animation:mePulse 1s ease-in-out infinite}@keyframes mePulse{50%{background:#1d4ed8}}
+#navAuto{border:0;background:rgba(255,255,255,.14);color:#e2e8f0;height:30px;padding:0 8px;border-radius:8px;font:700 11px system-ui,sans-serif;letter-spacing:.5px;flex:none}
+#navAuto.on{background:#16a34a;color:#fff;box-shadow:0 0 0 2px #86efac inset}

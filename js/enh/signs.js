@@ -141,6 +141,7 @@ onTick(400,function speedTick(){
     for(const w of OX.speeds){ if(x<w.bb[0]-25||x>w.bb[2]+25||y<w.bb[1]-25||y>w.bb[3]+25) continue;
       let d=polyDist(w.pts,x,y); if(roadName&&w.name===roadName) d-=6; if(d<best){ best=d; bw=w; } }
     if(bw) lim=bw.mph; else { const c=roadClassHere(); if(c){ lim=EST[c]; est=true; } } }
+  YD.limit=lim;                                                   // autopilot drives to this
   limEl.classList.toggle('on',lim!=null); limEl.classList.toggle('est',est);
   if(lim!=null&&limNum.textContent!==String(lim)) limNum.textContent=lim;
   limEl.title=est?'Typical limit for this road (not posted in map data)':'Posted speed limit';
