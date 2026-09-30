@@ -35,6 +35,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#9cc8ec;font-family:sy
 #lim.on{display:inline-block}#lim small{display:block;font-size:7px;font-weight:700;letter-spacing:.6px}#lim b{font-size:17px}#lim.est{opacity:.6}
 #mph.fast{color:#f87171}
 #wx{position:absolute;inset:0;width:100%;height:100%;z-index:6;pointer-events:none}
+#tint{position:absolute;inset:0;z-index:4;pointer-events:none;opacity:0;transition:opacity 3s,background 3s}
 #fog{position:absolute;inset:0;z-index:4;pointer-events:none;opacity:0;transition:opacity 2s;background:linear-gradient(to bottom,rgba(226,232,240,.97) 0%,rgba(226,232,240,.8) 34%,rgba(226,232,240,.3) 62%,rgba(226,232,240,0) 88%)}
 #flash{position:absolute;inset:0;z-index:7;pointer-events:none;background:#fff;opacity:0}
 #map{transition:filter 3s}
@@ -51,7 +52,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#9cc8ec;font-family:sy
 <div id="load">Loading map…</div>
 <div id="toast"></div>
 <div id="map"></div>
-<div id="fog"></div>
+<div id="tint"></div><div id="fog"></div>
 <canvas id="car3d"></canvas>
 <canvas id="wx"></canvas><div id="flash"></div>
 <div id="hud"><span id="mph">0</span> mph<span id="lim"><small>LIMIT</small><b>--</b></span><br><span id="road">On road</span><br><span id="place">Locating…</span><br><span id="wxl"></span><br><span id="surf"></span><br><span id="near"></span></div>
@@ -86,7 +87,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#9cc8ec;font-family:sy
 let POWER=false;
 try{ const v=localStorage.getItem('ydPower'); POWER = v===null ? matchMedia('(pointer: coarse)').matches : v==='1'; }
 catch(e){ try{ POWER=matchMedia('(pointer: coarse)').matches; }catch(_){} }
-const mapPR=on=>Math.min(devicePixelRatio||1, on?1.5:2);
+const mapPR=on=>Math.min(devicePixelRatio||1, on?1.25:2);
 // Start on Route 47 just south of Raging Waves waterpark, pointed at it
 const RAGING_WAVES={lng:-88.44446,lat:41.6989};
 const START=(()=>{ const lng=-88.4474, lat=41.6955, dN=(RAGING_WAVES.lat-lat)*111320, dE=(RAGING_WAVES.lng-lng)*111320*Math.cos(lat*Math.PI/180);
@@ -102,7 +103,7 @@ let roadIds=[], blockIds=[], waterIds=[], bridgeIds=[], hideIds=[];
 let houseIds=[]; const HOUSE_R=280; let hLat=null,hLng=null;
 function updateHouseFilter(force){
   if(!houseIds.length) return;
-  if(!force && hLat!==null && meters(hLat,hLng,S.lat,S.lng)<40) return;
+  if(!force && hLat!==null && meters(hLat,hLng,S.lat,S.lng)<(POWER?120:70)) return;   // each refilter re-lays out every house-number label
   hLat=S.lat; hLng=S.lng;
   const ring=[], dLat=HOUSE_R/111320, dLng=HOUSE_R/(111320*Math.cos(rad(S.lat)));
   for(let i=0;i<=24;i++){ const t=i/24*2*Math.PI; ring.push([S.lng+Math.cos(t)*dLng, S.lat+Math.sin(t)*dLat]); }
@@ -236,7 +237,7 @@ map.on('load',()=>{ try{ initMini();
     const dem={type:'raster-dem',tiles:['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
       encoding:'terrarium',tileSize:256,maxzoom:15,attribution:'Terrain: Mapzen / AWS Terrain Tiles'};
     map.addSource('dem',dem); map.addSource('dem-hs',Object.assign({},dem));
-    map.addLayer({id:'hillshade',type:'hillshade',source:'dem-hs',
+    map.addLayer({id:'hillshade',type:'hillshade',source:'dem-hs',layout:{visibility:POWER?'none':'visible'},
       paint:{'hillshade-exaggeration':.4,'hillshade-shadow-color':'#5a4f3f','hillshade-highlight-color':'#fffaf0'}},before);
     if(!POWER){ map.setTerrain({source:'dem',exaggeration:TERRAIN_X}); terrainOn=true; }
   }catch(e){ console.warn('terrain',e); }
@@ -525,8 +526,10 @@ function applyPower(on){
   if(styleReady){
     try{ if(on){ map.setTerrain(null); terrainOn=false; }
          else if(map.getSource('dem')){ map.setTerrain({source:'dem',exaggeration:TERRAIN_X}); terrainOn=true; } }catch(e){ console.warn('terrain toggle',e); }
+    try{ if(map.getLayer('hillshade')) map.setLayoutProperty('hillshade','visibility',on?'none':'visible'); }catch(e){}   // hidden = its elevation tiles aren't downloaded
     decorAt=null;                                               // rebuild trees at the new density
   }
+  try{ if(window.onPowerChange) window.onPowerChange(on); }catch(e){}
   dirty=true;
 }
 pw.onclick=()=>applyPower(!POWER);
@@ -597,13 +600,13 @@ function ngon(lng,lat,r,n,rot){ const k=Math.cos(lat*Math.PI/180)*111320, ring=[
   for(let i=0;i<=n;i++){ const t=rot+(i%n)/n*2*Math.PI; ring.push([lng+Math.cos(t)*r/k,lat+Math.sin(t)*r/111320]); } return [ring]; }
 function buildDecor(){
   if(!styleReady||!map.getSource('decor')) return;
-  const t0=performance.now(), cx=S.lng, cy=S.lat, R=POWER?450:650, TMAX=POWER?900:2500, feats=[], seenT=new Set();
+  const t0=performance.now(), cx=S.lng, cy=S.lat, R=POWER?350:650, TMAX=POWER?300:2500, feats=[], seenT=new Set();
   const wx0=cx-R/MLNG, wx1=cx+R/MLNG, wy0=cy-R/MLAT, wy1=cy+R/MLAT;
   let trees=0;
   try{
     const wood=map.querySourceFeatures(bSrc,{sourceLayer:'landcover',filter:['==',['get','class'],'wood']});
     const park=map.querySourceFeatures(bSrc,{sourceLayer:'park'});
-    outer: for(const [list,step,dens] of [[wood,12,.9],[park,22,.5]]){
+    outer: for(const [list,step,dens] of POWER?[[wood,20,.8],[park,36,.4]]:[[wood,12,.9],[park,22,.5]]){
       for(const f of list) for(const pl of partsOf(f.geometry)){
         const bb=bboxOf(pl[0]);
         const x0=Math.max(bb[0],wx0), x1=Math.min(bb[2],wx1), y0=Math.max(bb[1],wy0), y1=Math.min(bb[3],wy1);
@@ -896,7 +899,7 @@ function step(now){
     step.mLat=S.lat; step.mLng=S.lng; try{ mini.jumpTo({center:[S.lng,S.lat]}); }catch(e){} }
   const ah=S.hdg.toFixed(1); if(ah!==step.ah && every('arrow',.05)){ step.ah=ah; miniArrowEl.style.transform='rotate('+ah+'deg)'; }
   const parked=Math.abs(S.v)<.05 && step.detOnce;
-  if(!parked && styleReady && every('det',.12)){ step.detOnce=true;
+  if(!parked && styleReady && every('det',POWER?.25:.12)){ step.detOnce=true;
     const p=map.project([S.lng,S.lat]); const f=hitRoad(p.x,p.y,48);
     const el=roadEl;
     if(f===null){ onRoad=true; el.textContent='Driving'; el.className=''; }      // road data unavailable: never punish
@@ -1175,8 +1178,9 @@ onReady(function signLayers(){
 });
 onTick(1000,function signsTick(){
   if(!map.getSource('enh-signs')) return;
-  if(!bladeAt || ENH.bladesStale || meters(bladeAt[1],bladeAt[0],S.lat,S.lng)>120){ ENH.bladesStale=false; computeBlades(); }
-  if(ENH.signsDirty || !ENH.signsAt || meters(ENH.signsAt[1],ENH.signsAt[0],S.lat,S.lng)>150) buildSigns();
+  const bMoved=bladeAt?meters(bladeAt[1],bladeAt[0],S.lat,S.lng):1e9, bAge=Date.now()-(ENH.bladeT||0);
+  if(bMoved>(POWER?250:120) || (ENH.bladesStale && bAge>(POWER?20000:6000) && bMoved>30)){ ENH.bladesStale=false; ENH.bladeT=Date.now(); computeBlades(); }
+  if(ENH.signsDirty || !ENH.signsAt || meters(ENH.signsAt[1],ENH.signsAt[0],S.lat,S.lng)>(POWER?250:150)) buildSigns();
 });
 // traffic lights cycle: 12 s green, 3 s yellow, 15 s red; opposite phase for the cross street
 onTick(500,function signalTick(){
@@ -1367,7 +1371,7 @@ function wxFrom(code){
 }
 const AT={wx:wxFrom(FIX_WX!=null?FIX_WX:0), cloud:FIX_WX!=null?(FIX_WX>=3?1:FIX_WX===2?.5:0):0, temp:null, tzOff:null, wxAt:null, wxT:0, wxBusy:false,
   k:-1, windows:false, beams:null, lastKey:''};
-const wxlEl=document.getElementById('wxl'), fogEl=document.getElementById('fog'), flashEl=document.getElementById('flash'), wxCv=document.getElementById('wx');
+const tintEl=document.getElementById('tint'), wxlEl=document.getElementById('wxl'), fogEl=document.getElementById('fog'), flashEl=document.getElementById('flash'), wxCv=document.getElementById('wx');
 async function loadWeather(){
   if(AT.wxBusy||FIX_WX!=null) return; AT.wxBusy=true; AT.wxT=Date.now();
   const lat=S.lat, lng=S.lng, ctl=new AbortController(), to=setTimeout(()=>ctl.abort(),8000);
@@ -1431,7 +1435,11 @@ function applyAtmos(){
   if(key===AT.lastKey) return; AT.lastKey=key;
   // map darkness and colour
   const br=1-.47*k-.13*cl*(1-k), sat=1-.3*k-.3*cl, sep=.25*gold*(1-cl);
-  mapEl.style.filter=(br>.99&&sat>.99&&sep<.01)?'':`brightness(${br.toFixed(3)}) saturate(${sat.toFixed(3)}) sepia(${sep.toFixed(3)})`;
+  if(POWER){ mapEl.style.filter='';                               // a plain overlay costs far less than filtering the map every frame
+    if(tintEl){ const a=Math.min(.62,.5*k+.14*cl*(1-k)), g=.12*gold*(1-cl)*(1-k);
+      tintEl.style.background=g>a?`rgba(255,150,70,${g.toFixed(3)})`:`rgba(10,16,38,${a.toFixed(3)})`; tintEl.style.opacity=(Math.max(a,g)>.01)?'1':'0'; } }
+  else { if(tintEl) tintEl.style.opacity='0';
+    mapEl.style.filter=(br>.99&&sat>.99&&sep<.01)?'':`brightness(${br.toFixed(3)}) saturate(${sat.toFixed(3)}) sepia(${sep.toFixed(3)})`; }
   // sky
   const grey='#b8c2cc';
   let sky=mix('#7ab8ea','#0b1a3a',k), hor=mix('#eaf3fb','#1e2d4f',k);
@@ -1444,7 +1452,7 @@ function applyAtmos(){
   // buildings lit from the real sun direction; moonlight-blue and dim at night
   safe('light',()=>map.setLight({anchor:'map',position:[1.15,sp.az,Math.max(12,Math.min(80,90-Math.max(alt,8)))],
     color:k>.5?'#a9b8ff':mix('#ffffff','#ffc58a',gold*.7),intensity:.45-.2*k}));
-  setWindows(k>.6);
+  setWindows(k>.6&&!POWER);                                         // textured buildings cost more to draw
   // the SUV: dimmer, cooler light on the model at night; headlights and brighter tail lights
   safe('carlight',()=>{
     const hemi=scene.children.find(o=>o&&o.isHemisphereLight); if(hemi) hemi.intensity=.85-.5*k-.2*cl*(1-k);
@@ -1474,7 +1482,8 @@ function newPart(anyY){ const w=wxCv.width||innerWidth, h=wxCv.height||innerHeig
     l:snow?0:14+Math.random()*16,r:snow?1.2+Math.random()*2:0,ph:Math.random()*6.3,a:.35+Math.random()*.4}; }
 function wxFrame(now){
   if(!WX.run) return;
-  if(POWER&&now-WX.last<32){ requestAnimationFrame(wxFrame); return; }
+  const idle=Math.abs(S.v)<.3&&mode!=='glider';
+  if(POWER&&now-WX.last<(idle?120:32)){ requestAnimationFrame(wxFrame); return; }
   const dt=Math.min(.05,(now-WX.last)/1000); WX.last=now;
   const W=AT.wx, x=wxCv.getContext('2d');
   if(wxCv.width!==innerWidth||wxCv.height!==innerHeight){ wxCv.width=innerWidth; wxCv.height=innerHeight; }
@@ -1501,7 +1510,12 @@ onReady(function atmosInit(){ windowImage(); applyAtmos(); startWx(); loadWeathe
 function boot(){
   if(ENH.booted) return; ENH.booted=true;
   for(const f of inits) safe(f.name||'init',f);
-  setInterval(()=>{ const now=performance.now(); for(const t of ticks){ if(now-t.t>=t.ms){ t.t=now; safe(t.fn.name||'tick',t.fn); } } },100);
+  // background jobs: every job runs 2.5x less often in battery saver, and nothing runs while the page is hidden
+  const run=()=>{ if(!document.hidden){ const now=performance.now(), f=POWER?2.5:1;
+      for(const t of ticks){ if(now-t.t>=t.ms*f){ t.t=now; safe(t.fn.name||'tick',t.fn); } } }
+    setTimeout(run,POWER?250:100); };
+  run();
+  window.onPowerChange=()=>{ AT.lastKey=''; safe('power',applyAtmos); safe('power',startWx); };
 }
 if(map.loaded()&&map.isStyleLoaded()) boot(); else map.once('load',boot);
 })();
