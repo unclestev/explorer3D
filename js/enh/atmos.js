@@ -41,20 +41,33 @@ async function loadWeather(){
   if(AT.wxBusy||FIX_WX!=null) return; AT.wxBusy=true; AT.wxT=Date.now();
   const lat=S.lat, lng=S.lng, ctl=new AbortController(), to=setTimeout(()=>ctl.abort(),8000);
   try{
-    const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}&longitude=${lng.toFixed(3)}&current=temperature_2m,weather_code,cloud_cover,visibility&temperature_unit=fahrenheit&timezone=auto`,{signal:ctl.signal});
+    const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}&longitude=${lng.toFixed(3)}`+
+      `&current=temperature_2m,weather_code,cloud_cover,visibility,precipitation,snowfall`+
+      `&minutely_15=precipitation,snowfall&past_minutely_15=2&forecast_minutely_15=1&temperature_unit=fahrenheit&timezone=auto`,{signal:ctl.signal});
     if(!r.ok) throw new Error('weather '+r.status);
     const j=await r.json(), c=j.current||{};
     AT.wx=wxFrom(c.weather_code||0); AT.cloud=Math.max(0,Math.min(1,(c.cloud_cover??0)/100));
+    // The weather code is a coarse summary and often still says "overcast" while light or patchy rain is falling.
+    // Use the measured precipitation too: the current 15-minute amount and the 15-minute slots around now.
+    const m=j.minutely_15||{}, sum=a=>Array.isArray(a)?a.reduce((x,y)=>Math.max(x,+y||0),0):0;
+    const rate=Math.max(+c.precipitation||0,sum(m.precipitation))*4;             // mm per hour
+    const snowing=(+c.snowfall||0)>0||sum(m.snowfall)>0||(c.temperature_2m!=null&&c.temperature_2m<=33);
+    if(!AT.wx.type&&!AT.wx.fog&&rate>=.1){
+      const code=snowing?(rate<1?71:rate<4?73:75):(rate<2.5?61:rate<7.6?63:65);
+      AT.wx=wxFrom(code); AT.cloud=Math.max(AT.cloud,.85); }
+    AT.rate=rate;
     if(c.visibility!=null&&c.visibility<3000) AT.wx.fog=Math.max(AT.wx.fog,Math.min(.9,(3000-c.visibility)/2500));
     AT.temp=c.temperature_2m!=null?Math.round(c.temperature_2m):null; AT.tzOff=j.utc_offset_seconds!=null?j.utc_offset_seconds:null;
     AT.wxAt=[lng,lat]; AT.lastKey=''; applyAtmos(); startWx();
   }catch(e){ console.warn('weather',e&&e.message||e); AT.wxAt=[lng,lat]; }
   finally{ clearTimeout(to); AT.wxBusy=false; }
 }
+// refresh every 5 minutes, after driving 8 km, and whenever you come back to the app after 2+ minutes away
 onTick(5000,function weatherTick(){
   const moved=AT.wxAt?meters(AT.wxAt[1],AT.wxAt[0],S.lat,S.lng):1e9;
-  if(moved>15000||Date.now()-AT.wxT>15*60000) loadWeather();
+  if(moved>8000||Date.now()-AT.wxT>5*60000) loadWeather();
 });
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&Date.now()-AT.wxT>2*60000) loadWeather(); });
 // local clock at the car (Open-Meteo gives the place's UTC offset; the device clock otherwise)
 function clock(){
   const d=nowDate(); let h,m;
