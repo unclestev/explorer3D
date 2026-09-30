@@ -1,6 +1,6 @@
-/* Yorkville Driver: map, vehicles, physics, camera, minimap, trees, water towers, hang glider. */
+/* Yorkville Driver: map, vehicles, physics, camera, compass, trees, water towers, hang glider. */
 /* ---------- BATTERY SAVER (on by default on phones) ----------
-   30 fps cap, lower render resolution, flat terrain, fewer trees, slower minimap, and no redraw while parked. */
+   30 fps cap, lower render resolution, flat terrain, fewer trees, and no redraw while parked. */
 let POWER=false;
 try{ const v=localStorage.getItem('ydPower'); POWER = v===null ? matchMedia('(pointer: coarse)').matches : v==='1'; }
 catch(e){ try{ POWER=matchMedia('(pointer: coarse)').matches; }catch(_){} }
@@ -412,16 +412,32 @@ function updateFx(dt,dm,carRotY){
 
 /* ---------- INPUT ---------- */
 let tSteer=0,tGas=0;
-function joy(trackId,knobId,axis){
-  const tr=document.getElementById(trackId),kb=document.getElementById(knobId),R=45; let pid=null;
-  const upd=e=>{ if(e.pointerId!==pid)return; const r=tr.getBoundingClientRect();
-    if(axis==='x'){tSteer=Math.max(-1,Math.min(1,(e.clientX-(r.left+r.width/2))/R)); kb.style.transform=`translateX(${tSteer*R}px)`;}
-    else{tGas=Math.max(-1,Math.min(1,-(e.clientY-(r.top+r.height/2))/R)); kb.style.transform=`translateY(${-tGas*R}px)`;} };
-  const end=e=>{ if(e.pointerId!==pid)return; pid=null; axis==='x'?tSteer=0:tGas=0; kb.style.transform='none'; };
+// steering: a horizontal slider; the knob follows your thumb and springs back to centre
+(function steering(){
+  const tr=document.getElementById('st'),kb=document.getElementById('stk'); let pid=null,R=45;
+  const upd=e=>{ if(e.pointerId!==pid)return; const r=tr.getBoundingClientRect(); R=Math.max(20,(r.width-kb.offsetWidth)/2);
+    tSteer=Math.max(-1,Math.min(1,(e.clientX-(r.left+r.width/2))/R)); kb.style.transform=`translate(calc(-50% + ${tSteer*R}px),-50%)`; };
+  const end=e=>{ if(e.pointerId!==pid)return; pid=null; tSteer=0; kb.style.transform=''; };
   tr.addEventListener('pointerdown',e=>{pid=e.pointerId; tr.setPointerCapture(pid); upd(e);});
   tr.addEventListener('pointermove',upd); tr.addEventListener('pointerup',end); tr.addEventListener('pointercancel',end);
+})();
+// pedals: analog. How hard = where you press (higher up the pedal = harder) and you can slide while holding.
+// On screens that report real finger pressure (some iPhones, styluses) the pressure is used instead.
+// Brake at a standstill = reverse, like the old slider.
+let pGas=0,pBrake=0;
+function pedal(id,set){
+  const el=document.getElementById(id), fill=el.querySelector('.fill'); let pid=null, force=false;
+  const amount=e=>{ const r=el.getBoundingClientRect(), pos=Math.max(0,Math.min(1,1-(e.clientY-r.top)/r.height));
+    const p=e.pressure; if(e.pointerType!=='mouse'&&p>0&&p!==.5&&p!==1) force=true;   // this screen reports real pressure
+    return force&&p>0?Math.max(.15,Math.min(1,p*1.3)):.3+.7*pos; };
+  const show=a=>{ fill.style.height=(a*100).toFixed(0)+'%'; el.style.transform=a?`perspective(260px) rotateX(${(a*18).toFixed(1)}deg)`:''; el.classList.toggle('down',a>0); };
+  const upd=e=>{ if(e.pointerId!==pid)return; const a=amount(e); set(a); show(a); };
+  const end=e=>{ if(e.pointerId!==pid)return; pid=null; set(0); show(0); };
+  el.addEventListener('pointerdown',e=>{ pid=e.pointerId; el.setPointerCapture(pid); upd(e); });
+  el.addEventListener('pointermove',upd); el.addEventListener('pointerup',end); el.addEventListener('pointercancel',end);
 }
-joy('st','stk','x'); joy('sp','spk','y');
+pedal('sp',a=>{ pGas=a; tGas=pGas-pBrake; });
+pedal('brake',a=>{ pBrake=a; tGas=pGas-pBrake; });
 // triple-tap the gas (slider or W / up arrow) to launch or land the hang glider
 const taps=[];
 function gasTap(){ const t=performance.now(); taps.push(t); while(taps.length&&t-taps[0]>750) taps.shift();
@@ -459,12 +475,16 @@ let boat=false, waterC=0, landC=0, mode='car', farmC=0, offFarmC=0, terrainOn=fa
 const TERRAIN_X=1.5, TRACTOR=0.75;   // tractor runs at 75% of car speed
 const BOATMAX=48, WB=3.05, MAXV=60, REVMAX=28, SPEEDUP=3; let EXAG=1.6;   // two steps below the largest size (2.5)   // SPEEDUP: world distance per game metre
 let last=0,frame=0,onRoad=true,roadName='';
+// steering lock: 40 degrees when crawling (about a 6 m turning circle), easing off with speed so the highway stays calm.
+// 25 mph turns on roughly an 18 m radius, 15 mph about 12 m. Autopilot uses the same curve.
+const STEER_MAX=40*Math.PI/180;
+function steerLock(v){ const a=Math.abs(v); return STEER_MAX/(1+a/4.5+(a/12)*(a/12)); }
 const rad=d=>d*Math.PI/180;
 const mpp=(lat,z)=>78271.517*Math.cos(rad(lat))/Math.pow(2,z);
 let roadFails=0, miss=0;
 const hitRoad=(x,y,r)=>{ try{ if(!roadIds.length) return null; return map.queryRenderedFeatures([[x-r,y-r],[x+r,y+r]],{layers:roadIds}); }catch(e){ roadFails++; return null; } };
 const hit=(x,y,r,ids)=>{ try{ return ids.length?map.queryRenderedFeatures([[x-r,y-r],[x+r,y+r]],{layers:ids}):[]; }catch(e){ return []; } };
-const roadEl=document.getElementById('road'), mphEl=document.getElementById('mph'), miniArrowEl=document.getElementById('miniArrow');
+const roadEl=document.getElementById('road'), mphEl=document.getElementById('mph');
 const mapEl=document.getElementById('map');
 
 
@@ -489,19 +509,18 @@ function updatePlace(){
 }
 
 
-/* ---------- MINIMAP ---------- */
-let mini=null, miniZ=13.5;
-function initMini(){
-  try{
-    mini=new maplibregl.Map({container:'mini',style:'https://tiles.openfreemap.org/styles/liberty',center:[S.lng,S.lat],zoom:miniZ,
-      interactive:false,attributionControl:false,fadeDuration:0,pitch:0,pixelRatio:1});
-    mini.on('error',e=>{ console.warn('MINI:',e&&e.error&&e.error.message); });
-    mini.on('load',()=>{ try{
-      mini.addSource('towers',{type:'geojson',data:towerFC(true)});
-      mini.addLayer({id:'tw',type:'circle',source:'towers',paint:{'circle-radius':4.5,'circle-color':'#0ea5e9','circle-stroke-color':'#fff','circle-stroke-width':1.5}});
-      miniReady=true; }catch(e){ console.warn('mini towers',e); } });
-    document.getElementById('mini').addEventListener('click',()=>{ miniZ=miniZ>=15?11.5:miniZ+1.5; mini.easeTo({zoom:miniZ,duration:250}); });
-  }catch(e){ document.getElementById('mini').style.display='none'; }
+/* ---------- COMPASS (replaced the minimap: heading-up, with a marker toward the route destination) ---------- */
+let mini=null;                                                    // no minimap any more; kept so older checks stay harmless
+function initMini(){}
+const compassEl=document.getElementById('compass'), cHdgEl=document.getElementById('cHdg'), cDestEl=document.getElementById('cDest');
+const CARD=['N','NE','E','SE','S','SW','W','NW'];
+function updateCompass(){
+  const h=((S.hdg%360)+360)%360, hs=h.toFixed(1);
+  if(hs!==updateCompass.h){ updateCompass.h=hs; compassEl.style.setProperty('--h',hs);
+    const t=CARD[Math.round(h/45)%8]+'<small>'+Math.round(h)%360+'\u00b0</small>'; if(t!==updateCompass.t){ updateCompass.t=t; cHdgEl.innerHTML=t; } }
+  const d=window.YD&&YD.NAV&&YD.NAV.dest;
+  if(d){ const dy=(d[1]-S.lat)*111320, dx=(d[0]-S.lng)*111320*Math.cos(rad(S.lat)); compassEl.style.setProperty('--b',(Math.atan2(dx,dy)*180/Math.PI).toFixed(1)); }
+  if(!!d!==updateCompass.d){ updateCompass.d=!!d; cDestEl.classList.toggle('on',!!d); }
 }
 
 /* ---------- TREES + POI PINS (built from the map's own data around the car) ---------- */
@@ -745,8 +764,7 @@ function glideStep(dt,st,gas,now){
     const mph=Math.round(G.air*2.237); if(mph!==step.mph){ step.mph=mph; mphEl.textContent=mph; }
   }
   if(every('place',1)) updatePlace(); if(every('house',.25)) updateHouseFilter(false);
-  if(mini && every('mini',POWER?1:.12)){ try{ mini.jumpTo({center:[S.lng,S.lat]}); }catch(e){} }
-  const ah=S.hdg.toFixed(1); if(ah!==step.ah && every('arrow',.05)){ step.ah=ah; miniArrowEl.style.transform='rotate('+ah+'deg)'; }
+  if(every('compass',POWER?.12:.05)) updateCompass();
   if(every('clouds',2)) buildClouds(false);
   if(every('decor',.5) && styleReady && (!decorAt || meters(decorAt[1],decorAt[0],S.lat,S.lng)>250)) buildDecor();
 }
@@ -783,9 +801,9 @@ function step(now){
   S.v=Math.max(-REVMAX*pw,Math.min(MAXV,S.v)); if(Math.abs(S.v)<.05&&Math.abs(gas)<.05)S.v=0;
 
   // steering (bicycle model, less lock at speed)
-  const lock=boat?rad(30)/(1+Math.abs(S.v)/12):rad(34)/(1+Math.abs(S.v)/7);
+  const lock=boat?rad(30)/(1+Math.abs(S.v)/12):steerLock(S.v);
   S.steer+=(st*lock-S.steer)*Math.min(1,dt*9);
-  S.hdg+=(S.v/(boat?7:WB))*Math.tan(S.steer)*dt*180/Math.PI;
+  S.hdg+=(boat?S.v/7:S.v*SPEEDUP/WB)*Math.tan(S.steer)*dt*180/Math.PI;   // turn at the speed the world actually moves
 
   // move, with collision against buildings & water
   const dm=S.v*dt*SPEEDUP, h=rad(S.hdg);
@@ -814,9 +832,7 @@ function step(now){
 
   // road detection
   if(every('place',1)) updatePlace(); if(every('house',.25)) updateHouseFilter(false);
-  if(mini && every('mini',POWER?1:.12) && (!step.mLat || meters(step.mLat,step.mLng,S.lat,S.lng)>2)){
-    step.mLat=S.lat; step.mLng=S.lng; try{ mini.jumpTo({center:[S.lng,S.lat]}); }catch(e){} }
-  const ah=S.hdg.toFixed(1); if(ah!==step.ah && every('arrow',.05)){ step.ah=ah; miniArrowEl.style.transform='rotate('+ah+'deg)'; }
+  if(every('compass',POWER?.12:.05)) updateCompass();
   const parked=Math.abs(S.v)<.05 && step.detOnce;
   if(!parked && styleReady && every('det',POWER?.25:.12)){ step.detOnce=true;
     const p=map.project([S.lng,S.lat]); const f=hitRoad(p.x,p.y,48);

@@ -9,10 +9,14 @@ const B=6;                                      // planned braking, game m/s^2 (
 const CAN=()=>mode==='car'||mode==='tractor';
 const A={on:false,i:0,route:null,oxAt:null,stops:[],passed:new Set(),waitT:0,lastTarget:0};
 
-function lockAt(v){ return rad(34)/(1+Math.abs(v)/7); }            // same steering limit as the game physics
-// fastest speed (game m/s) that can still hold a curve of curvature kap (1/world m): the steering lock shrinks with speed
-function vCurve(kap){ if(kap<.002) return 1e9; const byLock=7*(.85*rad(34)/Math.atan(SPEEDUP*WB*kap)-1), byGrip=Math.sqrt(4/kap)/SPEEDUP;
-  return Math.max(3,Math.min(byLock,byGrip)); }
+// the game's own steering limit (js/game.js steerLock); the car turns at world speed: heading rate = v*SPEEDUP/WB*tan(steer)
+// fastest speed (game m/s) that can still hold a curve of curvature kap (1/world m), with 15% steering in reserve
+function vCurve(kap){ if(kap<.002) return 1e9;
+  const need=Math.atan(WB*kap)/.85; let lo=0, hi=60;
+  if(steerLock(0)<need) return 2;                                     // tighter than the car can turn: crawl
+  for(let i=0;i<18;i++){ const m=(lo+hi)/2; if(steerLock(m)>=need) lo=m; else hi=m; }
+  const byGrip=Math.sqrt(10/kap)/SPEEDUP;                             // keep sideways force sensible
+  return Math.max(2.5,Math.min(lo,byGrip)); }
 function pointAt(s,hint){ const c=YD.NAV.cum, P=YD.NAV.pts; let j=Math.max(0,Math.min(hint|0,P.length-2));
   while(j>0&&c[j]>s) j--; while(j<P.length-2&&c[j+1]<s) j++;
   const L=(c[j+1]-c[j])||1, t=Math.max(0,Math.min(1,(s-c[j])/L));
@@ -50,7 +54,7 @@ function control(dt){
   const h=rad(S.hdg), fx=Math.sin(h), fy=Math.cos(h), dx=tp[0]-x, dy=tp[1]-y;
   const alpha=-Math.atan2(fx*dy-fy*dx,fx*dx+fy*dy);                   // + = target to the right
   const k=2*Math.sin(alpha)/Math.max(Ld,Math.hypot(dx,dy));
-  const st=Math.max(-1,Math.min(1,Math.atan(SPEEDUP*WB*k)/lockAt(v)));
+  const st=Math.max(-1,Math.min(1,Math.atan(WB*k)/steerLock(v)));
 
   // speed: the lowest of the speed limit, what each bend ahead allows, and any stop ahead, allowing room to brake
   const lim=(YD.limit||30)/2.237;

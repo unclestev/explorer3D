@@ -6,7 +6,7 @@ Drive a Ford Explorer over a real map. Play it on GitHub Pages.
 - `index.html` — page markup; loads everything below in order
 - `css/style.css` — HUD, controls and overlay styles
 - `js/errors.js` — on-screen error overlay (phones have no console)
-- `js/game.js` — map, vehicles (SUV, bass boat, tractor, hang glider), physics, camera, minimap, trees, water towers
+- `js/game.js` — map, vehicles (SUV, bass boat, tractor, hang glider), physics and steering, camera, compass, pedals, trees, water towers
 - `js/enh/` — optional enhancements; each file is independent and wrapped so a failure can't stop the game
   - `core.js` — shared helpers (`window.YD`), must load first
   - `roads.js` — lane markings, bridges, rivers
