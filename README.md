@@ -4,6 +4,7 @@ Drive a Ford Explorer over a real map. Play it on GitHub Pages.
 
 ## Files
 - `index.html` — page markup; loads everything below in order
+- `manifest.webmanifest`, `favicon.ico`, `icons/` — app name and icons (Yorkville Foxes logo) for the home-screen app and browser tab
 - `css/style.css` — HUD, controls and overlay styles
 - `js/errors.js` — on-screen error overlay (phones have no console)
 - `js/game.js` — map, vehicles (SUV, bass boat, tractor, hang glider), physics and steering, camera, compass, pedals, trees, water towers
