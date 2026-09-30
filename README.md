@@ -21,6 +21,9 @@ Drive a Ford Explorer over a real map. Play it on GitHub Pages.
   - `vehicles.js` — the four traffic car designs (luxury SUV, full-size SUV, off-road pickup, 1970s muscle coupe), wheels that spin and steer
   - `traffic.js` — AI cars on the real road network (right-hand lanes, one-ways, stop signs, red lights)
   - `settings.js` — ⚙️ panel (battery saver, traffic, car size, zoom) and pinch-to-zoom
+  - `progress.js` — play time, miles, safe-driver score, streets and landmarks, the 🏆 panel
+  - `challenges.js` — time trials and glider challenges (only when started from 🏆)
+  - `police.js` — police chases (only when Police patrols is switched on in 🏆)
   - `boot.js` — starts the modules; must load last
 
 When a JS or CSS file changes, bump the `?v=` number on its tag in `index.html` so phones don't keep an old cached copy.

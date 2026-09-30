@@ -152,3 +152,28 @@ button{font-family:inherit;cursor:pointer}
 .stepper button:active{background:rgba(255,255,255,.28)}
 .stepper b{min-width:52px;text-align:center;font-variant-numeric:tabular-nums;font-size:15px}
 #glide.on{background:#ea580c;box-shadow:0 0 0 2px #fdba74 inset}
+
+/* ---------- 🏆 progress panel ---------- */
+#prog.on{background:#b45309}
+#progPanel{position:absolute;top:calc(var(--st) + var(--btn) + var(--gap));right:var(--sr);z-index:40;display:none;width:min(calc(100vw - 2*var(--gap)),360px);box-sizing:border-box;
+  background:var(--panel-solid);color:var(--txt);border:1px solid var(--line);border-radius:16px;padding:6px 14px 12px;box-shadow:0 10px 28px rgba(0,0,0,.5);
+  max-height:calc(100vh - var(--st) - var(--btn) - 3*var(--gap));overflow-y:auto;touch-action:pan-y;-webkit-overflow-scrolling:touch}
+#progPanel.on{display:block}
+.pgTabs{display:flex;gap:4px;background:rgba(255,255,255,.08);border-radius:10px;padding:3px;margin:4px 0 6px}
+.pgTabs button{flex:1;border:0;background:none;color:var(--muted);font:600 13px system-ui,sans-serif;padding:7px 0;border-radius:8px}
+.pgTabs button.on{background:rgba(255,255,255,.16);color:#fff}
+.pgSec{font-size:11px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:var(--muted);margin:12px 0 0}
+.pgVal{font-variant-numeric:tabular-nums;font-size:15px;white-space:nowrap}
+.pgScore{font-size:28px;font-variant-numeric:tabular-nums}
+.pgList{font-size:13px;color:var(--txt);padding:4px 0 2px}.pgList div{padding:3px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pgList i{color:var(--muted);font-style:normal;font-size:11px}
+.pgNote{font-size:12px;color:var(--muted);padding:8px 0}
+.pgGo{flex:none;border:0;border-radius:9px;background:#2563eb;color:#fff;font:700 13px system-ui,sans-serif;padding:8px 14px}
+.pgGo[disabled]{background:rgba(255,255,255,.12);color:var(--muted)}
+.pgFoot{padding-top:12px;text-align:center}.pgFoot button{border:0;background:none;color:#f87171;font:600 12px system-ui,sans-serif;padding:6px}
+/* challenge / police status chip: above the controls, or above the route banner when it's showing */
+#chal{position:absolute;left:50%;bottom:calc(var(--sb) + var(--ctl-h) + var(--gap));transform:translateX(-50%);z-index:22;display:none;align-items:center;gap:8px;max-width:min(calc(100vw - 2*var(--gap)),380px);box-sizing:border-box;
+  background:#7c2d12;color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:999px;padding:6px 8px 6px 14px;font:700 14px system-ui,sans-serif;font-variant-numeric:tabular-nums;box-shadow:0 6px 18px rgba(0,0,0,.4)}
+#chal.on{display:flex}#chalTxt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#chalX{border:0;background:rgba(255,255,255,.2);color:#fff;width:26px;height:26px;border-radius:50%;font-size:13px;flex:none}
+#nav.on ~ #chal{bottom:calc(var(--sb) + var(--ctl-h) + var(--gap) + 66px)}
+@media (orientation:landscape) and (max-height:560px){ #chal,#nav.on ~ #chal{bottom:calc(var(--sb) + var(--compass) + var(--gap));max-width:44vw} }

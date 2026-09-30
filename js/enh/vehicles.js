@@ -119,5 +119,25 @@ function build(shadowMat){
   g.userData={wheels,fronts,r:w.r,wb:Math.abs(w.f-w.b),kind,spin:0,steer:0};
   return g;
 }
-YD.VEH={build,mats,KINDS};
+// police car: the full-size SUV in black with white doors and a flashing red/blue light bar (userData.lights)
+let POL=null;
+function buildPolice(shadowMat){
+  const m=mats(), K=KINDS.big, G=geo('big'), W=K.W;
+  if(!POL){ POL={doors:merge([box(.03,.5,2.3,-(W/2+.01),.82,.35),box(.03,.5,2.3,(W/2+.01),.82,.35)]),
+    bar:new THREE.BoxGeometry(.62,.14,.34), base:merge([box(1.4,.06,.38,0,1.9,.9)]),
+    white:new THREE.MeshPhongMaterial({color:0xf8fafc,shininess:60}),
+    red:new THREE.MeshBasicMaterial({color:0xff2222}), blue:new THREE.MeshBasicMaterial({color:0x2563ff}),
+    dim:new THREE.MeshBasicMaterial({color:0x2a2f38}) }; }
+  const g=new THREE.Group();
+  if(shadowMat) g.add(new THREE.Mesh(G.shadow,shadowMat));
+  g.add(new THREE.Mesh(G.paint,paint(0x0b0c0e))); g.add(new THREE.Mesh(G.glass,m.glass)); g.add(new THREE.Mesh(G.trim,m.trim));
+  g.add(new THREE.Mesh(G.head,m.head)); g.add(new THREE.Mesh(G.tail,m.tail)); g.add(new THREE.Mesh(POL.doors,POL.white)); g.add(new THREE.Mesh(POL.base,m.trim));
+  const red=new THREE.Mesh(POL.bar,POL.red), blue=new THREE.Mesh(POL.bar,POL.blue); red.position.set(-.34,2.0,.9); blue.position.set(.34,2.0,.9); g.add(red); g.add(blue);
+  const w=K.wheel, wm=[m.tyre,m.rim.dark,m.rim.dark], wheels=[], fronts=[];
+  for(const z of [-w.f,-w.b]) for(const sx of [-1,1]){ const pv=new THREE.Group(); pv.position.set(sx*(W/2-w.w/2+.03),w.r,z); g.add(pv);
+    const wh=new THREE.Mesh(G.wheel,wm); pv.add(wh); wheels.push(wh); if(z<0) fronts.push(pv); }
+  g.userData={wheels,fronts,r:w.r,wb:Math.abs(w.f-w.b),kind:'police',spin:0,steer:0,lights:{red,blue,on:POL.red,onB:POL.blue,dim:POL.dim}};
+  return g;
+}
+YD.VEH={build,buildPolice,mats,KINDS};
 })();

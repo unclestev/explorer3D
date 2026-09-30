@@ -207,6 +207,10 @@ map.on('load',()=>{ try{ initMini();
   startLoop();
 });
 let started=false, styleReady=false;
+// per-frame hooks for add-ons that draw moving things in the car layer (e.g. the police car). Each gets dt and
+// returns true when it moved something, which forces a redraw.
+const FRAME_HOOKS=[];
+function runFrameHooks(dt){ let moved=false; for(const f of FRAME_HOOKS){ try{ moved=f(dt)||moved; }catch(e){ console.warn('frame hook',e); } } return moved; }
 function startLoop(){ if(started) return; started=true; last=performance.now(); requestAnimationFrame(loop); }
 setTimeout(()=>{const ld=document.getElementById('load'); if(ld){ld.style.opacity=0; setTimeout(()=>ld.remove(),500);} startLoop();},6000);
 
@@ -786,6 +790,7 @@ function glideStep(dt,st,gas,now){
   gMdl.rotation.set(rad(90-GP)-(G.phase==='fly'?gas*.12:0)+(G.phase==='land'?-.2:0)+bob, -rad(dB)*.6, -G.bank);
   updateFx(dt,0,0);
   if(window.TRAFFIC) TRAFFIC.frame(dt);                             // hides the AI cars while flying
+  runFrameHooks(dt);
   renderer.render(scene,camera);
   // HUD + the usual background jobs
   if(every('ghud',.2)){
@@ -948,7 +953,7 @@ function step(now){
   }
   tails.forEach(t=>t.material=braking?tailOn:tailOff);
   placePhoto(braking);
-  const trafficMoving=window.TRAFFIC?TRAFFIC.frame(dt):false;       // AI cars (js/enh/traffic.js)
+  const trafficMoving=(window.TRAFFIC?TRAFFIC.frame(dt):false)|runFrameHooks(dt);   // AI cars (js/enh/traffic.js) + add-ons
   const live=updateFx(dt,dm,car.rotation.y);
   const settling=Math.abs(tRoll-S.roll)>1e-3||Math.abs(tPitch-S.pitch)>1e-3||Math.abs(S.steer-(step.pst||0))>1e-4||braking!==step.pbr||Math.abs(S.sp)>1e-3&&!terrainOn;
   step.pst=S.steer; step.pbr=braking;
