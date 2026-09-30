@@ -270,6 +270,38 @@ sx.fillStyle=gr; sx.fillRect(0,0,128,128);
 const shadow=new THREE.Mesh(new THREE.PlaneGeometry(3.4,6.6),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(sc),transparent:true,depthWrite:false}));
 shadow.rotation.x=-Math.PI/2; shadow.position.y=.03; car.add(shadow);
 
+/* ---------- PHOTO BODY ----------
+   A cut-out photo of a real Explorer ST (img/explorer-rear.webp, the owner's own picture) is shown instead of the
+   3D body. The chase camera only ever sees the car from behind and above, so a camera-facing photo that leans as the
+   car turns and rolls reads as the real thing. Brake and tail lights glow on top of it, and it darkens at night.
+   The 3D body stays underneath as the fallback if the image can't load; the boat, tractor and glider are unchanged.
+   Add ?car=3d to the address to use the 3D model instead. */
+const PHOTO={mesh:null,glow:null,on:!/[?&]car=3d\b/.test(location.search)};
+if(PHOTO.on) new THREE.TextureLoader().load('img/explorer-rear.webp?v=1',tex=>{
+  tex.anisotropy=renderer.capabilities.getMaxAnisotropy?Math.min(4,renderer.capabilities.getMaxAnisotropy()):1;
+  const W=2.35, H=W*tex.image.height/tex.image.width, PIV=.38;   // pivot: the car's centre sits ~38% up the picture
+  const g=new THREE.PlaneGeometry(W,H); g.translate(0,H*(.5-PIV),0);
+  const m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({map:tex,transparent:true,alphaTest:.04,depthTest:false,depthWrite:false}));
+  m.renderOrder=10; m.visible=false; scene.add(m);
+  // soft red glow over each tail light (brighter when braking, a faint glow after dark)
+  const gc=document.createElement('canvas'); gc.width=gc.height=64; const gx=gc.getContext('2d'), rg=gx.createRadialGradient(32,32,1,32,32,32);
+  rg.addColorStop(0,'rgba(255,90,70,1)'); rg.addColorStop(.3,'rgba(255,30,25,.75)'); rg.addColorStop(1,'rgba(255,0,0,0)'); gx.fillStyle=rg; gx.fillRect(0,0,64,64);
+  const gm=new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(gc),transparent:true,depthTest:false,depthWrite:false,blending:THREE.AdditiveBlending,opacity:0});
+  for(const fx of [.088,.912]){ const q=new THREE.Mesh(new THREE.PlaneGeometry(W*.26,W*.3),gm); q.position.set((fx-.5)*W,H*(.37-PIV),.01); q.renderOrder=11; m.add(q); }
+  PHOTO.mesh=m; PHOTO.glow=gm; dirty=true;
+},undefined,e=>console.warn('car photo could not load, using the 3D model',e));
+// called every frame after the car transform is set: face the camera, lean with the car's heading and body roll
+function placePhoto(braking){
+  const m=PHOTO.mesh; if(!m) return;
+  const show=mode==='car'; if(m.visible!==show){ m.visible=show; body.visible=false; }
+  if(!show) return; body.visible=false;
+  m.scale.setScalar(car.scale.x);
+  m.quaternion.copy(camera.quaternion); m.rotateZ(car.rotation.y+(S.roll+S.sr)*.8);   // same lean directions as the 3D body (camera looks down the car's z axis)
+  const hemi=scene.children.find(o=>o&&o.isHemisphereLight), b=Math.max(.32,Math.min(1,(hemi?hemi.intensity:.85)/.85+.08));
+  m.material.color.setScalar(b);
+  PHOTO.glow.opacity=braking?1:(tailOff.color.r>.7?.45:0);        // tailOff turns brighter at night (js/enh/atmos.js)
+}
+
 
 
 /* ---------- BASS BOAT (swaps in when the car enters water) ---------- */
@@ -915,6 +947,7 @@ function step(now){
     if(Math.abs(S.v)>4 && every('dirt',.07)) spawn(0,1,1,0xa0825a);     // dirt kicked up behind
   }
   tails.forEach(t=>t.material=braking?tailOn:tailOff);
+  placePhoto(braking);
   const live=updateFx(dt,dm,car.rotation.y);
   const settling=Math.abs(tRoll-S.roll)>1e-3||Math.abs(tPitch-S.pitch)>1e-3||Math.abs(S.steer-(step.pst||0))>1e-4||braking!==step.pbr||Math.abs(S.sp)>1e-3&&!terrainOn;
   step.pst=S.steer; step.pbr=braking;
