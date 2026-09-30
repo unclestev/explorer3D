@@ -18,6 +18,8 @@ Drive a Ford Explorer over a real map. Play it on GitHub Pages.
   - `textures.js` — code-drawn ground textures and building colours
   - `search.js` — 🔍 destination search (address or place name)
   - `autopilot.js` — AUTO: drives the active route
+  - `traffic.js` — AI cars on the real road network (right-hand lanes, one-ways, stop signs, red lights)
+  - `settings.js` — ⚙️ panel (battery saver, traffic, car size, zoom) and pinch-to-zoom
   - `boot.js` — starts the modules; must load last
 
 When a JS or CSS file changes, bump the `?v=` number on its tag in `index.html` so phones don't keep an old cached copy.

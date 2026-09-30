@@ -20,7 +20,7 @@
 <link href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/3.6.2/maplibre-gl.css" rel="stylesheet">
 <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>window.THREE||document.write('<script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"><\/script>')</script>
-<link href="css/style.css?v=8" rel="stylesheet">
+<link href="css/style.css?v=14" rel="stylesheet">
 </head>
 <body>
 <div id="load">Loading map…</div>
@@ -33,7 +33,14 @@
 <div id="compass" aria-label="Compass"><div id="cDial"><b class="cn">N</b><b class="ce">E</b><b class="cs">S</b><b class="cw">W</b></div><div id="cDest"><i></i></div><i id="cPtr"></i><span id="cHdg">N</span></div>
 <div id="findPanel"><form id="findForm"><input id="findQ" type="search" placeholder="Address or place, e.g. Main St, Yorkville" autocomplete="off" enterkeyhint="search"><button type="submit">Go</button><button type="button" id="findX" aria-label="Close search">✕</button></form><div id="findList"></div></div>
 <div id="nav"><div id="navArrow">↑</div><div id="navTxt"><b id="navDist"></b><span id="navStreet"></span></div><button id="navAuto" title="Autopilot: drive this route for me">AUTO</button><button id="navX" aria-label="Clear route">✕</button></div>
-<div id="zoom"><button id="zi">+</button><button id="zo">−</button><button id="cp" style="font-size:14px">🚗+</button><button id="cm" style="font-size:14px">🚗−</button><button id="pw" title="Battery saver" style="font-size:18px">🔋</button><button id="find" title="Search for a destination" style="font-size:18px">🔍</button></div>
+<div id="zoom"><button id="find" title="Search for a destination">🔍</button><button id="gear" title="Settings">⚙️</button></div>
+<div id="settings" role="dialog" aria-label="Settings">
+  <div class="setHead"><b>Settings</b><button id="setX" aria-label="Close settings">✕</button></div>
+  <div class="setRow"><span>Battery saver<small>Smoother on older phones, lasts longer</small></span><button id="pw" class="switch" aria-label="Battery saver"></button></div>
+  <div class="setRow"><span>Traffic<small>Other cars on the road</small></span><button id="trafficBtn" class="switch" aria-label="Traffic"></button></div>
+  <div class="setRow"><span>Car size</span><div class="stepper"><button id="cm" aria-label="Smaller car">−</button><b id="carSize">100%</b><button id="cp" aria-label="Bigger car">+</button></div></div>
+  <div class="setRow"><span>Camera zoom<small>Or pinch the map with two fingers</small></span><div class="stepper"><button id="zo" aria-label="Zoom out">−</button><b id="zoomVal">1.0×</b><button id="zi" aria-label="Zoom in">+</button></div></div>
+</div>
 <div id="ctl">
   <div class="track" id="st"><div class="knob" id="stk"></div></div>
   <div id="pedals">
@@ -42,7 +49,7 @@
   </div>
 </div>
 <script src="js/errors.js?v=3"></script>
-<script src="js/game.js?v=12"></script>
+<script src="js/game.js?v=14"></script>
 <script src="js/enh/core.js?v=3"></script>
 <script src="js/enh/roads.js?v=10"></script>
 <script src="js/enh/signs.js?v=6"></script>
@@ -51,6 +58,8 @@
 <script src="js/enh/textures.js?v=7"></script>
 <script src="js/enh/search.js?v=9"></script>
 <script src="js/enh/autopilot.js?v=11"></script>
+<script src="js/enh/traffic.js?v=14"></script>
+<script src="js/enh/settings.js?v=14"></script>
 <script src="js/enh/boot.js?v=3"></script>
 </body>
 </html>

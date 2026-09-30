@@ -786,6 +786,7 @@ function glideStep(dt,st,gas,now){
   const bob=Math.sin(now/900)*.02;
   gMdl.rotation.set(rad(90-GP)-(G.phase==='fly'?gas*.12:0)+(G.phase==='land'?-.2:0)+bob, -rad(dB)*.6, -G.bank);
   updateFx(dt,0,0);
+  if(window.TRAFFIC) TRAFFIC.frame(dt);                             // hides the AI cars while flying
   renderer.render(scene,camera);
   // HUD + the usual background jobs
   if(every('ghud',.2)){
@@ -948,11 +949,12 @@ function step(now){
   }
   tails.forEach(t=>t.material=braking?tailOn:tailOff);
   placePhoto(braking);
+  const trafficMoving=window.TRAFFIC?TRAFFIC.frame(dt):false;       // AI cars (js/enh/traffic.js)
   const live=updateFx(dt,dm,car.rotation.y);
   const settling=Math.abs(tRoll-S.roll)>1e-3||Math.abs(tPitch-S.pitch)>1e-3||Math.abs(S.steer-(step.pst||0))>1e-4||braking!==step.pbr||Math.abs(S.sp)>1e-3&&!terrainOn;
   step.pst=S.steer; step.pbr=braking;
   const bob=boat&&(!POWER||frame%2===0);                         // parked boat still bobs, at half rate in saver
-  if(camMoved||settling||live>0||shake>0||bob){ renderer.render(scene,camera); }
+  if(camMoved||settling||live>0||shake>0||bob||trafficMoving){ renderer.render(scene,camera); }
   dirty=false;
 
   const mph=Math.round(Math.abs(S.v)*2.237); if(mph!==step.mph){ step.mph=mph; mphEl.textContent=mph; }

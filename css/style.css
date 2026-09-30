@@ -39,7 +39,6 @@ button{font-family:inherit;cursor:pointer}
 #zoom{position:absolute;top:var(--st);right:var(--sr);z-index:20;display:flex;flex-direction:column;gap:calc(var(--gap)*.6)}
 #zoom button{width:var(--btn);height:var(--btn);border:1px solid var(--line);border-radius:12px;background:var(--panel);color:#fff;font-size:calc(var(--btn)*.46);line-height:1;padding:0;box-shadow:0 3px 10px rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center}
 #zoom button:active{transform:scale(.94)}
-#zoom #cp,#zoom #cm{font-size:calc(var(--btn)*.3)}
 #zoom button.on{background:#15803d;box-shadow:0 0 0 2px #86efac inset}
 
 /* ---------- compass (bottom-centre, heading-up) ---------- */
@@ -133,3 +132,22 @@ button{font-family:inherit;cursor:pointer}
 @media (min-width:900px) and (min-height:600px){
   #hud{font-size:13px;max-width:320px}
 }
+
+/* ---------- settings panel (⚙️) ---------- */
+#gear.on{background:#1d4ed8}
+#settings{position:absolute;top:calc(var(--st) + var(--btn) + var(--gap));right:var(--sr);z-index:40;display:none;width:min(calc(100vw - 2*var(--gap)),330px);box-sizing:border-box;
+  background:var(--panel-solid);color:var(--txt);border:1px solid var(--line);border-radius:16px;padding:6px 14px 10px;box-shadow:0 10px 28px rgba(0,0,0,.5);
+  max-height:calc(100vh - var(--st) - var(--btn) - 3*var(--gap));overflow-y:auto;touch-action:pan-y}
+#settings.on{display:block}
+.setHead{display:flex;align-items:center;justify-content:space-between;padding:6px 0 4px}
+.setHead b{font-size:16px;color:#fff}
+#setX{border:0;background:rgba(255,255,255,.14);color:#fff;width:32px;height:32px;border-radius:9px;font-size:15px}
+.setRow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-top:1px solid var(--line);font-size:15px;color:#fff}
+.setRow small{display:block;font-size:11px;color:var(--muted);margin-top:2px}
+.switch{position:relative;flex:none;width:52px;height:30px;border:0;border-radius:15px;background:#475569;transition:background .2s;padding:0}
+.switch::after{content:'';position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.4);transition:transform .2s}
+.switch.on{background:#16a34a}.switch.on::after{transform:translateX(22px)}
+.stepper{display:flex;align-items:center;gap:6px;flex:none}
+.stepper button{width:38px;height:34px;border:0;border-radius:9px;background:rgba(255,255,255,.14);color:#fff;font-size:20px;line-height:1;padding:0}
+.stepper button:active{background:rgba(255,255,255,.28)}
+.stepper b{min-width:52px;text-align:center;font-variant-numeric:tabular-nums;font-size:15px}
