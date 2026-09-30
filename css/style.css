@@ -151,3 +151,4 @@ button{font-family:inherit;cursor:pointer}
 .stepper button{width:38px;height:34px;border:0;border-radius:9px;background:rgba(255,255,255,.14);color:#fff;font-size:20px;line-height:1;padding:0}
 .stepper button:active{background:rgba(255,255,255,.28)}
 .stepper b{min-width:52px;text-align:center;font-variant-numeric:tabular-nums;font-size:15px}
+#glide.on{background:#ea580c;box-shadow:0 0 0 2px #fdba74 inset}

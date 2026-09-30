@@ -199,7 +199,7 @@ map.on('load',()=>{ try{ initMini();
       paint:{'fill-extrusion-color':'#ffffff','fill-extrusion-height':['get','h'],'fill-extrusion-base':['get','b'],'fill-extrusion-opacity':.6}}); }
   catch(e){ console.warn('clouds',e); }
   loadTowers();
-  setTimeout(()=>toast('Tip: triple-tap the gas to take off in a hang glider',5000),1500);
+  setTimeout(()=>toast('Tip: tap 🪂 to take off in a hang glider',5000),1500);
   styleReady=true;
   const ld=document.getElementById('load'); ld.style.opacity=0; setTimeout(()=>ld.remove(),500);
   }catch(err){ console.error(err); var d=document.createElement('pre'); d.style.cssText='position:fixed;left:8px;right:8px;top:8px;z-index:9999;background:#7f1d1d;color:#fff;font:12px monospace;padding:10px;white-space:pre-wrap'; d.textContent='LOAD ERROR: '+err.message; document.body.appendChild(d); }
@@ -470,12 +470,10 @@ function pedal(id,set){
 }
 pedal('sp',a=>{ pGas=a; tGas=pGas-pBrake; });
 pedal('brake',a=>{ pBrake=a; tGas=pGas-pBrake; });
-// triple-tap the gas (slider or W / up arrow) to launch or land the hang glider
-const taps=[];
-function gasTap(){ const t=performance.now(); taps.push(t); while(taps.length&&t-taps[0]>750) taps.shift();
-  if(taps.length>=3){ taps.length=0; toggleGlider(); } }
-document.getElementById('sp').addEventListener('pointerdown',gasTap);
-addEventListener('keydown',e=>{ const k=e.key.toLowerCase(); if(!e.repeat&&(k==='w'||k==='arrowup')) gasTap(); });
+// 🪂 button (or the G key) launches the hang glider, and lands it again while flying
+const glideBtn=document.getElementById('glide');
+glideBtn.addEventListener('click',e=>{ e.stopPropagation(); toggleGlider(); });
+addEventListener('keydown',e=>{ if(!e.repeat&&e.key.toLowerCase()==='g'&&!(e.target&&e.target.tagName==='INPUT')) toggleGlider(); });
 let toastT=null;
 function toast(msg,ms){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show');
   clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('show'),ms||2600); }
@@ -698,6 +696,7 @@ function drawTowers(){
 function setMode(m){
   if(m===mode) return;
   const was=mode; mode=m; boat=(m==='boat');
+  glideBtn.classList.toggle('on',m==='glider');
   body.visible=(m==='car'); boatG.visible=(m==='boat'); tractorG.visible=(m==='tractor'); shadow.visible=(m!=='boat'&&m!=='glider');
   car.visible=(m!=='glider'); gliderG.visible=(m==='glider'); surfEl.style.color=''; step.surf=null;
   if(m!=='boat') boatG.position.y=boatG.rotation.x=boatG.rotation.z=0;
@@ -752,7 +751,7 @@ function glideStep(dt,st,gas,now){
   G.t+=dt;
   if(G.phase==='launch'){                                        // straight up from where you were
     const k=Math.min(1,G.t/2.8); G.alt=GTOP*(1-Math.pow(1-k,3)); G.vs=GTOP*3*Math.pow(1-k,2)/2.8; G.air=11;
-    if(k>=1){ G.phase='fly'; toast('Lean to turn · gas up to dive faster · gas down to slow · triple-tap to land',4500); }
+    if(k>=1){ G.phase='fly'; toast('Steer to lean and turn · gas to dive faster · brake to slow · tap 🪂 to land',4500); }
   } else if(G.phase==='land'){                                   // straight down to the spot below you
     const d=Math.max(35,G.alt*1.6)*dt; G.alt=Math.max(0,G.alt-d); G.vs=-d/Math.max(dt,1e-3);
     G.bank*=Math.exp(-dt*3); G.air*=Math.exp(-dt*1.5);
@@ -793,7 +792,7 @@ function glideStep(dt,st,gas,now){
     const v=G.vs/GVERT;
     roadEl.textContent='Altitude '+Math.round(G.alt*3.281)+' ft'; roadEl.className='';
     surfEl.textContent='Hang glider · '+(v>=0?'▲ ':'▼ ')+Math.abs(v).toFixed(1)+' m/s'; surfEl.style.color=v>=0?'#86efac':'#fca5a5';
-    nearEl.textContent=G.phase==='fly'&&G.lift>.8?'Thermal! Circle to climb':(G.phase==='fly'&&G.alt<60?'Getting low: find a thermal or triple-tap to land':nearestPoi());
+    nearEl.textContent=G.phase==='fly'&&G.lift>.8?'Thermal! Circle to climb':(G.phase==='fly'&&G.alt<60?'Getting low: find a thermal or tap 🪂 to land':nearestPoi());
     const mph=Math.round(G.air*2.237); if(mph!==step.mph){ step.mph=mph; mphEl.textContent=mph; }
   }
   if(every('place',1)) updatePlace(); if(every('house',.25)) updateHouseFilter(false);

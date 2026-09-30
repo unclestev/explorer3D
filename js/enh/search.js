@@ -40,7 +40,7 @@ async function search(q){
 }
 function go(o,name){
   close();
-  if(mode==='glider'){ toast('Land first (triple-tap the gas), then search again',2600); return; }
+  if(mode==='glider'){ toast('Land first (tap 🪂), then search again',2600); return; }
   YD.NAV.dest=[o.lng,o.lat]; YD.setDest(YD.NAV.dest); YD.requestRoute(false);
   setTimeout(()=>{ if(YD.NAV.pts) toast('Heading to '+name+' · tap AUTO to let the car drive',2800); },2600);
 }
