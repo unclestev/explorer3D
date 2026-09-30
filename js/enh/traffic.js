@@ -69,34 +69,9 @@ function markControls(){
 function light(ph){ const t=(Date.now()/1000)%30, a=t<12?'g':t<15?'y':'r', b=t<15?'r':t<27?'g':'y'; return ph===0?a:b; }
 
 /* ---------- cars ---------- */
-function makeParts(){
-  const P={};
-  P.body=new THREE.BoxGeometry(1.9,.72,4.6); P.body.translate(0,.62,0);
-  P.cabS=new THREE.BoxGeometry(1.66,.6,2.4); P.cabS.translate(0,1.26,.25);            // sedan
-  P.cabU=new THREE.BoxGeometry(1.78,.82,3.3); P.cabU.translate(0,1.37,.45);           // SUV / van
-  P.cabP=new THREE.BoxGeometry(1.78,.78,1.7); P.cabP.translate(0,1.35,-.35);          // pickup cab
-  P.bed=new THREE.BoxGeometry(1.9,.3,1.6); P.bed.translate(0,1.1,1.45);
-  P.roofS=new THREE.BoxGeometry(1.5,.06,1.6); P.roofS.translate(0,1.58,.35);
-  P.roofU=new THREE.BoxGeometry(1.64,.06,2.8); P.roofU.translate(0,1.8,.55);
-  P.roofP=new THREE.BoxGeometry(1.64,.06,1.3); P.roofP.translate(0,1.76,-.35);
-  P.lamp=new THREE.BoxGeometry(.42,.14,.06);
-  P.shadow=new THREE.PlaneGeometry(2.9,5.9); P.shadow.rotateX(-Math.PI/2); P.shadow.translate(0,.03,0);
-  P.glass=new THREE.MeshPhongMaterial({color:0x111827,specular:0x8899bb,shininess:110});
-  P.tail=new THREE.MeshBasicMaterial({color:0x8a1216}); P.head=new THREE.MeshBasicMaterial({color:0xe5e7eb});
-  P.paints=PAINT.map(c=>new THREE.MeshPhongMaterial({color:c,specular:0xcfd8e3,shininess:70}));
-  return P;
-}
-function carMesh(){
-  const P=T.parts, g=new THREE.Group(), kind=Math.random(), paint=P.paints[Math.floor(Math.random()*P.paints.length)];
-  g.add(new THREE.Mesh(P.shadow,shadow.material));                    // same soft shadow as your car
-  g.add(new THREE.Mesh(P.body,paint));
-  if(kind<.45){ g.add(new THREE.Mesh(P.cabS,P.glass)); g.add(new THREE.Mesh(P.roofS,paint)); }
-  else if(kind<.85){ g.add(new THREE.Mesh(P.cabU,P.glass)); g.add(new THREE.Mesh(P.roofU,paint)); }
-  else { g.add(new THREE.Mesh(P.cabP,P.glass)); g.add(new THREE.Mesh(P.roofP,paint)); g.add(new THREE.Mesh(P.bed,paint)); }
-  for(const x of [-.66,.66]){ const t=new THREE.Mesh(P.lamp,P.tail); t.position.set(x,.84,2.31); g.add(t);
-    const h=new THREE.Mesh(P.lamp,P.head); h.position.set(x,.8,-2.31); g.add(h); }
-  g.visible=false; T.group.add(g); return g;
-}
+// vehicle designs live in js/enh/vehicles.js
+function makeParts(){ return YD.VEH.mats(); }
+function carMesh(){ const g=YD.VEH.build(shadow.material); g.visible=false; T.group.add(g); return g; }
 function place(a,seg,s){ a.path=[seg]; a.s=s; a.v=seg.v*.6; a.stopDone=null; a.waitT=0;
   const p=pos(a); a.px=p[0]; a.py=p[1]; a.hd=Math.atan2(seg.ux,seg.uy); a.fade=0; }
 function pos(a){ const s=a.path[0], cx=s.a.x+s.ux*a.s, cy=s.a.y+s.uy*a.s; return [cx+s.uy*s.off, cy-s.ux*s.off]; }   // right-hand side: normal (uy,-ux)
@@ -175,7 +150,7 @@ function frame(dt){
   const H=innerHeight, dist=.5*H/Math.tan(rad(camera.fov)/2)*m, camX=px-sb*dist*Math.sin(rad(68)), camY=py-cb*dist*Math.sin(rad(68)), camH=dist*Math.cos(rad(68));
   const now=performance.now(), doOcc=now-occT>(POWER?600:250); if(doOcc) occT=now;
   const sc=EXAG/m, night=tailOff.color.r>.7;
-  T.parts.tail.color.setHex(night?0xd01c24:0x8a1216); T.parts.head.color.setHex(night?0xfffbe0:0xe5e7eb);
+  T.parts.tail.color.setHex(night?0xd01c24:0x8a1216); T.parts.head.color.setHex(night?0xfffbe0:0xe8ecf2);
   let any=false;
   while(T.agents.length<MAXCARS()){ const a={mesh:carMesh()}; T.agents.push(a); if(!spawn(a,60,420)) a.path=null; }
   while(T.agents.length>MAXCARS()){ const a=T.agents.pop(); T.group.remove(a.mesh); }
@@ -187,6 +162,10 @@ function frame(dt){
     const dx=a.px-px, dy=a.py-py, f=dx*sb+dy*cb, r=dx*cb-dy*sb;          // metres ahead / to the right of the camera's view
     a.fade=Math.min(1,(a.fade||0)+dt*2.5);
     g.position.set(r/m,0,-f/m); g.scale.setScalar(sc*a.fade); g.rotation.y=-(a.hd-b);
+    // wheels roll with the distance driven; front wheels steer from how fast the car is turning (same bicycle model as yours)
+    const u=g.userData, yaw=a.prevHd==null?0:Math.atan2(Math.sin(a.hd-a.prevHd),Math.cos(a.hd-a.prevHd))/Math.max(dt,1e-3); a.prevHd=a.hd;
+    u.spin-=a.v/SPEEDUP*dt/u.r; const st=a.v>.5?Math.max(-.55,Math.min(.55,Math.atan(yaw*u.wb/a.v))):u.steer; u.steer+=(st-u.steer)*Math.min(1,dt*6);
+    for(const w of u.wheels) w.rotation.x=u.spin; for(const p of u.fronts) p.rotation.y=-u.steer;
     any=true;
   }
   return any;
