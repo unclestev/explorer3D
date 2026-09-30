@@ -32,6 +32,18 @@ html,body{margin:0;height:100%;overflow:hidden;background:#9cc8ec;font-family:sy
 #navStreet{display:block;font-size:12px;color:#cbd5e1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #navX{border:0;background:rgba(255,255,255,.14);color:#fff;width:30px;height:30px;border-radius:8px;font-size:15px;flex:none}
 #load{position:absolute;inset:0;z-index:99;background:#0f172a;color:#7dd3fc;display:flex;align-items:center;justify-content:center;font-size:20px;transition:opacity .5s}
-#me.busy{animation:mePulse 1s ease-in-out infinite}@keyframes mePulse{50%{background:#1d4ed8}}
 #navAuto{border:0;background:rgba(255,255,255,.14);color:#e2e8f0;height:30px;padding:0 8px;border-radius:8px;font:700 11px system-ui,sans-serif;letter-spacing:.5px;flex:none}
 #navAuto.on{background:#16a34a;color:#fff;box-shadow:0 0 0 2px #86efac inset}
+#findPanel{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:min(92vw,420px);z-index:40;display:none;background:rgba(15,23,42,.94);border-radius:14px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+#findPanel.on{display:block}
+#findForm{display:flex;gap:6px}
+#findQ{flex:1;min-width:0;font-size:16px;padding:9px 10px;border:0;border-radius:9px;background:#f8fafc;color:#0f172a;-webkit-user-select:text;user-select:text;outline:none}
+#findForm button{border:0;border-radius:9px;background:#2563eb;color:#fff;font:700 15px system-ui,sans-serif;padding:0 14px}
+#findForm #findX{background:rgba(255,255,255,.14);padding:0 12px}
+#findList{max-height:46vh;overflow-y:auto;margin-top:6px;-webkit-overflow-scrolling:touch;touch-action:pan-y}
+.findHit{display:grid;grid-template-columns:1fr auto;gap:0 8px;padding:9px 8px;border-radius:9px;color:#e2e8f0;cursor:pointer}
+.findHit:active{background:rgba(255,255,255,.1)}
+.findHit b{font-size:15px;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.findHit span{grid-column:1;font-size:12px;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.findHit i{grid-row:1/3;grid-column:2;align-self:center;font-style:normal;font-size:12px;color:#7dd3fc}
+.findMsg{padding:9px 8px;font-size:13px;color:#cbd5e1}

@@ -90,7 +90,7 @@ function control(dt){
 function paint(){ btn.classList.toggle('on',A.on); btn.textContent=A.on?'AUTO ●':'AUTO'; }
 function start(){
   const N=YD.NAV;
-  if(!N.pts){ toast('Set a destination first: tap the map or 📍',2200); return; }
+  if(!N.pts){ toast('Set a destination first: tap the map or 🔍',2200); return; }
   if(!CAN()){ toast('Autopilot only drives the SUV and tractor',2200); return; }
   A.on=true; A.i=0; A.route=null; A.waitT=0; paint(); dirty=true;
   toast('Autopilot on · touch the controls to take over',2600);

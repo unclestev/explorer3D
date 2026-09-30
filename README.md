@@ -13,6 +13,9 @@ Drive a Ford Explorer over a real map. Play it on GitHub Pages.
   - `signs.js` — street signs, stop signs, traffic lights, rail crossings, speed limits
   - `nav.js` — tap-to-route navigation and breadcrumb trail
   - `atmos.js` — real time of day and live weather
+  - `textures.js` — code-drawn ground textures and building colours
+  - `search.js` — 🔍 destination search (address or place name)
+  - `autopilot.js` — AUTO: drives the active route
   - `boot.js` — starts the modules; must load last
 
 When a JS or CSS file changes, bump the `?v=` number on its tag in `index.html` so phones don't keep an old cached copy.

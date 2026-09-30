@@ -11,7 +11,7 @@
 <link href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/3.6.2/maplibre-gl.css" rel="stylesheet">
 <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>window.THREE||document.write('<script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"><\/script>')</script>
-<link href="css/style.css?v=6" rel="stylesheet">
+<link href="css/style.css?v=7" rel="stylesheet">
 </head>
 <body>
 <div id="load">Loading map…</div>
@@ -22,8 +22,9 @@
 <canvas id="wx"></canvas><div id="flash"></div>
 <div id="hud"><span id="mph">0</span> mph<span id="lim"><small>LIMIT</small><b>--</b></span><br><span id="road">On road</span><br><span id="place">Locating…</span><br><span id="wxl"></span><br><span id="surf"></span><br><span id="near"></span></div>
 <div id="mini"><div id="miniArrow"></div></div>
+<div id="findPanel"><form id="findForm"><input id="findQ" type="search" placeholder="Address or place, e.g. Main St, Yorkville" autocomplete="off" enterkeyhint="search"><button type="submit">Go</button><button type="button" id="findX" aria-label="Close search">✕</button></form><div id="findList"></div></div>
 <div id="nav"><div id="navArrow">↑</div><div id="navTxt"><b id="navDist"></b><span id="navStreet"></span></div><button id="navAuto" title="Autopilot: drive this route for me">AUTO</button><button id="navX" aria-label="Clear route">✕</button></div>
-<div id="zoom"><button id="zi">+</button><button id="zo">−</button><button id="cp" style="font-size:14px">🚗+</button><button id="cm" style="font-size:14px">🚗−</button><button id="pw" title="Battery saver" style="font-size:18px">🔋</button><button id="me" title="Tap: directions to your location. Hold: jump there" style="font-size:18px">📍</button></div>
+<div id="zoom"><button id="zi">+</button><button id="zo">−</button><button id="cp" style="font-size:14px">🚗+</button><button id="cm" style="font-size:14px">🚗−</button><button id="pw" title="Battery saver" style="font-size:18px">🔋</button><button id="find" title="Search for a destination" style="font-size:18px">🔍</button></div>
 <div id="ctl">
   <div class="track" id="st"><div class="knob" id="stk"></div></div>
   <div class="track" id="sp"><div class="knob" id="spk"></div></div>
@@ -35,9 +36,9 @@
 <script src="js/enh/signs.js?v=6"></script>
 <script src="js/enh/nav.js?v=3"></script>
 <script src="js/enh/atmos.js?v=3"></script>
-<script src="js/enh/textures.js?v=4"></script>
-<script src="js/enh/gps.js?v=5"></script>
-<script src="js/enh/autopilot.js?v=6"></script>
+<script src="js/enh/textures.js?v=7"></script>
+<script src="js/enh/search.js?v=7"></script>
+<script src="js/enh/autopilot.js?v=7"></script>
 <script src="js/enh/boot.js?v=3"></script>
 </body>
 </html>
