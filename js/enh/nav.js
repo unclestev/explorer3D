@@ -71,13 +71,7 @@ function navTick(){
 }
 onTick(200,navTick);
 document.getElementById('navX').addEventListener('click',e=>{ e.stopPropagation(); clearRoute(); toast('Route cleared',1400); });
-mapEl.addEventListener('click',e=>{
-  if(mode==='glider'||!ENH.booted) return;
-  const r=mapEl.getBoundingClientRect(); let ll=null;
-  try{ ll=map.unproject([e.clientX-r.left,e.clientY-r.top]); }catch(_){}
-  if(!ll||!isFinite(ll.lng)||!isFinite(ll.lat)||meters(S.lat,S.lng,ll.lat,ll.lng)>40000){ toast('Tap a spot on the ground to route there',1800); return; }
-  NAV.dest=[ll.lng,ll.lat]; setDest(NAV.dest); requestRoute(false);
-});
+// (Tapping the map to drop a destination pin was removed at the owner's request; destinations come from 🔍 search.)
 
 // breadcrumb trail of where you've driven (kept between visits on this device)
 const TRAIL={segs:[[]],n:0,changed:false,saved:0};
@@ -109,7 +103,7 @@ onReady(function navLayers(){
   addUnder({id:'nav-chev',type:'symbol',source:'nav-route',layout:{'symbol-placement':'line','symbol-spacing':70,'icon-image':'sg-chev',
     'icon-size':['interpolate',['linear'],['zoom'],14,.35,19,.6,22,1.1],'icon-allow-overlap':true,'icon-ignore-placement':true,'icon-rotation-alignment':'map','icon-pitch-alignment':'map'}});
   map.addLayer({id:'nav-flag',type:'symbol',source:'nav-dest',layout:Object.assign({'icon-image':'sg-flag','icon-size':ISZ},BILL)});
-  setTimeout(()=>{ try{ if(!localStorage.getItem('ydNavTip')){ localStorage.setItem('ydNavTip','1'); toast('Tip: tap anywhere on the map to get directions there',4500); } }catch(e){} },9000);
+  setTimeout(()=>{ try{ if(!localStorage.getItem('ydNavTip2')){ localStorage.setItem('ydNavTip2','1'); toast('Tip: tap 🔍 to search for a destination',4500); } }catch(e){} },9000);
 });
 // same route, destination and trail on the round minimap
 onTick(1000,function miniNav(){

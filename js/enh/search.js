@@ -1,6 +1,6 @@
 /* Destination search: 🔍 opens a box where you type an address or place name; pick a result and the car gets
    directions there from wherever it is in the game. Uses OpenStreetMap's Nominatim search (free, no key), with
-   results near the car first. Nothing about your real location is used. Tapping the map still routes too. */
+   results near the car first. Nothing about your real location is used. This is the only way to set a destination. */
 (()=>{
 'use strict';
 const {EMPTY}=YD;
