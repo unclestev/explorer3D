@@ -82,13 +82,17 @@ function setWindows(on){
     map.setPaintProperty(id,'fill-extrusion-pattern',on?'enh-win':undefined); });
 }
 // headlight beams on the ground ahead of the SUV / tractor
+// Sized to the Explorer photo: lamps ~1.4 m apart, each beam spreading to ~1.1 m, so the pair lights a strip about
+// as wide as the car (2.5 m) out to 18 m ahead. Plane is 4 m x 18 m on the ground; canvas is 32 px per metre across.
 function makeBeams(){
+  const W=4, L=18, PX=128/W, LAMP=.68, NEAR=.12, FAR=.55;         // metres: lamp offset from centre, beam half-width near / far
   const c=document.createElement('canvas'); c.width=128; c.height=256; const x=c.getContext('2d');
-  for(const cx of [40,88]){ const g=x.createLinearGradient(0,256,0,0); g.addColorStop(0,'rgba(255,244,200,.75)'); g.addColorStop(.55,'rgba(255,240,190,.3)'); g.addColorStop(1,'rgba(255,240,190,0)');
-    x.fillStyle=g; x.beginPath(); x.moveTo(cx-5,256); x.lineTo(cx+5,256); x.lineTo(cx+34,0); x.lineTo(cx-34,0); x.closePath(); x.fill(); }
+  for(const s of [-1,1]){ const cx=64+s*LAMP*PX, g=x.createLinearGradient(0,256,0,0);
+    g.addColorStop(0,'rgba(255,244,200,.8)'); g.addColorStop(.5,'rgba(255,240,190,.32)'); g.addColorStop(1,'rgba(255,240,190,0)');
+    x.fillStyle=g; x.beginPath(); x.moveTo(cx-NEAR*PX,256); x.lineTo(cx+NEAR*PX,256); x.lineTo(cx+FAR*PX,0); x.lineTo(cx-FAR*PX,0); x.closePath(); x.fill(); }
   const tex=new THREE.CanvasTexture(c);
-  const m=new THREE.Mesh(new THREE.PlaneGeometry(7,20),new THREE.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false,opacity:.9}));
-  m.rotation.x=-Math.PI/2; m.position.set(0,.07,-12.4); m.visible=false; car.add(m); return m;
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(W,L),new THREE.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false,opacity:.9}));
+  m.rotation.x=-Math.PI/2; m.position.set(0,.07,-(2.4+L/2)); m.visible=false; car.add(m); return m;   // starts at the front bumper
 }
 function applyAtmos(){
   const W=AT.wx, sp=sunPos(nowDate(),S.lat,S.lng), alt=sp.alt;
