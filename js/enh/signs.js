@@ -64,8 +64,8 @@ function computeBlades(){
     // from each centre line. The corner is picked from the intersection's position, so it stays put between visits.
     const ux=s[2]-s[0], uy=s[3]-s[1], ul=Math.hypot(ux,uy)||1, vx=t[2]-t[0], vy=t[3]-t[1], vl=Math.hypot(vx,vy)||1;
     const sin=Math.abs((ux*vy-uy*vx)/(ul*vl))||1, q=Math.floor(hash(Math.round(p[0]),Math.round(p[1]))*4);
-    const sa=q&1?1:-1, sb=q&2?1:-1, a=(t[5]+2.5)/sin*sa, b=(s[5]+2.5)/sin*sb;
-    out.push({key,x:p[0]+ux/ul*a+vx/vl*b,y:p[1]+uy/ul*a+vy/vl*b,names}); }
+    const da=(t[5]+2.5)/sin*(q&1?1:-1), db=(s[5]+2.5)/sin*(q&2?1:-1);   // (not a/b: those are the loop counters)
+    out.push({key,x:p[0]+ux/ul*da+vx/vl*db,y:p[1]+uy/ul*da+vy/vl*db,names}); }
   out.sort((a,b)=>Math.hypot(a.x-cx,a.y-cy)-Math.hypot(b.x-cx,b.y-cy));
   blades=out.slice(0,50); bladeAt=[S.lng,S.lat]; ENH.signsDirty=true;
 }
@@ -138,7 +138,7 @@ onReady(function signLayers(){
 onTick(1000,function signsTick(){
   if(!map.getSource('enh-signs')) return;
   const bMoved=bladeAt?meters(bladeAt[1],bladeAt[0],S.lat,S.lng):1e9, bAge=Date.now()-(ENH.bladeT||0);
-  if(bMoved>(POWER?250:120) || (ENH.bladesStale && bAge>(POWER?20000:6000) && bMoved>30)){ ENH.bladesStale=false; ENH.bladeT=Date.now(); computeBlades(); }
+  if(bMoved>(POWER?250:120) || (ENH.bladesStale && bAge>(POWER?20000:6000) && (bMoved>30||!blades.length))){ ENH.bladesStale=false; ENH.bladeT=Date.now(); computeBlades(); }
   if(ENH.signsDirty || !ENH.signsAt || meters(ENH.signsAt[1],ENH.signsAt[0],S.lat,S.lng)>(POWER?250:150)) buildSigns();
 });
 // traffic lights cycle: 12 s green, 3 s yellow, 15 s red; opposite phase for the cross street

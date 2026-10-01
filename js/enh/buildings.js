@@ -37,7 +37,7 @@ function addCaps(){
     map.addLayer({id:'rebuilt-roof',type:'fill-extrusion',source:'rebuilt',
       paint:{'fill-extrusion-color':capColour(['get','h']),'fill-extrusion-base':['get','h'],'fill-extrusion-height':['+',['get','h'],.35],'fill-extrusion-vertical-gradient':false}},before);
   if(!map.getSource('roofs')){
-    map.addSource('roofs',{type:'geojson',data:{type:'FeatureCollection',features:[]},maxzoom:20,tolerance:0,buffer:16});
+    map.addSource('roofs',{type:'geojson',data:{type:'FeatureCollection',features:[]},maxzoom:19,tolerance:0,buffer:16});
     map.addLayer({id:'roof-3d',type:'fill-extrusion',source:'roofs',
       paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-base':['get','b'],'fill-extrusion-height':['get','h'],'fill-extrusion-vertical-gradient':false}},before);
   }
@@ -83,8 +83,11 @@ const crossesTile=(b)=>Math.floor(tx(b[0]))!==Math.floor(tx(b[2]))||Math.floor(t
 function build(){
   if(!map.getSource('roofs')) return;
   const radius=POWER?200:320, maxHouses=POWER?110:240, maxBig=POWER?25:60, slices=POWER?5:8, maxFac=POWER?80:150;   // windows on the nearest maxFac
+  const kx=111320*Math.cos(S.lat*Math.PI/180), ky=111320, gone=new Set(destroyed), seen=new Set();
+  let parts=[];
+  const reuse=R.pending&&R.parts&&R.pAt&&meters(R.pAt[1],R.pAt[0],S.lat,S.lng)<40&&R.n===destroyed.length;
+  if(reuse) parts=R.parts; else {
   let fs=[]; try{ fs=map.querySourceFeatures(bSrc,{sourceLayer:'building'}); }catch(e){ return; }
-  const kx=111320*Math.cos(S.lat*Math.PI/180), ky=111320, gone=new Set(destroyed), seen=new Set(), parts=[];
   for(const f of fs){
     if(f.id!=null&&gone.has(f.id)) continue;
     const pr=f.properties||{}; if(pr.hide_3d) continue;
@@ -96,21 +99,26 @@ function build(){
       const key=cx.toFixed(6)+','+cy.toFixed(6); if(seen.has(key)) continue; seen.add(key);     // same building in two tiles
       parts.push({f,ring,h,b0,cx,cy,d,bb:[x0,y0,x1,y1],holes:pl.length>1}); }
   }
-  parts.sort((a,b)=>a.d-b.d);
+  parts.sort((a,b)=>a.d-b.d); R.parts=parts; R.pAt=[S.lng,S.lat]; }
   if(CACHE.size>4000) CACHE.clear();
-  const out=[]; let nh=0, nb=0, nf=0, budget=POWER?20:35; R.pending=false;
+  // new work is limited by time (not count) per tick, so the phone never stalls; results are only sent to the map
+  // when the set of buildings shown actually changed, and at most every 2.5 s while still catching up
+  const out=[], sig=[], t0=performance.now(), tb=POWER?6:10; let nh=0, nb=0, nf=0, budget=1e9; R.pending=false;
   for(const P of parts){
     if(P.b0>0||P.holes||crossesTile(P.bb)) continue;              // building parts, courtyards, tile-clipped pieces: flat
     const key=P.cx.toFixed(6)+','+P.cy.toFixed(6)+','+P.h;
     let C=CACHE.get(key);
-    if(!C){ if(budget<=0){ R.pending=true; continue; } budget--; C=roofFor(P,kx,ky,slices); CACHE.set(key,C); }   // spread new work over ticks
-    if(!C.fac&&nf<maxFac){ if(budget<=0){ R.pending=true; } else { budget--; safe('facades',()=>facades(P,kx,ky,C)); if(!C.fac) C.fac=[]; } }
+    if(!C){ if(performance.now()-t0>tb){ R.pending=true; continue; } C=roofFor(P,kx,ky,slices); CACHE.set(key,C); }   // spread new work over ticks
+    if(!C.fac&&nf<maxFac){ if(performance.now()-t0>tb){ R.pending=true; } else { safe('facades',()=>facades(P,kx,ky,C)); if(!C.fac) C.fac=[]; } }
     if(C.house){ if(nh>=maxHouses) continue; nh++; } else if(C.feats.length||C.fac&&C.fac.length){ if(nb>=maxBig) continue; nb++; }
     for(const f of C.feats) out.push(f);
-    if(C.fac&&C.fac.length&&nf<maxFac){ nf++; for(const f of C.fac) out.push(f); }
+    let w=0; if(C.fac&&C.fac.length&&nf<maxFac){ nf++; w=1; for(const f of C.fac) out.push(f); }
+    if(C.feats.length||w) sig.push(key+w);
   }
-  const s=map.getSource('roofs'); if(s) s.setData({type:'FeatureCollection',features:out});
-  R.at=[S.lng,S.lat]; R.t=performance.now(); R.n=destroyed.length; R.tiles=false; R.count=out.length;
+  const now=performance.now(), key=sig.join(';');
+  if(key!==R.last&&!(R.pending&&R.count&&now-(R.setT||0)<2500)){
+    const s=map.getSource('roofs'); if(s) s.setData({type:'FeatureCollection',features:out}); R.last=key; R.setT=now; R.count=out.length; }
+  R.at=[S.lng,S.lat]; R.t=now; R.n=destroyed.length; R.tiles=false;
 }
 // one building's roof features (cached by position, so each is only worked out once)
 const CACHE=new Map();
@@ -245,11 +253,11 @@ onReady(function buildings(){
 });
 onTick(700,function roofTick(){
   if(!map.getSource('roofs')) return;
-  if(mode==='glider'){ if(R.count){ safe('roofs off',()=>map.getSource('roofs').setData({type:'FeatureCollection',features:[]})); R.count=0; R.at=null; } return; }
+  if(mode==='glider'){ if(R.count){ safe('roofs off',()=>map.getSource('roofs').setData({type:'FeatureCollection',features:[]})); R.count=0; R.at=null; R.last=''; } return; }
   const moved=R.at?meters(R.at[1],R.at[0],S.lat,S.lng):1e9, age=performance.now()-R.t;
-  if(moved>(POWER?160:120)||destroyed.length!==R.n||(R.tiles&&age>3000)||R.pending) safe('roofs',build);
+  if(moved>(POWER?160:120)||destroyed.length!==R.n||(R.tiles&&age>(POWER?8000:5000))||R.pending) safe('roofs',build);
 });
 const prev=window.onPowerChange;
-window.onPowerChange=(on)=>{ if(prev) prev(on); R.at=null; CACHE.clear(); };   // slice count / unit count change
+window.onPowerChange=(on)=>{ if(prev) prev(on); R.at=null; R.last=''; R.parts=null; CACHE.clear(); };   // slice count / unit count change
 window.ROOFS={build,state:R};
 })();

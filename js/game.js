@@ -668,6 +668,27 @@ function buildDecor(){
   const t0=performance.now(), cx=S.lng, cy=S.lat, R=POWER?350:650, TMAX=POWER?300:2500, feats=[], seenT=new Set();
   const wx0=cx-R/MLNG, wx1=cx+R/MLNG, wy0=cy-R/MLAT, wy1=cy+R/MLAT;
   let trees=0;
+  // building footprints near the car (local metres, 20 m grid) so no tree is planted in or against a building
+  const BG=new Map(), C=20, bx0=cx*MLNG, by0=cy*MLAT;
+  try{
+    for(const f of map.querySourceFeatures(bSrc,{sourceLayer:'building'})){
+      for(const pl of partsOf(f.geometry)){ const ring=pl[0]; if(!ring||ring.length<4) continue;
+        const r=ring.map(q=>[q[0]*MLNG-bx0,q[1]*MLAT-by0]); let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+        for(const q of r){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
+        if(x1<-R-10||x0>R+10||y1<-R-10||y0>R+10) continue;
+        const b={r,bb:[x0-6,y0-6,x1+6,y1+6]};
+        for(let i=Math.floor(b.bb[0]/C);i<=Math.floor(b.bb[2]/C);i++) for(let j=Math.floor(b.bb[1]/C);j<=Math.floor(b.bb[3]/C);j++){
+          const k=i+','+j; let a=BG.get(k); if(!a) BG.set(k,a=[]); a.push(b); } } }
+  }catch(e){ console.warn('tree clearance',e); }
+  const clear=(lng,lat,cr)=>{ const x=lng*MLNG-bx0, y=lat*MLAT-by0, a=BG.get(Math.floor(x/C)+','+Math.floor(y/C)); if(!a) return true;
+    const m=cr*.8+.6;                                            // crown may overhang a little, never into the wall
+    for(const b of a){ if(x<b.bb[0]||x>b.bb[2]||y<b.bb[1]||y>b.bb[3]) continue; const r=b.r; let inside=false;
+      for(let i=0,j=r.length-1;i<r.length;j=i++){ const [xi,yi]=r[i],[xj,yj]=r[j];
+        if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi)) inside=!inside;
+        const dx=xj-xi, dy=yj-yi, L=dx*dx+dy*dy, t=L?Math.max(0,Math.min(1,((x-xi)*dx+(y-yi)*dy)/L)):0;
+        if(Math.hypot(x-xi-t*dx,y-yi-t*dy)<m) return false; }
+      if(inside) return false; }
+    return true; };
   try{
     const wood=map.querySourceFeatures(bSrc,{sourceLayer:'landcover',filter:['==',['get','class'],'wood']});
     const park=map.querySourceFeatures(bSrc,{sourceLayer:'park'});
@@ -683,7 +704,8 @@ function buildDecor(){
           const lng=(ix+hash(iy+11,ix))*step/MLNG, lat=(iy+hash(ix+7,iy+3))*step/MLAT;   // same spot every time
           if(!inPoly(lng,lat,pl)) continue;
           seenT.add(key);
-          const cr=2.2+hash(ix+1,iy)*1.8, th=2.2+hash(ix,iy+1)*1.3, top=th+4+hash(ix+2,iy+5)*7;
+          const cr=2.2+hash(ix+1,iy)*1.8; if(!clear(lng,lat,cr)) continue;
+          const th=2.2+hash(ix,iy+1)*1.3, top=th+4+hash(ix+2,iy+5)*7;
           feats.push({type:'Feature',properties:{k:'trunk',h:th+.6,b:0},geometry:{type:'Polygon',coordinates:ngon(lng,lat,.35,5,0)}});
           feats.push({type:'Feature',properties:{k:'crown',h:top,b:th,c:TREEC[Math.floor(hash(ix+3,iy+9)*TREEC.length)]},
             geometry:{type:'Polygon',coordinates:ngon(lng,lat,cr,7,r1*6)}});
