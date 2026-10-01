@@ -82,7 +82,7 @@ const crossesTile=(b)=>Math.floor(tx(b[0]))!==Math.floor(tx(b[2]))||Math.floor(t
 /* ---------- 2 + 3. pitched roofs and rooftop units near the car ---------- */
 function build(){
   if(!map.getSource('roofs')) return;
-  const radius=POWER?200:320, maxHouses=POWER?110:240, maxBig=POWER?25:60, slices=POWER?5:8;
+  const radius=POWER?200:320, maxHouses=POWER?110:240, maxBig=POWER?25:60, slices=POWER?5:8, maxFac=POWER?80:150;   // windows on the nearest maxFac
   let fs=[]; try{ fs=map.querySourceFeatures(bSrc,{sourceLayer:'building'}); }catch(e){ return; }
   const kx=111320*Math.cos(S.lat*Math.PI/180), ky=111320, gone=new Set(destroyed), seen=new Set(), parts=[];
   for(const f of fs){
@@ -98,20 +98,24 @@ function build(){
   }
   parts.sort((a,b)=>a.d-b.d);
   if(CACHE.size>4000) CACHE.clear();
-  const out=[]; let nh=0, nb=0;
+  const out=[]; let nh=0, nb=0, nf=0, budget=POWER?20:35; R.pending=false;
   for(const P of parts){
     if(P.b0>0||P.holes||crossesTile(P.bb)) continue;              // building parts, courtyards, tile-clipped pieces: flat
     const key=P.cx.toFixed(6)+','+P.cy.toFixed(6)+','+P.h;
-    let C=CACHE.get(key); if(!C){ C=roofFor(P,kx,ky,slices); CACHE.set(key,C); }
-    if(C.house){ if(nh>=maxHouses) continue; nh++; } else if(C.feats.length){ if(nb>=maxBig) continue; nb++; }
+    let C=CACHE.get(key);
+    if(!C){ if(budget<=0){ R.pending=true; continue; } budget--; C=roofFor(P,kx,ky,slices); CACHE.set(key,C); }   // spread new work over ticks
+    if(!C.fac&&nf<maxFac){ if(budget<=0){ R.pending=true; } else { budget--; safe('facades',()=>facades(P,kx,ky,C)); if(!C.fac) C.fac=[]; } }
+    if(C.house){ if(nh>=maxHouses) continue; nh++; } else if(C.feats.length||C.fac&&C.fac.length){ if(nb>=maxBig) continue; nb++; }
     for(const f of C.feats) out.push(f);
+    if(C.fac&&C.fac.length&&nf<maxFac){ nf++; for(const f of C.fac) out.push(f); }
   }
   const s=map.getSource('roofs'); if(s) s.setData({type:'FeatureCollection',features:out});
   R.at=[S.lng,S.lat]; R.t=performance.now(); R.n=destroyed.length; R.tiles=false; R.count=out.length;
 }
 // one building's roof features (cached by position, so each is only worked out once)
 const CACHE=new Map();
-function roofFor(P,kx,ky,slices){
+function roofFor(P,kx,ky,slices){ return roofParts(P,kx,ky,slices); }
+function roofParts(P,kx,ky,slices){
   const out=[], res={house:false,feats:out};
   {
     let p=clean(P.ring.map(q=>[(q[0]-P.cx)*kx,(q[1]-P.cy)*ky])); if(p.length<3) return res;
@@ -161,6 +165,79 @@ function roofFor(P,kx,ky,slices){
   return res;
 }
 
+/* ---------- 4. windows, doors and garage doors (owner's choice 2026-10-01, "B for the performance") ----------
+   Real-size shapes standing just proud of the walls of the same nearby buildings: no textures, so they never change
+   size with the camera zoom and cost little to draw; each building's set is worked out once and cached with its roof.
+   Houses: windows along every wall on each floor (white frames, not in battery saver), a front door and — on the wall
+   facing the nearest road, if it's long enough — a garage door. Stores/schools (up to 12 m): a glass storefront with
+   mullions on the street side. Taller buildings: a ribbon of windows on every floor of every wall. The map doesn't
+   say where real windows and doors are, so placement is a sensible guess. After dark about half the windows glow. */
+const GLASS='#27313e', FRAME='#eef0f1', DOORS=['#6b2f2a','#2f3e55','#3a3a3c','#5a4632','#f1efe9','#4d5b45'], GARAGE=['#f1efe9','#e5dfd3','#d8d3c9','#c9c2b6'];
+function streetDir(P){                                            // unit vector from the building toward its nearest road
+  if(typeof roadGeo==='undefined'||typeof rebuildRoadGeo!=='function') return null;
+  if(!roadGeo.segs||meters(roadGeo.lat,roadGeo.lng,S.lat,S.lng)>350) rebuildRoadGeo();
+  const segs=roadGeo.segs; if(!segs||!segs.length) return null;
+  const kx=111320*Math.cos(roadGeo.lat*Math.PI/180), px=(P.cx-roadGeo.lng)*kx, py=(P.cy-roadGeo.lat)*111320;
+  let best=1e9, bx=0, by=0;
+  for(const [x1,y1,x2,y2] of segs){ const dx=x2-x1, dy=y2-y1, L2=dx*dx+dy*dy, t=L2?Math.max(0,Math.min(1,((px-x1)*dx+(py-y1)*dy)/L2)):0;
+    const ex=x1+t*dx-px, ey=y1+t*dy-py, d=ex*ex+ey*ey; if(d<best){ best=d; bx=ex; by=ey; } }
+  best=Math.sqrt(best); return best>2&&best<70?[bx/best,by/best]:null;
+}
+function facades(P,kx,ky,res){
+  if(P.b0>0) return;
+  let p=clean(P.ring.map(q=>[(q[0]-P.cx)*kx,(q[1]-P.cy)*ky])); if(p.length<3||p.length>80) return;
+  if(area(p)<0) p.reverse();
+  const A=area(p), house=P.h<=12&&A>=25&&A<=450, seed=(Math.floor(P.cx*1e5)^Math.floor(P.cy*1e5))>>>0, out=res.fac=[];
+  if(!house&&A<80) return;                                        // sheds and kiosks: plain
+  const toLL=q=>[+(P.cx+q[0]/kx).toFixed(7),+(P.cy+q[1]/ky).toFixed(7)], frames=!POWER;
+  // one shape standing out from a wall: along the wall from s0 to s1 (m), o0..o1 m out from it, z from b to h
+  const put=(E,s0,s1,o0,o1,b,h,c,lit)=>{ const a=[E.a[0]+E.ux*s0,E.a[1]+E.uy*s0], z=[E.a[0]+E.ux*s1,E.a[1]+E.uy*s1];
+    const ring=[[a[0]+E.nx*o0,a[1]+E.ny*o0],[z[0]+E.nx*o0,z[1]+E.ny*o0],[z[0]+E.nx*o1,z[1]+E.ny*o1],[a[0]+E.nx*o1,a[1]+E.ny*o1]].map(toLL); ring.push(ring[0]);
+    const pr={c,b:+b.toFixed(2),h:+h.toFixed(2)}; if(lit!=null) pr.lit=lit; out.push({type:'Feature',properties:pr,geometry:{type:'Polygon',coordinates:[ring]}}); };
+  const window1=(E,s,w,b,h,k)=>{ if(frames) put(E,s-w/2-.08,s+w/2+.08,.01,.05,b-.08,h+.08,FRAME);
+    put(E,s-w/2,s+w/2,.02,.08,b,h,GLASS,hash(seed,k)<(house?.45:.7)?1:0); };
+  const edges=[];
+  for(let i=0;i<p.length;i++){ const a=p[i], b=p[(i+1)%p.length], ex=b[0]-a[0], ey=b[1]-a[1], L=Math.hypot(ex,ey);
+    if(L<2.4) continue; edges.push({a,L,ux:ex/L,uy:ey/L,nx:ey/L,ny:-ex/L}); }   // outward normal (outline runs counter-clockwise)
+  if(!edges.length) return;
+  const sd=streetDir(P);
+  let front=edges[0]; for(const E of edges){ const sc=(sd?E.nx*sd[0]+E.ny*sd[1]:0)+.02*Math.min(E.L,12), fs=(sd?front.nx*sd[0]+front.ny*sd[1]:0)+.02*Math.min(front.L,12); if(sc>fs) front=E; }
+  let k=0;
+  if(house){
+    const floors=P.h<5.2?1:P.h<8.6?2:3, fh=Math.min(3.1,(P.h-.4)/floors), busy=[];
+    // garage door at one end of the street side, front door in what's left
+    if(front.L>=9&&hash(seed,31)<.75){ const gw=front.L>=13?4.9:2.7, left=hash(seed,37)<.5, s0=left?.7:front.L-.7-gw;
+      put(front,s0,s0+gw,.02,.1,0,2.15,GARAGE[seed&3]); busy.push([s0-.5,s0+gw+.5]); }
+    { const free=busy.length?(busy[0][0]>front.L/2?[.8,busy[0][0]-.3]:[busy[0][1]+.3,front.L-.8]):[.8,front.L-.8];
+      if(free[1]-free[0]>=1.6){ const s=(free[0]+free[1])/2+(busy.length?0:(hash(seed,41)-.5)*front.L*.3);
+        if(frames) put(front,s-.6,s+.6,.01,.05,0,2.3,FRAME);
+        put(front,s-.48,s+.48,.02,.09,0,2.1,DOORS[seed%DOORS.length]); busy.push([s-.9,s+.9]); } }
+    for(const E of edges) for(let f=0;f<floors;f++){
+      const n=Math.floor((E.L-1.2)/2.9); if(n<1) continue; const step=(E.L)/(n+1), big=E===front&&f===0;
+      for(let i=1;i<=n;i++){ const s=i*step, w=big?1.4:.95;
+        if(E===front&&f===0&&busy.some(z=>s+w/2>z[0]&&s-w/2<z[1])) continue;
+        window1(E,s,w,f*fh+.9,f*fh+.9+(big?1.4:1.25),k++); } }
+  } else if(P.h<=12){
+    // storefront: glass band on the street side (the middle 60% of very long walls), mullions every ~1.6 m
+    const E=front, s0=E.L>40?E.L*.2:1, s1=E.L>40?E.L*.8:E.L-1;
+    if(s1-s0>2){ put(E,s0,s1,.02,.08,.3,2.9,GLASS,hash(seed,5)<.8?1:0);
+      if(frames) for(let s=s0;s<=s1+.01;s+=1.6) put(E,s-.05,s+.05,.08,.12,.3,2.9,'#b9bec4');
+      put(E,s0-.2,s1+.2,.02,.5,2.9,3.2,'#d6d8da'); }               // canopy fascia above the glass
+    for(const F of edges){ if(F===E||F.L<12||hash(seed,F.L|0)<.5) continue;   // a few high windows on some side walls
+      const n=Math.min(6,Math.floor(F.L/8)); for(let i=1;i<=n;i++) window1(F,i*F.L/(n+1),1.6,P.h*.55,P.h*.55+1,k++); }
+  } else {
+    // taller buildings: a ribbon of windows on every floor of every wall
+    const floors=Math.min(12,Math.max(2,Math.round(P.h/3.6))), fh=P.h/floors;
+    for(const E of edges){ if(E.L<3) continue;
+      for(let f=0;f<floors;f++) put(E,.6,E.L-.6,.02,.08,f*fh+.9,f*fh+.9+Math.min(1.6,fh-1.2),GLASS,hash(seed+f,E.L|0)<.65?1:0); }
+  }
+}
+// after dark, the windows marked lit glow warm (a paint switch, nothing is rebuilt)
+let night=null;
+function setNight(on){ if(on===night||!map.getLayer('roof-3d')) return; night=on;
+  safe('lit windows',()=>map.setPaintProperty('roof-3d','fill-extrusion-color',on?['case',['==',['get','lit'],1],'#ffd27f',['get','c']]:['get','c'])); }
+onTick(2000,function litTick(){ const A=YD.AT; setNight(!!(A&&A.k>.55)); });
+
 onReady(function buildings(){
   safe('roof caps',addCaps);
   map.on('sourcedata',e=>{ if(e.sourceId===bSrc&&e.tile) R.tiles=true; });
@@ -170,7 +247,7 @@ onTick(700,function roofTick(){
   if(!map.getSource('roofs')) return;
   if(mode==='glider'){ if(R.count){ safe('roofs off',()=>map.getSource('roofs').setData({type:'FeatureCollection',features:[]})); R.count=0; R.at=null; } return; }
   const moved=R.at?meters(R.at[1],R.at[0],S.lat,S.lng):1e9, age=performance.now()-R.t;
-  if(moved>(POWER?160:120)||destroyed.length!==R.n||(R.tiles&&age>3000)) safe('roofs',build);
+  if(moved>(POWER?160:120)||destroyed.length!==R.n||(R.tiles&&age>3000)||R.pending) safe('roofs',build);
 });
 const prev=window.onPowerChange;
 window.onPowerChange=(on)=>{ if(prev) prev(on); R.at=null; CACHE.clear(); };   // slice count / unit count change
