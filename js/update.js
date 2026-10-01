@@ -1,0 +1,44 @@
+/* Picks up new versions of the game without reinstalling the home-screen app.
+   There's no service worker, so the app loads index.html like a web page — but the phone may keep a copy of it for a
+   few minutes (GitHub Pages allows 10). This asks the server for a fresh index.html (bypassing that copy) and compares
+   the file versions (?v=) it lists with the ones running now.
+   - Just after start, before you've driven anywhere: reloads straight away into the new version.
+   - Later (e.g. coming back to the app): shows a small "New version — tap to update" button instead, so a drive is
+     never interrupted (the car's position isn't saved, so a reload starts you over). */
+(()=>{
+'use strict';
+const T0=Date.now();
+const sig=doc=>[...doc.querySelectorAll('script[src],link[rel=stylesheet]')]
+  .map(e=>e.getAttribute('src')||e.getAttribute('href')).filter(u=>u&&!/^https?:|^\/\//.test(u)).sort().join('|');
+let busy=false, shown=false, away=0;
+
+function offer(){
+  if(shown) return; shown=true;
+  const b=document.createElement('button');
+  b.textContent='New version — tap to update';
+  b.style.cssText='position:fixed;left:50%;top:calc(max(env(safe-area-inset-top),10px) + 4px);transform:translateX(-50%);z-index:60;'+
+    'border:0;border-radius:999px;padding:8px 14px;background:#1d4ed8;color:#fff;font:600 13px system-ui,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.35)';
+  for(const t of ['pointerdown','click']) b.addEventListener(t,e=>e.stopPropagation());
+  b.addEventListener('click',()=>location.reload());
+  document.body.appendChild(b);
+  setTimeout(()=>{ b.remove(); shown=false; },60000);           // asks again next time you come back
+}
+function check(){
+  if(busy||!navigator.onLine) return; busy=true;
+  // cache:'reload' fetches from the server and also refreshes the phone's stored copy, so a reload gets the new page
+  fetch(location.pathname,{cache:'reload'}).then(r=>r.ok?r.text():null).then(html=>{
+    if(!html) return;
+    const fresh=sig(new DOMParser().parseFromString(html,'text/html'));
+    if(!fresh||fresh===sig(document)) return;                  // (read now: this file loads before the rest of the page)
+    const driven=typeof S!=='undefined'&&S.dist>30;
+    let recent=false; try{ recent=Date.now()-(+sessionStorage.getItem('ydUpd')||0)<60000; }catch(e){}
+    if(Date.now()-T0<20000&&!driven&&!recent){ try{ sessionStorage.setItem('ydUpd',String(Date.now())); }catch(e){} location.reload(); }
+    else offer();                                                 // (never auto-reload twice in a row)
+  }).catch(()=>{}).finally(()=>{ busy=false; });
+}
+setTimeout(check,1500);
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){ away=Date.now(); return; }
+  if(away&&Date.now()-away>30000) check();
+});
+})();
