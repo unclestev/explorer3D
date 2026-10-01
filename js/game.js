@@ -285,20 +285,20 @@ shadow.rotation.x=-Math.PI/2; shadow.position.y=.03; car.add(shadow);
 //   piv   where the car's centre sits, as a fraction of the picture's height from the bottom
 //   glow  tail/brake light centres [x, y] (or [x, y, w, h]) as fractions of the picture (x from the left, y from the bottom); gw/gh glow size × W
 //   lamp  headlight offset from the centre line (m), front = front bumper distance ahead of the centre (m) — for the beams
+//   lights optional mask picture the same size as the photo, lit like the glows (used instead of glow spots)
 //   sound engine in js/enh/sound.js; vmax top speed in m/s (speedometer units) — cars without one keep the old behaviour
 const CARS={
   explorer:{name:'Ford Explorer ST',img:'img/explorer-rear.webp?v=1',W:2.35,piv:.38,glow:[[.088,.37],[.912,.37]],gw:.26,gh:.3,lamp:.68,front:2.4,sound:'ecoboost30'},
   // AMC Javelin (the owner's photo): one full-width tail-light bar low on the tail, reversing light in the middle
   javelin:{name:'AMC Javelin',img:'img/javelin-rear.webp?v=1',W:1.95,piv:.40,glow:[[.15,.2],[.27,.2],[.38,.2],[.62,.2],[.73,.2],[.85,.2]],gw:.15,gh:.12,lamp:.62,front:2.44,sound:'amc401',vmax:120/2.237},   // top speed 120 mph
-  // 2026 Lincoln Navigator (the owner's photo, white): tall corner lamps wrapping the tail, plus the full-width light bar
-  // that runs through the LINCOLN lettering — inner lamp sections brighter, the middle a thinner line. [x, y, w, h] sizes × W
-  navigator:{name:'Lincoln Navigator',img:'img/navigator-rear.webp?v=1',W:2.4,piv:.40,
-    glow:[[.053,.305,.06,.15],[.947,.305,.06,.15],[.156,.278,.14,.05],[.844,.278,.14,.05],[.31,.278,.15,.032],[.5,.278,.15,.032],[.69,.278,.15,.032]],
-    gw:.1,gh:.1,lamp:.76,front:2.67,sound:'ecoboost35'}
+  // 2026 Lincoln Navigator (the owner's photo, white, lit bar): the red full-width light bar and wrap-around corner lamps
+  // glow from a mask cut from the photo's own red pixels (img/navigator-lights.webp), so the light covers all of that red
+  navigator:{name:'Lincoln Navigator',img:'img/navigator-rear.webp?v=2',lights:'img/navigator-lights.webp?v=1',W:2.4,piv:.40,glow:[],
+    gw:.1,gh:.1,lamp:.74,front:2.67,sound:'ecoboost35'}
 };
 let CARKEY='explorer'; try{ const k=localStorage.getItem('ydCar'); if(CARS[k]) CARKEY=k; }catch(e){}
 let CARSPEC=CARS[CARKEY];
-const PHOTO={mesh:null,glow:null,on:!/[?&]car=3d\b/.test(location.search),key:null};
+const PHOTO={mesh:null,glow:null,lights:null,on:!/[?&]car=3d\b/.test(location.search),key:null};
 function loadPhoto(key){
   const c=CARS[key]; if(!PHOTO.on||!c) return;
   new THREE.TextureLoader().load(c.img,tex=>{
@@ -313,8 +313,14 @@ function loadPhoto(key){
     rg.addColorStop(0,'rgba(255,90,70,1)'); rg.addColorStop(.3,'rgba(255,30,25,.75)'); rg.addColorStop(1,'rgba(255,0,0,0)'); gx.fillStyle=rg; gx.fillRect(0,0,64,64);
     const gm=new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(gc),transparent:true,depthTest:false,depthWrite:false,blending:THREE.AdditiveBlending,opacity:0});
     for(const [fx,fy,fw,fh] of c.glow){ const q=new THREE.Mesh(new THREE.PlaneGeometry(W*(fw||c.gw),W*(fh||c.gh)),gm); q.position.set((fx-.5)*W,H*(fy-PIV),.01); q.renderOrder=11; m.add(q); }
-    const old=PHOTO.mesh; if(old){ scene.remove(old); old.geometry.dispose(); old.material.map.dispose(); old.material.dispose(); PHOTO.glow.map.dispose(); PHOTO.glow.dispose(); }
-    PHOTO.mesh=m; PHOTO.glow=gm; PHOTO.key=key; dirty=true;
+    // a light mask the size of the photo (red where the lamps are, with a soft bloom), added over it like the glows
+    let lm=null;
+    if(c.lights){ lm=new THREE.MeshBasicMaterial({transparent:true,depthTest:false,depthWrite:false,blending:THREE.AdditiveBlending,opacity:0});
+      const q=new THREE.Mesh(g,lm); q.position.z=.01; q.renderOrder=11; m.add(q);
+      new THREE.TextureLoader().load(c.lights,lt=>{ if(PHOTO.lights!==lm){ lt.dispose(); return; } lm.map=lt; lm.needsUpdate=true; dirty=true; },undefined,e=>console.warn('car light mask',e)); }
+    const old=PHOTO.mesh; if(old){ scene.remove(old); old.geometry.dispose(); old.material.map.dispose(); old.material.dispose(); PHOTO.glow.map.dispose(); PHOTO.glow.dispose();
+      if(PHOTO.lights){ if(PHOTO.lights.map) PHOTO.lights.map.dispose(); PHOTO.lights.dispose(); } }
+    PHOTO.mesh=m; PHOTO.glow=gm; PHOTO.lights=lm; PHOTO.key=key; dirty=true;
   },undefined,e=>console.warn('car photo could not load, using the 3D model',e));
 }
 // pick a car: swaps the photo, tells the headlights (atmos.js) and the engine sound (sound.js), remembers the choice
@@ -336,6 +342,7 @@ function placePhoto(braking){
   const hemi=scene.children.find(o=>o&&o.isHemisphereLight), b=Math.max(.32,Math.min(1,(hemi?hemi.intensity:.85)/.85+.08));
   m.material.color.setScalar(b);
   PHOTO.glow.opacity=braking?1:(tailOff.color.r>.7?.45:0);        // tailOff turns brighter at night (js/enh/atmos.js)
+  if(PHOTO.lights) PHOTO.lights.opacity=PHOTO.lights.map?PHOTO.glow.opacity:0;
 }
 
 
