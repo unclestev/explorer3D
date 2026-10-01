@@ -5,6 +5,7 @@ const {ENH,EMPTY,PXM,UNDER,mz,mzE,safe,addUnder,srcName,img,addImg,onReady,onTic
 
 /* ---------- 2. STREET SIGNS, STOP SIGNS, TRAFFIC LIGHTS, RAIL CROSSINGS, SPEED LIMITS ---------- */
 // OpenStreetMap data via Overpass (same servers as the water towers), refreshed as you drive
+const SG={dirty:false};                                     // 3D street-name signs (see the end of this file)
 const OX={at:null,busy:false,failT:0,stops:[],sigs:[],xings:[],speeds:[]};
 const EST={motorway:65,trunk:55,primary:45,secondary:40,tertiary:35,minor:30,service:15,track:10};   // Illinois-style defaults when a road has no posted limit in OSM
 function parseMph(v){ const m=/(\d+(?:\.\d+)?)\s*(mph|km\/h|kmh|kph)?/i.exec(String(v||'')); if(!m) return null;
@@ -65,9 +66,10 @@ function computeBlades(){
     const ux=s[2]-s[0], uy=s[3]-s[1], ul=Math.hypot(ux,uy)||1, vx=t[2]-t[0], vy=t[3]-t[1], vl=Math.hypot(vx,vy)||1;
     const sin=Math.abs((ux*vy-uy*vx)/(ul*vl))||1, q=Math.floor(hash(Math.round(p[0]),Math.round(p[1]))*4);
     const da=(t[5]+2.5)/sin*(q&1?1:-1), db=(s[5]+2.5)/sin*(q&2?1:-1);   // (not a/b: those are the loop counters)
-    out.push({key,x:p[0]+ux/ul*da+vx/vl*db,y:p[1]+uy/ul*da+vy/vl*db,names}); }
+    out.push({key,x:p[0]+ux/ul*da+vx/vl*db,y:p[1]+uy/ul*da+vy/vl*db,names,
+      st:[{name:s[4],hd:Math.atan2(ux,uy),w:s[5]},{name:t[4],hd:Math.atan2(vx,vy),w:t[5]}]}); }
   out.sort((a,b)=>Math.hypot(a.x-cx,a.y-cy)-Math.hypot(b.x-cx,b.y-cy));
-  blades=out.slice(0,50); bladeAt=[S.lng,S.lat]; ENH.signsDirty=true;
+  blades=out.slice(0,50); bladeAt=[S.lng,S.lat]; ENH.signsDirty=true; SG.dirty=true;
 }
 // drop signs a few metres off to a corner so they stand beside the road, not in it
 function buildSigns(){
@@ -77,38 +79,7 @@ function buildSigns(){
   for(const o of OX.stops) if(near(o)) pt(o.x+3,o.y-3,{k:'stop'});
   for(const o of OX.sigs) if(near(o)) pt(o.x-6,o.y-6,{k:'sig',ph:hash(Math.round(o.x/60),Math.round(o.y/60))<.5?0:1});
   for(const o of OX.xings) if(near(o)) pt(o.x+4,o.y+4,{k:'xing'});
-  const used=new Set();
-  for(const b of blades) if(near(b)&&used.size<36){ const id=bladeImage(b.names); if(!id) continue; used.add(id);
-    pt(b.x,b.y,{k:'bpost'}); pt(b.x,b.y,{k:'blade',img:id}); }
   src.setData({type:'FeatureCollection',features:F}); ENH.signsAt=[S.lng,S.lat]; ENH.signsDirty=false;
-  // forget sign pictures that are no longer shown (each is a small image in the map's memory)
-  for(const id of bladeImgs) if(!used.has(id)){ bladeImgs.delete(id); safe('blade img',()=>{ if(map.hasImage(id)) map.removeImage(id); }); }
-}
-/* Street-name signs: a pair of green blades (one per street, like the two crossed blades on a real post), white border,
-   white condensed lettering with the suffix (St, Ave, Rd…) smaller, the way US signs are lettered. Each pair is drawn
-   once as a picture with the words baked in, so the text can't drift off the sign, and sized like a real blade
-   (about 1:4.5) — enlarged the same as the other signs so it stays readable. Drawn at 2x for sharp text. */
-const bladeImgs=new Set(), SUFFIX=/^(St|Ave|Rd|Dr|Ln|Ct|Blvd|Pkwy|Pl|Cir|Hwy|Trl|Ter|Way|Rte|Loop|Pass|Xing|Sq)$/;
-const FONT=w=>`${w} "Avenir Next Condensed","Roboto Condensed","Arial Narrow","Helvetica Neue",Arial,sans-serif`;
-const PR=2, BH=30, GAP=3, POST=88;                             // blade height, gap between blades, post height to the blades (logical px)
-function bladeImage(names){
-  const id='blade:'+names.join('|'); if(bladeImgs.has(id)&&map.hasImage(id)) return id;
-  const c=document.createElement('canvas'), x=c.getContext('2d'), parts=names.map(n=>{ const w=abbr(n).split(' ');
-    const suf=w.length>1&&SUFFIX.test(w[w.length-1])?w.pop():''; return {main:w.join(' '),suf}; });
-  const measure=o=>{ x.font=FONT('700 22px'); let m=x.measureText(o.main).width; if(o.suf){ x.font=FONT('700 15px'); m+=5+x.measureText(o.suf).width; } return m; };
-  const W=Math.ceil(Math.min(300,Math.max(70,...parts.map(measure))+20));
-  c.width=W*PR; c.height=(BH*2+GAP)*PR; x.scale(PR,PR);
-  parts.forEach((o,i)=>{ const y=i*(BH+GAP);
-    rrect(x,0,y,W,BH,4); x.fillStyle='#0b6b38'; x.fill();
-    rrect(x,1.8,y+1.8,W-3.6,BH-3.6,3); x.strokeStyle='#ffffff'; x.lineWidth=1.6; x.stroke();
-    x.fillStyle='#ffffff'; x.textBaseline='alphabetic';
-    const m=measure(o), scale=Math.min(1,(W-16)/m), x0=(W-m*scale)/2, base=y+BH/2+7.5;
-    x.save(); x.translate(x0,base); x.scale(scale,1);
-    x.font=FONT('700 22px'); x.textAlign='left'; x.fillText(o.main,0,0);
-    if(o.suf){ const mw=x.measureText(o.main).width; x.font=FONT('700 15px'); x.fillText(o.suf,mw+5,0); }
-    x.restore(); });
-  try{ if(map.hasImage(id)) map.removeImage(id); map.addImage(id,x.getImageData(0,0,c.width,c.height),{pixelRatio:PR}); bladeImgs.add(id); return id; }
-  catch(e){ console.warn('blade',e); return null; }
 }
 function signImages(){
   addImg('sg-stop',img(64,128,(x,w,h)=>{ post(x,w,h,40); octa(x,32,27,26); x.fillStyle='#fff'; x.fill(); octa(x,32,27,22.5); x.fillStyle='#c8102e'; x.fill();
@@ -129,9 +100,6 @@ onReady(function signLayers(){
   map.addSource('enh-signs',{type:'geojson',data:EMPTY});
   map.addLayer({id:'sg-icons',type:'symbol',source:'enh-signs',minzoom:15,filter:['in',['get','k'],['literal',['stop','sig','xing','post','bpost']]],
     layout:Object.assign({'icon-image':sigImg('g','r'),'icon-size':ISZ},BILL)});
-  // the blades sit on top of their post: same anchor point, lifted by the post's height (scales with icon-size)
-  map.addLayer({id:'sg-blades',type:'symbol',source:'enh-signs',minzoom:15,filter:['==',['get','k'],'blade'],
-    layout:Object.assign({},BILL,{'icon-image':['get','img'],'icon-size':ISZ,'icon-offset':['literal',[0,-(96-6)]]})});
   // new map tiles may reveal more intersections
   map.on('sourcedata',e=>{ if(e.sourceId===srcName()&&e.tile){ clearTimeout(ENH.bT); ENH.bT=setTimeout(()=>{ ENH.bladesStale=true; },800); } });
 });
@@ -176,6 +144,84 @@ onTick(400,function speedTick(){
   if(lim!=null&&limNum.textContent!==String(lim)) limNum.textContent=lim;
   limEl.title=est?'Typical limit for this road (not posted in map data)':'Posted speed limit';
   mphEl.classList.toggle('fast',lim!=null&&Math.abs(S.v)*2.237>lim+5);
+});
+/* ---------- 3D street-name signs (owner's request 2026-10-01: "like real street signs work") ----------
+   A real post with two crossed blades on top, drawn in the car layer like the traffic cars. Each blade runs parallel
+   to the street it names, with the name on both faces — so as you drive toward an intersection the cross street's
+   blade faces you, and the blade for the road you're on runs along your road, pointing at the cross street. The wider
+   road's blade is on top. Blades are about 10x a real blade (posts ~2x) and grow with Car size — at real size a name is
+   only a few pixels from the chase camera. One picture per street name, shared by every sign for that street. Hidden while gliding and when a
+   building stands between the sign and the camera (same check as traffic). Flat ground, like the traffic cars. */
+const BH=2.4, BT=.18, GAP=.16, TOPC=6.8;                          // blade height / thickness / gap, upper blade centre (m, before Car size)
+const SUFFIX=/^(St|Ave|Rd|Dr|Ln|Ct|Blvd|Pkwy|Pl|Cir|Hwy|Trl|Ter|Way|Rte|Loop|Pass|Xing|Sq)$/;
+const FONT=w=>`${w} "Avenir Next Condensed","Roboto Condensed","Arial Narrow","Helvetica Neue",Arial,sans-serif`;
+const TEX=new Map();                                               // street name -> {mat, aspect, n (signs using it)}
+let G3=null, GREEN=null, POSTM=null, BOX=null, CYL=null, signs3=new Map(), occT=0, dimK=-1;
+function nameTex(name){
+  let t=TEX.get(name); if(t){ t.n++; return t; }
+  const w=abbr(name).split(' '), suf=w.length>1&&SUFFIX.test(w[w.length-1])?w.pop():'', main=w.join(' ');
+  const H=96, c=document.createElement('canvas'), x=c.getContext('2d');
+  const meas=()=>{ x.font=FONT('700 66px'); let m=x.measureText(main).width; if(suf){ x.font=FONT('700 44px'); m+=14+x.measureText(suf).width; } return m; };
+  const tw=meas(), W=Math.min(500,Math.max(240,Math.ceil(tw+56)));   // long names are squeezed, not longer
+  c.width=W; c.height=H;
+  x.fillStyle='#0b6b38'; x.fillRect(0,0,W,H);
+  x.strokeStyle='#fff'; x.lineWidth=5; rrect(x,6,6,W-12,H-12,9); x.stroke();
+  const sc=Math.min(1,(W-40)/tw), x0=(W-tw*sc)/2;
+  x.save(); x.translate(x0,H/2+23); x.scale(sc,1); x.fillStyle='#fff';
+  x.font=FONT('700 66px'); x.fillText(main,0,0);
+  if(suf){ const mw=x.measureText(main).width; x.font=FONT('700 44px'); x.fillText(suf,mw+14,0); }
+  x.restore();
+  const tex=new THREE.CanvasTexture(c); tex.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy()); tex.minFilter=THREE.LinearMipmapLinearFilter;
+  t={mat:new THREE.MeshBasicMaterial({map:tex}),aspect:W/H,n:1}; TEX.set(name,t); return t;
+}
+function dropTex(name){ const t=TEX.get(name); if(!t) return; if(--t.n<=0){ t.mat.map.dispose(); t.mat.dispose(); TEX.delete(name); } }
+function makeSign(b){
+  const g=new THREE.Group(), st=b.st.slice().sort((p,q)=>q.w-p.w||(p.name<q.name?-1:1));   // wider road on top
+  // post up to the lower blade, a short bracket between the blades (never inside a blade: it would show through)
+  const low=TOPC-(BH+GAP)-BH/2, post=new THREE.Mesh(CYL,POSTM); post.scale.set(1,low,1); post.position.y=low/2; g.add(post);
+  const br=new THREE.Mesh(CYL,POSTM); br.scale.set(1.3,GAP,1.3); br.position.y=TOPC-BH/2-GAP/2; g.add(br);
+  st.forEach((o,i)=>{ const t=nameTex(o.name), L=BH*t.aspect;
+    // box faces: +x, -x carry the name (each reads left-to-right from its own side), the rest plain green
+    const m=new THREE.Mesh(BOX,[t.mat,t.mat,GREEN,GREEN,GREEN,GREEN]); m.scale.set(BT,BH,L);
+    m.position.y=TOPC-i*(BH+GAP); m.rotation.y=-o.hd; g.add(m); });
+  g.userData={b,names:st.map(o=>o.name),fade:0}; g.visible=false; G3.add(g); return g;
+}
+function killSign(g){ G3.remove(g); for(const n of g.userData.names) dropTex(n); }
+function syncSigns(){
+  SG.dirty=false; if(!G3) return;
+  const cx=S.lng*MLNG, cy=S.lat*MLAT, R=POWER?260:340, max=POWER?12:24, want=new Map();
+  for(const b of blades){ if(want.size>=max) break; if(Math.hypot(b.x-cx,b.y-cy)<R) want.set(b.key+'@'+Math.round(b.x)+','+Math.round(b.y),b); }
+  for(const [k,g] of signs3) if(!want.has(k)){ killSign(g); signs3.delete(k); }
+  for(const [k,b] of want) if(!signs3.has(k)) signs3.set(k,makeSign(b));
+}
+onReady(function signs3d(){
+  G3=new THREE.Group(); scene.add(G3);
+  GREEN=new THREE.MeshBasicMaterial({color:0x0b6b38}); POSTM=new THREE.MeshBasicMaterial({color:0x8b949e});
+  BOX=new THREE.BoxGeometry(1,1,1); CYL=new THREE.CylinderGeometry(.075,.075,1,8);
+  const prev=window.onModeChange;
+  window.onModeChange=(m,was)=>{ if(prev) prev(m,was); if(G3) G3.visible=m!=='glider'; };
+});
+FRAME_HOOKS.push(function streetSigns(dt){
+  if(!G3) return false;
+  if(mode==='glider'){ if(G3.visible){ G3.visible=false; return true; } return false; }
+  let changed=false;
+  if(SG.dirty){ syncSigns(); changed=true; }
+  if(!signs3.size) return changed;
+  G3.visible=true;
+  const px=S.lng*MLNG, py=S.lat*MLAT, m=mpp(S.lat,S.zoom), b=rad(S.camB), sb=Math.sin(b), cb=Math.cos(b), sc=EXAG/m;
+  const H=innerHeight, dist=.5*H/Math.tan(rad(camera.fov)/2)*m, tp=rad(map.getPitch()), camX=px-sb*dist*Math.sin(tp), camY=py-cb*dist*Math.sin(tp), camH=dist*Math.cos(tp);
+  const now=performance.now(), doOcc=now-occT>(POWER?700:300), hid=window.TRAFFIC&&TRAFFIC.hidden; if(doOcc) occT=now;
+  // a little dimmer after dark (they're reflective, so not much)
+  const k=YD.AT?Math.round((YD.AT.k||0)*10)/10:0;
+  if(k!==dimK){ dimK=k; const f=1-.4*k; GREEN.color.setRGB(.043*f,.42*f,.22*f); POSTM.color.setRGB(.55*f,.58*f,.62*f); for(const t of TEX.values()) t.mat.color.setScalar(f); changed=true; }
+  for(const g of signs3.values()){ const u=g.userData, o=u.b, dx=o.x-px, dy=o.y-py;
+    if(doOcc&&hid) u.occ=hid({px:o.x,py:o.y},camX,camY,camH);
+    if(u.occ){ if(g.visible){ g.visible=false; changed=true; } continue; }
+    if(!g.visible){ g.visible=true; changed=true; }
+    if(u.fade<1){ u.fade=Math.min(1,u.fade+dt*2.5); changed=true; }
+    const f=dx*sb+dy*cb, r=dx*cb-dy*sb;                              // metres ahead / to the right of the camera's view
+    g.position.set(r/m,0,-f/m); g.scale.setScalar(sc*u.fade); g.rotation.y=b; }
+  return changed;
 });
 Object.assign(YD,{OX});
 })();

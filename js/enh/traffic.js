@@ -187,5 +187,5 @@ function setOn(on){ T.on=on; try{ localStorage.setItem('ydTraffic',on?'1':'0'); 
   const b=document.getElementById('trafficBtn'); if(b) b.classList.toggle('on',on); dirty=true; }
 const btn=document.getElementById('trafficBtn');
 if(btn){ btn.classList.toggle('on',T.on); btn.addEventListener('click',e=>{ e.stopPropagation(); setOn(!T.on); }); }
-window.TRAFFIC={frame:(dt)=>{ try{ return frame(dt); }catch(e){ console.warn('traffic',e); return false; } }, state:T, setOn};
+window.TRAFFIC={hidden:(o,x,y,h)=>{ try{ return hiddenByBuilding(o,x,y,h); }catch(e){ return false; } }, frame:(dt)=>{ try{ return frame(dt); }catch(e){ console.warn('traffic',e); return false; } }, state:T, setOn};
 })();
