@@ -285,10 +285,11 @@ shadow.rotation.x=-Math.PI/2; shadow.position.y=.03; car.add(shadow);
 //   piv   where the car's centre sits, as a fraction of the picture's height from the bottom
 //   glow  tail/brake light centres [x, y] as fractions of the picture (x from the left, y from the bottom); gw/gh glow size × W
 //   lamp  headlight offset from the centre line (m), front = front bumper distance ahead of the centre (m) — for the beams
+//   sound engine in js/enh/sound.js; vmax top speed in m/s (speedometer units) — cars without one keep the old behaviour
 const CARS={
-  explorer:{name:'Ford Explorer ST',img:'img/explorer-rear.webp?v=1',W:2.35,piv:.38,glow:[[.088,.37],[.912,.37]],gw:.26,gh:.3,lamp:.68,front:2.4},
+  explorer:{name:'Ford Explorer ST',img:'img/explorer-rear.webp?v=1',W:2.35,piv:.38,glow:[[.088,.37],[.912,.37]],gw:.26,gh:.3,lamp:.68,front:2.4,sound:'ecoboost30'},
   // AMC Javelin (the owner's photo): one full-width tail-light bar low on the tail, reversing light in the middle
-  javelin:{name:'AMC Javelin',img:'img/javelin-rear.webp?v=1',W:1.95,piv:.40,glow:[[.15,.2],[.27,.2],[.38,.2],[.62,.2],[.73,.2],[.85,.2]],gw:.15,gh:.12,lamp:.62,front:2.44,sound:'amc401'}
+  javelin:{name:'AMC Javelin',img:'img/javelin-rear.webp?v=1',W:1.95,piv:.40,glow:[[.15,.2],[.27,.2],[.38,.2],[.62,.2],[.73,.2],[.85,.2]],gw:.15,gh:.12,lamp:.62,front:2.44,sound:'amc401',vmax:120/2.237}   // top speed 120 mph
 };
 let CARKEY='explorer'; try{ const k=localStorage.getItem('ydCar'); if(CARS[k]) CARKEY=k; }catch(e){}
 let CARSPEC=CARS[CARKEY];
@@ -858,7 +859,10 @@ function step(now){
   // longitudinal
   let a=0, braking=false;
   const tractor=(mode==='tractor'), pw=tractor?TRACTOR:1, vmax=MAXV*pw;
-  if(gas>0.05) a=gas*(S.v<0?30:12)*pw*(1-Math.min(S.v/vmax,1)**2);
+  const vtop=!tractor&&!boat&&CARSPEC.vmax;                       // a car with a set top speed reaches it at full throttle
+  if(gas>0.05){ if(vtop&&S.v>0){ const r=Math.min(S.v/(vtop*1.012),1);  // power fades toward the top speed, and also
+      a=gas*(12*(1-r*r)+(.35+.0032*vtop*vtop)*r*r); }             // covers the drag there, so flat out it settles at vtop
+    else a=gas*(S.v<0?30:12)*pw*(1-Math.min(S.v/vmax,1)**2); }
   else if(gas<-0.05){ if(S.v>.5){a=-28*(-gas);braking=true;} else a=gas*14*pw; }
   if(hand){a-=Math.sign(S.v)*30; braking=Math.abs(S.v)>.5;}
   const cap=boat?BOATMAX:tractor?vmax:(onRoad?MAXV:34);
@@ -866,7 +870,7 @@ function step(now){
   if(!onRoad&&!boat&&!tractor) a-=S.v*.15;                               // mild grass drag
   const prevV=S.v; S.v+=a*dt; if(prevV*S.v<0&&Math.abs(gas)<.05) S.v=0;
   if(S.v>cap) S.v=Math.max(cap,S.v-25*dt);                     // ease down to a lower cap instead of snapping
-  S.v=Math.max(-REVMAX*pw,Math.min(MAXV,S.v)); if(Math.abs(S.v)<.05&&Math.abs(gas)<.05)S.v=0;
+  S.v=Math.max(-REVMAX*pw,Math.min(vtop||MAXV,S.v)); if(Math.abs(S.v)<.05&&Math.abs(gas)<.05)S.v=0;
 
   // steering (bicycle model, less lock at speed)
   const lock=boat?rad(30)/(1+Math.abs(S.v)/12):steerLock(S.v);
