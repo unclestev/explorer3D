@@ -49,7 +49,7 @@ function computeBlades(){
     for(const ln of lines) for(let i=1;i<ln.length;i++){
       const ax=ln[i-1][0]*MLNG, ay=ln[i-1][1]*MLAT, bx=ln[i][0]*MLNG, by=ln[i][1]*MLAT;
       if(Math.max(ax,bx)<cx-R||Math.min(ax,bx)>cx+R||Math.max(ay,by)<cy-R||Math.min(ay,by)>cy+R) continue;
-      segs.push([ax,ay,bx,by,nm]); }
+      segs.push([ax,ay,bx,by,nm,(typeof ROAD_HALF!=='undefined'&&ROAD_HALF[p.class])||5.5]); }
     if(segs.length>8000) break; }
   const C=50, grid=new Map();
   segs.forEach((s,k)=>{ for(let i=Math.floor(Math.min(s[0],s[2])/C);i<=Math.floor(Math.max(s[0],s[2])/C);i++)
@@ -60,7 +60,12 @@ function computeBlades(){
     const p=segX(s,t); if(!p) continue;
     const names=[s[4],t[4]].sort(), key=names.join('|');
     if(out.some(o=>o.key===key&&Math.hypot(o.x-p[0],o.y-p[1])<40)) continue;
-    out.push({key,x:p[0],y:p[1],names}); }
+    // stand the post on a corner, just behind the curb of both streets: a point that is (road half-width + 2.5 m)
+    // from each centre line. The corner is picked from the intersection's position, so it stays put between visits.
+    const ux=s[2]-s[0], uy=s[3]-s[1], ul=Math.hypot(ux,uy)||1, vx=t[2]-t[0], vy=t[3]-t[1], vl=Math.hypot(vx,vy)||1;
+    const sin=Math.abs((ux*vy-uy*vx)/(ul*vl))||1, q=Math.floor(hash(Math.round(p[0]),Math.round(p[1]))*4);
+    const sa=q&1?1:-1, sb=q&2?1:-1, a=(t[5]+2.5)/sin*sa, b=(s[5]+2.5)/sin*sb;
+    out.push({key,x:p[0]+ux/ul*a+vx/vl*b,y:p[1]+uy/ul*a+vy/vl*b,names}); }
   out.sort((a,b)=>Math.hypot(a.x-cx,a.y-cy)-Math.hypot(b.x-cx,b.y-cy));
   blades=out.slice(0,50); bladeAt=[S.lng,S.lat]; ENH.signsDirty=true;
 }
@@ -72,8 +77,38 @@ function buildSigns(){
   for(const o of OX.stops) if(near(o)) pt(o.x+3,o.y-3,{k:'stop'});
   for(const o of OX.sigs) if(near(o)) pt(o.x-6,o.y-6,{k:'sig',ph:hash(Math.round(o.x/60),Math.round(o.y/60))<.5?0:1});
   for(const o of OX.xings) if(near(o)) pt(o.x+4,o.y+4,{k:'xing'});
-  for(const b of blades) if(near(b)){ pt(b.x+5,b.y+5,{k:'post'}); pt(b.x+5,b.y+5,{k:'blade',name:b.names.map(abbr).join('\n')}); }
+  const used=new Set();
+  for(const b of blades) if(near(b)&&used.size<36){ const id=bladeImage(b.names); if(!id) continue; used.add(id);
+    pt(b.x,b.y,{k:'bpost'}); pt(b.x,b.y,{k:'blade',img:id}); }
   src.setData({type:'FeatureCollection',features:F}); ENH.signsAt=[S.lng,S.lat]; ENH.signsDirty=false;
+  // forget sign pictures that are no longer shown (each is a small image in the map's memory)
+  for(const id of bladeImgs) if(!used.has(id)){ bladeImgs.delete(id); safe('blade img',()=>{ if(map.hasImage(id)) map.removeImage(id); }); }
+}
+/* Street-name signs: a pair of green blades (one per street, like the two crossed blades on a real post), white border,
+   white condensed lettering with the suffix (St, Ave, Rd…) smaller, the way US signs are lettered. Each pair is drawn
+   once as a picture with the words baked in, so the text can't drift off the sign, and sized like a real blade
+   (about 1:4.5) — enlarged the same as the other signs so it stays readable. Drawn at 2x for sharp text. */
+const bladeImgs=new Set(), SUFFIX=/^(St|Ave|Rd|Dr|Ln|Ct|Blvd|Pkwy|Pl|Cir|Hwy|Trl|Ter|Way|Rte|Loop|Pass|Xing|Sq)$/;
+const FONT=w=>`${w} "Avenir Next Condensed","Roboto Condensed","Arial Narrow","Helvetica Neue",Arial,sans-serif`;
+const PR=2, BH=30, GAP=3, POST=88;                             // blade height, gap between blades, post height to the blades (logical px)
+function bladeImage(names){
+  const id='blade:'+names.join('|'); if(bladeImgs.has(id)&&map.hasImage(id)) return id;
+  const c=document.createElement('canvas'), x=c.getContext('2d'), parts=names.map(n=>{ const w=abbr(n).split(' ');
+    const suf=w.length>1&&SUFFIX.test(w[w.length-1])?w.pop():''; return {main:w.join(' '),suf}; });
+  const measure=o=>{ x.font=FONT('700 22px'); let m=x.measureText(o.main).width; if(o.suf){ x.font=FONT('700 15px'); m+=5+x.measureText(o.suf).width; } return m; };
+  const W=Math.ceil(Math.min(300,Math.max(70,...parts.map(measure))+20));
+  c.width=W*PR; c.height=(BH*2+GAP)*PR; x.scale(PR,PR);
+  parts.forEach((o,i)=>{ const y=i*(BH+GAP);
+    rrect(x,0,y,W,BH,4); x.fillStyle='#0b6b38'; x.fill();
+    rrect(x,1.8,y+1.8,W-3.6,BH-3.6,3); x.strokeStyle='#ffffff'; x.lineWidth=1.6; x.stroke();
+    x.fillStyle='#ffffff'; x.textBaseline='alphabetic';
+    const m=measure(o), scale=Math.min(1,(W-16)/m), x0=(W-m*scale)/2, base=y+BH/2+7.5;
+    x.save(); x.translate(x0,base); x.scale(scale,1);
+    x.font=FONT('700 22px'); x.textAlign='left'; x.fillText(o.main,0,0);
+    if(o.suf){ const mw=x.measureText(o.main).width; x.font=FONT('700 15px'); x.fillText(o.suf,mw+5,0); }
+    x.restore(); });
+  try{ if(map.hasImage(id)) map.removeImage(id); map.addImage(id,x.getImageData(0,0,c.width,c.height),{pixelRatio:PR}); bladeImgs.add(id); return id; }
+  catch(e){ console.warn('blade',e); return null; }
 }
 function signImages(){
   addImg('sg-stop',img(64,128,(x,w,h)=>{ post(x,w,h,40); octa(x,32,27,26); x.fillStyle='#fff'; x.fill(); octa(x,32,27,22.5); x.fillStyle='#c8102e'; x.fill();
@@ -86,22 +121,17 @@ function signImages(){
     for(const [a,t] of [[.6,'RAILROAD'],[-.6,'CROSSING']]){ x.save(); x.translate(48,32); x.rotate(a); x.fillStyle='#111'; x.fillRect(-45,-9,90,18);
       x.fillStyle='#fff'; x.fillRect(-43,-7,86,14); x.fillStyle='#111'; x.font='bold 10px sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText(t,0,1); x.restore(); } }));
   addImg('sg-post',img(12,128,(x,w,h)=>post(x,w,h,0)));
-  addImg('sg-blade',img(24,24,(x)=>{ rrect(x,0,0,24,24,4); x.fillStyle='#fff'; x.fill(); rrect(x,2,2,20,20,3); x.fillStyle='#0f7a3d'; x.fill(); }),
-    {stretchX:[[6,18]],stretchY:[[6,18]],content:[5,5,19,19]});
+  addImg('sg-bpost',img(16,96,(x,w,h)=>{ post(x,w,h,8); x.fillStyle='#6b737d'; x.fillRect(w/2-4,4,8,6); }));   // post + bracket cap
 }
-const sigImg=(a,b)=>['match',['get','k'],'stop','sg-stop','xing','sg-xing','post','sg-post',['match',['get','ph'],0,'sg-sig-'+a,'sg-sig-'+b]];
+const sigImg=(a,b)=>['match',['get','k'],'stop','sg-stop','xing','sg-xing','post','sg-post','bpost','sg-bpost',['match',['get','ph'],0,'sg-sig-'+a,'sg-sig-'+b]];
 onReady(function signLayers(){
   signImages();
   map.addSource('enh-signs',{type:'geojson',data:EMPTY});
-  map.addLayer({id:'sg-icons',type:'symbol',source:'enh-signs',minzoom:15,filter:['in',['get','k'],['literal',['stop','sig','xing','post']]],
+  map.addLayer({id:'sg-icons',type:'symbol',source:'enh-signs',minzoom:15,filter:['in',['get','k'],['literal',['stop','sig','xing','post','bpost']]],
     layout:Object.assign({'icon-image':sigImg('g','r'),'icon-size':ISZ},BILL)});
+  // the blades sit on top of their post: same anchor point, lifted by the post's height (scales with icon-size)
   map.addLayer({id:'sg-blades',type:'symbol',source:'enh-signs',minzoom:15,filter:['==',['get','k'],'blade'],
-    layout:Object.assign({},BILL,{'icon-anchor':'center','icon-image':'sg-blade','icon-text-fit':'both','icon-text-fit-padding':[3,6,3,6],
-      'text-field':['get','name'],'text-font':['Noto Sans Bold'],'text-size':['interpolate',['linear'],['zoom'],15,5,17,8,19.3,11,22,22],
-      'text-line-height':1.3,'text-anchor':'bottom','text-allow-overlap':true,'text-ignore-placement':true,
-      'text-pitch-alignment':'viewport','text-rotation-alignment':'viewport',
-      'text-offset':['interpolate',['linear'],['zoom'],15,['literal',[0,-4]],17,['literal',[0,-3.8]],19.3,['literal',[0,-4.3]],22,['literal',[0,-5.5]]]}),
-    paint:{'text-color':'#ffffff'}});
+    layout:Object.assign({},BILL,{'icon-image':['get','img'],'icon-size':ISZ,'icon-offset':['literal',[0,-(96-6)]]})});
   // new map tiles may reveal more intersections
   map.on('sourcedata',e=>{ if(e.sourceId===srcName()&&e.tile){ clearTimeout(ENH.bT); ENH.bT=setTimeout(()=>{ ENH.bladesStale=true; },800); } });
 });
