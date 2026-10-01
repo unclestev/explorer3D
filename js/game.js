@@ -280,20 +280,46 @@ shadow.rotation.x=-Math.PI/2; shadow.position.y=.03; car.add(shadow);
    car turns and rolls reads as the real thing. Brake and tail lights glow on top of it, and it darkens at night.
    The 3D body stays underneath as the fallback if the image can't load; the boat, tractor and glider are unchanged.
    Add ?car=3d to the address to use the 3D model instead. */
-const PHOTO={mesh:null,glow:null,on:!/[?&]car=3d\b/.test(location.search)};
-if(PHOTO.on) new THREE.TextureLoader().load('img/explorer-rear.webp?v=1',tex=>{
-  tex.anisotropy=renderer.capabilities.getMaxAnisotropy?Math.min(4,renderer.capabilities.getMaxAnisotropy()):1;
-  const W=2.35, H=W*tex.image.height/tex.image.width, PIV=.38;   // pivot: the car's centre sits ~38% up the picture
-  const g=new THREE.PlaneGeometry(W,H); g.translate(0,H*(.5-PIV),0);
-  const m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({map:tex,transparent:true,alphaTest:.04,depthTest:false,depthWrite:false}));
-  m.renderOrder=10; m.visible=false; scene.add(m);
-  // soft red glow over each tail light (brighter when braking, a faint glow after dark)
-  const gc=document.createElement('canvas'); gc.width=gc.height=64; const gx=gc.getContext('2d'), rg=gx.createRadialGradient(32,32,1,32,32,32);
-  rg.addColorStop(0,'rgba(255,90,70,1)'); rg.addColorStop(.3,'rgba(255,30,25,.75)'); rg.addColorStop(1,'rgba(255,0,0,0)'); gx.fillStyle=rg; gx.fillRect(0,0,64,64);
-  const gm=new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(gc),transparent:true,depthTest:false,depthWrite:false,blending:THREE.AdditiveBlending,opacity:0});
-  for(const fx of [.088,.912]){ const q=new THREE.Mesh(new THREE.PlaneGeometry(W*.26,W*.3),gm); q.position.set((fx-.5)*W,H*(.37-PIV),.01); q.renderOrder=11; m.add(q); }
-  PHOTO.mesh=m; PHOTO.glow=gm; dirty=true;
-},undefined,e=>console.warn('car photo could not load, using the 3D model',e));
+// The cars you can pick in ⚙️ Settings. Each is a cut-out photo seen from behind and above:
+//   W     width of the picture in metres (Explorer incl. mirrors; Javelin across the rear fenders)
+//   piv   where the car's centre sits, as a fraction of the picture's height from the bottom
+//   glow  tail/brake light centres [x, y] as fractions of the picture (x from the left, y from the bottom); gw/gh glow size × W
+//   lamp  headlight offset from the centre line (m), front = front bumper distance ahead of the centre (m) — for the beams
+const CARS={
+  explorer:{name:'Ford Explorer ST',img:'img/explorer-rear.webp?v=1',W:2.35,piv:.38,glow:[[.088,.37],[.912,.37]],gw:.26,gh:.3,lamp:.68,front:2.4},
+  // AMC Javelin (the owner's photo): one full-width tail-light bar low on the tail, reversing light in the middle
+  javelin:{name:'AMC Javelin',img:'img/javelin-rear.webp?v=1',W:1.95,piv:.40,glow:[[.15,.2],[.27,.2],[.38,.2],[.62,.2],[.73,.2],[.85,.2]],gw:.15,gh:.12,lamp:.62,front:2.44,sound:'amc401'}
+};
+let CARKEY='explorer'; try{ const k=localStorage.getItem('ydCar'); if(CARS[k]) CARKEY=k; }catch(e){}
+let CARSPEC=CARS[CARKEY];
+const PHOTO={mesh:null,glow:null,on:!/[?&]car=3d\b/.test(location.search),key:null};
+function loadPhoto(key){
+  const c=CARS[key]; if(!PHOTO.on||!c) return;
+  new THREE.TextureLoader().load(c.img,tex=>{
+    if(key!==CARKEY){ tex.dispose(); return; }                     // switched again while this one was loading
+    tex.anisotropy=renderer.capabilities.getMaxAnisotropy?Math.min(4,renderer.capabilities.getMaxAnisotropy()):1;
+    const W=c.W, H=W*tex.image.height/tex.image.width, PIV=c.piv;
+    const g=new THREE.PlaneGeometry(W,H); g.translate(0,H*(.5-PIV),0);
+    const m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({map:tex,transparent:true,alphaTest:.04,depthTest:false,depthWrite:false}));
+    m.renderOrder=10; m.visible=false; scene.add(m);
+    // soft red glow over each tail light (brighter when braking, a faint glow after dark)
+    const gc=document.createElement('canvas'); gc.width=gc.height=64; const gx=gc.getContext('2d'), rg=gx.createRadialGradient(32,32,1,32,32,32);
+    rg.addColorStop(0,'rgba(255,90,70,1)'); rg.addColorStop(.3,'rgba(255,30,25,.75)'); rg.addColorStop(1,'rgba(255,0,0,0)'); gx.fillStyle=rg; gx.fillRect(0,0,64,64);
+    const gm=new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(gc),transparent:true,depthTest:false,depthWrite:false,blending:THREE.AdditiveBlending,opacity:0});
+    for(const [fx,fy] of c.glow){ const q=new THREE.Mesh(new THREE.PlaneGeometry(W*c.gw,W*c.gh),gm); q.position.set((fx-.5)*W,H*(fy-PIV),.01); q.renderOrder=11; m.add(q); }
+    const old=PHOTO.mesh; if(old){ scene.remove(old); old.geometry.dispose(); old.material.map.dispose(); old.material.dispose(); PHOTO.glow.map.dispose(); PHOTO.glow.dispose(); }
+    PHOTO.mesh=m; PHOTO.glow=gm; PHOTO.key=key; dirty=true;
+  },undefined,e=>console.warn('car photo could not load, using the 3D model',e));
+}
+// pick a car: swaps the photo, tells the headlights (atmos.js) and the engine sound (sound.js), remembers the choice
+function setCar(key){
+  if(!CARS[key]||key===CARKEY&&PHOTO.key===key) return;
+  CARKEY=key; CARSPEC=CARS[key]; try{ localStorage.setItem('ydCar',key); }catch(e){}
+  loadPhoto(key);
+  try{ if(window.onCarChange) window.onCarChange(key); }catch(e){ console.warn('car change',e); }
+  dirty=true;
+}
+loadPhoto(CARKEY);
 // called every frame after the car transform is set: face the camera, lean with the car's heading and body roll
 function placePhoto(braking){
   const m=PHOTO.mesh; if(!m) return;
@@ -826,6 +852,7 @@ function step(now){
   let st=Math.abs(tSteer)>.05?tSteer:kS, gas=Math.abs(tGas)>.05?tGas:kG; const hand=!!K[' '];
   // autopilot (js/enh/autopilot.js) drives until you touch the steering, gas or handbrake
   if(window.AUTO&&AUTO.on){ if(Math.abs(st)>.05||Math.abs(gas)>.05||hand) AUTO.takeover(); else { const c=AUTO.control(dt); st=c.st; gas=c.gas; } }
+  S.gas=gas;                                                      // pedal position for add-ons (engine sound)
   if(mode==='glider'){ glideStep(dt,st,gas,now); return; }
 
   // longitudinal
