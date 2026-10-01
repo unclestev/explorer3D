@@ -544,6 +544,43 @@ const rad=d=>d*Math.PI/180;
 const mpp=(lat,z)=>78271.517*Math.cos(rad(lat))/Math.pow(2,z);
 let roadFails=0, miss=0;
 const hitRoad=(x,y,r)=>{ try{ if(!roadIds.length) return null; return map.queryRenderedFeatures([[x-r,y-r],[x+r,y+r]],{layers:roadIds}); }catch(e){ roadFails++; return null; } };
+/* Off-road check that doesn't depend on what's drawn on screen. The screen query above misses real roads now and then
+   (tiles being swapped while the camera zooms out with speed, the road drawn a frame behind the car at high speed), and
+   "Off road" caps the speed at 76 mph and adds grass drag. So before calling it off-road we measure the distance from
+   the car to the actual road centre lines in the loaded map data, allowing each road's half width plus a margin.
+   Returns true (on a road), false (clearly away from every road), or null (no road data loaded here: don't punish). */
+const ROAD_HALF={motorway:9,trunk:8,primary:7.5,secondary:7,tertiary:6.5,minor:5.5,service:4.5,track:3.5,path:2.5,raceway:6,busway:5};
+const ROAD_SKIP=/^(rail|transit|ferry|aerialway|cable_car|pier)$/;
+const roadGeo={segs:null,lat:0,lng:0,t:0,src:null};
+function rebuildRoadGeo(){
+  roadGeo.lat=S.lat; roadGeo.lng=S.lng; roadGeo.t=performance.now(); roadGeo.segs=null;
+  if(!roadGeo.src){ const l=roadIds.length&&map.getLayer(roadIds[0]); roadGeo.src=l?l.source:null; }
+  if(!roadGeo.src) return;
+  let fs; try{ fs=map.querySourceFeatures(roadGeo.src,{sourceLayer:'transportation'}); }catch(e){ return; }
+  const kx=111320*Math.cos(rad(S.lat)), R=700, segs=[];
+  for(const f of fs){ const pr=f.properties||{}, cl=String(pr.class||''); if(ROAD_SKIP.test(cl)) continue;
+    const g=f.geometry; if(!g) continue;
+    const lines=g.type==='LineString'?[g.coordinates]:g.type==='MultiLineString'?g.coordinates:null;
+    if(!lines) continue;
+    const half=ROAD_HALF[cl]||5;
+    for(const L of lines) for(let i=1;i<L.length;i++){
+      const x1=(L[i-1][0]-S.lng)*kx, y1=(L[i-1][1]-S.lat)*111320, x2=(L[i][0]-S.lng)*kx, y2=(L[i][1]-S.lat)*111320;
+      if(Math.max(x1,x2)<-R||Math.min(x1,x2)>R||Math.max(y1,y2)<-R||Math.min(y1,y2)>R) continue;
+      segs.push([x1,y1,x2,y2,half]); } }
+  roadGeo.segs=segs;
+}
+function nearRoadGeo(){
+  if(!roadGeo.segs||meters(roadGeo.lat,roadGeo.lng,S.lat,S.lng)>350||performance.now()-roadGeo.t>4000) rebuildRoadGeo();
+  const segs=roadGeo.segs; if(!segs||!segs.length) return null;
+  const kx=111320*Math.cos(rad(roadGeo.lat)), px=(S.lng-roadGeo.lng)*kx, py=(S.lat-roadGeo.lat)*111320, M=3.5;   // margin: lane offset, car width, map mismatch
+  let any=false;
+  for(const [x1,y1,x2,y2,half] of segs){
+    const dx=x2-x1, dy=y2-y1, L2=dx*dx+dy*dy, t=L2?Math.max(0,Math.min(1,((px-x1)*dx+(py-y1)*dy)/L2)):0;
+    const ex=x1+t*dx-px, ey=y1+t*dy-py, d=Math.hypot(ex,ey);
+    if(d<half+M) return true;
+    if(d<300) any=true; }
+  return any?false:null;                                          // nothing loaded within 300 m: data missing, not off-road
+}
 const hit=(x,y,r,ids)=>{ try{ return ids.length?map.queryRenderedFeatures([[x-r,y-r],[x+r,y+r]],{layers:ids}):[]; }catch(e){ return []; } };
 const roadEl=document.getElementById('road'), mphEl=document.getElementById('mph');
 const mapEl=document.getElementById('map');
@@ -912,7 +949,10 @@ function step(now){
     const el=roadEl;
     if(f===null){ onRoad=true; el.textContent='Driving'; el.className=''; }      // road data unavailable: never punish
     else if(f.length>0){ miss=0; onRoad=true; const nm=f.find(x=>x.properties&&x.properties.name); roadName=nm?nm.properties.name:''; el.textContent=roadName||'On road'; el.className=''; }
-    else if(++miss>=8){ onRoad=false; el.textContent='Off road'; el.className='off'; }   // ~1s of sustained misses
+    else {                                                         // screen query missed: check the real road lines
+      const g=nearRoadGeo();
+      if(g!==false){ miss=0; if(!onRoad||el.className){ onRoad=true; el.textContent=roadName||'On road'; el.className=''; } }
+      else if(++miss>=8){ onRoad=false; el.textContent='Off road'; el.className='off'; } }   // ~1s of sustained misses
     // ---- which vehicle? Decided from the map's real water/farmland polygons (point-in-polygon on
     //      lng/lat), not from what happens to be drawn under a screen pixel, then debounced by time.
     if(!landCache.at || every('landcache',3) || meters(landCache.at[1],landCache.at[0],S.lat,S.lng)>400) rebuildLandCache();
