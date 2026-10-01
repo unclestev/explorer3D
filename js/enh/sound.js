@@ -4,9 +4,13 @@
        Explorer ST  3.0 L twin-turbo EcoBoost V6, 10-speed automatic, turbo whistle and boost
        AMC Javelin  401 V8 with dual exhaust, 3-speed automatic
        Navigator    3.5 L twin-turbo EcoBoost V6 (the EcoBoost synth through the Navigator's 10-speed, axle and 22" tyres)
+       Tractor      John Deere PowerTech 6.8 L inline-six turbo diesel (6R-series style), IVT transmission: the engine
+                    speed follows the throttle (850 idle -> 2,100 rated), not the road speed
    - Engine speed comes from a model of each car's drivetrain (gear ratios, axle, tyre size, torque converter, shift
-     points that rise with how hard you press the gas, kickdown when you floor it).
-   - Nothing runs while sound is off, you're in the boat/tractor/glider, or the app is hidden. */
+     points that rise with how hard you press the gas, kickdown when you floor it). Shift points grow with the
+     pedal squared-and-a-half, so a normal press (0.5-0.7) shifts around 2,000-3,000 rpm like a real automatic and only
+     a full press holds the revs high (holding ~4,000 rpm at a normal press made the cars sound like chain saws).
+   - Nothing runs while sound is off, you're in the boat/glider/on foot, or the app is hidden. */
 (()=>{
 'use strict';
 const btn=document.getElementById('audioBtn');
@@ -22,11 +26,12 @@ const ENG={
     idle:600, redline:6000, up:[1400,3900], down:[1000,1500], kick:5000, flare:[1000,1900], gain:.27, skip:true},
   amc401:{                                                       // Javelin: 3-speed TorqueCommand, 3.15 axle, 26.5" tyres
     gears:[2.45,1.45,1.0], axle:3.15, tyre:.673*Math.PI,
-    idle:700, redline:5200, up:[1700,3000], down:[1050,1300], kick:4200, flare:[1500,2400], gain:.32, skip:false}
+    idle:700, redline:5200, up:[1700,3000], down:[1050,1300], kick:4200, flare:[1500,2400], gain:.32, skip:false},
+  jd68:{ivt:true, idle:850, rated:2100, gain:.17}                 // John Deere 6R-style tractor (any car: used in the tractor)
 };
 const A={ctx:null,nodes:{},ready:false,failed:false,rpm:700,gear:0,shiftT:0,boost:0,gainNow:{},key:null};
-const engKey=()=>typeof CARSPEC!=='undefined'?CARSPEC.sound:null;
-function wanted(){ return on&&!document.hidden&&!!ENG[engKey()]&&mode==='car'; }
+const engKey=()=>mode==='tractor'?'jd68':typeof CARSPEC!=='undefined'?CARSPEC.sound:null;
+function wanted(){ return on&&!document.hidden&&!!ENG[engKey()]&&(mode==='car'||mode==='tractor'); }
 
 // iPhone only lets sound start inside a tap, so the context is created and resumed right in the tap handler;
 // the engines (an AudioWorklet module) load a moment later.
@@ -36,7 +41,7 @@ function start(){
   if(!AC){ A.failed=true; return; }
   try{ A.ctx=new AC({latencyHint:'interactive'}); A.ctx.resume().catch(()=>{}); }catch(e){ A.failed=true; return; }
   if(!A.ctx.audioWorklet){ A.failed=true; console.warn('engine sound: AudioWorklet not supported'); return; }
-  A.ctx.audioWorklet.addModule('js/enh/engine-worklet.js?v=2').then(()=>{
+  A.ctx.audioWorklet.addModule('js/enh/engine-worklet.js?v=3').then(()=>{
     for(const k of Object.keys(ENG)){
       const n=new AudioWorkletNode(A.ctx,ENG[k].proc||k,{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2]});
       n.connect(A.ctx.destination); A.nodes[k]=n; A.gainNow[k]=0; }
@@ -48,11 +53,12 @@ for(const t of ['pointerdown','touchend','click','keydown']) document.addEventLi
 
 // drivetrain model -> engine rpm, load and (EcoBoost) turbo boost
 function engine(E,dt){
+  if(E.ivt) return tractor(E,dt);
   const v=Math.abs(S.v||0), gas=Math.max(0,S.gas||0), shaft=v/E.tyre*60*E.axle, G=E.gears;
   const inGear=g=>shaft*G[g];
   if(S.v<-.2) A.gear=0;                                          // reverse: low ratio
   else{
-    const up=E.up[0]+gas*E.up[1], down=E.down[0]+gas*E.down[1]; A.shiftT-=dt;
+    const g25=Math.pow(gas,2.5), up=E.up[0]+g25*E.up[1], down=Math.min(E.down[0]+g25*E.down[1],up/1.7); A.shiftT-=dt;   // no hunting between gears
     if(A.shiftT<=0){
       if(A.gear<G.length-1&&inGear(A.gear)>up){ A.gear++; A.shiftT=E.skip?.35:.6; }
       else if(A.gear>0&&inGear(A.gear)<down&&inGear(A.gear-1)<E.redline*.85){ A.gear--; A.shiftT=E.skip?.35:.6; }
@@ -69,6 +75,18 @@ function engine(E,dt){
   // turbo boost builds with throttle once the engine is off idle, with spool lag; drops fast when you lift
   const want=gas*Math.min(1,Math.max(0,(A.rpm-1300)/1800));
   A.boost+=(want-A.boost)*Math.min(1,dt*(want>A.boost?1.8:6));
+  return {rpm:A.rpm, load:gas, boost:A.boost};
+}
+
+// tractor: the governor holds the speed the throttle asks for; the IVT transmission handles road speed. Revs rise a
+// little with speed when you're coasting, dip briefly under a sudden heavy load (lugging), and the turbo builds slowly.
+function tractor(E,dt){
+  const v=Math.abs(S.v||0), gas=Math.max(0,S.gas||0);
+  const target=Math.min(E.rated,E.idle+(E.rated-E.idle)*Math.min(1,gas*1.15)+Math.min(250,v*9)*(1-gas));
+  const lug=Math.max(0,gas-(A.lastGas||0))*260; A.lastGas=gas;
+  A.rpm+=(target-A.rpm)*Math.min(1,dt*(target>A.rpm?2.2:1.6)); A.rpm=Math.max(E.idle*.9,A.rpm-lug);
+  const want=gas*Math.min(1,Math.max(0,(A.rpm-1100)/800));
+  A.boost+=(want-A.boost)*Math.min(1,dt*(want>A.boost?1.2:4));
   return {rpm:A.rpm, load:gas, boost:A.boost};
 }
 
