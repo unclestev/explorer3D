@@ -30,7 +30,7 @@ let lastT=Date.now(), session=0, lastPos=null;
 onTick(1000,function timeTick(){
   const now=Date.now(), dt=Math.min(5,(now-lastT)/1000); lastT=now; if(document.hidden) return;
   P.time.total+=dt; session+=dt; const k=dayKey(); P.time.days[k]=(P.time.days[k]||0)+dt;
-  if(Math.abs(S.v)>.5||mode==='glider') P.time.drive+=dt;
+  if(Math.abs(S.v)>.5&&mode!=='walk'||mode==='glider') P.time.drive+=dt;
   const days=Object.keys(P.time.days); if(days.length>90) for(const d of days.sort().slice(0,days.length-90)) delete P.time.days[d];
   save();
 });
@@ -117,7 +117,7 @@ function render(){
     const s=P.safe, sc=Math.round(s.score), col=sc>=85?'#4ade80':sc>=60?'#fbbf24':'#f87171';
     const near=nearbyStreets(), spots=Object.values(P.spots), tw=spots.filter(q=>q.c==='water tower').length;
     h+='<div class="pgSec">Time played</div>'+row('Today',fmtT(P.time.days[dayKey()]||0))+row('This session',fmtT(session))+row('All time',fmtT(P.time.total),'Actually moving: '+fmtT(P.time.drive));
-    h+='<div class="pgSec">Distance</div>'+row('SUV',fmtMi(P.dist.car||0))+row('Tractor · Boat · Glider',[P.dist.tractor,P.dist.boat,P.dist.glider].map(v=>fmtMi(v||0)).join(' · '))+row('Top speed',Math.round(P.top)+' mph');
+    h+='<div class="pgSec">Distance</div>'+row('SUV',fmtMi(P.dist.car||0))+row('Tractor · Boat · Glider',[P.dist.tractor,P.dist.boat,P.dist.glider].map(v=>fmtMi(v||0)).join(' · '))+row('On foot',fmtMi(P.dist.walk||0))+row('Top speed',Math.round(P.top)+' mph');
     h+=`<div class="pgSec">Safe driver</div><div class="setRow"><span>Score<small>Drops for red lights, stop signs, speeding and hitting buildings; clean miles earn it back</small></span><b class="pgScore" style="color:${col}">${sc}</b></div>`;
     h+=row('Clean streak',fmtMi(s.streak),'Best '+fmtMi(s.best))+row('Red lights · Stop signs',s.red+' · '+s.stop)+row('Buildings hit · Speeding',s.crash+' · '+fmtT(s.speed));
     if(s.tickets||s.escapes) h+=row('Police: tickets · escapes',s.tickets+' · '+s.escapes);

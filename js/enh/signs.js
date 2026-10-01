@@ -120,7 +120,7 @@ onTick(500,function signalTick(){
 // rail crossings: a bump as you cross (checked along the path travelled, so it can't be skipped at speed) and a heads-up
 onTick(100,function xingTick(){
   const x=S.lng*MLNG, y=S.lat*MLAT, p=ENH.prevXY||[x,y]; ENH.prevXY=[x,y];
-  if(!OX.xings.length||mode==='glider'||mode==='boat') return;
+  if(!OX.xings.length||mode==='glider'||mode==='boat'||mode==='walk') return;
   const sp=Math.abs(S.v), now=Date.now(), hx=Math.sin(rad(S.hdg)), hy=Math.cos(rad(S.hdg));
   for(const o of OX.xings){
     const dx=o.x-x, dy=o.y-y, d=Math.hypot(dx,dy);

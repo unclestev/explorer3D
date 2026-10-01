@@ -335,10 +335,11 @@ loadPhoto(CARKEY);
 // called every frame after the car transform is set: face the camera, lean with the car's heading and body roll
 function placePhoto(braking){
   const m=PHOTO.mesh; if(!m) return;
-  const show=mode==='car'; if(m.visible!==show){ m.visible=show; body.visible=false; }
+  const walk=mode==='walk', show=mode==='car'||walk&&!!window.WALK&&WALK.parked()==='car';   // on foot: the parked car
+  if(m.visible!==show){ m.visible=show; body.visible=false; }
   if(!show) return; body.visible=false;
-  m.scale.setScalar(car.scale.x);
-  m.quaternion.copy(camera.quaternion); m.rotateZ(car.rotation.y+(S.roll+S.sr)*.8);   // same lean directions as the 3D body (camera looks down the car's z axis)
+  m.scale.setScalar(car.scale.x); m.position.copy(car.position);
+  m.quaternion.copy(camera.quaternion); m.rotateZ(car.rotation.y+(walk?0:(S.roll+S.sr)*.8));   // same lean directions as the 3D body (camera looks down the car's z axis)
   const hemi=scene.children.find(o=>o&&o.isHemisphereLight), b=Math.max(.32,Math.min(1,(hemi?hemi.intensity:.85)/.85+.08));
   m.material.color.setScalar(b);
   PHOTO.glow.opacity=braking?1:(tailOff.color.r>.7?.45:0);        // tailOff turns brighter at night (js/enh/atmos.js)
@@ -780,14 +781,16 @@ function drawTowers(){
 function setMode(m){
   if(m===mode) return;
   const was=mode; mode=m; boat=(m==='boat');
+  const vis=m==='walk'?((window.WALK&&WALK.parked())||'car'):m;   // on foot (js/enh/walk.js): show the parked vehicle
   glideBtn.classList.toggle('on',m==='glider');
-  body.visible=(m==='car'); boatG.visible=(m==='boat'); tractorG.visible=(m==='tractor'); shadow.visible=(m!=='boat'&&m!=='glider');
+  body.visible=(vis==='car'); boatG.visible=(vis==='boat'); tractorG.visible=(vis==='tractor'); shadow.visible=(vis!=='boat'&&m!=='glider');
   car.visible=(m!=='glider'); gliderG.visible=(m==='glider'); surfEl.style.color=''; step.surf=null;
   if(m!=='boat') boatG.position.y=boatG.rotation.x=boatG.rotation.z=0;
-  if(m==='glider'){ /* no ground puff in the air */ }
+  if(m==='glider'||m==='walk'||was==='walk'){ /* no ground puff in the air or when getting in/out */ }
   else if(m==='boat'||was==='boat'){ spawn(0,22,-1,0xcfe9ff); shake=Math.max(shake,.5); }
   else { spawn(0,16,-1,0xa0825a); shake=Math.max(shake,.3); }            // puff of field dirt
-  roadEl.textContent=m==='boat'?'Boating':'Driving'; roadEl.className='';
+  roadEl.textContent=m==='boat'?'Boating':m==='walk'?'On foot':'Driving'; roadEl.className='';
+  try{ if(window.onModeChange) window.onModeChange(m,was); }catch(e){ console.warn('mode change',e); }
 }
 function setBoat(v){ setMode(v?'boat':'car'); }
 
@@ -823,12 +826,12 @@ function buildClouds(force){
 function clearClouds(){ try{ map.getSource('clouds').setData({type:'FeatureCollection',features:[]}); }catch(e){} cloudAt=null; }
 function toggleGlider(){
   if(mode==='glider'){ if(G.phase!=='land'){ G.phase='land'; toast('Landing: straight down'); } return; }
-  Object.assign(G,{alt:0,air:11,bank:0,vs:0,lift:0,phase:'launch',t:0});
+  Object.assign(G,{alt:0,air:11,bank:0,vs:0,lift:0,phase:'launch',t:0,from:mode});   // from: 'walk' lands you back on foot
   S.v=0; S.steer=0; setMode('glider'); dirty=true; step.W=0; buildClouds(true);
   toast('Taking off…');
 }
 function touchDown(){
-  G.phase=''; setMode('car'); S.v=0; S.zoom=19.3; step.detOnce=false; step.W=0; dirty=true; step.cam=null;
+  G.phase=''; setMode(G.from==='walk'&&window.WALK?'walk':'car'); S.v=0; S.zoom=19.3; step.detOnce=false; step.W=0; dirty=true; step.cam=null;
   clearClouds(); shake=Math.max(shake,.4); toast('Landed');
 }
 function glideStep(dt,st,gas,now){
@@ -871,6 +874,7 @@ function glideStep(dt,st,gas,now){
   updateFx(dt,0,0);
   if(window.TRAFFIC) TRAFFIC.frame(dt);                             // hides the AI cars while flying
   runFrameHooks(dt);
+  placePhoto(false);                                                // hides the car photo while flying
   renderer.render(scene,camera);
   // HUD + the usual background jobs
   if(every('ghud',.2)){
@@ -904,6 +908,7 @@ function step(now){
   if(window.AUTO&&AUTO.on){ if(Math.abs(st)>.05||Math.abs(gas)>.05||hand) AUTO.takeover(); else { const c=AUTO.control(dt); st=c.st; gas=c.gas; } }
   S.gas=gas;                                                      // pedal position for add-ons (engine sound)
   if(mode==='glider'){ glideStep(dt,st,gas,now); return; }
+  if(mode==='walk'&&window.WALK){ WALK.step(dt,st,gas,now); return; }   // on foot (js/enh/walk.js)
 
   // longitudinal
   let a=0, braking=false;

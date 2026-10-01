@@ -198,3 +198,5 @@ button{font-family:inherit;cursor:pointer}
 .seg{display:flex;flex:none;background:rgba(255,255,255,.1);border-radius:10px;padding:3px;gap:3px}
 .seg button{border:0;background:transparent;color:#cbd5e1;font:600 13px system-ui,sans-serif;padding:7px 10px;border-radius:8px}
 .seg button.on{background:#1d4ed8;color:#fff}
+/* on foot (js/enh/walk.js): the 🚶/🚗 button lights up when you're close enough to get back in */
+#walkBtn.on{background:#15803d;box-shadow:0 0 0 2px #86efac inset}
