@@ -19,7 +19,7 @@ function save(){ try{ localStorage.setItem('ydCarSize',String(EXAG)); localStora
 for(const id of ['cp','cm','zi','zo']) document.getElementById(id).addEventListener('click',e=>{ e.stopPropagation(); show(); save(); });
 document.getElementById('pw').addEventListener('click',e=>e.stopPropagation());
 
-// car picker: Explorer / Javelin (setCar in game.js swaps the photo, lights and sound and remembers the choice)
+// car picker: Explorer / Javelin / Navigator (setCar in game.js swaps the photo, lights and sound and remembers the choice)
 const pick=document.getElementById('carPick');
 function showCar(){ if(pick) for(const b of pick.querySelectorAll('button')) b.classList.toggle('on',b.dataset.car===CARKEY); }
 if(pick) pick.addEventListener('click',e=>{ e.stopPropagation(); const b=e.target.closest('button[data-car]'); if(b){ setCar(b.dataset.car); showCar(); } });

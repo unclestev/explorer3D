@@ -196,5 +196,5 @@ button{font-family:inherit;cursor:pointer}
 #navEta{display:block;font-size:12px;color:#86efac;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* ---------- settings: segmented picker (car) ---------- */
 .seg{display:flex;flex:none;background:rgba(255,255,255,.1);border-radius:10px;padding:3px;gap:3px}
-.seg button{border:0;background:transparent;color:#cbd5e1;font:600 13px system-ui,sans-serif;padding:7px 12px;border-radius:8px}
+.seg button{border:0;background:transparent;color:#cbd5e1;font:600 13px system-ui,sans-serif;padding:7px 10px;border-radius:8px}
 .seg button.on{background:#1d4ed8;color:#fff}

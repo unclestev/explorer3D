@@ -3,6 +3,7 @@
    - Each car has its own synthesized engine (js/enh/engine-worklet.js; no recordings are used):
        Explorer ST  3.0 L twin-turbo EcoBoost V6, 10-speed automatic, turbo whistle and boost
        AMC Javelin  401 V8 with dual exhaust, 3-speed automatic
+       Navigator    3.5 L twin-turbo EcoBoost V6 (the EcoBoost synth through the Navigator's 10-speed, axle and 22" tyres)
    - Engine speed comes from a model of each car's drivetrain (gear ratios, axle, tyre size, torque converter, shift
      points that rise with how hard you press the gas, kickdown when you floor it).
    - Nothing runs while sound is off, you're in the boat/tractor/glider, or the app is hidden. */
@@ -16,6 +17,9 @@ const ENG={
   ecoboost30:{                                                   // 2020+ Explorer ST: 10R60 10-speed, 3.73 axle, 275/45R21
     gears:[4.70,2.99,2.15,1.80,1.52,1.28,1.00,.85,.69,.64], axle:3.73, tyre:.781*Math.PI,
     idle:650, redline:6250, up:[1500,4300], down:[1050,1700], kick:5200, flare:[1100,2000], gain:.30, skip:true},
+  ecoboost35:{proc:'ecoboost30',                                 // 2025+ Navigator: 3.5 L twin-turbo V6 (same EcoBoost voice), 10R80 10-speed,
+    gears:[4.70,2.99,2.15,1.80,1.52,1.28,1.00,.85,.69,.64], axle:3.31, tyre:.815*Math.PI,   // 3.31 axle, 285/45R22
+    idle:600, redline:6000, up:[1400,3900], down:[1000,1500], kick:5000, flare:[1000,1900], gain:.27, skip:true},
   amc401:{                                                       // Javelin: 3-speed TorqueCommand, 3.15 axle, 26.5" tyres
     gears:[2.45,1.45,1.0], axle:3.15, tyre:.673*Math.PI,
     idle:700, redline:5200, up:[1700,3000], down:[1050,1300], kick:4200, flare:[1500,2400], gain:.32, skip:false}
@@ -34,7 +38,7 @@ function start(){
   if(!A.ctx.audioWorklet){ A.failed=true; console.warn('engine sound: AudioWorklet not supported'); return; }
   A.ctx.audioWorklet.addModule('js/enh/engine-worklet.js?v=2').then(()=>{
     for(const k of Object.keys(ENG)){
-      const n=new AudioWorkletNode(A.ctx,k,{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2]});
+      const n=new AudioWorkletNode(A.ctx,ENG[k].proc||k,{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2]});
       n.connect(A.ctx.destination); A.nodes[k]=n; A.gainNow[k]=0; }
     A.ready=true;
   }).catch(e=>{ A.failed=true; console.warn('engine sound',e); });

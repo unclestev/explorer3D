@@ -281,15 +281,20 @@ shadow.rotation.x=-Math.PI/2; shadow.position.y=.03; car.add(shadow);
    The 3D body stays underneath as the fallback if the image can't load; the boat, tractor and glider are unchanged.
    Add ?car=3d to the address to use the 3D model instead. */
 // The cars you can pick in ⚙️ Settings. Each is a cut-out photo seen from behind and above:
-//   W     width of the picture in metres (Explorer incl. mirrors; Javelin across the rear fenders)
+//   W     width of the picture in metres (Explorer and Navigator incl. mirrors; Javelin across the rear fenders)
 //   piv   where the car's centre sits, as a fraction of the picture's height from the bottom
-//   glow  tail/brake light centres [x, y] as fractions of the picture (x from the left, y from the bottom); gw/gh glow size × W
+//   glow  tail/brake light centres [x, y] (or [x, y, w, h]) as fractions of the picture (x from the left, y from the bottom); gw/gh glow size × W
 //   lamp  headlight offset from the centre line (m), front = front bumper distance ahead of the centre (m) — for the beams
 //   sound engine in js/enh/sound.js; vmax top speed in m/s (speedometer units) — cars without one keep the old behaviour
 const CARS={
   explorer:{name:'Ford Explorer ST',img:'img/explorer-rear.webp?v=1',W:2.35,piv:.38,glow:[[.088,.37],[.912,.37]],gw:.26,gh:.3,lamp:.68,front:2.4,sound:'ecoboost30'},
   // AMC Javelin (the owner's photo): one full-width tail-light bar low on the tail, reversing light in the middle
-  javelin:{name:'AMC Javelin',img:'img/javelin-rear.webp?v=1',W:1.95,piv:.40,glow:[[.15,.2],[.27,.2],[.38,.2],[.62,.2],[.73,.2],[.85,.2]],gw:.15,gh:.12,lamp:.62,front:2.44,sound:'amc401',vmax:120/2.237}   // top speed 120 mph
+  javelin:{name:'AMC Javelin',img:'img/javelin-rear.webp?v=1',W:1.95,piv:.40,glow:[[.15,.2],[.27,.2],[.38,.2],[.62,.2],[.73,.2],[.85,.2]],gw:.15,gh:.12,lamp:.62,front:2.44,sound:'amc401',vmax:120/2.237},   // top speed 120 mph
+  // 2026 Lincoln Navigator (the owner's photo, white): tall corner lamps wrapping the tail, plus the full-width light bar
+  // that runs through the LINCOLN lettering — inner lamp sections brighter, the middle a thinner line. [x, y, w, h] sizes × W
+  navigator:{name:'Lincoln Navigator',img:'img/navigator-rear.webp?v=1',W:2.4,piv:.40,
+    glow:[[.053,.305,.06,.15],[.947,.305,.06,.15],[.156,.278,.14,.05],[.844,.278,.14,.05],[.31,.278,.15,.032],[.5,.278,.15,.032],[.69,.278,.15,.032]],
+    gw:.1,gh:.1,lamp:.76,front:2.67,sound:'ecoboost35'}
 };
 let CARKEY='explorer'; try{ const k=localStorage.getItem('ydCar'); if(CARS[k]) CARKEY=k; }catch(e){}
 let CARSPEC=CARS[CARKEY];
@@ -307,7 +312,7 @@ function loadPhoto(key){
     const gc=document.createElement('canvas'); gc.width=gc.height=64; const gx=gc.getContext('2d'), rg=gx.createRadialGradient(32,32,1,32,32,32);
     rg.addColorStop(0,'rgba(255,90,70,1)'); rg.addColorStop(.3,'rgba(255,30,25,.75)'); rg.addColorStop(1,'rgba(255,0,0,0)'); gx.fillStyle=rg; gx.fillRect(0,0,64,64);
     const gm=new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(gc),transparent:true,depthTest:false,depthWrite:false,blending:THREE.AdditiveBlending,opacity:0});
-    for(const [fx,fy] of c.glow){ const q=new THREE.Mesh(new THREE.PlaneGeometry(W*c.gw,W*c.gh),gm); q.position.set((fx-.5)*W,H*(fy-PIV),.01); q.renderOrder=11; m.add(q); }
+    for(const [fx,fy,fw,fh] of c.glow){ const q=new THREE.Mesh(new THREE.PlaneGeometry(W*(fw||c.gw),W*(fh||c.gh)),gm); q.position.set((fx-.5)*W,H*(fy-PIV),.01); q.renderOrder=11; m.add(q); }
     const old=PHOTO.mesh; if(old){ scene.remove(old); old.geometry.dispose(); old.material.map.dispose(); old.material.dispose(); PHOTO.glow.map.dispose(); PHOTO.glow.dispose(); }
     PHOTO.mesh=m; PHOTO.glow=gm; PHOTO.key=key; dirty=true;
   },undefined,e=>console.warn('car photo could not load, using the 3D model',e));
