@@ -1,13 +1,16 @@
-/* Realistic Oswego and Yorkville water towers, modelled on the owner's photos.
+/* Realistic Oswego, Yorkville and Sugar Grove water towers, modelled on the owner's photos.
    - Oswego: wide white "onion" tank on a plain white column, with the Village of Oswego logo
      (cattails, small "Village Of", navy "Oswego", blue swoosh) three times around the tank.
    - Yorkville: round white tank on a tall slim column that flares at the ground, two thin red bands
      with red "YORKVILLE" between them, twice around the tank.
+   - Sugar Grove: white egg-shaped tank (widest above the middle, tapering into a short flared neck) on a slim column,
+     topped by a ring of cell antennas and a tall mast. Twice around the tank: navy small-caps serif "SUGAR GROVE"
+     (light-blue edge) and a group of four green trees standing on their shadows.
    Towers are still map fill-extrusions (so buildings, terrain and fog hide them correctly): the outline is a stack of
    rings following each tower's real profile, and the lettering is painted onto the rings as thin coloured wedges,
    sampled from an unrolled picture of the tank that's drawn once in code. Only towers within 3 km of the car
    (2 km in battery saver) get the lettering; farther ones keep the shape in plain white.
-   Other towns' towers keep the generic shape from game.js. Hook: game.js towerFC() calls window.TOWER_SHAPE(t). */
+   Towers in other towns keep the generic shape from game.js. Hook: game.js towerFC() calls window.TOWER_SHAPE(t). */
 (()=>{
 'use strict';
 const {safe,onReady,onTick}=YD;
@@ -22,7 +25,7 @@ function wedge(t,r,a0,a1){ const k=kx(t), ring=[[t.lng,t.lat]], n=Math.max(1,Mat
 const F=(geom,b,h,c)=>({type:'Feature',properties:{k:'tw',b:+b.toFixed(2),h:+h.toFixed(2),c},geometry:{type:'Polygon',coordinates:geom}});
 const segs=r=>Math.max(16,Math.min(40,Math.round(r*3.2)));
 
-// ---------- the two designs (heights in metres from the ground; measured off the photos) ----------
+// ---------- the designs (heights in metres from the ground; measured off the photos) ----------
 const D={
   york:{
     // round tank (20 m wide) on a slim column that flares at the base; ~42 m tall
@@ -42,6 +45,51 @@ const D={
         x.fillText('YORKVILLE',0,0); x.restore(); }},
     extras(t,f){ f.push(F([circle(t,2.8,24),circle(t,2.6,24).reverse()],41.3,42.2,RAIL));     // railing round the hatch
       f.push(F([circle(t,.6,10)],41.9,42.8,RAIL)); }
+  },
+  sg:{
+    // egg tank (19 m wide, widest ~7 m below the top) tapering into a short flared neck on a slim column; ~45 m to the
+    // tank top, antenna mast to ~57 m. Measured off the owner's two photos (tank : column width about 4 : 1).
+    r(z){ if(z<1) return 3.0; if(z<26) return 2.25; if(z<28.6) return 2.25+(z-26)/2.6*.55;
+      if(z<37.7){ const t=(37.7-z)/9.1; return 2.8+6.7*Math.pow(Math.max(0,1-t*t),.8); }
+      const t=Math.min(1,(z-37.7)/7.3); return 9.5*Math.sqrt(Math.max(0,1-t*t)); },
+    top:45, light:57.3,
+    rings:[[0,1,1],[1,26,25],[26,28.6,.65],[28.6,35.5,.45],[42.5,45,.4]],
+    band:{z0:35.5,z1:42.5,rowH:7/24,M:480,Rref:9.0,copies:2,
+      pal:['#f2f4f6','#1c2a6b','#8098c8','#1f5a3a','#2f8a52','#4aa268','#4a5d98'],
+      draw(x,W,Hm,cx){
+        const Z=z=>Hm-(z-35.5);
+        // ---- "SUGAR GROVE": small caps, big S and G, navy with a light-blue edge ----
+        const parts=[['S',1],['UGAR',0],[' ',0],['G',1],['ROVE',0]], FONT='700 100px Georgia, "Times New Roman", serif';
+        x.font=FONT; const asc=x.measureText('H').actualBoundingBoxAscent||70, sc=[2.1/asc,2.8/asc];
+        let nat=0; for(const [s,b] of parts) nat+=x.measureText(s).width*sc[b]+(s===' '?0:.12);
+        const fx=16/nat, x0=cx-14.1, base=Z(37.4);
+        for(const [col,dx,dy] of [['#8098c8',-.2,.16],['#1c2a6b',0,0]]){
+          x.fillStyle=col; let px=x0+dx;
+          for(const [s,b] of parts){ x.save(); x.translate(px,base+dy); x.scale(sc[b]*fx,sc[b]); x.font=FONT; x.textBaseline='alphabetic'; x.fillText(s,0,0); x.restore();
+            px+=(x.measureText(s).width*sc[b]+(s===' '?0:.12))*fx; } }
+        // ---- the trees, to the right of the name: four trees on a common ground line, each with a shadow ----
+        const tx=cx+3.7, g=Z(37.0);
+        const blob=(cxm,cz,rx,ry,col)=>{ x.fillStyle=col; for(const [ox,oz,f] of [[0,0,1],[-.55,-.25,.7],[.55,-.2,.72],[-.3,.45,.66],[.35,.45,.62],[0,-.5,.6]]){
+          x.beginPath(); x.ellipse(tx+cxm+ox*rx,Z(cz+oz*ry),rx*f,ry*f,0,0,7); x.fill(); } };
+        const trunk=(cxm,top)=>{ x.strokeStyle='#1f5a3a'; x.lineCap='round'; x.lineWidth=.26;
+          x.beginPath(); x.moveTo(tx+cxm,g); x.lineTo(tx+cxm,Z(top)); x.stroke(); x.lineWidth=.16;
+          x.beginPath(); x.moveTo(tx+cxm,Z(top-.3)); x.lineTo(tx+cxm-.45,Z(top+.35)); x.moveTo(tx+cxm,Z(top-.4)); x.lineTo(tx+cxm+.5,Z(top+.3)); x.stroke(); };
+        const shadow=(a,b)=>{ x.strokeStyle='#1f5a3a'; x.lineWidth=.22; x.beginPath(); x.moveTo(tx+a,g+.05); x.lineTo(tx+b,g+.3); x.stroke(); };
+        const T=[[.8,39.3,.75,1.25,'#4aa268',38.4],[2.3,40.1,1.15,1.45,'#1f5a3a',39.0],[6.8,40.3,1.25,1.15,'#4aa268',39.4],[4.4,40.7,1.7,1.55,'#2f8a52',39.4]];
+        for(const t of T){ shadow(t[0]-.3,t[0]-1.6); trunk(t[0],t[5]); }
+        for(const t of T) blob(t[0],t[1],t[2],t[3],t[4]);
+        for(const t of T) trunk(t[0],t[5]-.6);                     // trunk base stays visible under the canopy
+      }},
+    extras(t,f){
+      f.push(F([circle(t,3.7,24),circle(t,3.45,24).reverse()],44.4,45.4,RAIL));      // antenna platform rail
+      for(let i=0;i<9;i++){ const a=i/9*2*Math.PI, k=kx(t), cx=t.lng+Math.cos(a)*3.3/k, cy=t.lat+Math.sin(a)*3.3/111320;   // panel antennas
+        const ux=Math.cos(a), uy=Math.sin(a), vx=-uy, vy=ux, P=(u,v)=>[cx+(ux*u+vx*v)/k,cy+(uy*u+vy*v)/111320];
+        f.push(F([[P(-.18,-.3),P(.18,-.3),P(.18,.3),P(-.18,.3),P(-.18,-.3)]],45.2,48.6,'#cfd5dc')); }
+      f.push(F([circle(t,2.2,16),circle(t,2.0,16).reverse()],47.4,47.8,RAIL));     // antenna frame
+      f.push(F([circle(t,.35,8)],44.8,57,RAIL));                                      // mast
+      f.push(F([circle(t,1.3,12),circle(t,1.1,12).reverse()],53.6,54.0,RAIL));
+      for(let i=0;i<3;i++){ const a=i/3*2*Math.PI+.4, k=kx(t), cx=t.lng+Math.cos(a)*1.2/k, cy=t.lat+Math.sin(a)*1.2/111320;
+        f.push(F([[[cx-.12/k,cy-.12/111320],[cx+.12/k,cy-.12/111320],[cx+.12/k,cy+.12/111320],[cx-.12/k,cy+.12/111320],[cx-.12/k,cy-.12/111320]]],53.8,56.2,'#cfd5dc')); } }
   },
   osw:{
     // wide onion tank (24 m) tapering into a plain column, on a low pedestal; ~38 m tall
@@ -101,15 +149,16 @@ function bandRuns(d){
 }
 
 // ---------- which design a tower gets ----------
-// Real village/city limits of Oswego and Yorkville (OpenStreetMap, via the same Overpass servers game.js uses).
+// Real village/city limits of Oswego, Yorkville and Sugar Grove (OpenStreetMap, via the same Overpass servers game.js uses).
 // Until they arrive (or if they can't be fetched) rough boxes stand in.
-const LIMITS={osw:null,york:null,tried:0,busy:false};
+const LIMITS={osw:null,york:null,sg:null,tried:0,busy:false};
+const haveLimits=()=>!!(LIMITS.osw||LIMITS.york||LIMITS.sg);
 function loadLimits(ep=0){
-  if(LIMITS.busy||LIMITS.osw||typeof OVERPASS==='undefined') return; LIMITS.busy=true; LIMITS.tried=Date.now();
-  const q='[out:json][timeout:25];rel["boundary"="administrative"]["admin_level"="8"]["name"~"^(Oswego|Yorkville|United City of Yorkville)$"](41.45,-88.75,41.85,-88.1);out geom;';
+  if(LIMITS.busy||haveLimits()||typeof OVERPASS==='undefined') return; LIMITS.busy=true; LIMITS.tried=Date.now();
+  const q='[out:json][timeout:25];rel["boundary"="administrative"]["admin_level"="8"]["name"~"^(Oswego|Yorkville|United City of Yorkville|Sugar Grove|Village of Sugar Grove)$"](41.45,-88.75,41.85,-88.1);out geom;';
   fetch(OVERPASS[ep],{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'}})
     .then(r=>{ if(!r.ok) throw new Error('overpass '+r.status); return r.json(); })
-    .then(j=>{ for(const el of j.elements||[]){ const nm=((el.tags||{}).name||'').toLowerCase(), key=/oswego/.test(nm)?'osw':/yorkville/.test(nm)?'york':null;
+    .then(j=>{ for(const el of j.elements||[]){ const nm=((el.tags||{}).name||'').toLowerCase(), key=/oswego/.test(nm)?'osw':/yorkville/.test(nm)?'york':/sugar grove/.test(nm)?'sg':null;
         if(!key) continue; const edges=[];
         for(const m of el.members||[]) if(m.type==='way'&&m.geometry&&(m.role==='outer'||m.role==='inner'||!m.role))
           for(let i=1;i<m.geometry.length;i++){ const a=m.geometry[i-1], b=m.geometry[i]; edges.push([a.lon,a.lat,b.lon,b.lat]); }
@@ -126,12 +175,14 @@ function kind(t){
   let k=null;
   if(LIMITS.osw&&inside(t.lng,t.lat,LIMITS.osw)) k='osw';
   else if(LIMITS.york&&inside(t.lng,t.lat,LIMITS.york)) k='york';
+  else if(LIMITS.sg&&inside(t.lng,t.lat,LIMITS.sg)) k='sg';
   else{ const s=((t.raw||'')+' '+(t.op||'')+' '+(t.city||'')+' '+(t.name||'')).toLowerCase();
-    if(/oswego/.test(s)) k='osw'; else if(/yorkville/.test(s)) k='york';
-    else if(!LIMITS.osw&&!LIMITS.york&&!/montgomery|plano|aurora|naperville|plainfield|sandwich|millbrook|newark|bristol/.test(s)){
-      if(t.lat>41.62&&t.lat<41.74&&t.lng>-88.42&&t.lng<-88.26) k='osw';
+    if(/oswego/.test(s)) k='osw'; else if(/yorkville/.test(s)) k='york'; else if(/sugar ?grove/.test(s)) k='sg';
+    else if(!haveLimits()&&!/montgomery|plano|aurora|naperville|plainfield|sandwich|millbrook|newark|bristol|elburn|big rock|north aurora/.test(s)){
+      if(t.lat>41.735&&t.lat<41.81&&t.lng>-88.52&&t.lng<-88.40) k='sg';
+      else if(t.lat>41.62&&t.lat<41.74&&t.lng>-88.42&&t.lng<-88.26) k='osw';
       else if(t.lat>41.57&&t.lat<41.73&&t.lng>-88.56&&t.lng<=-88.42) k='york'; } }
-  if(LIMITS.osw||LIMITS.york) cache.set(id,k);                    // final once the real limits are known
+  if(haveLimits()) cache.set(id,k);                    // final once the real limits are known
   return k;
 }
 function hash(s){ let h=2166136261; for(const ch of String(s)) h=Math.imul(h^ch.charCodeAt(0),16777619); return (h>>>0)/4294967296; }
@@ -206,6 +257,6 @@ function placeBeacons(){
 }
 
 onReady(function towerLooks(){ shown='-'; refresh(); loadLimits(); syncBeacons(); map.on('render',()=>safe('beacons',placeBeacons)); });
-onTick(3000,function towerDetail(){ refresh(); if(!LIMITS.osw&&!LIMITS.york&&!LIMITS.busy&&Date.now()-LIMITS.tried>120000) loadLimits(); });
+onTick(3000,function towerDetail(){ refresh(); if(!haveLimits()&&!LIMITS.busy&&Date.now()-LIMITS.tried>120000) loadLimits(); });
 onTick(1000,function beaconList(){ syncBeacons(); });
 })();
