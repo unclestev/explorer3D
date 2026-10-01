@@ -13,7 +13,7 @@ const START=(()=>{ const lng=-88.4474, lat=41.6955, dN=(RAGING_WAVES.lat-lat)*11
 const map = new maplibregl.Map({ pixelRatio:mapPR(POWER),
   container:'map', style:'https://tiles.openfreemap.org/styles/liberty',
   center:[START.lng,START.lat], bearing:START.hdg, zoom:19.3, pitch:68, maxPitch:80, maxZoom:22,
-  interactive:false, fadeDuration:0, attributionControl:{compact:true}
+  interactive:false, fadeDuration:0, attributionControl:false
 });
 let roadIds=[], blockIds=[], waterIds=[], bridgeIds=[], hideIds=[];
 /* house numbers: only within HOUSE_R metres of the car, never overlapping */

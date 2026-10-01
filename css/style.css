@@ -177,3 +177,10 @@ button{font-family:inherit;cursor:pointer}
 #chalX{border:0;background:rgba(255,255,255,.2);color:#fff;width:26px;height:26px;border-radius:50%;font-size:13px;flex:none}
 #nav.on ~ #chal{bottom:calc(var(--sb) + var(--ctl-h) + var(--gap) + 66px)}
 @media (orientation:landscape) and (max-height:560px){ #chal,#nav.on ~ #chal{bottom:calc(var(--sb) + var(--compass) + var(--gap));max-width:44vw} }
+
+/* ---------- map credits: small dim ⓘ at the end of the top-right buttons (js/enh/credits.js) ---------- */
+#zoom button.mini{width:22px;height:22px;align-self:center;border-radius:50%;font:italic 700 13px/1 Georgia,serif;opacity:.5;background:rgba(12,18,32,.55);box-shadow:none}
+#zoom button.mini.on{opacity:1;background:var(--panel-solid);box-shadow:none}
+#credits{position:absolute;z-index:40;display:none;max-width:min(78vw,320px);background:var(--panel-solid);border:1px solid var(--line);border-radius:10px;padding:7px 10px;font-size:11px;line-height:1.45;color:var(--muted);box-shadow:0 6px 18px rgba(0,0,0,.4)}
+#credits.on{display:block}
+#credits a{color:#cbd5e1}
