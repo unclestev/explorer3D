@@ -188,7 +188,7 @@ map.on('load',()=>{ try{ initMini();
     const fl=(all.find(l=>l.layout&&l.layout['text-font'])||{}).layout;
     map.addSource('towers',{type:'geojson',data:towerFC(false)});
     map.addLayer({id:'tower-3d',type:'fill-extrusion',source:'towers',filter:['==',['get','k'],'tw'],
-      paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-height':['get','h'],'fill-extrusion-base':['get','b']}});
+      paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-height':['get','h'],'fill-extrusion-base':['get','b'],'fill-extrusion-vertical-gradient':false}});
     map.addLayer({id:'tower-label',type:'symbol',source:'towers',filter:['==',['get','k'],'lbl'],
       layout:{'text-field':['get','name'],'text-font':fl?fl['text-font']:['Noto Sans Regular'],'text-size':14,'text-anchor':'bottom',
         'text-offset':[0,-.5],'text-allow-overlap':true,'text-ignore-placement':true},
@@ -671,7 +671,7 @@ function loadTowers(ep=0){
         if(lat==null||lng==null) continue;
         const k=el.type+el.id; if(towerSeen.has(k)) continue; towerSeen.add(k);
         const t=el.tags||{};
-        towers.push({lng,lat,name:t.name||t['name:en']||(t.operator?t.operator+' water tower':'Water tower'),cls:'water tower'});
+        towers.push({lng,lat,name:t.name||t['name:en']||(t.operator?t.operator+' water tower':'Water tower'),cls:'water tower',id:k,op:t.operator||'',raw:t.name||''});
       }
       towerAt=[cx,cy]; drawTowers();
     })
@@ -683,6 +683,7 @@ function towerFC(pointsOnly){
   for(const t of towers){
     feats.push({type:'Feature',properties:{k:'lbl',name:t.name},geometry:{type:'Point',coordinates:[t.lng,t.lat]}});
     if(pointsOnly) continue;
+    if(window.TOWER_SHAPE){ let f=null; try{ f=window.TOWER_SHAPE(t); }catch(e){ console.warn('tower shape',e); } if(f){ for(const x of f) feats.push(x); continue; } }   // js/enh/towers.js
     feats.push({type:'Feature',properties:{k:'tw',h:34,b:0,c:'#cfd8e3'},geometry:{type:'Polygon',coordinates:ngon(t.lng,t.lat,2.2,10,0)}});   // stem
     const C=42, R=8;                                                  // spherical tank from stacked rings
     for(let z=C-R+.6;z<C+R;z+=1.6){ const zm=z+.8, r=Math.sqrt(Math.max(0,R*R-(zm-C)*(zm-C)));
