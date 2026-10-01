@@ -860,8 +860,9 @@ function step(now){
   let a=0, braking=false;
   const tractor=(mode==='tractor'), pw=tractor?TRACTOR:1, vmax=MAXV*pw;
   const vtop=!tractor&&!boat&&CARSPEC.vmax;                       // a car with a set top speed reaches it at full throttle
-  if(gas>0.05){ if(vtop&&S.v>0){ const r=Math.min(S.v/(vtop*1.012),1);  // power fades toward the top speed, and also
-      a=gas*(12*(1-r*r)+(.35+.0032*vtop*vtop)*r*r); }             // covers the drag there, so flat out it settles at vtop
+  if(gas>0.05){ if(vtop&&S.v>0){ const r=Math.min(S.v/(vtop*1.012),1);  // power fades toward the top speed, and also covers
+      // the drag there, so any firm press (half the pedal or more) keeps pulling to vtop; how hard you press sets how quickly
+      a=gas*12*(1-r*r)+Math.min(1,gas*2)*(.35+.0032*vtop*vtop)*r*r; }
     else a=gas*(S.v<0?30:12)*pw*(1-Math.min(S.v/vmax,1)**2); }
   else if(gas<-0.05){ if(S.v>.5){a=-28*(-gas);braking=true;} else a=gas*14*pw; }
   if(hand){a-=Math.sign(S.v)*30; braking=Math.abs(S.v)>.5;}
