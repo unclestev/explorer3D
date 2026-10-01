@@ -5,7 +5,7 @@ const {ENH,EMPTY,PXM,UNDER,mz,mzE,safe,addUnder,srcName,img,addImg,onReady,onTic
 
 /* ---------- 3. TAP-TO-ROUTE NAVIGATION + BREADCRUMB TRAIL ---------- */
 const NAV={dest:null,pts:null,cum:null,steps:[],idx:0,off:0,lastReq:0,busy:false,arrT:0,drawAt:null,total:0};
-const navEl=document.getElementById('nav'), navArrowEl=document.getElementById('navArrow'), navDistEl=document.getElementById('navDist'), navStreetEl=document.getElementById('navStreet');
+const navEl=document.getElementById('nav'), navArrowEl=document.getElementById('navArrow'), navDistEl=document.getElementById('navDist'), navStreetEl=document.getElementById('navStreet'), navEtaEl=document.getElementById('navEta');
 function fmtDist(m){ const mi=m/1609.344; if(mi<.1) return Math.max(50,Math.round(m*3.281/50)*50)+' ft'; return (mi<10?mi.toFixed(1):Math.round(mi))+' mi'; }
 function arrowFor(s){ if(s.type==='arrive') return '⚑'; if(/roundabout|rotary/.test(s.type)) return '↻';
   return {'left':'←','right':'→','slight left':'↖','slight right':'↗','sharp left':'↙','sharp right':'↘','uturn':'↶','straight':'↑'}[s.mod]||'↑'; }
@@ -27,7 +27,7 @@ function setLine(id,coords){ const s=map.getSource(id); if(s) s.setData(coords&&
   const m=ENH.miniOk&&mini.getSource(id); if(m) m.setData(coords&&coords.length>1?{type:'Feature',properties:{},geometry:{type:'LineString',coordinates:coords}}:EMPTY); }
 function setDest(p){ const d=p?{type:'Feature',properties:{},geometry:{type:'Point',coordinates:p}}:EMPTY;
   const s=map.getSource('nav-dest'); if(s) s.setData(d); const m=ENH.miniOk&&mini.getSource('nav-dest'); if(m) m.setData(d); }
-function clearRoute(){ Object.assign(NAV,{dest:null,pts:null,steps:[],coords:null,arrT:0,off:0,drawAt:null}); navEl.classList.remove('on'); setLine('nav-route',null); setDest(null); }
+function clearRoute(){ Object.assign(NAV,{dest:null,pts:null,cumT:null,steps:[],coords:null,arrT:0,off:0,drawAt:null,etaTxt:''}); navEtaEl.textContent=''; navEl.classList.remove('on'); setLine('nav-route',null); setDest(null); }
 function setRoute(rt){
   const c=rt.geometry.coordinates, pts=c.map(p=>[p[0]*MLNG,p[1]*MLAT]), cum=[0];
   for(let i=1;i<pts.length;i++) cum.push(cum[i-1]+Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]));
@@ -36,19 +36,23 @@ function setRoute(rt){
     const lx=L[0]*MLNG, ly=L[1]*MLAT; let best=vi, bd=1e18;
     for(let i=vi;i<pts.length;i++){ const d=Math.hypot(pts[i][0]-lx,pts[i][1]-ly); if(d<bd){ bd=d; best=i; } if(d<.5) break; }
     vi=best; steps.push({at:cum[best],type:m.type,mod:m.modifier||'',exit:m.exit,name:s.name||'',ref:s.ref||''}); }
-  Object.assign(NAV,{coords:c,pts,cum,steps,idx:0,off:0,total:cum[cum.length-1],arrT:0,drawAt:null});
+  // seconds of driving still ahead at each route point: OSRM's per-segment times when given, else spread evenly by distance
+  const segT=[]; for(const lg of rt.legs||[]){ const d=lg.annotation&&lg.annotation.duration; if(d) for(const v of d) segT.push(v); }
+  const tot=cum[cum.length-1]||1, cumT=[0];
+  for(let i=1;i<pts.length;i++) cumT.push(cumT[i-1]+(segT.length===pts.length-1?segT[i-1]:(rt.duration||0)*(cum[i]-cum[i-1])/tot));
+  Object.assign(NAV,{coords:c,pts,cum,cumT,steps,idx:0,off:0,total:cum[cum.length-1],arrT:0,drawAt:null,etaTxt:''});
   setDest(c[c.length-1]); setLine('nav-route',c); navEl.classList.add('on'); navTick();
 }
 async function requestRoute(re){
   if(NAV.busy||!NAV.dest) return; NAV.busy=true; NAV.lastReq=Date.now();
   toast(re?'Rerouting…':'Finding a route…',1400);
   const h=((S.hdg%360)+360)%360, bear=Math.abs(S.v)>2?`&bearings=${Math.round(h)},80;`:'';
-  const url=`https://router.project-osrm.org/route/v1/driving/${S.lng.toFixed(6)},${S.lat.toFixed(6)};${NAV.dest[0].toFixed(6)},${NAV.dest[1].toFixed(6)}?overview=full&geometries=geojson&steps=true${bear}`;
+  const url=`https://router.project-osrm.org/route/v1/driving/${S.lng.toFixed(6)},${S.lat.toFixed(6)};${NAV.dest[0].toFixed(6)},${NAV.dest[1].toFixed(6)}?overview=full&geometries=geojson&steps=true&annotations=duration${bear}`;
   const ctl=new AbortController(), to=setTimeout(()=>ctl.abort(),10000);
   try{ const r=await fetch(url,{signal:ctl.signal}); const j=await r.json();
     if(j.code!=='Ok'||!j.routes||!j.routes[0]) throw new Error(j.message||j.code||'no route');
     const rt=j.routes[0]; setRoute(rt);
-    if(!re) toast(fmtDist(rt.distance)+' · about '+Math.max(1,Math.round(rt.duration/60))+' min drive',2600);
+    if(!re) toast(fmtDist(rt.distance)+' · about '+Math.max(1,Math.round(rt.duration/SPEEDUP/60))+' min drive',2600);
   }catch(e){ console.warn('route',e); toast(re?'Could not reroute, keeping the old route':'No route found to there',2200); if(!re) clearRoute(); }
   finally{ clearTimeout(to); NAV.busy=false; }
 }
@@ -59,12 +63,18 @@ function navTick(){
   scan(Math.max(0,NAV.idx-3),Math.min(P.length-1,NAV.idx+150)); if(bd>60) scan(0,P.length-1);
   NAV.idx=bi; const along=NAV.cum[bi]+bt*(NAV.cum[bi+1]-NAV.cum[bi]);
   if(NAV.total-along<30&&bd<60){                                 // arrived
-    if(!NAV.arrT){ NAV.arrT=Date.now(); toast('⚑ You have arrived',3000); setBanner('⚑','Arrived',''); }
+    if(!NAV.arrT){ NAV.arrT=Date.now(); toast('⚑ You have arrived',3000); setBanner('⚑','Arrived',''); navEtaEl.textContent=''; NAV.etaTxt=''; }
     else if(Date.now()-NAV.arrT>4000) clearRoute();
     return; }
   if(bd>45&&mode!=='glider'){ NAV.off+=.2; if(NAV.off>2.5&&Date.now()-NAV.lastReq>6000){ NAV.off=0; requestRoute(true); } } else NAV.off=0;
   const nx=NAV.steps.find((s,k)=>k>0&&s.at>along+3)||NAV.steps[NAV.steps.length-1];
   if(nx) setBanner(arrowFor(nx),fmtDist(Math.max(0,nx.at-along)),instr(nx));
+  // ETA: the route's remaining drive time at the speed limits, shortened by SPEEDUP like everything else in the game
+  // (game miles = map metres / SPEEDUP), so it's how long the trip takes here, plus the arrival clock time
+  if(NAV.cumT){ const T=NAV.cumT, left=(T[T.length-1]-(T[bi]+bt*(T[bi+1]-T[bi])))/SPEEDUP, min=Math.max(1,Math.round(left/60));
+    const at=new Date(Date.now()+left*1000), clk=at.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+    const txt='ETA '+clk+' · '+(min<60?min+' min':Math.floor(min/60)+' h '+(min%60)+' min');
+    if(txt!==NAV.etaTxt){ NAV.etaTxt=txt; navEtaEl.textContent=txt; } }
   if(NAV.drawAt==null||Math.abs(along-NAV.drawAt)>15){           // only draw what's still ahead
     NAV.drawAt=along; const c=NAV.coords, a=c[bi], b=c[bi+1];
     setLine('nav-route',[[a[0]+(b[0]-a[0])*bt,a[1]+(b[1]-a[1])*bt]].concat(c.slice(bi+1))); }

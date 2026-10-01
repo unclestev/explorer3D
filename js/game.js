@@ -671,7 +671,10 @@ function loadTowers(ep=0){
         if(lat==null||lng==null) continue;
         const k=el.type+el.id; if(towerSeen.has(k)) continue; towerSeen.add(k);
         const t=el.tags||{};
-        towers.push({lng,lat,name:t.name||t['name:en']||(t.operator?t.operator+' water tower':'Water tower'),cls:'water tower',id:k,op:t.operator||'',raw:t.name||''});
+        // the same tower is often mapped twice (a point and an outline, or two points): keep one model per spot
+        const dup=towers.find(q=>meters(q.lat,q.lng,lat,lng)<45);
+        if(dup){ if(!dup.raw&&t.name){ dup.raw=t.name; dup.name=t.name; } if(!dup.op&&t.operator) dup.op=t.operator; continue; }
+        towers.push({lng,lat,name:t.name||t['name:en']||(t.operator?t.operator+' water tower':'Water tower'),cls:'water tower',id:k,op:t.operator||'',raw:t.name||'',city:t['addr:city']||''});
       }
       towerAt=[cx,cy]; drawTowers();
     })

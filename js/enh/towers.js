@@ -30,7 +30,7 @@ const D={
       const C=34.2, a=10, b=7.8, sph=Math.abs(z-C)<b?a*Math.sqrt(1-((z-C)/b)**2):0;
       const neck=z<25.5?1.9:z<29?1.9+(z-25.5)*.9:0;
       return Math.max(sph,neck,z<26?1.9:0); },
-    top:42.0,
+    top:42.0, light:42.95,
     rings:[[0,.6,.6],[.6,2.2,.4],[2.2,25.5,23.3],[25.5,32,.5],[38.4,42,.4]],
     band:{z0:32,z1:38.4,rowH:.32,M:420,Rref:9.7,copies:2,
       pal:['#f2f4f6','#c8202a'],
@@ -48,7 +48,7 @@ const D={
     r(z){ if(z<0.9) return 4.2; if(z<1.5) return 3.3; if(z<18.9) return 2.8;
       if(z<30.8){ const t=(30.8-z)/11.9; return 2.8+9.2*Math.pow(Math.max(0,1-t*t),1.15); }
       const t=Math.min(1,(z-30.8)/7.1); return 12*Math.pow(Math.max(0,1-Math.pow(t,2.1)),1/2.1); },
-    top:37.9,
+    top:37.9, light:39.15,
     rings:[[0,.9,.9],[.9,1.5,.6],[1.5,18.9,17.4],[18.9,24.5,.45],[35,37.9,.4]],
     band:{z0:24.5,z1:35,rowH:.35,M:480,Rref:11.3,copies:3,
       pal:['#f2f4f6','#233a5e','#2f86cc','#4c9a3c','#c9741f'],
@@ -101,13 +101,38 @@ function bandRuns(d){
 }
 
 // ---------- which design a tower gets ----------
+// Real village/city limits of Oswego and Yorkville (OpenStreetMap, via the same Overpass servers game.js uses).
+// Until they arrive (or if they can't be fetched) rough boxes stand in.
+const LIMITS={osw:null,york:null,tried:0,busy:false};
+function loadLimits(ep=0){
+  if(LIMITS.busy||LIMITS.osw||typeof OVERPASS==='undefined') return; LIMITS.busy=true; LIMITS.tried=Date.now();
+  const q='[out:json][timeout:25];rel["boundary"="administrative"]["admin_level"="8"]["name"~"^(Oswego|Yorkville|United City of Yorkville)$"](41.45,-88.75,41.85,-88.1);out geom;';
+  fetch(OVERPASS[ep],{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'}})
+    .then(r=>{ if(!r.ok) throw new Error('overpass '+r.status); return r.json(); })
+    .then(j=>{ for(const el of j.elements||[]){ const nm=((el.tags||{}).name||'').toLowerCase(), key=/oswego/.test(nm)?'osw':/yorkville/.test(nm)?'york':null;
+        if(!key) continue; const edges=[];
+        for(const m of el.members||[]) if(m.type==='way'&&m.geometry&&(m.role==='outer'||m.role==='inner'||!m.role))
+          for(let i=1;i<m.geometry.length;i++){ const a=m.geometry[i-1], b=m.geometry[i]; edges.push([a.lon,a.lat,b.lon,b.lat]); }
+        if(edges.length>2) LIMITS[key]=edges; }
+      cache.clear(); shown='-'; refresh(); })
+    .catch(e=>{ console.warn('town limits',e); if(ep+1<OVERPASS.length){ LIMITS.busy=false; loadLimits(ep+1); } })
+    .finally(()=>{ LIMITS.busy=false; });
+}
+function inside(lng,lat,edges){ let c=false; for(const e of edges){ const [x1,y1,x2,y2]=e;
+  if((y1>lat)!==(y2>lat)&&lng<(x2-x1)*(lat-y1)/(y2-y1)+x1) c=!c; } return c; }
+const cache=new Map();
 function kind(t){
-  const s=((t.raw||'')+' '+(t.op||'')+' '+(t.name||'')).toLowerCase();
-  if(/oswego/.test(s)) return 'osw'; if(/yorkville/.test(s)) return 'york';
-  if(/montgomery|plano|aurora|naperville|plainfield|sandwich|millbrook|newark|bristol/.test(s)) return null;
-  if(t.lat>41.63&&t.lat<41.73&&t.lng>-88.40&&t.lng<-88.27) return 'osw';
-  if(t.lat>41.58&&t.lat<41.70&&t.lng>-88.55&&t.lng<=-88.40) return 'york';
-  return null;
+  const id=t.id||(t.lng+','+t.lat); if(cache.has(id)) return cache.get(id);
+  let k=null;
+  if(LIMITS.osw&&inside(t.lng,t.lat,LIMITS.osw)) k='osw';
+  else if(LIMITS.york&&inside(t.lng,t.lat,LIMITS.york)) k='york';
+  else{ const s=((t.raw||'')+' '+(t.op||'')+' '+(t.city||'')+' '+(t.name||'')).toLowerCase();
+    if(/oswego/.test(s)) k='osw'; else if(/yorkville/.test(s)) k='york';
+    else if(!LIMITS.osw&&!LIMITS.york&&!/montgomery|plano|aurora|naperville|plainfield|sandwich|millbrook|newark|bristol/.test(s)){
+      if(t.lat>41.62&&t.lat<41.74&&t.lng>-88.42&&t.lng<-88.26) k='osw';
+      else if(t.lat>41.57&&t.lat<41.73&&t.lng>-88.56&&t.lng<=-88.42) k='york'; } }
+  if(LIMITS.osw||LIMITS.york) cache.set(id,k);                    // final once the real limits are known
+  return k;
 }
 function hash(s){ let h=2166136261; for(const ch of String(s)) h=Math.imul(h^ch.charCodeAt(0),16777619); return (h>>>0)/4294967296; }
 const near=t=>meters(t.lat,t.lng,S.lat,S.lng)<(POWER?2000:3000);
@@ -129,10 +154,58 @@ function shape(t){
 }
 
 window.TOWER_SHAPE=t=>safe('tower shape',()=>shape(t))||null;
+const lightAt=t=>{ const k=kind(t); return k?D[k].light:52.7; };     // generic tower (game.js): finial top at 52.5 m
+
 let shown='';
 function refresh(){ if(typeof towers==='undefined'||typeof drawTowers!=='function') return;
-  const key=towers.filter(t=>kind(t)&&near(t)).map(t=>t.id).join(',');   // redraw only when the set of close towers changes
+  const key=towers.filter(t=>kind(t)&&near(t)).map(t=>t.id+kind(t)).join(',');   // redraw only when the set of close towers changes
   if(key!==shown){ shown=key; drawTowers(); } }
-onReady(function towerLooks(){ shown='-'; refresh(); });
-onTick(3000,function towerDetail(){ refresh(); });
+
+/* ---------- obstruction beacons on top of every water tower ----------
+   Drawn as small glowing dots in a layer over the map (so night darkening doesn't dim them), placed each time the
+   map draws using the map's own camera, so they sit exactly on the tank tops in the car and the glider.
+   Daylight: brief white strobe. When it gets dark (same darkness the sky and headlights use): slow red flash.
+   A dot is hidden when a building stands in front of it. Only towers within 12 km get one. */
+const layer=document.createElement('div'); layer.id='beacons';
+const fogEl=document.getElementById('fog'); (fogEl&&fogEl.parentNode?fogEl.parentNode.insertBefore(layer,fogEl):document.body.appendChild(layer));   // above the night tint, under fog
+const B={list:[],night:null,occT:0};
+function syncBeacons(){
+  if(typeof towers==='undefined') return;
+  const want=towers.filter(t=>meters(t.lat,t.lng,S.lat,S.lng)<12000);
+  const ids=new Set(want.map(t=>t.id));
+  B.list=B.list.filter(b=>{ if(ids.has(b.t.id)) return true; b.el.remove(); return false; });
+  for(const t of want) if(!B.list.find(b=>b.t.id===t.id)){
+    const el=document.createElement('i'); el.className='bcn'; el.style.animationDelay=(-hash(t.id)*3).toFixed(2)+'s';
+    layer.appendChild(el); B.list.push({t,el,h:0,occ:false}); }
+  for(const b of B.list) b.h=lightAt(b.t);
+  const night=!!(YD.AT&&YD.AT.k>.45);
+  if(night!==B.night){ B.night=night; layer.classList.toggle('night',night); }
+}
+function screenPt(b){
+  const T=map.transform, ll=new maplibregl.LngLat(b.t.lng,b.t.lat), mc=T.locationCoordinate(ll), ter=map.terrain;
+  const z=ter?ter.getElevationForLngLatZoom(ll,T.tileZoom)+b.h:b.h, M=ter&&T.pixelMatrix3D?T.pixelMatrix3D:T.pixelMatrix;
+  const x=mc.x*T.worldSize, y=mc.y*T.worldSize;
+  const w=M[3]*x+M[7]*y+M[11]*z+M[15]; if(w<=0) return null;      // behind the camera
+  return [(M[0]*x+M[4]*y+M[8]*z+M[12])/w,(M[1]*x+M[5]*y+M[9]*z+M[13])/w];
+}
+const OCC=['building-3d','rebuilt-3d'];
+function placeBeacons(){
+  if(!B.list.length) return;
+  const W=innerWidth, H=innerHeight, now=performance.now(), occ=now-B.occT>(POWER?900:450);
+  if(occ) B.occT=now;
+  const layers=occ?OCC.filter(id=>map.getLayer(id)):null;
+  for(const b of B.list){
+    let p=null; try{ p=screenPt(b); }catch(e){}
+    if(!p||p[0]<-20||p[0]>W+20||p[1]<-20||p[1]>H+20){ if(b.el.style.display!=='none') b.el.style.display='none'; continue; }
+    if(occ&&layers.length){ try{ b.occ=map.queryRenderedFeatures([p[0],p[1]+2],{layers}).length>0; }catch(e){ b.occ=false; } }
+    if(b.occ){ if(b.el.style.display!=='none') b.el.style.display='none'; continue; }
+    const d=meters(b.t.lat,b.t.lng,S.lat,S.lng), sc=Math.max(.45,Math.min(1.3,700/Math.max(d,1)));   // a bit smaller with distance
+    if(b.el.style.display==='none') b.el.style.display='';
+    b.el.style.transform='translate3d('+p[0].toFixed(1)+'px,'+p[1].toFixed(1)+'px,0) scale('+sc.toFixed(2)+')';
+  }
+}
+
+onReady(function towerLooks(){ shown='-'; refresh(); loadLimits(); syncBeacons(); map.on('render',()=>safe('beacons',placeBeacons)); });
+onTick(3000,function towerDetail(){ refresh(); if(!LIMITS.osw&&!LIMITS.york&&!LIMITS.busy&&Date.now()-LIMITS.tried>120000) loadLimits(); });
+onTick(1000,function beaconList(){ syncBeacons(); });
 })();
