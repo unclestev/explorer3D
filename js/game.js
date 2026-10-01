@@ -194,6 +194,11 @@ map.on('load',()=>{ try{ initMini();
         'text-offset':[0,-.5],'text-allow-overlap':true,'text-ignore-placement':true},
       paint:{'text-color':'#0c4a6e','text-halo-color':'#fff','text-halo-width':2}});
   }catch(e){ console.warn('tower layers',e); }
+  // faint rising-air columns under each thermal while gliding (filled by buildClouds, emptied on landing)
+  try{ map.addSource('thermals',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+    map.addLayer({id:'thermals',type:'fill-extrusion',source:'thermals',
+      paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-height':['get','h'],'fill-extrusion-base':['get','b'],'fill-extrusion-opacity':.13,'fill-extrusion-vertical-gradient':false}}); }
+  catch(e){ console.warn('thermals',e); }
   try{ map.addSource('clouds',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
     map.addLayer({id:'clouds',type:'fill-extrusion',source:'clouds',
       paint:{'fill-extrusion-color':'#ffffff','fill-extrusion-height':['get','h'],'fill-extrusion-base':['get','b'],'fill-extrusion-opacity':.6}}); }
@@ -827,16 +832,34 @@ let cloudAt=null;
 function buildClouds(force){
   const src=map.getSource&&map.getSource('clouds'); if(!src) return;
   if(!force&&cloudAt&&meters(cloudAt[1],cloudAt[0],S.lat,S.lng)<800) return;
-  const x=S.lng*MLNG, y=S.lat*MLAT, ix=Math.floor(x/600), iy=Math.floor(y/600), feats=[];
+  const x=S.lng*MLNG, y=S.lat*MLAT, ix=Math.floor(x/600), iy=Math.floor(y/600), feats=[], cols=[];
   for(let i=ix-6;i<=ix+6;i++) for(let j=iy-6;j<=iy+6;j++){ const t=thermalAt(i,j); if(!t) continue;
+    // a faint column of rising air from the ground to the cloud base, over the thermal's core (where the lift is
+    // at least ~half its peak); stronger thermals look a little warmer and brighter
+    const k=Math.min(1,(t.s-1.6)/2.6);
+    cols.push({type:'Feature',properties:{h:1140,b:15,c:k>.66?'#fff2c2':k>.33?'#f6f1dc':'#e7edf2'},
+      geometry:{type:'Polygon',coordinates:ngon(t.x/MLNG,t.y/MLAT,t.r*.75,18,0)}});
     const n=3+Math.floor(hash(i+5,j+5)*3);
     for(let k=0;k<n;k++){ const a=hash(i+k,j-k)*6.28, o=t.r*.6*hash(j+k,i), base=1150+hash(i-k,j+k)*120;
       feats.push({type:'Feature',properties:{h:base+110+t.s*45,b:base},geometry:{type:'Polygon',
         coordinates:ngon((t.x+Math.cos(a)*o)/MLNG,(t.y+Math.sin(a)*o)/MLAT,t.r*(.5+.45*hash(k+3,i+j)),12,a)}}); } }
   try{ src.setData({type:'FeatureCollection',features:feats}); }catch(e){}
+  try{ const ts=map.getSource('thermals'); if(ts) ts.setData({type:'FeatureCollection',features:cols}); }catch(e){}
   cloudAt=[S.lng,S.lat];
 }
-function clearClouds(){ try{ map.getSource('clouds').setData({type:'FeatureCollection',features:[]}); }catch(e){} cloudAt=null; }
+function clearClouds(){ try{ map.getSource('clouds').setData({type:'FeatureCollection',features:[]}); }catch(e){}
+  try{ map.getSource('thermals').setData({type:'FeatureCollection',features:[]}); }catch(e){} cloudAt=null; }
+// the nearest good thermal (core within ~1.8 km): distance in metres and an arrow relative to where you're heading
+function nearestLift(){
+  const x=S.lng*MLNG, y=S.lat*MLAT, ix=Math.floor(x/600), iy=Math.floor(y/600); let best=null;
+  for(let i=ix-3;i<=ix+3;i++) for(let j=iy-3;j<=iy+3;j++){ const t=thermalAt(i,j); if(!t||t.s<2.2) continue;
+    const d=Math.hypot(t.x-x,t.y-y); if(d<1800&&(!best||d<best.d)) best={d,dx:t.x-x,dy:t.y-y}; }
+  if(!best) return null;
+  const rel=((Math.atan2(best.dx,best.dy)*180/Math.PI-S.hdg)%360+540)%360-180;
+  const arrow=['↓','↙','←','↖','↑','↗','→','↘','↓'][Math.round((rel+180)/45)];
+  const ft=best.d*3.281, dist=ft<1000?Math.round(ft/50)*50+' ft':(best.d/1609.344).toFixed(1)+' mi';
+  return arrow+' '+dist;
+}
 function toggleGlider(){
   if(mode==='glider'){ if(G.phase!=='land'){ G.phase='land'; toast('Landing: straight down'); } return; }
   Object.assign(G,{alt:0,air:11,bank:0,vs:0,lift:0,phase:'launch',t:0,from:mode});   // from: 'walk' lands you back on foot
@@ -893,7 +916,10 @@ function glideStep(dt,st,gas,now){
     const v=G.vs/GVERT;
     roadEl.textContent='Altitude '+Math.round(G.alt*3.281)+' ft'; roadEl.className='';
     surfEl.textContent='Hang glider · '+(v>=0?'▲ ':'▼ ')+Math.abs(v).toFixed(1)+' m/s'; surfEl.style.color=v>=0?'#86efac':'#fca5a5';
-    nearEl.textContent=G.phase==='fly'&&G.lift>.8?'Thermal! Circle to climb':(G.phase==='fly'&&G.alt<60?'Getting low: find a thermal or tap 🪂 to land':nearestPoi());
+    const lift=G.phase==='fly'&&G.lift<=.8?nearestLift():null;   // where to head for the next climb
+    nearEl.textContent=G.phase==='fly'&&G.lift>.8?'Thermal! Circle to climb'
+      :G.phase==='fly'&&G.alt<60?(lift?'Getting low: lift '+lift+' or tap 🪂 to land':'Getting low: find a thermal or tap 🪂 to land')
+      :lift?'Rising air '+lift:nearestPoi();
     const mph=Math.round(G.air*2.237); if(mph!==step.mph){ step.mph=mph; mphEl.textContent=mph; }
   }
   if(every('place',1)) updatePlace(); if(every('house',.25)) updateHouseFilter(false);
