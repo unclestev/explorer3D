@@ -147,7 +147,7 @@ function frame(dt){
   T.group.visible=true;
   const px=S.lng*MLNG, py=S.lat*MLAT, ph=rad(S.hdg), pv=S.v*SPEEDUP, m=mpp(S.lat,S.zoom), b=rad(S.camB), sb=Math.sin(b), cb=Math.cos(b);
   // camera ground position and height (same geometry as the game's camera), for the building check
-  const H=innerHeight, dist=.5*H/Math.tan(rad(camera.fov)/2)*m, camX=px-sb*dist*Math.sin(rad(68)), camY=py-cb*dist*Math.sin(rad(68)), camH=dist*Math.cos(rad(68));
+  const H=innerHeight, dist=.5*H/Math.tan(rad(camera.fov)/2)*m, tp=rad(map.getPitch()), camX=px-sb*dist*Math.sin(tp), camY=py-cb*dist*Math.sin(tp), camH=dist*Math.cos(tp);
   const now=performance.now(), doOcc=now-occT>(POWER?600:250); if(doOcc) occT=now;
   const sc=EXAG/m, night=tailOff.color.r>.7;
   T.parts.tail.color.setHex(night?0xd01c24:0x8a1216); T.parts.head.color.setHex(night?0xfffbe0:0xe8ecf2);

@@ -144,24 +144,9 @@ const prevMode=window.onModeChange;
 window.onModeChange=(m,was)=>{ if(prevMode) prevMode(m,was);
   person.visible=(m==='walk'); setPedals(m==='walk'||m==='glider'&&!!PK.mode);
   if(m!=='walk'&&m!=='glider') PK.mode=null;                       // back in a vehicle
-  if(m!=='walk'){ W.front=false; restorePaint(); }
   if(m==='walk'){ car.visible=true; W.v=0; S.zoom=Math.max(S.zoom,19.3); }
   updateBtn();
 };
-
-// The car photos only show the back. When you walk round to the front of the parked car, it switches to the 3D body
-// (painted roughly the photo car's colour) so you don't see the tail lights from the front; back to the photo behind it.
-const PAINT={explorer:0x3e4855,javelin:0x141518,navigator:0xe6e8ea};
-function frontView(){
-  const m=PHOTO.mesh; if(!m||!m.visible&&!W.front) return;
-  if(PK.mode!=='car'){ W.front=false; return; }
-  const rel=Math.abs(((PK.hdg-S.camB)%360+540)%360-180);
-  W.front=W.front?rel>95:rel>105;                                  // a little hysteresis around side-on
-  if(W.front){ m.visible=false; body.visible=true;
-    if(W.paintKey!==CARKEY){ W.paintKey=CARKEY; W.paint0=W.paint0||paint.color.getHex(); paint.color.setHex(PAINT[CARKEY]||W.paint0); } }
-  else body.visible=false;
-}
-function restorePaint(){ if(W.paint0!=null){ paint.color.setHex(W.paint0); W.paintKey=null; } }
 
 /* ---------- every frame on foot (called from js/game.js step()) ---------- */
 function walkStep(dt,st,gas,now){
@@ -209,16 +194,15 @@ function walkStep(dt,st,gas,now){
   }
 
   // camera: closer than driving, follows where you face
-  const dB=((S.hdg-S.camB+540)%360)-180; S.camB+=dB*(1-Math.exp(-dt*4));
+  const dB=((S.hdg+LOOK.yaw-S.camB+540)%360)-180; S.camB+=dB*(1-Math.exp(-dt*4));
   const tz=Math.min(22,20.5+zoomOff); S.zoom+=(tz-S.zoom)*Math.min(1,dt*2.5);
-  const Wd=innerWidth,H=innerHeight,padTop=H*.34, cm0=step.cam||{};
-  const camMoved=dirty||Wd!==cm0.W||H!==cm0.H||Math.abs(S.lng-cm0.lng)>1e-8||Math.abs(S.lat-cm0.lat)>1e-8||Math.abs(S.camB-cm0.b)>.005||Math.abs(S.zoom-cm0.z)>.0003;
-  if(camMoved){ step.cam={lng:S.lng,lat:S.lat,b:S.camB,z:S.zoom,W:Wd,H};
-    map.jumpTo({center:[S.lng,S.lat],bearing:S.camB,zoom:S.zoom,pitch:68,padding:{top:padTop,bottom:0,left:0,right:0}}); }
-  if(Wd!==step.W||H!==step.H){ step.W=Wd; step.H=H;
+  const Wd=innerWidth,H=innerHeight,padTop=H*.34, cm0=step.cam||{}, PIT=viewPitch(68);
+  const camMoved=dirty||Wd!==cm0.W||H!==cm0.H||PIT!==cm0.p||Math.abs(S.lng-cm0.lng)>1e-8||Math.abs(S.lat-cm0.lat)>1e-8||Math.abs(S.camB-cm0.b)>.005||Math.abs(S.zoom-cm0.z)>.0003;
+  if(camMoved){ step.cam={lng:S.lng,lat:S.lat,b:S.camB,z:S.zoom,W:Wd,H,p:PIT};
+    map.jumpTo({center:[S.lng,S.lat],bearing:S.camB,zoom:S.zoom,pitch:PIT,padding:{top:padTop,bottom:0,left:0,right:0}}); }
+  if(Wd!==step.W||H!==step.H||PIT!==step.pit){ step.W=Wd; step.H=H; step.pit=PIT;
     renderer.setSize(Wd,H,false); camera.aspect=Wd/H; camera.setViewOffset(Wd,H,0,-padTop/2,Wd,H);
-    const dist=.5*H/Math.tan(rad(camera.fov)/2), p=rad(68);
-    camera.position.set(0,dist*Math.cos(p),dist*Math.sin(p)); camera.lookAt(0,0,0); camera.updateProjectionMatrix(); placeGlider(); }
+    aimCam3D(H,PIT); placeGlider(); }
 
   // car layer: you at the centre, the parked vehicle where you left it (same projection as the traffic)
   const m=mpp(S.lat,S.zoom), sc=EXAG/m, b=rad(S.camB), sb=Math.sin(b), cb=Math.cos(b);
@@ -228,7 +212,6 @@ function walkStep(dt,st,gas,now){
   body.rotation.set(0,0,0); tractorG.rotation.set(0,0,0); debris.scale.setScalar(sc);
   tails.forEach(t=>t.material=tailOff);
   placePhoto(false);
-  frontView();
   setOrder(car.position.z>0&&Math.hypot(r,f)<12*EXAG?9:12);       // the car photo covers you only when it's nearer the camera
   const traffic=(window.TRAFFIC?TRAFFIC.frame(dt):false)|runFrameHooks(dt);
   const live=updateFx(dt,0,0);

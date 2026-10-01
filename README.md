@@ -25,6 +25,7 @@ Drive a Ford Explorer over a real map. Play it on GitHub Pages.
   - `challenges.js` — time trials and glider challenges (only when started from 🏆)
   - `police.js` — police chases (only when Police patrols is switched on in 🏆)
   - `walk.js` — 🚶 get out of the car and walk/run as a person; the car stays parked, 🚗 gets back in
+  - `look.js` — drag one finger on the map to look around (orbit / tilt) in every mode; tap the compass to look ahead again
   - `boot.js` — starts the modules; must load last
 
 When a JS or CSS file changes, bump the `?v=` number on its tag in `index.html` so phones don't keep an old cached copy.

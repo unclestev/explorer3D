@@ -200,3 +200,7 @@ button{font-family:inherit;cursor:pointer}
 .seg button.on{background:#1d4ed8;color:#fff}
 /* on foot (js/enh/walk.js): the 🚶/🚗 button lights up when you're close enough to get back in */
 #walkBtn.on{background:#15803d;box-shadow:0 0 0 2px #86efac inset}
+/* look around (js/enh/look.js): while the view is panned the compass becomes a "look ahead again" button */
+#compass.look{pointer-events:auto;cursor:pointer;border-color:#38bdf8;box-shadow:0 0 0 3px rgba(56,189,248,.55),0 4px 14px rgba(0,0,0,.4)}
+#compass.look::after{content:'↺';position:absolute;right:-7px;top:-7px;width:22px;height:22px;border-radius:50%;background:#0284c7;border:2px solid #fff;
+  color:#fff;font:800 14px/22px system-ui,sans-serif;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.4)}

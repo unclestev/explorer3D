@@ -224,7 +224,7 @@ const camera=new THREE.PerspectiveCamera(36.87,1,10,50000);
 scene.add(new THREE.HemisphereLight(0xdfeeff,0x556070,.85));
 const sun=new THREE.DirectionalLight(0xfff2dd,.9); sun.position.set(-4,8,3); scene.add(sun);
 
-const paint=new THREE.MeshPhongMaterial({color:0x4d647c,specular:0xbcd0e6,shininess:90});
+const PAINT0=0x4d647c, paint=new THREE.MeshPhongMaterial({color:PAINT0,specular:0xbcd0e6,shininess:90});
 const glass=new THREE.MeshPhongMaterial({color:0x0b1220,specular:0x8899bb,shininess:120});
 const black=new THREE.MeshPhongMaterial({color:0x111214,shininess:30});
 const tire =new THREE.MeshPhongMaterial({color:0x141414,shininess:10});
@@ -286,14 +286,15 @@ shadow.rotation.x=-Math.PI/2; shadow.position.y=.03; car.add(shadow);
 //   glow  tail/brake light centres [x, y] (or [x, y, w, h]) as fractions of the picture (x from the left, y from the bottom); gw/gh glow size × W
 //   lamp  headlight offset from the centre line (m), front = front bumper distance ahead of the centre (m) — for the beams
 //   lights optional mask picture the same size as the photo, lit like the glows (used instead of glow spots)
+//   paint colour of the 3D body shown instead of the photo when you look at the car from the front
 //   sound engine in js/enh/sound.js; vmax top speed in m/s (speedometer units) — cars without one keep the old behaviour
 const CARS={
-  explorer:{name:'Ford Explorer ST',img:'img/explorer-rear.webp?v=1',W:2.35,piv:.38,glow:[[.088,.37],[.912,.37]],gw:.26,gh:.3,lamp:.68,front:2.4,sound:'ecoboost30'},
+  explorer:{name:'Ford Explorer ST',paint:0x3e4855,img:'img/explorer-rear.webp?v=1',W:2.35,piv:.38,glow:[[.088,.37],[.912,.37]],gw:.26,gh:.3,lamp:.68,front:2.4,sound:'ecoboost30'},
   // AMC Javelin (the owner's photo): one full-width tail-light bar low on the tail, reversing light in the middle
-  javelin:{name:'AMC Javelin',img:'img/javelin-rear.webp?v=1',W:1.95,piv:.40,glow:[[.15,.2],[.27,.2],[.38,.2],[.62,.2],[.73,.2],[.85,.2]],gw:.15,gh:.12,lamp:.62,front:2.44,sound:'amc401',vmax:120/2.237},   // top speed 120 mph
+  javelin:{name:'AMC Javelin',paint:0x141518,img:'img/javelin-rear.webp?v=1',W:1.95,piv:.40,glow:[[.15,.2],[.27,.2],[.38,.2],[.62,.2],[.73,.2],[.85,.2]],gw:.15,gh:.12,lamp:.62,front:2.44,sound:'amc401',vmax:120/2.237},   // top speed 120 mph
   // 2026 Lincoln Navigator (the owner's photo, white, lit bar): the red full-width light bar and wrap-around corner lamps
   // glow from a mask cut from the photo's own red pixels (img/navigator-lights.webp), so the light covers all of that red
-  navigator:{name:'Lincoln Navigator',img:'img/navigator-rear.webp?v=2',lights:'img/navigator-lights.webp?v=1',W:2.4,piv:.40,glow:[],
+  navigator:{name:'Lincoln Navigator',paint:0xe6e8ea,img:'img/navigator-rear.webp?v=2',lights:'img/navigator-lights.webp?v=1',W:2.4,piv:.40,glow:[],
     gw:.1,gh:.1,lamp:.74,front:2.67,sound:'ecoboost35'}
 };
 let CARKEY='explorer'; try{ const k=localStorage.getItem('ydCar'); if(CARS[k]) CARKEY=k; }catch(e){}
@@ -336,8 +337,14 @@ loadPhoto(CARKEY);
 function placePhoto(braking){
   const m=PHOTO.mesh; if(!m) return;
   const walk=mode==='walk', show=mode==='car'||walk&&!!window.WALK&&WALK.parked()==='car';   // on foot: the parked car
-  if(m.visible!==show){ m.visible=show; body.visible=false; }
-  if(!show) return; body.visible=false;
+  if(!show){ if(m.visible){ m.visible=false; body.visible=false; } return; }
+  // the photos only show the back: looking at the car from the front (camera panned round, or walking round it),
+  // show the 3D body in roughly the car's colour instead, and the photo again from behind (a little hysteresis)
+  const hd=walk?WALK.parkedAt.hdg:S.hdg, rel=Math.abs(((hd-S.camB)%360+540)%360-180);
+  PHOTO.front=PHOTO.front?rel>95:rel>105;
+  const pc=PHOTO.front&&CARSPEC.paint||PAINT0; if(paint.color.getHex()!==pc) paint.color.setHex(pc);
+  m.visible=!PHOTO.front; body.visible=PHOTO.front;
+  if(PHOTO.front) return;
   m.scale.setScalar(car.scale.x); m.position.copy(car.position);
   m.quaternion.copy(camera.quaternion); m.rotateZ(car.rotation.y+(walk?0:(S.roll+S.sr)*.8));   // same lean directions as the 3D body (camera looks down the car's z axis)
   const hemi=scene.children.find(o=>o&&o.isHemisphereLight), b=Math.max(.32,Math.min(1,(hemi?hemi.intensity:.85)/.85+.08));
@@ -544,6 +551,12 @@ pw.classList.toggle('on',POWER);
 zi.onclick=()=>{zoomOff=Math.min(zoomOff+.5,2); dirty=true;}; zo.onclick=()=>{zoomOff=Math.max(zoomOff-.5,-3); dirty=true;};
 
 /* ---------- PHYSICS ---------- */
+// look around (js/enh/look.js): one-finger drag orbits the camera. yaw = degrees from straight behind (follows the
+// vehicle as it turns), pitch = degrees added to each mode's tilt. viewPitch() clamps to what the map allows.
+const LOOK={yaw:0,pitch:0};
+function viewPitch(base){ return Math.max(18,Math.min(80,base+LOOK.pitch)); }
+function aimCam3D(H,pitchDeg){ const dist=.5*H/Math.tan(rad(camera.fov)/2), p=rad(pitchDeg);
+  camera.position.set(0,dist*Math.cos(p),dist*Math.sin(p)); camera.lookAt(0,0,0); camera.updateProjectionMatrix(); }
 const S={lng:START.lng,lat:START.lat,hdg:START.hdg,v:0,steer:0,camB:START.hdg,zoom:19.3,roll:0,pitch:0,wheel:0,dist:0,sp:0,sr:0};
 let boat=false, waterC=0, landC=0, mode='car', farmC=0, offFarmC=0, terrainOn=false, landIds=[];
 const TERRAIN_X=1.5, TRACTOR=0.75;   // tractor runs at 75% of car speed
@@ -857,20 +870,19 @@ function glideStep(dt,st,gas,now){
     if(G.alt<=0){ G.alt=0; touchDown(); return; }
   }
   // camera: at the pilot's height, just behind and above, looking ahead and down
-  const dB=((S.hdg-S.camB+540)%360)-180; S.camB+=dB*(1-Math.exp(-dt*2.5));
-  const W=innerWidth,H=innerHeight,padTop=H*.34;
-  if(W!==step.W||H!==step.H){ step.W=W; step.H=H;
+  const dB=((S.hdg+LOOK.yaw-S.camB+540)%360)-180; S.camB+=dB*(1-Math.exp(-dt*2.5));
+  const W=innerWidth,H=innerHeight,padTop=H*.34, gp=viewPitch(GP);
+  if(W!==step.W||H!==step.H||gp!==step.pit){ step.W=W; step.H=H; step.pit=gp;
     renderer.setSize(W,H,false); camera.aspect=W/H; camera.setViewOffset(W,H,0,-padTop/2,W,H);
-    const dist=.5*H/Math.tan(rad(camera.fov)/2), p=rad(68);
-    camera.position.set(0,dist*Math.cos(p),dist*Math.sin(p)); camera.lookAt(0,0,0); camera.updateProjectionMatrix(); placeGlider(); }
-  const camAlt=Math.max(6,G.alt+14)*Math.pow(2,-zoomOff*.5), pr=rad(GP), hb=rad(S.camB), fwd=camAlt*Math.tan(pr);
+    aimCam3D(H,68); placeGlider(); }
+  const camAlt=Math.max(6,G.alt+14)*Math.pow(2,-zoomOff*.5), pr=rad(gp), hb=rad(S.camB), fwd=camAlt*Math.tan(pr);
   const cLat=S.lat+Math.cos(hb)*fwd/111320, cLng=S.lng+Math.sin(hb)*fwd/(111320*Math.cos(rad(S.lat)));
   const mppNeed=(camAlt/Math.cos(pr))/(.5*H/Math.tan(rad(36.87)/2));
   const z=Math.max(10,Math.min(21,Math.log2(78271.517*Math.cos(rad(S.lat))/mppNeed)));
-  map.jumpTo({center:[cLng,cLat],bearing:S.camB,zoom:z,pitch:GP,padding:{top:padTop,bottom:0,left:0,right:0}});
+  map.jumpTo({center:[cLng,cLat],bearing:S.camB,zoom:z,pitch:gp,padding:{top:padTop,bottom:0,left:0,right:0}});
   // glider attitude as seen from behind: level with the horizon, banked, nose follows the bar
   const bob=Math.sin(now/900)*.02;
-  gMdl.rotation.set(rad(90-GP)-(G.phase==='fly'?gas*.12:0)+(G.phase==='land'?-.2:0)+bob, -rad(dB)*.6, -G.bank);
+  gMdl.rotation.set(rad(90-gp)-(G.phase==='fly'?gas*.12:0)+(G.phase==='land'?-.2:0)+bob, rad(LOOK.yaw)-rad(dB)*.6, -G.bank);
   updateFx(dt,0,0);
   if(window.TRAFFIC) TRAFFIC.frame(dt);                             // hides the AI cars while flying
   runFrameHooks(dt);
@@ -1016,20 +1028,19 @@ function step(now){
   }
 
   // camera: lagged chase, zooms out with speed
-  const dB=((S.hdg-S.camB+540)%360)-180; S.camB+=dB*(1-Math.exp(-dt*7));
+  const dB=((S.hdg+LOOK.yaw-S.camB+540)%360)-180; S.camB+=dB*(1-Math.exp(-dt*7));
   const tz=19.3+zoomOff-Math.min(Math.abs(S.v)/MAXV,1)*2.0; S.zoom+=(tz-S.zoom)*Math.min(1,dt*3);
-  const W=innerWidth,H=innerHeight,padTop=H*.34;
+  const W=innerWidth,H=innerHeight,padTop=H*.34, PIT=viewPitch(68);
   const cm0=step.cam||{};
-  const camMoved=dirty||W!==cm0.W||H!==cm0.H||Math.abs(S.lng-cm0.lng)>1e-8||Math.abs(S.lat-cm0.lat)>1e-8||Math.abs(S.camB-cm0.b)>.005||Math.abs(S.zoom-cm0.z)>.0003;
-  if(camMoved){ step.cam={lng:S.lng,lat:S.lat,b:S.camB,z:S.zoom,W,H};
-    map.jumpTo({center:[S.lng,S.lat],bearing:S.camB,zoom:S.zoom,pitch:68,padding:{top:padTop,bottom:0,left:0,right:0}}); }
+  const camMoved=dirty||W!==cm0.W||H!==cm0.H||PIT!==cm0.p||Math.abs(S.lng-cm0.lng)>1e-8||Math.abs(S.lat-cm0.lat)>1e-8||Math.abs(S.camB-cm0.b)>.005||Math.abs(S.zoom-cm0.z)>.0003;
+  if(camMoved){ step.cam={lng:S.lng,lat:S.lat,b:S.camB,z:S.zoom,W,H,p:PIT};
+    map.jumpTo({center:[S.lng,S.lat],bearing:S.camB,zoom:S.zoom,pitch:PIT,padding:{top:padTop,bottom:0,left:0,right:0}}); }
 
   // 3D car — pixel-scale match with map camera
-  if(W!==step.W||H!==step.H){ step.W=W; step.H=H;               // only touch the GL canvas / camera on resize
+  if(W!==step.W||H!==step.H||PIT!==step.pit){ step.W=W; step.H=H; step.pit=PIT;   // only touch the GL canvas / camera on resize or tilt
     renderer.setSize(W,H,false); camera.aspect=W/H;
     camera.setViewOffset(W,H,0,-padTop/2,W,H);
-    const fovR=rad(camera.fov), dist=.5*H/Math.tan(fovR/2), p=rad(68);
-    camera.position.set(0,dist*Math.cos(p),dist*Math.sin(p)); camera.lookAt(0,0,0); camera.updateProjectionMatrix(); placeGlider(); }
+    aimCam3D(H,PIT); placeGlider(); }
   const sc=EXAG/mpp(S.lat,S.zoom); car.scale.setScalar(sc); debris.scale.setScalar(sc);
   car.rotation.y=-rad(S.hdg-S.camB);
   const tRoll=S.steer*Math.min(Math.abs(S.v)/12,1.2)*.35, tPitch=Math.max(-.05,Math.min(.05,a*.004));
