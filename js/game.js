@@ -311,7 +311,7 @@ const CARS={
   // Same engine and top speed as the photo Javelin, which stays as its own choice.
   javelin3d:{name:'AMC Javelin AMX',paint:0x141518,model:'models/javelin-amx.glb?v=1',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237},
   // the owner's second version of that model (2026-10-02): wheel wells, window frames, non-metallic black paint, darker glass
-  javelin3d2:{name:'AMC Javelin AMX',paint:0x141518,model:'models/javelin-amx-v2.glb?v=1',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237}
+  javelin3d2:{name:'AMC Javelin AMX',paint:0x141518,model:'models/javelin-amx-v2.glb?v=2',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237}
 };
 let CARKEY='explorer'; try{ const k=localStorage.getItem('ydCar'); if(CARS[k]) CARKEY=k; }catch(e){}
 let CARSPEC=CARS[CARKEY];
@@ -387,7 +387,9 @@ function loadModel(key){
     const g=new THREE.Group(), root=gl.scene, env=envTex(), mats=new Set(), wheels=[]; let tail=null, head=null, r=.33;
     g.rotation.y=Math.PI; g.add(root); g.visible=false;
     root.traverse(o=>{
-      if(/^wheel/i.test(o.name)&&!/^wheel/i.test(o.parent&&o.parent.name||'')){ o.rotation.order='YXZ'; wheels.push({o,front:o.position.z>0}); }   // the outermost node of each wheel
+      // the outermost node of each wheel; not wheel *wells* or arches (v2 has a "Wheel_Wells" part, which was being spun round the car)
+      const isW=n=>/^wheel/i.test(n||'')&&!/well|arch|house/i.test(n);
+      if(isW(o.name)&&!isW(o.parent&&o.parent.name)&&Math.abs(o.position.x)>.2){ o.rotation.order='YXZ'; wheels.push({o,front:o.position.z>0}); }
       if(!o.isMesh) return;
       const ms=Array.isArray(o.material)?o.material:[o.material];
       // lamps flush with (or just inside) the body would be hidden by the paint: move them 3.5 cm out from the car's end
@@ -398,6 +400,7 @@ function loadModel(key){
         for(const t of [m.map,m.emissiveMap]) if(t){ t.encoding=THREE.LinearEncoding; t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy()); }
         if(m.isMeshStandardMaterial){ m.envMap=env; m.envMapIntensity=1; }
         if(/paint/i.test(m.name||'')&&m.map){ m.map.dispose(); m.map=null; }       // its metal-flake texture streaks across the panels
+        if(/glass|trim|stripe/i.test(m.name||'')){ m.polygonOffset=true; m.polygonOffsetFactor=-2; m.polygonOffsetUnits=-4; }   // thin layers on the paint always win the depth test (no flicker)
         if(/tail/i.test(m.name)){ tail=m; m.color.setRGB(.3,.025,.02); m.emissive.setRGB(1,.04,.02); m.emissiveIntensity=.05; }   // dark red lens, lit below
         if(/head/i.test(m.name)){ head=m; m.emissive.setRGB(1,.98,.88); m.emissiveIntensity=.35; }
         m.needsUpdate=true; }
