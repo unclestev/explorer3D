@@ -374,7 +374,12 @@ function placePhoto(braking){
     fm.quaternion.copy(camera.quaternion); fm.rotateZ(walk?0:-(S.roll+S.sr)*.8); fm.material.color.setScalar(b); }
   if(PHOTO.front) return;
   m.scale.setScalar(car.scale.x); m.position.copy(car.position);
-  m.quaternion.copy(camera.quaternion); m.rotateZ(car.rotation.y+(walk?0:(S.roll+S.sr)*.8));   // same lean directions as the 3D body (camera looks down the car's z axis)
+  // lean with the car's heading only for the small angles of the chase camera lagging in a turn (up to ~17°); panned
+  // further round (look-around, or walking past the parked car) the lean fades back to 0 by ~52°, so the photo stays
+  // upright on the ground instead of turning sideways or upside down
+  const yw=Math.atan2(Math.sin(car.rotation.y),Math.cos(car.rotation.y)), ay=Math.abs(yw),
+        lean=ay<=.3?yw:Math.sign(yw)*.3*Math.max(0,1-(ay-.3)/.6);
+  m.quaternion.copy(camera.quaternion); m.rotateZ(lean+(walk?0:(S.roll+S.sr)*.8));   // same lean directions as the 3D body (camera looks down the car's z axis)
   m.material.color.setScalar(b);
   PHOTO.glow.opacity=braking?1:(tailOff.color.r>.7?.45:0);        // tailOff turns brighter at night (js/enh/atmos.js)
   if(PHOTO.lights) PHOTO.lights.opacity=PHOTO.lights.map?PHOTO.glow.opacity:0;
