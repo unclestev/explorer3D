@@ -241,7 +241,7 @@ map.on('load',()=>{ try{ initMini();
   loadTowers();
   setTimeout(()=>toast('Tip: tap 🪂 to take off in a hang glider',5000),1500);
   styleReady=true;
-  const ld=document.getElementById('load'); ld.style.opacity=0; setTimeout(()=>ld.remove(),500);
+  const ld=document.getElementById('load'); if(ld){ ld.style.opacity=0; setTimeout(()=>ld.remove(),500); }   // (the 6 s backup timer below may already have removed it on a slow load)
   }catch(err){ console.error(err); var d=document.createElement('pre'); d.style.cssText='position:fixed;left:8px;right:8px;top:8px;z-index:9999;background:#7f1d1d;color:#fff;font:12px monospace;padding:10px;white-space:pre-wrap'; d.textContent='LOAD ERROR: '+err.message; document.body.appendChild(d); }
   const ld2=document.getElementById('load'); if(ld2){ld2.style.opacity=0; setTimeout(()=>ld2.remove(),500);}
   startLoop();
