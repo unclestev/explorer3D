@@ -5,10 +5,14 @@ let POWER=false;
 try{ const v=localStorage.getItem('ydPower'); POWER = v===null ? matchMedia('(pointer: coarse)').matches : v==='1'; }
 catch(e){ try{ POWER=matchMedia('(pointer: coarse)').matches; }catch(_){} }
 const mapPR=on=>Math.min(devicePixelRatio||1, on?1.25:2);
-// Start on Route 47 just south of Raging Waves waterpark, pointed at it
+// First start: on Route 47 just south of Raging Waves waterpark, pointed at it. After that: where you were last
+// (saved by js/enh/savepos.js as localStorage 'ydPos'; ⚙️ Start point goes back to HOME).
 const RAGING_WAVES={lng:-88.44446,lat:41.6989};
-const START=(()=>{ const lng=-88.4474, lat=41.6955, dN=(RAGING_WAVES.lat-lat)*111320, dE=(RAGING_WAVES.lng-lng)*111320*Math.cos(lat*Math.PI/180);
+const HOME=(()=>{ const lng=-88.4474, lat=41.6955, dN=(RAGING_WAVES.lat-lat)*111320, dE=(RAGING_WAVES.lng-lng)*111320*Math.cos(lat*Math.PI/180);
   return {lng,lat,hdg:(Math.atan2(dE,dN)*180/Math.PI+360)%360}; })();
+const START=(()=>{ try{ const p=JSON.parse(localStorage.getItem('ydPos')||'null');
+  if(p&&[p.lng,p.lat,p.hdg].every(Number.isFinite)&&Math.abs(p.lat)<85&&Math.abs(p.lng)<=180) return {lng:p.lng,lat:p.lat,hdg:p.hdg}; }catch(e){}
+  return HOME; })();
 /* ---------- MAP ---------- */
 const map = new maplibregl.Map({ pixelRatio:mapPR(POWER),
   container:'map', style:'https://tiles.openfreemap.org/styles/liberty',

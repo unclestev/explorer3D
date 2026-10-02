@@ -4,7 +4,7 @@
    the file versions (?v=) it lists with the ones running now.
    - Just after start, before you've driven anywhere: reloads straight away into the new version.
    - Later (e.g. coming back to the app): shows a small "New version — tap to update" button instead, so a drive is
-     never interrupted (the car's position isn't saved, so a reload starts you over). */
+     never interrupted. (Your position is saved by js/enh/savepos.js, so tapping it picks up where you were.) */
 (()=>{
 'use strict';
 const T0=Date.now();
