@@ -50,7 +50,8 @@
   <div class="setRow"><span>Sound<small>Engine sound · starts on your first tap</small></span><button id="audioBtn" class="switch" aria-label="Sound"></button></div>
   <div class="setRow"><span>Car size</span><div class="stepper"><button id="cm" aria-label="Smaller car">−</button><b id="carSize">100%</b><button id="cp" aria-label="Bigger car">+</button></div></div>
   <div class="setRow"><span>Camera zoom<small>Or pinch the map with two fingers</small></span><div class="stepper"><button id="zo" aria-label="Zoom out">−</button><b id="zoomVal">1.0×</b><button id="zi" aria-label="Zoom in">+</button></div></div>
-  <div class="setRow"><span>Start point<small>The game reopens where you left off · this goes back to Raging Waves</small></span><div class="stepper"><button id="homeBtn" style="width:auto;padding:0 12px;font-size:14px;font-weight:600">Go back</button></div></div>
+  <div class="setRow"><span>Start at<small>When you open the game</small></span><div class="seg" id="startPick"><button data-start="last">Last spot</button><button data-start="random">Random place</button></div></div>
+  <div class="setRow"><span>Go to now<small>Leaves where you are</small></span><div class="stepper"><button id="randomBtn" style="width:auto;padding:0 10px;font-size:14px;font-weight:600">Random</button><button id="homeBtn" style="width:auto;padding:0 10px;font-size:14px;font-weight:600">Raging Waves</button></div></div>
 </div>
 <div id="ctl">
   <div class="track" id="st"><div class="knob" id="stk"></div></div>
@@ -61,7 +62,7 @@
 </div>
 <script src="js/errors.js?v=3"></script>
 <script src="js/update.js?v=2"></script>
-<script src="js/game.js?v=36"></script>
+<script src="js/game.js?v=37"></script>
 <script src="js/enh/core.js?v=3"></script>
 <script src="js/enh/roads.js?v=10"></script>
 <script src="js/enh/signs.js?v=10"></script>
@@ -83,7 +84,7 @@
 <script src="js/enh/walk.js?v=2"></script>
 <script src="js/enh/look.js?v=1"></script>
 <script src="js/enh/buildings.js?v=5"></script>
-<script src="js/enh/savepos.js?v=1"></script>
+<script src="js/enh/savepos.js?v=2"></script>
 <script src="js/enh/boot.js?v=3"></script>
 </body>
 </html>

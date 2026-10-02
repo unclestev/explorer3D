@@ -10,8 +10,39 @@ const mapPR=on=>Math.min(devicePixelRatio||1, on?1.25:2);
 const RAGING_WAVES={lng:-88.44446,lat:41.6989};
 const HOME=(()=>{ const lng=-88.4474, lat=41.6955, dN=(RAGING_WAVES.lat-lat)*111320, dE=(RAGING_WAVES.lng-lng)*111320*Math.cos(lat*Math.PI/180);
   return {lng,lat,hdg:(Math.atan2(dE,dN)*180/Math.PI+360)%360}; })();
-const START=(()=>{ try{ const p=JSON.parse(localStorage.getItem('ydPos')||'null');
-  if(p&&[p.lng,p.lat,p.hdg].every(Number.isFinite)&&Math.abs(p.lat)<85&&Math.abs(p.lng)<=180) return {lng:p.lng,lat:p.lat,hdg:p.hdg}; }catch(e){}
+// ⚙️ Start at: 'last' (default) = where you left off; 'random' = one of these places, a different one each time.
+// Coordinates are the landmark itself (Wikipedia / historical-marker / map listings, 2026-10-02); savepos.js then moves
+// the car onto the nearest real road a short way before it, pointing along the road.
+const START_PLACES=[
+  {name:'Raging Waves, Yorkville',lng:-88.44446,lat:41.6989},
+  {name:'Kendall County Courthouse, Yorkville',lng:-88.44795,lat:41.64040},
+  {name:'Little White School Museum, Oswego',lng:-88.348953,lat:41.682725},
+  {name:'Blackberry Farm, Aurora',lng:-88.390971,lat:41.764934},
+  {name:'Paramount Theatre, Aurora',lng:-88.31444,lat:41.757667},
+  {name:'Aurora Municipal Airport, Sugar Grove',lng:-88.47556,lat:41.77194},
+  {name:'Waubonsee Community College, Sugar Grove',lng:-88.458531,lat:41.795358},
+  {name:'Farnsworth House, Plano',lng:-88.5357,lat:41.6350},
+  {name:'Silver Springs State Park, Yorkville',lng:-88.5225,lat:41.6275},
+  {name:'Fermilab, Batavia',lng:-88.25722,lat:41.83194},
+  {name:'Fabyan Villa, Geneva',lng:-88.31194,lat:41.87111},
+  {name:'Arcada Theatre, St. Charles',lng:-88.3120306,lat:41.913667},
+  {name:'Centennial Beach & Riverwalk, Naperville',lng:-88.1540,lat:41.7695},
+  {name:'Cantigny Park, Wheaton',lng:-88.1559,lat:41.8546},
+  {name:'Morton Arboretum, Lisle',lng:-88.07028,lat:41.81611},
+  {name:'Starved Rock State Park, Utica',lng:-88.99028,lat:41.32139}
+];
+const START=(()=>{
+  let how='last'; try{ how=localStorage.getItem('ydStart')||'last';
+    const once=localStorage.getItem('ydStartOnce'); if(once){ how=once; localStorage.removeItem('ydStartOnce'); } }catch(e){}   // ⚙️ Go to now (random / home)
+  if(how==='home') return HOME;
+  if(how==='random'){
+    let lastI=-1; try{ lastI=+localStorage.getItem('ydStartLast'); }catch(e){}
+    let i=Math.floor(Math.random()*START_PLACES.length); if(i===lastI) i=(i+1+Math.floor(Math.random()*(START_PLACES.length-1)))%START_PLACES.length;
+    try{ localStorage.setItem('ydStartLast',String(i)); }catch(e){}
+    const P=START_PLACES[i]; return {lng:P.lng,lat:P.lat,hdg:0,place:P};
+  }
+  try{ const p=JSON.parse(localStorage.getItem('ydPos')||'null');
+    if(p&&[p.lng,p.lat,p.hdg].every(Number.isFinite)&&Math.abs(p.lat)<85&&Math.abs(p.lng)<=180) return {lng:p.lng,lat:p.lat,hdg:p.hdg}; }catch(e){}
   return HOME; })();
 /* ---------- MAP ---------- */
 const map = new maplibregl.Map({ pixelRatio:mapPR(POWER),
