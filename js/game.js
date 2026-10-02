@@ -292,9 +292,12 @@ shadow.rotation.x=-Math.PI/2; shadow.position.y=.03; car.add(shadow);
 //   lamp  headlight offset from the centre line (m), front = front bumper distance ahead of the centre (m) — for the beams
 //   lights optional mask picture the same size as the photo, lit like the glows (used instead of glow spots)
 //   paint colour of the 3D body shown instead of the photo when you look at the car from the front
+//   fimg  optional front three-quarter photo (seen from the driver's side; mirrored for the passenger side) used instead of
+//         the 3D body from the front; fW its width in metres, fpiv [x, y] the car's centre on the ground as fractions (y from the bottom)
 //   sound engine in js/enh/sound.js; vmax top speed in m/s (speedometer units) — cars without one keep the old behaviour
 const CARS={
-  explorer:{name:'Ford Explorer ST',paint:0x3e4855,img:'img/explorer-rear.webp?v=1',W:2.35,piv:.38,glow:[[.088,.37],[.912,.37]],gw:.26,gh:.3,lamp:.68,front:2.4,sound:'ecoboost30'},
+  explorer:{name:'Ford Explorer ST',paint:0x3e4855,img:'img/explorer-rear.webp?v=1',W:2.35,piv:.38,glow:[[.088,.37],[.912,.37]],gw:.26,gh:.3,lamp:.68,front:2.4,sound:'ecoboost30',
+    fimg:'img/explorer-front.webp?v=1',fW:4.4,fpiv:[.525,.141]},     // front: the owner's Explorer ST photo, front-left three-quarter
   // AMC Javelin (the owner's photo): one full-width tail-light bar low on the tail, reversing light in the middle
   javelin:{name:'AMC Javelin',paint:0x141518,img:'img/javelin-rear.webp?v=1',W:1.95,piv:.40,glow:[[.15,.2],[.27,.2],[.38,.2],[.62,.2],[.73,.2],[.85,.2]],gw:.15,gh:.12,lamp:.62,front:2.44,sound:'amc401',vmax:120/2.237},   // top speed 120 mph
   // 2026 Lincoln Navigator (the owner's photo, white, lit bar): the red full-width light bar and wrap-around corner lamps
@@ -304,7 +307,7 @@ const CARS={
 };
 let CARKEY='explorer'; try{ const k=localStorage.getItem('ydCar'); if(CARS[k]) CARKEY=k; }catch(e){}
 let CARSPEC=CARS[CARKEY];
-const PHOTO={mesh:null,glow:null,lights:null,on:!/[?&]car=3d\b/.test(location.search),key:null};
+const PHOTO={mesh:null,glow:null,lights:null,fm:null,on:!/[?&]car=3d\b/.test(location.search),key:null};
 function loadPhoto(key){
   const c=CARS[key]; if(!PHOTO.on||!c) return;
   new THREE.TextureLoader().load(c.img,tex=>{
@@ -333,26 +336,45 @@ function loadPhoto(key){
 function setCar(key){
   if(!CARS[key]||key===CARKEY&&PHOTO.key===key) return;
   CARKEY=key; CARSPEC=CARS[key]; try{ localStorage.setItem('ydCar',key); }catch(e){}
-  loadPhoto(key);
+  loadPhoto(key); loadFront(key);
   try{ if(window.onCarChange) window.onCarChange(key); }catch(e){ console.warn('car change',e); }
   dirty=true;
 }
-loadPhoto(CARKEY);
+// the front photo (if the car has one): a second camera-facing picture, shown when you look at the car from the front
+function loadFront(key){
+  const old=PHOTO.fm; if(old){ scene.remove(old); old.geometry.dispose(); old.material.map.dispose(); old.material.dispose(); PHOTO.fm=null; }
+  const c=CARS[key]; if(!PHOTO.on||!c||!c.fimg) return;
+  new THREE.TextureLoader().load(c.fimg,tex=>{
+    if(key!==CARKEY||PHOTO.fm){ tex.dispose(); return; }
+    tex.anisotropy=renderer.capabilities.getMaxAnisotropy?Math.min(4,renderer.capabilities.getMaxAnisotropy()):1;
+    const W=c.fW, H=W*tex.image.height/tex.image.width;
+    const g=new THREE.PlaneGeometry(W,H); g.translate(W*(.5-c.fpiv[0]),H*(.5-c.fpiv[1]),0);
+    const m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({map:tex,transparent:true,alphaTest:.04,depthTest:false,depthWrite:false,side:THREE.DoubleSide}));
+    m.renderOrder=10; m.visible=false; scene.add(m); PHOTO.fm=m; dirty=true;
+  },undefined,e=>console.warn('car front photo could not load, using the 3D model',e));
+}
+loadPhoto(CARKEY); loadFront(CARKEY);
 // called every frame after the car transform is set: face the camera, lean with the car's heading and body roll
 function placePhoto(braking){
   const m=PHOTO.mesh; if(!m) return;
   const walk=mode==='walk', show=mode==='car'||walk&&!!window.WALK&&WALK.parked()==='car';   // on foot: the parked car
-  if(!show){ if(m.visible){ m.visible=false; body.visible=false; } return; }
-  // the photos only show the back: looking at the car from the front (camera panned round, or walking round it),
-  // show the 3D body in roughly the car's colour instead, and the photo again from behind (a little hysteresis)
+  const fm=PHOTO.fm;
+  if(!show){ if(m.visible||fm&&fm.visible){ m.visible=false; if(fm) fm.visible=false; body.visible=false; } return; }
+  // looking at the car from the front (camera panned round, or walking round it): the car's front photo, or the 3D body
+  // in roughly the car's colour for cars without one; the rear photo again from behind (a little hysteresis)
   const hd=walk?WALK.parkedAt.hdg:S.hdg, rel=Math.abs(((hd-S.camB)%360+540)%360-180);
   PHOTO.front=PHOTO.front?rel>95:rel>105;
   const pc=PHOTO.front&&CARSPEC.paint||PAINT0; if(paint.color.getHex()!==pc) paint.color.setHex(pc);
-  m.visible=!PHOTO.front; body.visible=PHOTO.front;
+  const hemi=scene.children.find(o=>o&&o.isHemisphereLight), b=Math.max(.32,Math.min(1,(hemi?hemi.intensity:.85)/.85+.08));
+  // from the front: the front photo if the car has one (camera on the passenger side → mirrored), else the 3D body
+  const useF=PHOTO.front&&!!fm&&PHOTO.key===CARKEY;
+  m.visible=!PHOTO.front; body.visible=PHOTO.front&&!useF; if(fm) fm.visible=useF;
+  if(useF){ const d=((S.camB-hd)%360+540)%360-180;              // > 0: camera ahead-left of the car (driver's side)
+    const sc=car.scale.x; fm.scale.set(d>=0?sc:-sc,sc,sc); fm.position.copy(car.position);
+    fm.quaternion.copy(camera.quaternion); fm.rotateZ(walk?0:-(S.roll+S.sr)*.8); fm.material.color.setScalar(b); }
   if(PHOTO.front) return;
   m.scale.setScalar(car.scale.x); m.position.copy(car.position);
   m.quaternion.copy(camera.quaternion); m.rotateZ(car.rotation.y+(walk?0:(S.roll+S.sr)*.8));   // same lean directions as the 3D body (camera looks down the car's z axis)
-  const hemi=scene.children.find(o=>o&&o.isHemisphereLight), b=Math.max(.32,Math.min(1,(hemi?hemi.intensity:.85)/.85+.08));
   m.material.color.setScalar(b);
   PHOTO.glow.opacity=braking?1:(tailOff.color.r>.7?.45:0);        // tailOff turns brighter at night (js/enh/atmos.js)
   if(PHOTO.lights) PHOTO.lights.opacity=PHOTO.lights.map?PHOTO.glow.opacity:0;
