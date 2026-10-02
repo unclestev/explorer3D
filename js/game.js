@@ -278,6 +278,8 @@ const gr=sx.createRadialGradient(64,64,10,64,64,64); gr.addColorStop(0,'rgba(0,0
 sx.fillStyle=gr; sx.fillRect(0,0,128,128);
 const shadow=new THREE.Mesh(new THREE.PlaneGeometry(3.4,6.6),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(sc),transparent:true,depthWrite:false}));
 shadow.rotation.x=-Math.PI/2; shadow.position.y=.03; car.add(shadow);
+// the generic SUV parts, grouped so a 3D model car (below) can be shown under body instead
+const suv=new THREE.Group(); while(body.children.length) suv.add(body.children[0]); body.add(suv);
 
 /* ---------- PHOTO BODY ----------
    A cut-out photo of a real Explorer ST (img/explorer-rear.webp, the owner's own picture) is shown instead of the
@@ -295,6 +297,7 @@ shadow.rotation.x=-Math.PI/2; shadow.position.y=.03; car.add(shadow);
 //   fimg  optional front three-quarter photo (seen from the driver's side; mirrored for the passenger side) used instead of
 //         the 3D body from the front; fW its width in metres, fpiv [x, y] the car's centre on the ground as fractions (y from the bottom)
 //   sound engine in js/enh/sound.js; vmax top speed in m/s (speedometer units) — cars without one keep the old behaviour
+//   model a .glb 3D model (metres, front +z, ground at y 0, wheels as nodes named Wheel_*) drawn instead of a photo
 const CARS={
   explorer:{name:'Ford Explorer ST',paint:0x3e4855,img:'img/explorer-rear.webp?v=1',W:2.35,piv:.38,glow:[[.088,.37],[.912,.37]],gw:.26,gh:.3,lamp:.68,front:2.4,sound:'ecoboost30',
     fimg:'img/explorer-front.webp?v=1',fW:4.4,fpiv:[.525,.141]},     // front: the owner's Explorer ST photo, front-left three-quarter
@@ -303,13 +306,17 @@ const CARS={
   // 2026 Lincoln Navigator (the owner's photo, white, lit bar): the red full-width light bar and wrap-around corner lamps
   // glow from a mask cut from the photo's own red pixels (img/navigator-lights.webp), so the light covers all of that red
   navigator:{name:'Lincoln Navigator',paint:0xe6e8ea,img:'img/navigator-rear.webp?v=2',lights:'img/navigator-lights.webp?v=1',W:2.4,piv:.40,glow:[],
-    gw:.1,gh:.1,lamp:.74,front:2.67,sound:'ecoboost35'}
+    gw:.1,gh:.1,lamp:.74,front:2.67,sound:'ecoboost35'},
+  // 1972 AMC Javelin AMX 401 as a real 3D model (the owner's .glb, 2026-10-02): turns properly from every angle.
+  // Same engine and top speed as the photo Javelin, which stays as its own choice.
+  javelin3d:{name:'AMC Javelin AMX',paint:0x141518,model:'models/javelin-amx.glb?v=1',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237}
 };
 let CARKEY='explorer'; try{ const k=localStorage.getItem('ydCar'); if(CARS[k]) CARKEY=k; }catch(e){}
 let CARSPEC=CARS[CARKEY];
 const PHOTO={mesh:null,glow:null,lights:null,fm:null,on:!/[?&]car=3d\b/.test(location.search),key:null};
 function loadPhoto(key){
-  const c=CARS[key]; if(!PHOTO.on||!c) return;
+  const c=CARS[key]; if(c&&c.model){ loadModel(key); return; }
+  if(!PHOTO.on||!c) return;
   new THREE.TextureLoader().load(c.img,tex=>{
     if(key!==CARKEY){ tex.dispose(); return; }                     // switched again while this one was loading
     tex.anisotropy=renderer.capabilities.getMaxAnisotropy?Math.min(4,renderer.capabilities.getMaxAnisotropy()):1;
@@ -353,11 +360,75 @@ function loadFront(key){
     m.renderOrder=10; m.visible=false; scene.add(m); PHOTO.fm=m; dirty=true;
   },undefined,e=>console.warn('car front photo could not load, using the 3D model',e));
 }
+/* ---------- 3D MODEL CARS ----------
+   A car with `model` is a real 3D model under `body` (so it rolls and pitches like the SUV), loaded only when that car
+   is picked (GLTFLoader too, from js/lib). Until it has loaded, the generic SUV shows in the car's paint. glTF faces +z,
+   the game's car faces -z, so the model is turned 180°. The renderer has no sRGB output, so the model's colours are
+   converted to match the rest of the scene; metal reflects a small sky/ground gradient made once (PMREM). */
+const MODELS={};                                   // key -> {g, wheels:[{o,front}], r, tail, head, mats} (kept once loaded)
+let ENVTEX=null;
+function envTex(){
+  if(ENVTEX) return ENVTEX;
+  const es=new THREE.Scene(), geo=new THREE.SphereGeometry(10,24,12), pos=geo.attributes.position, col=[], c=new THREE.Color();
+  const sky=new THREE.Color(0x7d9ccc), hor=new THREE.Color(0xdde6ef), gnd=new THREE.Color(0x3c3f3c), gh=new THREE.Color(0x8d8f88);
+  for(let i=0;i<pos.count;i++){ const y=pos.getY(i)/10; if(y>=0) c.copy(hor).lerp(sky,Math.pow(y,.6)); else c.copy(gh).lerp(gnd,Math.pow(-y,.5)); col.push(c.r,c.g,c.b); }
+  geo.setAttribute('color',new THREE.Float32BufferAttribute(col,3));
+  es.add(new THREE.Mesh(geo,new THREE.MeshBasicMaterial({vertexColors:true,side:THREE.BackSide})));
+  const pm=new THREE.PMREMGenerator(renderer); ENVTEX=pm.fromScene(es,.04).texture; pm.dispose(); geo.dispose();
+  return ENVTEX;
+}
+function loadModel(key){
+  const c=CARS[key]; if(!c||!c.model||MODELS[key]||loadModel.busy===key) return;
+  loadModel.busy=key;
+  const go=()=>new THREE.GLTFLoader().load(c.model,gl=>{
+    loadModel.busy=null;
+    const g=new THREE.Group(), root=gl.scene, env=envTex(), mats=new Set(), wheels=[]; let tail=null, head=null, r=.33;
+    g.rotation.y=Math.PI; g.add(root); g.visible=false;
+    root.traverse(o=>{
+      if(/^wheel/i.test(o.name)&&!/^wheel/i.test(o.parent&&o.parent.name||'')){ o.rotation.order='YXZ'; wheels.push({o,front:o.position.z>0}); }   // the outermost node of each wheel
+      if(!o.isMesh) return;
+      const ms=Array.isArray(o.material)?o.material:[o.material];
+      // lamps flush with (or just inside) the body would be hidden by the paint: move them 3.5 cm out from the car's end
+      if(ms.some(m=>/tail|head/i.test(m.name||''))){ const bb=new THREE.Box3().setFromObject(o), cz=(bb.min.z+bb.max.z)/2; o.position.z+=Math.sign(cz)*.035; }
+      for(const m of ms){ if(mats.has(m)) continue; mats.add(m);
+        if(m.color) m.color.convertLinearToSRGB(); if(m.emissive) m.emissive.convertLinearToSRGB();
+        for(const t of [m.map,m.emissiveMap]) if(t){ t.encoding=THREE.LinearEncoding; t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy()); }
+        if(m.isMeshStandardMaterial){ m.envMap=env; m.envMapIntensity=1; }
+        if(/paint/i.test(m.name||'')&&m.map){ m.map.dispose(); m.map=null; }       // its metal-flake texture streaks across the panels
+        if(/tail/i.test(m.name)){ tail=m; m.color.setRGB(.3,.025,.02); m.emissive.setRGB(1,.04,.02); m.emissiveIntensity=.05; }   // dark red lens, lit below
+        if(/head/i.test(m.name)){ head=m; m.emissive.setRGB(1,.98,.88); m.emissiveIntensity=.35; }
+        m.needsUpdate=true; }
+    });
+    for(const w of wheels){ const bb=new THREE.Box3().setFromObject(w.o); r=Math.max(.15,(bb.max.y-bb.min.y)/2); }
+    body.add(g); MODELS[key]={g,wheels,r,tail,head,mats:[...mats],lit:-1}; dirty=true;
+  },undefined,e=>{ loadModel.busy=null; console.warn('car model could not load, using the 3D SUV',e); });
+  if(THREE.GLTFLoader) go();
+  else{ const s=document.createElement('script'); s.src='js/lib/GLTFLoader.js?v=1'; s.onload=go;
+    s.onerror=()=>{ loadModel.busy=null; console.warn('GLTFLoader could not load'); }; document.head.appendChild(s); }
+}
+// every frame for a model car: show it (or the SUV until it has loaded), spin/steer its wheels, light its lamps
+function placeModel(braking,show){
+  const md=MODELS[CARKEY];
+  if(PHOTO.mesh&&PHOTO.mesh.visible) PHOTO.mesh.visible=false; if(PHOTO.fm&&PHOTO.fm.visible) PHOTO.fm.visible=false;
+  for(const k in MODELS) MODELS[k].g.visible=k===CARKEY;
+  suv.visible=!md; if(!show) return;
+  if(!md){ if(paint.color.getHex()!==CARSPEC.paint) paint.color.setHex(CARSPEC.paint); body.visible=true; return; }
+  body.visible=true;
+  if(mode==='car') for(const w of md.wheels){ w.o.rotation.x=S.dist/md.r; w.o.rotation.y=w.front?-S.steer:0; }
+  const hemi=scene.children.find(o=>o&&o.isHemisphereLight), b=Math.max(.32,Math.min(1,(hemi?hemi.intensity:.85)/.85+.08));
+  const night=tailOff.color.r>.7, lit=(braking?2:0)+(night?1:0)+b;              // only touch materials when something changed
+  if(Math.abs(lit-md.lit)>.01){ md.lit=lit;
+    for(const m of md.mats) if(m.isMeshStandardMaterial) m.envMapIntensity=b;
+    if(md.tail) md.tail.emissiveIntensity=braking?2.4:night?.6:.05;
+    if(md.head) md.head.emissiveIntensity=night?1.6:.35; }
+}
 loadPhoto(CARKEY); loadFront(CARKEY);
 // called every frame after the car transform is set: face the camera, lean with the car's heading and body roll
 function placePhoto(braking){
-  const m=PHOTO.mesh; if(!m) return;
   const walk=mode==='walk', show=mode==='car'||walk&&!!window.WALK&&WALK.parked()==='car';   // on foot: the parked car
+  if(CARSPEC.model){ placeModel(braking,show); return; }
+  if(!suv.visible){ suv.visible=true; for(const k in MODELS) MODELS[k].g.visible=false; }
+  const m=PHOTO.mesh; if(!m) return;
   const fm=PHOTO.fm;
   if(!show){ if(m.visible||fm&&fm.visible){ m.visible=false; if(fm) fm.visible=false; body.visible=false; } return; }
   // looking at the car from the front (camera panned round, or walking round it): the car's front photo, or the 3D body
