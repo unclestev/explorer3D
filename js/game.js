@@ -309,7 +309,9 @@ const CARS={
     gw:.1,gh:.1,lamp:.74,front:2.67,sound:'ecoboost35'},
   // 1972 AMC Javelin AMX 401 as a real 3D model (the owner's .glb, 2026-10-02): turns properly from every angle.
   // Same engine and top speed as the photo Javelin, which stays as its own choice.
-  javelin3d:{name:'AMC Javelin AMX',paint:0x141518,model:'models/javelin-amx.glb?v=1',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237}
+  javelin3d:{name:'AMC Javelin AMX',paint:0x141518,model:'models/javelin-amx.glb?v=1',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237},
+  // the owner's second version of that model (2026-10-02): wheel wells, window frames, non-metallic black paint, darker glass
+  javelin3d2:{name:'AMC Javelin AMX',paint:0x141518,model:'models/javelin-amx-v2.glb?v=1',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237}
 };
 let CARKEY='explorer'; try{ const k=localStorage.getItem('ydCar'); if(CARS[k]) CARKEY=k; }catch(e){}
 let CARSPEC=CARS[CARKEY];
@@ -391,7 +393,8 @@ function loadModel(key){
       // lamps flush with (or just inside) the body would be hidden by the paint: move them 3.5 cm out from the car's end
       if(ms.some(m=>/tail|head/i.test(m.name||''))){ const bb=new THREE.Box3().setFromObject(o), cz=(bb.min.z+bb.max.z)/2; o.position.z+=Math.sign(cz)*.035; }
       for(const m of ms){ if(mats.has(m)) continue; mats.add(m);
-        if(m.color) m.color.convertLinearToSRGB(); if(m.emissive) m.emissive.convertLinearToSRGB();
+        // near-black colours stay as they are: converted, they turn mid-grey under the scene's lights (black paint looked charcoal)
+        if(m.color&&Math.max(m.color.r,m.color.g,m.color.b)>=.05) m.color.convertLinearToSRGB(); if(m.emissive) m.emissive.convertLinearToSRGB();
         for(const t of [m.map,m.emissiveMap]) if(t){ t.encoding=THREE.LinearEncoding; t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy()); }
         if(m.isMeshStandardMaterial){ m.envMap=env; m.envMapIntensity=1; }
         if(/paint/i.test(m.name||'')&&m.map){ m.map.dispose(); m.map=null; }       // its metal-flake texture streaks across the panels
