@@ -1102,7 +1102,10 @@ function step(now){
   // inputs (keyboard eases like an analog stick)
   const ease=(v,p,n)=>{ if(p)v+=dt*4; else if(n)v-=dt*4; else v*=Math.exp(-dt*8); return Math.max(-1,Math.min(1,v)); };
   kS=ease(kS,K.d||K.arrowright,K.a||K.arrowleft); kG=ease(kG,K.w||K.arrowup,K.s||K.arrowdown);
-  let st=Math.abs(tSteer)>.05?tSteer:kS, gas=Math.abs(tGas)>.05?tGas:kG; const hand=!!K[' '];
+  // racing wheel + pedals on a PC (js/enh/wheel.js); the touch controls and keys still win when used
+  const WH=window.WHEEL&&WHEEL.read();
+  const wS=WH&&Math.abs(kS)<.05?WH.st:kS, wG=WH&&Math.abs(kG)<.05&&(WH.ok||WH.cal)?WH.gas:kG;
+  let st=Math.abs(tSteer)>.05?tSteer:wS, gas=Math.abs(tGas)>.05?tGas:wG; const hand=!!K[' '];
   // autopilot (js/enh/autopilot.js) drives until you touch the steering, gas or handbrake
   if(window.AUTO&&AUTO.on){ if(Math.abs(st)>.05||Math.abs(gas)>.05||hand) AUTO.takeover(); else { const c=AUTO.control(dt); st=c.st; gas=c.gas; } }
   S.gas=gas;                                                      // pedal position for add-ons (engine sound)
