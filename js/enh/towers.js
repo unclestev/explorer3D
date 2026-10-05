@@ -2,7 +2,7 @@
    - Oswego: wide white "onion" tank on a plain white column, with the Village of Oswego logo
      (cattails, small "Village Of", navy "Oswego", blue swoosh) three times around the tank.
    - Yorkville: round white tank on a tall slim column that flares at the ground, two thin red bands
-     with red "YORKVILLE" between them, twice around the tank.
+     with red "YORKVILLE" between them and the red fox head (Yorkville Foxes) to the right of the name, twice around the tank.
    - Sugar Grove: white egg-shaped tank (widest above the middle, tapering into a short flared neck) on a slim column,
      topped by a ring of cell antennas and a tall mast. Twice around the tank: navy small-caps serif "SUGAR GROVE"
      (light-blue edge) and a group of four green trees standing on their shadows.
@@ -25,6 +25,9 @@ function wedge(t,r,a0,a1){ const k=kx(t), ring=[[t.lng,t.lat]], n=Math.max(1,Mat
 const F=(geom,b,h,c)=>({type:'Feature',properties:{k:'tw',b:+b.toFixed(2),h:+h.toFixed(2),c},geometry:{type:'Polygon',coordinates:geom}});
 const segs=r=>Math.max(16,Math.min(40,Math.round(r*3.2)));
 
+// Yorkville fox head, metres: x from the fox's centre, z = height above ground (traced off the owner's photo, 2026-10-04)
+const FOX={"out":[-1.28,35.49,-1.39,35.8,-1.45,36.24,-1.48,36.67,-1.45,37.02,-1.37,37.14,-1.23,37.08,-1.0,36.72,-0.77,36.39,-0.56,36.16,-0.42,35.96,-0.19,35.87,0.07,35.89,0.29,35.98,0.42,36.16,0.53,36.5,0.65,36.88,0.81,37.12,0.99,37.24,1.12,37.25,1.22,37.16,1.24,36.69,1.21,36.0,1.18,35.49,1.33,35.17,1.41,35.12,1.36,35.04,1.47,34.77,1.52,34.72,1.41,34.65,1.28,34.57,1.21,34.36,1.28,34.09,1.39,33.91,1.53,33.86,1.42,33.78,1.34,33.61,1.4,33.48,1.26,33.4,1.09,33.42,0.87,33.35,0.67,33.07,0.44,32.91,0.17,32.85,-0.08,32.92,-0.33,33.07,-0.57,33.3,-0.69,33.43,-0.87,33.33,-1.0,33.3,-1.16,33.44,-1.27,33.63,-1.27,33.71,-1.33,33.98,-1.26,34.23,-1.43,34.33,-1.46,34.51,-1.47,34.85,-1.53,35.12,-1.43,35.28,-1.34,35.36,-1.28,35.49],"earL":[-1.42,36.94,-1.29,36.96,-1.05,36.68,-0.82,36.31,-0.61,35.95,-0.62,35.69,-0.81,35.49,-1.03,35.4,-1.24,35.48,-1.3,35.75,-1.36,36.14,-1.44,36.63],"earR":[0.65,36.83,0.86,36.94,1.09,36.9,1.12,36.53,1.04,35.85,0.97,35.49,0.86,35.41,0.67,35.52,0.53,35.72,0.56,36.32],"eyeL":[-0.44,34.72,-0.27,34.73,-0.12,34.61,-0.1,34.45,-0.21,34.42,-0.36,34.5],"eyeR":[0.27,34.7,0.43,34.77,0.55,34.75,0.49,34.55,0.35,34.44,0.24,34.46,0.22,34.58],"lines":[[-0.53,35.2,-0.46,34.98],[0.38,35.21,0.43,34.95],[-0.44,34.29,-0.18,34.22],[0.47,34.3,0.61,34.37],[-0.13,34.39,-0.1,34.13,-0.08,33.91],[0.18,34.36,0.23,34.14,0.27,33.92],[-0.85,34.06,-0.6,33.96,-0.35,33.8,-0.19,33.7,-0.06,33.61],[0.94,34.25,0.8,34.05,0.52,33.9,0.38,33.78,0.28,33.62]],"nose":[0.15,33.59,0.16,0.19]};
+
 // ---------- the designs (heights in metres from the ground; measured off the photos) ----------
 const D={
   york:{
@@ -35,14 +38,21 @@ const D={
       return Math.max(sph,neck,z<26?1.9:0); },
     top:42.0, light:42.95,
     rings:[[0,.6,.6],[.6,2.2,.4],[2.2,25.5,23.3],[25.5,32,.5],[38.4,42,.4]],
-    band:{z0:32,z1:38.4,rowH:.32,M:420,Rref:9.7,copies:2,
+    band:{z0:32,z1:38.4,rowH:.16,M:600,Rref:9.7,copies:2,       // finer rows/columns (were .32 m / 420) so the fox's lines show
       pal:['#f2f4f6','#c8202a'],
       draw(x,W,Hm,cx){                                            // x: canvas scaled to metres; y = 0 at the top of the band
+        const Z=z=>Hm-(z-32);
         x.fillStyle='#c8202a';
-        x.fillRect(0,Hm-(37.95-32),W,.48); x.fillRect(0,Hm-(32.65-32),W,.48);   // the two red bands, all the way round
+        x.fillRect(0,Z(38.08),W,.64); x.fillRect(0,Z(32.64),W,.64);   // the two red bands, all the way round (where the old .32 m rows drew them)
         x.save(); x.translate(cx,Hm-(33.5-32)); x.font='700 100px Arial, Helvetica, sans-serif';
         const w=x.measureText('YORKVILLE').width; x.scale(14.5/w,3.3/72); x.textAlign='center'; x.textBaseline='alphabetic';
-        x.fillText('YORKVILLE',0,0); x.restore(); }},
+        x.fillText('YORKVILLE',0,0); x.restore();
+        // fox head from the owner's photo (traced off the tank, unrolled): outline, filled ears/eyes/nose, face lines
+        const fx=cx+10.3, P=a=>{ x.beginPath(); for(let i=0;i<a.length;i+=2) x[i?'lineTo':'moveTo'](fx+a[i],Z(a[i+1])); };
+        x.strokeStyle='#c8202a'; x.lineWidth=.2; x.lineJoin=x.lineCap='round';
+        for(const k of ['earL','earR','eyeL','eyeR']){ P(FOX[k]); x.closePath(); x.fill(); x.stroke(); }
+        P(FOX.out); x.stroke(); for(const l of FOX.lines){ P(l); x.stroke(); }
+        const n=FOX.nose; x.beginPath(); x.ellipse(fx+n[0],Z(n[1]),n[2],n[3],0,0,7); x.fill(); }},
     extras(t,f){ f.push(F([circle(t,2.8,24),circle(t,2.6,24).reverse()],41.3,42.2,RAIL));     // railing round the hatch
       f.push(F([circle(t,.6,10)],41.9,42.8,RAIL)); }
   },
