@@ -26,8 +26,9 @@ const F=(geom,b,h,c)=>({type:'Feature',properties:{k:'tw',b:+b.toFixed(2),h:+h.t
 const segs=r=>Math.max(16,Math.min(40,Math.round(r*3.2)));
 
 // Yorkville Foxes fox head (redrawn from the owner's close-up photo of the tank, 2026-10-04).
-// Design units: x -44..44 (0 = centre line), y 0 (ear tips) .. 142 (chin), y down. Symmetric; the right half is listed.
+// Design units: x -44..44 (×1.08 when drawn) (0 = centre line), y 0 (ear tips) .. 142 (chin), y down. Symmetric; the right half is listed.
 function drawFox(x,lw){
+  x.save(); x.scale(1.08,1);                 // drawn a touch wider than the units below
   const R='#c8202a'; x.fillStyle=R; x.strokeStyle=R; x.lineWidth=lw; x.lineJoin='round'; x.lineCap='round';
   const half=[                               // outline from the dip between the ears round the right side to the chin
     ['Q',6.5,44.5,9,41],                      // rounded dip between the ears
@@ -36,8 +37,8 @@ function drawFox(x,lw){
     ['C',33,59,35.5,63,37,67],['L',40.5,70.5],['L',38,73.5],['L',41,77.5],['L',39.5,82],   // wavy fur down the side of the head
     ['L',32,83],                             // the step in at the cheek
     ['Q',29,90,30,97],['Q',33,101,38,104],   // and out again round the lower cheek
-    ['L',40,109],['L',36,112],['L',40,117],['L',31,121],['L',33,125],   // jaw tufts
-    ['C',27,131,14,141,0,142]];              // jaw round to the chin
+    ['L',40,109],['L',36,112],['L',40,117],['L',31,120],['L',34,124.5],['L',24,121.5],   // jaw tufts
+    ['C',23.5,134,12.5,142,0,142]];          // half-circle chin
   const pts=s=>{ const a=[]; for(let i=1;i<s.length;i+=2) a.push([s[i],s[i+1]]); return a; };
   const op=s=>s[0]==='C'?'bezierCurveTo':s[0]==='Q'?'quadraticCurveTo':'lineTo';
   x.beginPath(); x.moveTo(0,44.5);
@@ -58,10 +59,12 @@ function drawFox(x,lw){
     x.moveTo(X(15.6),95); x.lineTo(X(13.2),98.5);                                     // tick under the eye
     x.moveTo(X(5.4),78); x.bezierCurveTo(X(4.4),87,X(4),97,X(4.4),106.5);           // muzzle line, eye to nose
     x.moveTo(X(25),95.5); x.bezierCurveTo(X(24),101.5,X(15.5),103.5,X(11),106.5);        // cheek line curving in…
-    x.bezierCurveTo(X(8.5),108.5,X(8),112,X(8),116.5);                                // …and down beside the nose
+    x.bezierCurveTo(X(8.2),108.5,X(7.2),111.5,X(7.2),116.5);                                // …down beside the nose…
+    x.bezierCurveTo(X(7.2),122.5,X(4.2),127,X(0),127);                                      // …joining its twin in a U under it
     x.stroke();
   }
-  x.beginPath(); x.ellipse(0,115,4.4,5.4,0,0,7); x.fill();                          // nose
+  x.beginPath(); x.ellipse(0,117,3.6,5.2,0,0,7); x.fill();                        // nose: tall oval inside the U
+  x.restore();
 }
 
 // ---------- the designs (heights in metres from the ground; measured off the photos) ----------
@@ -83,7 +86,7 @@ const D={
         const w=x.measureText('YORKVILLE').width; x.scale(14.5/w,3.3/72); x.textAlign='center'; x.textBaseline='alphabetic';
         x.fillText('YORKVILLE',0,0); x.restore(); }},
     // the Yorkville Foxes fox head, right of each YORKVILLE: a finer picture laid just outside the band (see decalRects)
-    decal:{x:9.4,z0:32.85,z1:37.25,cell:.033,color:'#c8202a',units:[88,142],draw:drawFox},
+    decal:{x:9.55,z0:32.85,z1:37.25,cell:.033,color:'#c8202a',units:[96,142],draw:drawFox},
     extras(t,f){ f.push(F([circle(t,2.8,24),circle(t,2.6,24).reverse()],41.3,42.2,RAIL));     // railing round the hatch
       f.push(F([circle(t,.6,10)],41.9,42.8,RAIL)); }
   },
