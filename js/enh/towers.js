@@ -25,46 +25,43 @@ function wedge(t,r,a0,a1){ const k=kx(t), ring=[[t.lng,t.lat]], n=Math.max(1,Mat
 const F=(geom,b,h,c)=>({type:'Feature',properties:{k:'tw',b:+b.toFixed(2),h:+h.toFixed(2),c},geometry:{type:'Polygon',coordinates:geom}});
 const segs=r=>Math.max(16,Math.min(40,Math.round(r*3.2)));
 
-// Yorkville fox head (redrawn from the owner's photo of the tank, 2026-10-04), in design units: x -56..56 (0 = centre line), y 0 (ear tips) .. 142 (chin), y down.
+// Yorkville Foxes fox head (redrawn from the owner's close-up photo of the tank, 2026-10-04).
+// Design units: x -44..44 (0 = centre line), y 0 (ear tips) .. 142 (chin), y down. Symmetric; the right half is listed.
 function drawFox(x,lw){
   const R='#c8202a'; x.fillStyle=R; x.strokeStyle=R; x.lineWidth=lw; x.lineJoin='round'; x.lineCap='round';
-  // half outline, right side, from the dip between the ears to the chin; the left side is its mirror
-  const half=[
-    ['C',7,40,12,38,15,30],                 // top of the head rising into the ear
-    ['C',19,20,27,8,33,0],                  // inner edge of the ear up to the tip
-    ['C',37,10,42,32,44,52],                // outer edge of the ear
-    ['Q',45,58,47,63],['L',52,70],['L',46,72],          // ruff tufts down the side of the head
-    ['Q',42,76,41,81],['L',43,84],['L',40,87],
-    ['Q',41,94,44,98],['L',51,104],['L',46,106],
-    ['Q',45,110,44,113],['L',48,118],['L',39,119],
-    ['Q',36,121,34,124],['L',36,129],['L',27,128],
-    ['C',20,134,8,142.5,0,142.5]];              // jaw tapering to the chin             // jaw to the chin
+  const half=[                               // outline from the dip between the ears round the right side to the chin
+    ['Q',6.5,44.5,9,41],                      // rounded dip between the ears
+    ['C',15,28,24.5,10,32,0],                  // long inner edge of the ear up to the tip (ears lean out)
+    ['C',34,14,33,38,31,55],                 // outer edge of the ear
+    ['C',33,59,35.5,63,37,67],['L',40.5,70.5],['L',38,73.5],['L',41,77.5],['L',39.5,82],   // wavy fur down the side of the head
+    ['L',32,83],                             // the step in at the cheek
+    ['Q',29,90,30,97],['Q',33,101,38,104],   // and out again round the lower cheek
+    ['L',40,109],['L',36,112],['L',40,117],['L',31,121],['L',33,125],   // jaw tufts
+    ['C',27,131,14,141,0,142]];              // jaw round to the chin
   const pts=s=>{ const a=[]; for(let i=1;i<s.length;i+=2) a.push([s[i],s[i+1]]); return a; };
-  x.beginPath(); x.moveTo(0,40);
-  for(const s of half){ const p=pts(s); x[s[0]==='C'?'bezierCurveTo':s[0]==='Q'?'quadraticCurveTo':'lineTo'](...p.flat()); }
-  // back up the left side: same segments mirrored and reversed
-  let cur=[0,142]; const ends=[[0,40]]; let e=[0,40]; for(const s of half){ const p=pts(s); ends.push(p[p.length-1]); }
-  for(let i=half.length-1;i>=0;i--){ const s=half[i], p=pts(s), start=ends[i];
-    const ctrl=p.slice(0,-1).reverse().map(q=>[-q[0],q[1]]), to=[-start[0],start[1]];
-    x[s[0]==='C'?'bezierCurveTo':s[0]==='Q'?'quadraticCurveTo':'lineTo'](...ctrl.flat(),...to); }
+  const op=s=>s[0]==='C'?'bezierCurveTo':s[0]==='Q'?'quadraticCurveTo':'lineTo';
+  x.beginPath(); x.moveTo(0,44.5);
+  for(const s of half) x[op(s)](...pts(s).flat());
+  const ends=[[0,44.5]]; for(const s of half){ const p=pts(s); ends.push(p[p.length-1]); }
+  for(let i=half.length-1;i>=0;i--){ const p=pts(half[i]), st=ends[i];          // mirrored back up the left side
+    x[op(half[i])](...p.slice(0,-1).reverse().map(q=>[-q[0],q[1]]).flat(),-st[0],st[1]); }
   x.closePath(); x.stroke();
-  for(const m of [1,-1]){
-    const X=v=>v*m;
-    // inner ear, filled
-    x.beginPath(); x.moveTo(X(32),6); x.bezierCurveTo(X(26),17,X(20),33,X(21),43);
-    x.bezierCurveTo(X(22),51,X(33),54,X(39),46); x.bezierCurveTo(X(40),30,X(36),15,X(32),6); x.fill();
-    // eye: slanted almond, round at the outer top, pointed at the inner bottom
-    const A=[17.5,72], B=[6.5,91], dx=B[0]-A[0], dy=B[1]-A[1], L=Math.hypot(dx,dy), px=-dy/L, py=dx/L;
-    x.beginPath(); x.moveTo(X(A[0]-px*0),A[1]);
-    x.bezierCurveTo(X(A[0]+px*6+dx*.05),A[1]+py*6+dy*.05, X(B[0]+px*3.2-dx*.3),B[1]+py*3.2-dy*.3, X(B[0]),B[1]);
-    x.bezierCurveTo(X(B[0]-px*2.2-dx*.3),B[1]-py*2.2-dy*.3, X(A[0]-px*5+dx*.05),A[1]-py*5+dy*.05, X(A[0]),A[1]); x.fill();
-    // brow marks, tick under the eye, muzzle line, cheek-to-nose line
-    x.beginPath(); x.moveTo(X(12),59); x.lineTo(X(13),68.5);
-    x.moveTo(X(15),95); x.lineTo(X(18.5),91.5);
-    x.moveTo(X(5),94); x.bezierCurveTo(X(5.5),100,X(6),106,X(6.5),111);
-    x.moveTo(X(28),93); x.bezierCurveTo(X(26),104,X(17),110,X(8.5),113.5); x.stroke();
+  for(const m of [1,-1]){ const X=v=>v*m;
+    // inner ear: a long red leaf along the ear, pointed at the top, blunt and slanted at the bottom
+    x.beginPath(); x.moveTo(X(30.4),7); x.bezierCurveTo(X(25.6),14,X(18.4),26,X(13.8),38);
+    x.quadraticCurveTo(X(12.8),45.5,X(17.5),48.5); x.lineTo(X(24),51); x.quadraticCurveTo(X(28),52.5,X(28.8),47.5);
+    x.bezierCurveTo(X(30.6),36,X(31.2),18,X(30.4),7); x.fill();
+    // eye: plump oval tilted with its top outward
+    x.beginPath(); x.ellipse(X(10.6),87.5,3.3,6.3,X(.48),0,7); x.fill();
+    x.beginPath();
+    x.moveTo(X(11.7),65); x.lineTo(X(11.9),75.5);                                   // brow mark above the eye
+    x.moveTo(X(15.6),95); x.lineTo(X(13.2),98.5);                                     // tick under the eye
+    x.moveTo(X(5.4),78); x.bezierCurveTo(X(4.4),87,X(4),97,X(4.4),106.5);           // muzzle line, eye to nose
+    x.moveTo(X(25),95.5); x.bezierCurveTo(X(24),101.5,X(15.5),103.5,X(11),106.5);        // cheek line curving in…
+    x.bezierCurveTo(X(8.5),108.5,X(8),112,X(8),116.5);                                // …and down beside the nose
+    x.stroke();
   }
-  x.beginPath(); x.ellipse(0,118,4.4,5.6,0,0,7); x.fill();       // nose
+  x.beginPath(); x.ellipse(0,115,4.4,5.4,0,0,7); x.fill();                          // nose
 }
 
 // ---------- the designs (heights in metres from the ground; measured off the photos) ----------
@@ -86,7 +83,7 @@ const D={
         const w=x.measureText('YORKVILLE').width; x.scale(14.5/w,3.3/72); x.textAlign='center'; x.textBaseline='alphabetic';
         x.fillText('YORKVILLE',0,0); x.restore(); }},
     // the Yorkville Foxes fox head, right of each YORKVILLE: a finer picture laid just outside the band (see decalRects)
-    decal:{x:9.9,z0:32.85,z1:37.25,cell:.033,color:'#c8202a',units:[112,142],draw:drawFox},
+    decal:{x:9.4,z0:32.85,z1:37.25,cell:.033,color:'#c8202a',units:[88,142],draw:drawFox},
     extras(t,f){ f.push(F([circle(t,2.8,24),circle(t,2.6,24).reverse()],41.3,42.2,RAIL));     // railing round the hatch
       f.push(F([circle(t,.6,10)],41.9,42.8,RAIL)); }
   },
@@ -200,7 +197,7 @@ function decalRects(d){
   const C=d.decal; if(C.rects) return C.rects;
   const [uw,uh]=C.units, k=(C.z1-C.z0)/uh, cols=Math.ceil(uw*k/C.cell), rows=Math.round((C.z1-C.z0)/C.cell), P=8;
   const c=document.createElement('canvas'); c.width=cols*P; c.height=rows*P; const x=c.getContext('2d');
-  x.scale(P/C.cell*k,P/C.cell*k); x.translate(uw/2,0); C.draw(x,2.5);
+  x.scale(P/C.cell*k,P/C.cell*k); x.translate(uw/2,0); C.draw(x,2);
   const px=x.getImageData(0,0,c.width,c.height).data, on=[];
   for(let r=0;r<rows;r++){ const line=[]; for(let j=0;j<cols;j++){ let a=0; for(let yy=r*P;yy<(r+1)*P;yy++) for(let xx=j*P;xx<(j+1)*P;xx++) a+=px[(yy*c.width+xx)*4+3]; line.push(a/(P*P*255)>.4); } on.push(line); }
   const B=d.band, bandRow=z=>Math.floor((z-B.z0)/B.rowH+1e-6), rects=[]; let open=new Map();
