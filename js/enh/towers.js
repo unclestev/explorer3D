@@ -2,7 +2,7 @@
    - Oswego: wide white "onion" tank on a plain white column, with the Village of Oswego logo
      (cattails, small "Village Of", navy "Oswego", blue swoosh) three times around the tank.
    - Yorkville: round white tank on a tall slim column that flares at the ground, two thin red bands
-     with red "YORKVILLE" between them and the red Yorkville Foxes fox head to the right of the name, twice around the tank.
+     with red "YORKVILLE" between them twice around the tank, and the red Yorkville Foxes fox head centred between the two names.
    - Sugar Grove: white egg-shaped tank (widest above the middle, tapering into a short flared neck) on a slim column,
      topped by a ring of cell antennas and a tall mast. Twice around the tank: navy small-caps serif "SUGAR GROVE"
      (light-blue edge) and a group of four green trees standing on their shadows.
@@ -85,8 +85,8 @@ const D={
         x.save(); x.translate(cx,Hm-(33.5-32)); x.font='700 100px Arial, Helvetica, sans-serif';
         const w=x.measureText('YORKVILLE').width; x.scale(14.5/w,3.3/72); x.textAlign='center'; x.textBaseline='alphabetic';
         x.fillText('YORKVILLE',0,0); x.restore(); }},
-    // the Yorkville Foxes fox head, right of each YORKVILLE: a finer picture laid just outside the band (see decalRects)
-    decal:{x:9.55,z0:32.85,z1:37.25,cell:.033,color:'#c8202a',units:[96,142],draw:drawFox},
+    // the Yorkville Foxes fox head, centred between the two YORKVILLEs (front and back): a finer picture laid just outside the band (see decalRects)
+    decal:{x:'mid',z0:32.85,z1:37.25,cell:.033,color:'#c8202a',units:[96,142],draw:drawFox},
     extras(t,f){ f.push(F([circle(t,2.8,24),circle(t,2.6,24).reverse()],41.3,42.2,RAIL));     // railing round the hatch
       f.push(F([circle(t,.6,10)],41.9,42.8,RAIL)); }
   },
@@ -221,7 +221,8 @@ function shell(t,ri,ro,a0,a1){ const k=kx(t), n=Math.max(1,Math.ceil((a1-a0)/(4*
 function decal(t,d,rot,f){
   const C=d.decal, B=d.band, R=decalRects(d), circ=2*Math.PI*B.Rref;
   for(let i=0;i<B.copies;i++){
-    const a0=rot+(circ*(i+.5)/B.copies+C.x-R.w/2)/B.Rref;           // same angle convention as the band: x / Rref
+    const cx=C.x==='mid'?circ/(2*B.copies):C.x;                       // 'mid' = halfway between neighbouring copies of the name
+    const a0=rot+(circ*(i+.5)/B.copies+cx-R.w/2)/B.Rref;             // same angle convention as the band: x / Rref
     for(const q of R.rects){ const r=d.r(B.z0+(q.br+.5)*B.rowH);    // the band ring this rectangle sits on
       f.push(F(shell(t,r-.3,r+.03,a0+q.j0*C.cell/B.Rref,a0+q.j1*C.cell/B.Rref),q.zb,q.zt,C.color)); } }
 }
