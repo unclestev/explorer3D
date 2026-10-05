@@ -2,7 +2,7 @@
    - Oswego: wide white "onion" tank on a plain white column, with the Village of Oswego logo
      (cattails, small "Village Of", navy "Oswego", blue swoosh) three times around the tank.
    - Yorkville: round white tank on a tall slim column that flares at the ground, two thin red bands
-     with red "YORKVILLE" between them and the red fox head (Yorkville Foxes) to the right of the name, twice around the tank.
+     with red "YORKVILLE" between them and the red Yorkville Foxes fox head to the right of the name, twice around the tank.
    - Sugar Grove: white egg-shaped tank (widest above the middle, tapering into a short flared neck) on a slim column,
      topped by a ring of cell antennas and a tall mast. Twice around the tank: navy small-caps serif "SUGAR GROVE"
      (light-blue edge) and a group of four green trees standing on their shadows.
@@ -25,8 +25,47 @@ function wedge(t,r,a0,a1){ const k=kx(t), ring=[[t.lng,t.lat]], n=Math.max(1,Mat
 const F=(geom,b,h,c)=>({type:'Feature',properties:{k:'tw',b:+b.toFixed(2),h:+h.toFixed(2),c},geometry:{type:'Polygon',coordinates:geom}});
 const segs=r=>Math.max(16,Math.min(40,Math.round(r*3.2)));
 
-// Yorkville fox head, metres: x from the fox's centre, z = height above ground (traced off the owner's photo, 2026-10-04)
-const FOX={"out":[-1.28,35.49,-1.39,35.8,-1.45,36.24,-1.48,36.67,-1.45,37.02,-1.37,37.14,-1.23,37.08,-1.0,36.72,-0.77,36.39,-0.56,36.16,-0.42,35.96,-0.19,35.87,0.07,35.89,0.29,35.98,0.42,36.16,0.53,36.5,0.65,36.88,0.81,37.12,0.99,37.24,1.12,37.25,1.22,37.16,1.24,36.69,1.21,36.0,1.18,35.49,1.33,35.17,1.41,35.12,1.36,35.04,1.47,34.77,1.52,34.72,1.41,34.65,1.28,34.57,1.21,34.36,1.28,34.09,1.39,33.91,1.53,33.86,1.42,33.78,1.34,33.61,1.4,33.48,1.26,33.4,1.09,33.42,0.87,33.35,0.67,33.07,0.44,32.91,0.17,32.85,-0.08,32.92,-0.33,33.07,-0.57,33.3,-0.69,33.43,-0.87,33.33,-1.0,33.3,-1.16,33.44,-1.27,33.63,-1.27,33.71,-1.33,33.98,-1.26,34.23,-1.43,34.33,-1.46,34.51,-1.47,34.85,-1.53,35.12,-1.43,35.28,-1.34,35.36,-1.28,35.49],"earL":[-1.42,36.94,-1.29,36.96,-1.05,36.68,-0.82,36.31,-0.61,35.95,-0.62,35.69,-0.81,35.49,-1.03,35.4,-1.24,35.48,-1.3,35.75,-1.36,36.14,-1.44,36.63],"earR":[0.65,36.83,0.86,36.94,1.09,36.9,1.12,36.53,1.04,35.85,0.97,35.49,0.86,35.41,0.67,35.52,0.53,35.72,0.56,36.32],"eyeL":[-0.44,34.72,-0.27,34.73,-0.12,34.61,-0.1,34.45,-0.21,34.42,-0.36,34.5],"eyeR":[0.27,34.7,0.43,34.77,0.55,34.75,0.49,34.55,0.35,34.44,0.24,34.46,0.22,34.58],"lines":[[-0.53,35.2,-0.46,34.98],[0.38,35.21,0.43,34.95],[-0.44,34.29,-0.18,34.22],[0.47,34.3,0.61,34.37],[-0.13,34.39,-0.1,34.13,-0.08,33.91],[0.18,34.36,0.23,34.14,0.27,33.92],[-0.85,34.06,-0.6,33.96,-0.35,33.8,-0.19,33.7,-0.06,33.61],[0.94,34.25,0.8,34.05,0.52,33.9,0.38,33.78,0.28,33.62]],"nose":[0.15,33.59,0.16,0.19]};
+// Yorkville fox head (redrawn from the owner's photo of the tank, 2026-10-04), in design units: x -56..56 (0 = centre line), y 0 (ear tips) .. 142 (chin), y down.
+function drawFox(x,lw){
+  const R='#c8202a'; x.fillStyle=R; x.strokeStyle=R; x.lineWidth=lw; x.lineJoin='round'; x.lineCap='round';
+  // half outline, right side, from the dip between the ears to the chin; the left side is its mirror
+  const half=[
+    ['C',7,40,12,38,15,30],                 // top of the head rising into the ear
+    ['C',19,20,27,8,33,0],                  // inner edge of the ear up to the tip
+    ['C',37,10,42,32,44,52],                // outer edge of the ear
+    ['Q',45,58,47,63],['L',52,70],['L',46,72],          // ruff tufts down the side of the head
+    ['Q',42,76,41,81],['L',43,84],['L',40,87],
+    ['Q',41,94,44,98],['L',51,104],['L',46,106],
+    ['Q',45,110,44,113],['L',48,118],['L',39,119],
+    ['Q',36,121,34,124],['L',36,129],['L',27,128],
+    ['C',20,134,8,142.5,0,142.5]];              // jaw tapering to the chin             // jaw to the chin
+  const pts=s=>{ const a=[]; for(let i=1;i<s.length;i+=2) a.push([s[i],s[i+1]]); return a; };
+  x.beginPath(); x.moveTo(0,40);
+  for(const s of half){ const p=pts(s); x[s[0]==='C'?'bezierCurveTo':s[0]==='Q'?'quadraticCurveTo':'lineTo'](...p.flat()); }
+  // back up the left side: same segments mirrored and reversed
+  let cur=[0,142]; const ends=[[0,40]]; let e=[0,40]; for(const s of half){ const p=pts(s); ends.push(p[p.length-1]); }
+  for(let i=half.length-1;i>=0;i--){ const s=half[i], p=pts(s), start=ends[i];
+    const ctrl=p.slice(0,-1).reverse().map(q=>[-q[0],q[1]]), to=[-start[0],start[1]];
+    x[s[0]==='C'?'bezierCurveTo':s[0]==='Q'?'quadraticCurveTo':'lineTo'](...ctrl.flat(),...to); }
+  x.closePath(); x.stroke();
+  for(const m of [1,-1]){
+    const X=v=>v*m;
+    // inner ear, filled
+    x.beginPath(); x.moveTo(X(32),6); x.bezierCurveTo(X(26),17,X(20),33,X(21),43);
+    x.bezierCurveTo(X(22),51,X(33),54,X(39),46); x.bezierCurveTo(X(40),30,X(36),15,X(32),6); x.fill();
+    // eye: slanted almond, round at the outer top, pointed at the inner bottom
+    const A=[17.5,72], B=[6.5,91], dx=B[0]-A[0], dy=B[1]-A[1], L=Math.hypot(dx,dy), px=-dy/L, py=dx/L;
+    x.beginPath(); x.moveTo(X(A[0]-px*0),A[1]);
+    x.bezierCurveTo(X(A[0]+px*6+dx*.05),A[1]+py*6+dy*.05, X(B[0]+px*3.2-dx*.3),B[1]+py*3.2-dy*.3, X(B[0]),B[1]);
+    x.bezierCurveTo(X(B[0]-px*2.2-dx*.3),B[1]-py*2.2-dy*.3, X(A[0]-px*5+dx*.05),A[1]-py*5+dy*.05, X(A[0]),A[1]); x.fill();
+    // brow marks, tick under the eye, muzzle line, cheek-to-nose line
+    x.beginPath(); x.moveTo(X(12),59); x.lineTo(X(13),68.5);
+    x.moveTo(X(15),95); x.lineTo(X(18.5),91.5);
+    x.moveTo(X(5),94); x.bezierCurveTo(X(5.5),100,X(6),106,X(6.5),111);
+    x.moveTo(X(28),93); x.bezierCurveTo(X(26),104,X(17),110,X(8.5),113.5); x.stroke();
+  }
+  x.beginPath(); x.ellipse(0,118,4.4,5.6,0,0,7); x.fill();       // nose
+}
 
 // ---------- the designs (heights in metres from the ground; measured off the photos) ----------
 const D={
@@ -38,21 +77,16 @@ const D={
       return Math.max(sph,neck,z<26?1.9:0); },
     top:42.0, light:42.95,
     rings:[[0,.6,.6],[.6,2.2,.4],[2.2,25.5,23.3],[25.5,32,.5],[38.4,42,.4]],
-    band:{z0:32,z1:38.4,rowH:.16,M:600,Rref:9.7,copies:2,       // finer rows/columns (were .32 m / 420) so the fox's lines show
+    band:{z0:32,z1:38.4,rowH:.32,M:420,Rref:9.7,copies:2,
       pal:['#f2f4f6','#c8202a'],
       draw(x,W,Hm,cx){                                            // x: canvas scaled to metres; y = 0 at the top of the band
-        const Z=z=>Hm-(z-32);
         x.fillStyle='#c8202a';
-        x.fillRect(0,Z(38.08),W,.64); x.fillRect(0,Z(32.64),W,.64);   // the two red bands, all the way round (where the old .32 m rows drew them)
+        x.fillRect(0,Hm-(37.95-32),W,.48); x.fillRect(0,Hm-(32.65-32),W,.48);   // the two red bands, all the way round
         x.save(); x.translate(cx,Hm-(33.5-32)); x.font='700 100px Arial, Helvetica, sans-serif';
         const w=x.measureText('YORKVILLE').width; x.scale(14.5/w,3.3/72); x.textAlign='center'; x.textBaseline='alphabetic';
-        x.fillText('YORKVILLE',0,0); x.restore();
-        // fox head from the owner's photo (traced off the tank, unrolled): outline, filled ears/eyes/nose, face lines
-        const fx=cx+10.3, P=a=>{ x.beginPath(); for(let i=0;i<a.length;i+=2) x[i?'lineTo':'moveTo'](fx+a[i],Z(a[i+1])); };
-        x.strokeStyle='#c8202a'; x.lineWidth=.2; x.lineJoin=x.lineCap='round';
-        for(const k of ['earL','earR','eyeL','eyeR']){ P(FOX[k]); x.closePath(); x.fill(); x.stroke(); }
-        P(FOX.out); x.stroke(); for(const l of FOX.lines){ P(l); x.stroke(); }
-        const n=FOX.nose; x.beginPath(); x.ellipse(fx+n[0],Z(n[1]),n[2],n[3],0,0,7); x.fill(); }},
+        x.fillText('YORKVILLE',0,0); x.restore(); }},
+    // the Yorkville Foxes fox head, right of each YORKVILLE: a finer picture laid just outside the band (see decalRects)
+    decal:{x:9.9,z0:32.85,z1:37.25,cell:.033,color:'#c8202a',units:[112,142],draw:drawFox},
     extras(t,f){ f.push(F([circle(t,2.8,24),circle(t,2.6,24).reverse()],41.3,42.2,RAIL));     // railing round the hatch
       f.push(F([circle(t,.6,10)],41.9,42.8,RAIL)); }
   },
@@ -158,6 +192,40 @@ function bandRuns(d){
   return (B.runs=runs);
 }
 
+
+// ---------- decals: a small picture (the Yorkville fox) at a finer grid than the band, laid 3 cm proud of the tank ----------
+// Sampled once into cells, merged into rectangles (same columns in consecutive rows), never across a band row so each
+// rectangle can sit on its own band ring. Each rectangle becomes a thin curved shell, not a wedge from the centre.
+function decalRects(d){
+  const C=d.decal; if(C.rects) return C.rects;
+  const [uw,uh]=C.units, k=(C.z1-C.z0)/uh, cols=Math.ceil(uw*k/C.cell), rows=Math.round((C.z1-C.z0)/C.cell), P=8;
+  const c=document.createElement('canvas'); c.width=cols*P; c.height=rows*P; const x=c.getContext('2d');
+  x.scale(P/C.cell*k,P/C.cell*k); x.translate(uw/2,0); C.draw(x,2.5);
+  const px=x.getImageData(0,0,c.width,c.height).data, on=[];
+  for(let r=0;r<rows;r++){ const line=[]; for(let j=0;j<cols;j++){ let a=0; for(let yy=r*P;yy<(r+1)*P;yy++) for(let xx=j*P;xx<(j+1)*P;xx++) a+=px[(yy*c.width+xx)*4+3]; line.push(a/(P*P*255)>.4); } on.push(line); }
+  const B=d.band, bandRow=z=>Math.floor((z-B.z0)/B.rowH+1e-6), rects=[]; let open=new Map();
+  for(let r=0;r<rows;r++){                                         // r = 0 at the top
+    const zt=C.z1-r*C.cell, zb=zt-C.cell, br=bandRow(zb+C.cell/2), runs=[];
+    for(let j=0;j<cols;){ if(!on[r][j]){ j++; continue; } let e=j; while(e<cols&&on[r][e]) e++; runs.push([j,e]); j=e; }
+    const next=new Map();
+    for(const [j0,j1] of runs){ const key=j0+','+j1, o=open.get(key);
+      if(o&&o.br===br){ o.zb=zb; next.set(key,o); } else { const n={j0,j1,zt,zb,br}; rects.push(n); next.set(key,n); } }
+    open=next;
+  }
+  return (C.rects={rects,cols,w:cols*C.cell});
+}
+function shell(t,ri,ro,a0,a1){ const k=kx(t), n=Math.max(1,Math.ceil((a1-a0)/(4*DEG))), ring=[];
+  for(let i=0;i<=n;i++){ const a=a0+(a1-a0)*i/n; ring.push([t.lng+Math.cos(a)*ro/k,t.lat+Math.sin(a)*ro/111320]); }
+  for(let i=n;i>=0;i--){ const a=a0+(a1-a0)*i/n; ring.push([t.lng+Math.cos(a)*ri/k,t.lat+Math.sin(a)*ri/111320]); }
+  ring.push(ring[0]); return [ring]; }
+function decal(t,d,rot,f){
+  const C=d.decal, B=d.band, R=decalRects(d), circ=2*Math.PI*B.Rref;
+  for(let i=0;i<B.copies;i++){
+    const a0=rot+(circ*(i+.5)/B.copies+C.x-R.w/2)/B.Rref;           // same angle convention as the band: x / Rref
+    for(const q of R.rects){ const r=d.r(B.z0+(q.br+.5)*B.rowH);    // the band ring this rectangle sits on
+      f.push(F(shell(t,r-.3,r+.03,a0+q.j0*C.cell/B.Rref,a0+q.j1*C.cell/B.Rref),q.zb,q.zt,C.color)); } }
+}
+
 // ---------- which design a tower gets ----------
 // Real village/city limits of Oswego, Yorkville and Sugar Grove (OpenStreetMap, via the same Overpass servers game.js uses).
 // Until they arrive (or if they can't be fetched) rough boxes stand in.
@@ -209,6 +277,7 @@ function shape(t){
     runs.forEach((rr,i)=>{ const z0=B.z0+i*B.rowH, z1=z0+B.rowH, r=d.r((z0+z1)/2);
       if(rr.length===1){ f.push(F([circle(t,r,segs(r))],z0,z1,B.pal[rr[0][0]])); return; }
       for(const [ci,j0,j1] of rr) f.push(F(wedge(t,r,rot+j0*dA,rot+j1*dA),z0,z1,B.pal[ci])); });
+    if(d.decal) decal(t,d,rot,f);
   }
   d.extras(t,f);
   return f;
