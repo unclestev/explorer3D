@@ -1,5 +1,5 @@
 /* Settings panel (⚙️) and pinch-to-zoom.
-   The panel holds the battery saver switch, the traffic switch, car size and camera zoom. The buttons keep their
+   The panel holds the Graphics picker and Realistic driving switch (js/enh/quality.js), the traffic switch, car size and camera zoom. The buttons keep their
    original ids, so js/game.js still handles battery saver / size / zoom and js/enh/traffic.js the traffic switch;
    this file opens and closes the panel, shows the current values and remembers size and zoom on this device.
    Pinch the map with two fingers to zoom the camera (same range as the zoom buttons). */
@@ -17,7 +17,6 @@ function show(){ sizeEl.textContent=Math.round(EXAG/BASE_EXAG*100)+'%'; zoomEl.t
 function save(){ try{ localStorage.setItem('ydCarSize',String(EXAG)); localStorage.setItem('ydZoom',String(zoomOff)); }catch(e){} }
 // game.js's own click handlers run first (they were attached earlier); then show and save the new values
 for(const id of ['cp','cm','zi','zo']) document.getElementById(id).addEventListener('click',e=>{ e.stopPropagation(); show(); save(); });
-document.getElementById('pw').addEventListener('click',e=>e.stopPropagation());
 
 // car picker: Explorer / Javelin / Navigator (setCar in game.js swaps the photo, lights and sound and remembers the choice)
 const pick=document.getElementById('carPick');

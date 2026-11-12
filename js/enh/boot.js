@@ -5,8 +5,8 @@ const {ENH,inits,ticks,safe}=YD;
 function boot(){
   if(ENH.booted) return; ENH.booted=true;
   for(const f of inits) safe(f.name||'init',f);
-  // background jobs: every job runs 2.5x less often in battery saver, and nothing runs while the page is hidden
-  const run=()=>{ if(!document.hidden){ const now=performance.now(), f=POWER?2.5:1;
+  // background jobs: every job runs 2.5x less often on Low graphics (1.5x on Medium), and nothing runs while the page is hidden
+  const run=()=>{ if(!document.hidden){ const now=performance.now(), f=Q3(2.5,1.5,1);
       for(const t of ticks){ if(now-t.t>=t.ms*f){ t.t=now; safe(t.fn.name||'tick',t.fn); } } }
     setTimeout(run,POWER?250:100); };
   run();

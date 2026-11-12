@@ -15,7 +15,7 @@ function vCurve(kap){ if(kap<.002) return 1e9;
   const need=Math.atan(WB*kap)/.85; let lo=0, hi=60;
   if(steerLock(0)<need) return 2;                                     // tighter than the car can turn: crawl
   for(let i=0;i<18;i++){ const m=(lo+hi)/2; if(steerLock(m)>=need) lo=m; else hi=m; }
-  const byGrip=Math.sqrt(10/kap)/SPEEDUP;                             // keep sideways force sensible
+  const byGrip=Math.sqrt(10*grip()/kap)/SPEEDUP;                             // keep sideways force sensible
   return Math.max(2.5,Math.min(lo,byGrip)); }
 function pointAt(s,hint){ const c=YD.NAV.cum, P=YD.NAV.pts; let j=Math.max(0,Math.min(hint|0,P.length-2));
   while(j>0&&c[j]>s) j--; while(j<P.length-2&&c[j+1]<s) j++;
@@ -87,7 +87,7 @@ function control(dt){
   let gas=0; const err=target-v;
   if(target<.3&&v<.6) gas=0;                                          // hold still; rolling resistance stops the last bit
   else if(err>.4) gas=Math.min(1,.25+err*.2);
-  else if(err<-.6) gas=Math.max(-1,err*.12);
+  else if(err<-.6) gas=Math.max(-1,err*.12/grip());                // wet road: press harder for the same braking
   return {st,gas};
 }
 

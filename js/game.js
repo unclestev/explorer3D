@@ -1,10 +1,25 @@
 /* Yorkville Driver: map, vehicles, physics, camera, compass, trees, water towers, hang glider. */
-/* ---------- BATTERY SAVER (on by default on phones) ----------
-   30 fps cap, lower render resolution, flat terrain, fewer trees, and no redraw while parked. */
-let POWER=false;
-try{ const v=localStorage.getItem('ydPower'); POWER = v===null ? matchMedia('(pointer: coarse)').matches : v==='1'; }
-catch(e){ try{ POWER=matchMedia('(pointer: coarse)').matches; }catch(_){} }
-const mapPR=on=>Math.min(devicePixelRatio||1, on?1.25:2);
+/* ---------- GRAPHICS QUALITY (was the on/off battery saver) ----------
+   QL: 0 = Low (the old battery saver: 30 fps cap, lower resolution, flat terrain, fewer trees, no redraw while parked),
+       1 = Medium (hills on, mid detail; still 30 fps on touch devices to spare the battery), 2 = High (everything).
+   QMODE: 'auto' | 'low' | 'med' | 'high' (⚙️ Graphics, localStorage ydQual). In auto, js/enh/quality.js measures real
+   frame times while driving and moves the level; phones start Low and may go up to Medium, PCs start High.
+   POWER stays as "Low level is on" - every module that asks POWER keeps working. Q3(low,med,high) picks a value. */
+const COARSE=(()=>{ try{ return matchMedia('(pointer: coarse)').matches; }catch(e){ return false; } })();
+const QNAMES=['low','med','high'], QMAX_AUTO=COARSE?1:2;
+let QMODE='auto', QL=COARSE?0:2, QAUTO={lvl:COARSE?0:2,cap:QMAX_AUTO};
+try{ let m=localStorage.getItem('ydQual');
+  if(!m){ const v=localStorage.getItem('ydPower'); m = v==='0' ? 'high' : (v==='1'&&!COARSE) ? 'low' : 'auto'; }   // carry over an old saver choice
+  if(m==='auto'||QNAMES.includes(m)) QMODE=m;
+  const a=JSON.parse(localStorage.getItem('ydQAuto')||'null');
+  if(a&&a.lvl>=0&&a.lvl<=2&&a.cap>=0&&a.cap<=2) QAUTO={lvl:Math.min(a.lvl,a.cap,QMAX_AUTO),cap:Math.min(a.cap,QMAX_AUTO)};
+}catch(e){}
+QL = QMODE==='auto' ? QAUTO.lvl : QNAMES.indexOf(QMODE);
+let POWER = QL===0;
+const Q3=(l,m,h)=>QL===0?l:QL===1?m:h;
+const CAP30=()=>QL===0||(QL===1&&COARSE);                          // 30 fps cap
+let PRS=1;                                                        // adaptive sharpness: map resolution scale (quality.js)
+const mapPR=()=>{ const d=devicePixelRatio||1; return Math.max(Math.min(d,1),Math.min(d,Q3(1.25,1.5,2))*PRS); };
 // First start: on Route 47 just south of Raging Waves waterpark, pointed at it. After that: where you were last
 // (saved by js/enh/savepos.js as localStorage 'ydPos'; ⚙️ Start point goes back to HOME).
 const RAGING_WAVES={lng:-88.44446,lat:41.6989};
@@ -45,7 +60,7 @@ const START=(()=>{
     if(p&&[p.lng,p.lat,p.hdg].every(Number.isFinite)&&Math.abs(p.lat)<85&&Math.abs(p.lng)<=180) return {lng:p.lng,lat:p.lat,hdg:p.hdg}; }catch(e){}
   return HOME; })();
 /* ---------- MAP ---------- */
-const map = new maplibregl.Map({ pixelRatio:mapPR(POWER),
+const map = new maplibregl.Map({ pixelRatio:mapPR(),
   container:'map', style:'https://tiles.openfreemap.org/styles/liberty',
   center:[START.lng,START.lat], bearing:START.hdg, zoom:19.3, pitch:68, maxPitch:80, maxZoom:22,
   interactive:false, fadeDuration:0, attributionControl:false
@@ -189,9 +204,9 @@ map.on('load',()=>{ try{ initMini();
     const dem={type:'raster-dem',tiles:['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
       encoding:'terrarium',tileSize:256,maxzoom:15,attribution:'Terrain: Mapzen / AWS Terrain Tiles'};
     map.addSource('dem',dem); map.addSource('dem-hs',Object.assign({},dem));
-    map.addLayer({id:'hillshade',type:'hillshade',source:'dem-hs',layout:{visibility:POWER?'none':'visible'},
+    map.addLayer({id:'hillshade',type:'hillshade',source:'dem-hs',layout:{visibility:QL===2?'visible':'none'},
       paint:{'hillshade-exaggeration':.4,'hillshade-shadow-color':'#5a4f3f','hillshade-highlight-color':'#fffaf0'}},before);
-    if(!POWER){ map.setTerrain({source:'dem',exaggeration:TERRAIN_X}); terrainOn=true; }
+    if(!POWER){ map.setTerrain({source:'dem',exaggeration:TERRAIN_X}); terrainOn=true; }   // Medium and High
   }catch(e){ console.warn('terrain',e); }
   try{
     const TW=16, D=new Uint8Array(TW*TW*4);                      // crop-row stripes for farmland
@@ -257,8 +272,8 @@ setTimeout(()=>{const ld=document.getElementById('load'); if(ld){ld.style.opacit
 /* ---------- THREE: EXPLORER-STYLE SUV ---------- */
 const cv=document.getElementById('car3d');
 const renderer=new THREE.WebGLRenderer({canvas:cv,alpha:true,antialias:(devicePixelRatio||1)<2,powerPreference:'low-power'});
-const carPR=on=>on?Math.min(devicePixelRatio||1,1.25):Math.min(devicePixelRatio||1,2);
-renderer.setPixelRatio(carPR(POWER));
+const carPR=()=>Math.min(devicePixelRatio||1,Q3(1.25,1.5,2));
+renderer.setPixelRatio(carPR());
 const scene=new THREE.Scene();
 const camera=new THREE.PerspectiveCamera(36.87,1,10,50000);
 scene.add(new THREE.HemisphereLight(0xdfeeff,0x556070,.85));
@@ -334,19 +349,19 @@ const suv=new THREE.Group(); while(body.children.length) suv.add(body.children[0
 //   sound engine in js/enh/sound.js; vmax top speed in m/s (speedometer units) — cars without one keep the old behaviour
 //   model a .glb 3D model (metres, front +z, ground at y 0, wheels as nodes named Wheel_*) drawn instead of a photo
 const CARS={
-  explorer:{name:'Ford Explorer ST',paint:0x3e4855,img:'img/explorer-rear.webp?v=1',W:2.35,piv:.38,glow:[[.088,.37],[.912,.37]],gw:.26,gh:.3,lamp:.68,front:2.4,sound:'ecoboost30',
+  explorer:{name:'Ford Explorer ST',paint:0x3e4855,img:'img/explorer-rear.webp?v=1',W:2.35,piv:.38,glow:[[.088,.37],[.912,.37]],gw:.26,gh:.3,lamp:.68,front:2.4,sound:'ecoboost30',perf:{t60:5.2,top:143,a0:7.8},
     fimg:'img/explorer-front.webp?v=1',fW:4.4,fpiv:[.525,.141]},     // front: the owner's Explorer ST photo, front-left three-quarter
   // AMC Javelin (the owner's photo): one full-width tail-light bar low on the tail, reversing light in the middle
-  javelin:{name:'AMC Javelin',paint:0x141518,img:'img/javelin-rear.webp?v=1',W:1.95,piv:.40,glow:[[.15,.2],[.27,.2],[.38,.2],[.62,.2],[.73,.2],[.85,.2]],gw:.15,gh:.12,lamp:.62,front:2.44,sound:'amc401',vmax:120/2.237},   // top speed 120 mph
+  javelin:{name:'AMC Javelin',paint:0x141518,img:'img/javelin-rear.webp?v=1',W:1.95,piv:.40,glow:[[.15,.2],[.27,.2],[.38,.2],[.62,.2],[.73,.2],[.85,.2]],gw:.15,gh:.12,lamp:.62,front:2.44,sound:'amc401',vmax:120/2.237,perf:{t60:6.8,top:120,a0:6.0}},   // top speed 120 mph
   // 2026 Lincoln Navigator (the owner's photo, white, lit bar): the red full-width light bar and wrap-around corner lamps
   // glow from a mask cut from the photo's own red pixels (img/navigator-lights.webp), so the light covers all of that red
   navigator:{name:'Lincoln Navigator',paint:0xe6e8ea,img:'img/navigator-rear.webp?v=2',lights:'img/navigator-lights.webp?v=1',W:2.4,piv:.40,glow:[],
-    gw:.1,gh:.1,lamp:.74,front:2.67,sound:'ecoboost35'},
+    gw:.1,gh:.1,lamp:.74,front:2.67,sound:'ecoboost35',perf:{t60:6.1,top:115,a0:7.2}},
   // 1972 AMC Javelin AMX 401 as a real 3D model (the owner's .glb, 2026-10-02): turns properly from every angle.
   // Same engine and top speed as the photo Javelin, which stays as its own choice.
-  javelin3d:{name:'AMC Javelin AMX',paint:0x141518,model:'models/javelin-amx.glb?v=1',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237},
+  javelin3d:{name:'AMC Javelin AMX',paint:0x141518,model:'models/javelin-amx.glb?v=1',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237,perf:{t60:6.8,top:120,a0:6.0}},
   // the owner's second version of that model (2026-10-02): wheel wells, window frames, non-metallic black paint, darker glass
-  javelin3d2:{name:'AMC Javelin AMX',paint:0x141518,model:'models/javelin-amx-v2.glb?v=2',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237}
+  javelin3d2:{name:'AMC Javelin AMX',paint:0x141518,model:'models/javelin-amx-v2.glb?v=2',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237,perf:{t60:6.8,top:120,a0:6.0}}
 };
 let CARKEY='explorer'; try{ const k=localStorage.getItem('ydCar'); if(CARS[k]) CARKEY=k; }catch(e){}
 let CARSPEC=CARS[CARKEY];
@@ -676,22 +691,28 @@ const K={}; addEventListener('keydown',e=>{K[e.key.toLowerCase()]=1; if(e.key.st
 let kS=0,kG=0; let zoomOff=0;
 let dirty=true;
 cp.onclick=()=>{EXAG=Math.min(EXAG*1.25,2.5); dirty=true;}; cm.onclick=()=>{EXAG=Math.max(EXAG/1.25,.25); dirty=true;};
-function applyPower(on){
-  POWER=on; try{ localStorage.setItem('ydPower',on?'1':'0'); }catch(e){}
-  pw.classList.toggle('on',on);
-  try{ map.setPixelRatio(mapPR(on)); }catch(e){}
-  renderer.setPixelRatio(carPR(on)); step.W=0;                  // forces canvas resize next frame
+// switch the graphics level now (0 Low / 1 Medium / 2 High). Called by setQuality (the ⚙️ choice) and by quality.js in auto.
+function applyQuality(lvl){
+  lvl=Math.max(0,Math.min(2,lvl|0)); QL=lvl; POWER=lvl===0; PRS=1;
+  try{ map.setPixelRatio(mapPR()); }catch(e){}
+  renderer.setPixelRatio(carPR()); step.W=0;                     // forces canvas resize next frame
   if(styleReady){
-    try{ if(on){ map.setTerrain(null); terrainOn=false; }
-         else if(map.getSource('dem')){ map.setTerrain({source:'dem',exaggeration:TERRAIN_X}); terrainOn=true; } }catch(e){ console.warn('terrain toggle',e); }
-    try{ if(map.getLayer('hillshade')) map.setLayoutProperty('hillshade','visibility',on?'none':'visible'); }catch(e){}   // hidden = its elevation tiles aren't downloaded
+    try{ if(POWER){ map.setTerrain(null); terrainOn=false; }
+         else if(map.getSource('dem')&&!terrainOn){ map.setTerrain({source:'dem',exaggeration:TERRAIN_X}); terrainOn=true; } }catch(e){ console.warn('terrain toggle',e); }
+    try{ if(map.getLayer('hillshade')) map.setLayoutProperty('hillshade','visibility',QL===2?'visible':'none'); }catch(e){}   // hidden = its elevation tiles aren't downloaded
     decorAt=null;                                               // rebuild trees at the new density
   }
-  try{ if(window.onPowerChange) window.onPowerChange(on); }catch(e){}
+  try{ if(window.onPowerChange) window.onPowerChange(POWER); }catch(e){}   // modules rebuild at the new level (also Medium <-> High)
   dirty=true;
 }
-pw.onclick=()=>applyPower(!POWER);
-pw.classList.toggle('on',POWER);
+// the player's choice in ⚙️ Graphics: 'auto' | 'low' | 'med' | 'high'
+function setQuality(mode){
+  if(mode!=='auto'&&!QNAMES.includes(mode)) return;
+  QMODE=mode; try{ localStorage.setItem('ydQual',mode); }catch(e){}
+  const lvl=mode==='auto'?QAUTO.lvl:QNAMES.indexOf(mode); if(lvl!==QL) applyQuality(lvl);
+}
+// adaptive sharpness: scale the map's resolution (1 = the level's full resolution); quality.js decides when
+function setPRScale(k){ k=Math.max(.6,Math.min(1,k)); if(Math.abs(k-PRS)<.005) return; PRS=k; try{ map.setPixelRatio(mapPR()); }catch(e){} dirty=true; }
 zi.onclick=()=>{zoomOff=Math.min(zoomOff+.5,2); dirty=true;}; zo.onclick=()=>{zoomOff=Math.max(zoomOff-.5,-3); dirty=true;};
 
 /* ---------- PHYSICS ---------- */
@@ -709,7 +730,33 @@ let last=0,frame=0,onRoad=true,roadName='';
 // steering lock: 40 degrees when crawling (about a 6 m turning circle), easing off with speed so the highway stays calm.
 // 25 mph turns on roughly an 18 m radius, 15 mph about 12 m. Autopilot uses the same curve.
 const STEER_MAX=40*Math.PI/180;
-function steerLock(v){ const a=Math.abs(v); return STEER_MAX/(1+a/4.5+(a/12)*(a/12)); }
+function steerLock(v){ const a=Math.abs(v), g=grip();           // on a wet or snowy road the front tyres push wide at speed
+  return STEER_MAX/(1+a/4.5+(a/12)*(a/12))*(g<1?1-(1-g)*.8*Math.max(0,Math.min(1,(a-6)/14)):1); }
+/* ---------- REALISTIC DRIVING (⚙️ switch, localStorage ydReal, on by default; js/enh/quality.js owns the switch) ----------
+   Each car pulls like the real one: CARS[..].perf = {t60: real 0-60 mph time in seconds at full pedal, top: top speed mph,
+   a0: launch limit m/s^2 (traction)}. Thrust at full pedal = min(a0, pm/v) (traction, then engine power), against
+   rolling + air drag sized so the car stops pulling just above its top speed. pm is fitted once per car so the 0-60
+   time comes out right (perfOf). Rain and snow cut grip (grip()): longer braking, slower launches, less steering at speed.
+   Off = the old arcade formula for every car. Speeds here are speedometer m/s. */
+let REAL=true; try{ REAL=localStorage.getItem('ydReal')!=='0'; }catch(e){}
+const PERF={};
+function perfOf(key){
+  if(PERF[key]!==undefined) return PERF[key];
+  const c=CARS[key]&&CARS[key].perf; if(!c) return PERF[key]=null;
+  const top=c.top/2.237, RR=.18;
+  const mk=pm=>({pm,a0:c.a0,top,rr:RR,cd:Math.max(0,(pm/(top*1.04)-RR))/((top*1.04)*(top*1.04))});
+  const t60=P=>{ let v=0,t=0; while(v<26.82&&t<60){ v+=(Math.min(P.a0,P.pm/Math.max(v,.5))-P.rr-P.cd*v*v)*.01; t+=.01; } return t; };
+  let lo=20, hi=400; for(let i=0;i<30;i++){ const m=(lo+hi)/2; if(t60(mk(m))>c.t60) lo=m; else hi=m; }
+  return PERF[key]=mk((lo+hi)/2);
+}
+// tyre grip from the weather where the car is (js/enh/atmos.js): 1 dry ... about .35 on ice. Only in realistic driving, cars only.
+function grip(){
+  if(!REAL||mode!=='car'||boat) return 1;
+  const W=window.YD&&YD.AT&&YD.AT.wx; if(!W||!W.type) return 1;
+  const c=W.code, i=Math.max(0,Math.min(1,W.int||0));
+  if(c===56||c===57||c===66||c===67) return .35;                   // freezing rain / drizzle: ice
+  return W.type==='snow' ? .55-.15*i : .9-.2*i;                    // snow .40-.55, rain .70-.90
+}
 const rad=d=>d*Math.PI/180;
 const mpp=(lat,z)=>78271.517*Math.cos(rad(lat))/Math.pow(2,z);
 let roadFails=0, miss=0;
@@ -804,7 +851,7 @@ function ngon(lng,lat,r,n,rot){ const k=Math.cos(lat*Math.PI/180)*111320, ring=[
   for(let i=0;i<=n;i++){ const t=rot+(i%n)/n*2*Math.PI; ring.push([lng+Math.cos(t)*r/k,lat+Math.sin(t)*r/111320]); } return [ring]; }
 function buildDecor(){
   if(!styleReady||!map.getSource('decor')) return;
-  const t0=performance.now(), cx=S.lng, cy=S.lat, R=POWER?350:650, TMAX=POWER?300:2500, feats=[], seenT=new Set();
+  const t0=performance.now(), cx=S.lng, cy=S.lat, R=Q3(350,500,650), TMAX=Q3(300,1200,2500), feats=[], seenT=new Set();
   const wx0=cx-R/MLNG, wx1=cx+R/MLNG, wy0=cy-R/MLAT, wy1=cy+R/MLAT;
   let trees=0;
   // building footprints near the car (local metres, 20 m grid) so no tree is planted in or against a building
@@ -831,7 +878,7 @@ function buildDecor(){
   try{
     const wood=map.querySourceFeatures(bSrc,{sourceLayer:'landcover',filter:['==',['get','class'],'wood']});
     const park=map.querySourceFeatures(bSrc,{sourceLayer:'park'});
-    outer: for(const [list,step,dens] of POWER?[[wood,20,.8],[park,36,.4]]:[[wood,12,.9],[park,22,.5]]){
+    outer: for(const [list,step,dens] of Q3([[wood,20,.8],[park,36,.4]],[[wood,15,.85],[park,28,.45]],[[wood,12,.9],[park,22,.5]])){
       for(const f of list) for(const pl of partsOf(f.geometry)){
         const bb=bboxOf(pl[0]);
         const x0=Math.max(bb[0],wx0), x1=Math.min(bb[2],wx1), y0=Math.max(bb[1],wy0), y1=Math.min(bb[3],wy1);
@@ -1092,9 +1139,10 @@ const tick={};
 function every(k,sec){ const t=last/1000; if(tick[k]===undefined||t-tick[k]>=sec){ tick[k]=t; return true; } return false; }
 let lastStep=0;
 function loop(now){
-  if(POWER && now-lastStep<30){ requestAnimationFrame(loop); return; }   // ~30 fps in battery saver
-  lastStep=now;
+  if(CAP30() && now-lastStep<30){ if(window.QUAL) QUAL.frame(now,false,0); requestAnimationFrame(loop); return; }   // ~30 fps (Low; Medium on touch devices)
+  lastStep=now; const t0=performance.now();
   try{ step(now); }catch(e){ if(!loop.err){loop.err=1; const d=document.createElement('pre'); d.style.cssText='position:fixed;left:8px;right:8px;top:8px;z-index:9999;background:#7f1d1d;color:#fff;font:12px monospace;padding:10px;white-space:pre-wrap;border-radius:8px'; d.textContent='LOOP ERROR: '+e.message+'\n'+(e.stack||'').split('\n').slice(0,4).join('\n'); document.body.appendChild(d);} }
+  if(window.QUAL) QUAL.frame(now,true,performance.now()-t0);     // frame timing for auto quality + the ?fps=1 meter (js/enh/quality.js)
   requestAnimationFrame(loop);
 }
 function step(now){
@@ -1115,19 +1163,27 @@ function step(now){
   // longitudinal
   let a=0, braking=false;
   const tractor=(mode==='tractor'), pw=tractor?TRACTOR:1, vmax=MAXV*pw;
-  const vtop=!tractor&&!boat&&CARSPEC.vmax;                       // a car with a set top speed reaches it at full throttle
-  if(gas>0.05){ if(vtop&&S.v>0){ const r=Math.min(S.v/(vtop*1.012),1);  // power fades toward the top speed, and also covers
+  const PF=REAL&&!tractor&&!boat&&perfOf(CARKEY), mu=grip();      // realistic driving: this car's real pull, weather grip
+  const vtop=PF?PF.top:!tractor&&!boat&&CARSPEC.vmax;             // a car with a set top speed reaches it at full throttle
+  if(gas>0.05){
+    if(PF&&S.v>=0){ const r=Math.min(S.v/PF.top,1), t1=Math.min(1,gas*1.25);   // a firm press is full power; near the top
+      // speed any press of half the pedal or more counts as full, so the top speed is reachable with a normal press
+      a=(t1+(Math.min(1,gas*2)-t1)*r*r)*Math.min(PF.a0*mu,PF.pm/Math.max(S.v,.5)); }
+    else if(vtop&&S.v>0){ const r=Math.min(S.v/(vtop*1.012),1);  // power fades toward the top speed, and also covers
       // the drag there, so any firm press (half the pedal or more) keeps pulling to vtop; how hard you press sets how quickly
       a=gas*12*(1-r*r)+Math.min(1,gas*2)*(.35+.0032*vtop*vtop)*r*r; }
-    else a=gas*(S.v<0?30:12)*pw*(1-Math.min(S.v/vmax,1)**2); }
-  else if(gas<-0.05){ if(S.v>.5){a=-28*(-gas);braking=true;} else a=gas*14*pw; }
-  if(hand){a-=Math.sign(S.v)*30; braking=Math.abs(S.v)>.5;}
-  const cap=boat?BOATMAX:tractor?vmax:(onRoad?MAXV:34);
-  a-=Math.sign(S.v)*(boat?(.25+.0022*S.v*S.v):(.35+.0032*S.v*S.v));                // rolling + aero drag
+    else a=gas*(S.v<0?30*mu:12)*pw*(1-Math.min(S.v/vmax,1)**2); }
+  else if(gas<-0.05){ if(S.v>.5){a=-28*(-gas)*mu;braking=true;} else a=gas*14*pw; }
+  if(hand){a-=Math.sign(S.v)*30*mu; braking=Math.abs(S.v)>.5;}
+  const cap=boat?BOATMAX:tractor?vmax:(onRoad?Math.max(MAXV,vtop||0):34);
+  if(PF) a-=Math.sign(S.v)*(PF.rr+PF.cd*S.v*S.v+(gas<=.05&&Math.abs(S.v)>.3?.7+.015*Math.abs(S.v):0));   // rolling + air drag, engine braking off the gas
+  else a-=Math.sign(S.v)*(boat?(.25+.0022*S.v*S.v):(.35+.0032*S.v*S.v));                // rolling + aero drag
   if(!onRoad&&!boat&&!tractor) a-=S.v*.15;                               // mild grass drag
   const prevV=S.v; S.v+=a*dt; if(prevV*S.v<0&&Math.abs(gas)<.05) S.v=0;
   if(S.v>cap) S.v=Math.max(cap,S.v-25*dt);                     // ease down to a lower cap instead of snapping
   S.v=Math.max(-REVMAX*pw,Math.min(vtop||MAXV,S.v)); if(Math.abs(S.v)<.05&&Math.abs(gas)<.05)S.v=0;
+  if(every('grip',2)){ const k=mu>=.95?0:mu>=.62?1:2;               // tell the driver once when the road turns wet or slick
+    if(k!==step.gripK){ if(k>(step.gripK||0)) toast(k===1?'🌧️ Wet road — brake earlier':'❄️ Slick road — brake much earlier, turn gently',3500); step.gripK=k; } }
 
   // steering (bicycle model, less lock at speed)
   const lock=boat?rad(30)/(1+Math.abs(S.v)/12):steerLock(S.v);
