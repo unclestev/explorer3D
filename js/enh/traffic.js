@@ -72,7 +72,7 @@ function light(ph){ const t=(Date.now()/1000)%30, a=t<12?'g':t<15?'y':'r', b=t<1
 // vehicle designs live in js/enh/vehicles.js
 function makeParts(){ return YD.VEH.mats(); }
 function carMesh(){ const g=YD.VEH.build(shadow.material); g.visible=false; T.group.add(g); return g; }
-function place(a,seg,s){ a.path=[seg]; a.s=s; a.v=seg.v*.6; a.stopDone=null; a.waitT=0;
+function place(a,seg,s){ a.hold=0; a.path=[seg]; a.s=s; a.v=seg.v*.6; a.stopDone=null; a.waitT=0;
   const p=pos(a); a.px=p[0]; a.py=p[1]; a.hd=Math.atan2(seg.ux,seg.uy); a.fade=0; }
 function pos(a){ const s=a.path[0], cx=s.a.x+s.ux*a.s, cy=s.a.y+s.uy*a.s; return [cx+s.uy*s.off, cy-s.ux*s.off]; }   // right-hand side: normal (uy,-ux)
 function spawn(a,minD,maxD){
@@ -116,6 +116,7 @@ function drive(a,dt,px,py,pv,ph){
     if(fd>0&&fd<70&&lat<3.2&&(ohx*hx+ohy*hy)>.5) allow=Math.min(allow,Math.sqrt(Math.max(0,ov*ov*.8+2*B*Math.max(0,fd-11)))); };
   for(const o of T.agents) if(o!==a&&o.path) gap(o.px,o.py,Math.sin(o.hd),Math.cos(o.hd),o.v);
   gap(px,py,Math.sin(ph),Math.cos(ph),Math.max(0,pv));
+  if(a.hold>0){ a.hold-=dt; allow=0; }                             // just been in a bump with you (js/enh/feel.js): stay put a moment
   a.v=a.v<allow?Math.min(allow,a.v+ACC*dt):Math.max(allow,a.v-B*1.6*dt); if(a.v<.05&&allow<.3) a.v=0;
   a.s+=a.v*dt;
   while(a.path.length&&a.s>a.path[0].len){ a.s-=a.path[0].len; a.path.shift(); }

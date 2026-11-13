@@ -498,15 +498,15 @@ function placePhoto(braking){
   m.visible=!PHOTO.front; body.visible=PHOTO.front&&!useF; if(fm) fm.visible=useF;
   if(useF){ const d=((S.camB-hd)%360+540)%360-180;              // > 0: camera ahead-left of the car (driver's side)
     const sc=car.scale.x; fm.scale.set(d>=0?sc:-sc,sc,sc); fm.position.copy(car.position);
-    fm.quaternion.copy(camera.quaternion); fm.rotateZ(walk?0:-(S.roll+S.sr)*.8); fm.material.color.setScalar(b); }
+    fm.position.y+=walk?0:(S.by||0)*sc; fm.quaternion.copy(camera.quaternion); fm.rotateZ(walk?0:-(S.roll+S.sr+(S.bz||0))*.8); fm.material.color.setScalar(b); }
   if(PHOTO.front) return;
-  m.scale.setScalar(car.scale.x); m.position.copy(car.position);
+  m.scale.setScalar(car.scale.x); m.position.copy(car.position); if(!walk) m.position.y+=(S.by||0)*car.scale.x;
   // lean with the car's heading only for the small angles of the chase camera lagging in a turn (up to ~17°); panned
   // further round (look-around, or walking past the parked car) the lean fades back to 0 by ~52°, so the photo stays
   // upright on the ground instead of turning sideways or upside down
   const yw=Math.atan2(Math.sin(car.rotation.y),Math.cos(car.rotation.y)), ay=Math.abs(yw),
         lean=ay<=.3?yw:Math.sign(yw)*.3*Math.max(0,1-(ay-.3)/.6);
-  m.quaternion.copy(camera.quaternion); m.rotateZ(lean+(walk?0:(S.roll+S.sr)*.8));   // same lean directions as the 3D body (camera looks down the car's z axis)
+  m.quaternion.copy(camera.quaternion); m.rotateZ(lean+(walk?0:(S.roll+S.sr+(S.bz||0))*.8));   // same lean directions as the 3D body (camera looks down the car's z axis)
   m.material.color.setScalar(b);
   PHOTO.glow.opacity=braking?1:(tailOff.color.r>.7?.45:0);        // tailOff turns brighter at night (js/enh/atmos.js)
   if(PHOTO.lights) PHOTO.lights.opacity=PHOTO.lights.map?PHOTO.glow.opacity:0;
@@ -750,7 +750,8 @@ function perfOf(key){
   return PERF[key]=mk((lo+hi)/2);
 }
 // tyre grip from the weather where the car is (js/enh/atmos.js): 1 dry ... about .35 on ice. Only in realistic driving, cars only.
-function grip(){
+function grip(){ const g=wxGrip(); return window.FEEL&&REAL&&mode==='car'&&!boat?g*FEEL.mu:g; }   // weather x the surface under the tyres (js/enh/feel.js)
+function wxGrip(){
   if(!REAL||mode!=='car'||boat) return 1;
   const W=window.YD&&YD.AT&&YD.AT.wx; if(!W||!W.type) return 1;
   const c=W.code, i=Math.max(0,Math.min(1,W.int||0));
@@ -840,6 +841,7 @@ function updateCompass(){
 
 /* ---------- TREES + POI PINS (built from the map's own data around the car) ---------- */
 let decorTimer=null, decorAt=null, decorN=0, decorT=0, pois=[];
+let treePts=[];                                                   // trunk positions [x,y,x,y,...] in local metres (lng*MLNG, lat*MLAT), for js/enh/feel.js
 const MLAT=111320, MLNG=111320*Math.cos(41.64*Math.PI/180);
 const TREEC=['#2f6b2f','#3d7a35','#4a8a3c','#2c5e34','#5b8f3a','#35703a'];
 const POIC={fuel:'#dc2626',restaurant:'#f97316',fast_food:'#f97316',cafe:'#f97316',bar:'#f97316',beer:'#f97316',ice_cream:'#f97316',
@@ -853,7 +855,7 @@ function buildDecor(){
   if(!styleReady||!map.getSource('decor')) return;
   const t0=performance.now(), cx=S.lng, cy=S.lat, R=Q3(350,500,650), TMAX=Q3(300,1200,2500), feats=[], seenT=new Set();
   const wx0=cx-R/MLNG, wx1=cx+R/MLNG, wy0=cy-R/MLAT, wy1=cy+R/MLAT;
-  let trees=0;
+  let trees=0; const tp=[];
   // building footprints near the car (local metres, 20 m grid) so no tree is planted in or against a building
   const BG=new Map(), C=20, bx0=cx*MLNG, by0=cy*MLAT;
   try{
@@ -895,6 +897,7 @@ function buildDecor(){
           feats.push({type:'Feature',properties:{k:'trunk',h:th+.6,b:0},geometry:{type:'Polygon',coordinates:ngon(lng,lat,.35,5,0)}});
           feats.push({type:'Feature',properties:{k:'crown',h:top,b:th,c:TREEC[Math.floor(hash(ix+3,iy+9)*TREEC.length)]},
             geometry:{type:'Polygon',coordinates:ngon(lng,lat,cr,7,r1*6)}});
+          tp.push(lng*MLNG,lat*MLAT);
           if(++trees>=TMAX || performance.now()-t0>35) break outer;
         }
       }
@@ -915,7 +918,7 @@ function buildDecor(){
       feats.push({type:'Feature',properties:{k:'pin',h:10.5,b:7,c},geometry:{type:'Polygon',coordinates:ngon(lng,lat,1.9,8,.2)}});
     }
   }catch(e){ console.warn('poi',e); }
-  pois=np; decorN=feats.length; decorT=performance.now(); decorAt=[cx,cy];
+  treePts=tp; pois=np; decorN=feats.length; decorT=performance.now(); decorAt=[cx,cy];
   try{ map.getSource('decor').setData({type:'FeatureCollection',features:feats}); }catch(e){}
 }
 const LAND={wood:'Forest',grass:'Grassland',farmland:'Farmland',wetland:'Wetland',sand:'Sand',ice:'Ice',rock:'Rock',
@@ -924,13 +927,14 @@ const LAND={wood:'Forest',grass:'Grassland',farmland:'Farmland',wetland:'Wetland
   quarry:'Quarry',military:'Military',university:'Campus',college:'Campus',stadium:'Stadium',zoo:'Zoo',playground:'Playground'};
 const surfEl=document.getElementById('surf'), nearEl=document.getElementById('near');
 function landHere(p){
+  S.land='';
   if(!landIds.length) return '';
   const fs=hit(p.x,p.y,1,landIds);
   const pick=id=>fs.find(f=>f.layer&&f.layer.id===id);
   const f=pick('lc-detect')||pick('lu-detect')||pick('park');
   if(!f) return '';
-  if(f.layer.id==='park') return (f.properties&&f.properties.name)||'Park';
-  const c=f.properties&&f.properties.class; if(!c) return '';
+  if(f.layer.id==='park'){ S.land='park'; return (f.properties&&f.properties.name)||'Park'; }
+  const c=f.properties&&f.properties.class; if(!c) return ''; S.land=c;
   return LAND[c]||(c.charAt(0).toUpperCase()+c.slice(1).replace(/_/g,' '));
 }
 function nearestPoi(){
@@ -1175,32 +1179,44 @@ function step(now){
     else a=gas*(S.v<0?30*mu:12)*pw*(1-Math.min(S.v/vmax,1)**2); }
   else if(gas<-0.05){ if(S.v>.5){a=-28*(-gas)*mu;braking=true;} else a=gas*14*pw; }
   if(hand){a-=Math.sign(S.v)*30*mu; braking=Math.abs(S.v)>.5;}
-  const cap=boat?BOATMAX:tractor?vmax:(onRoad?Math.max(MAXV,vtop||0):34);
+  const SF=REAL&&window.FEEL&&!boat&&!tractor?FEEL.surf:null;       // realistic driving: what the tyres are on (js/enh/feel.js)
+  const cap=boat?BOATMAX:tractor?vmax:(SF?(SF.cap||Math.max(MAXV,vtop||0)):(onRoad?Math.max(MAXV,vtop||0):34));
   if(PF) a-=Math.sign(S.v)*(PF.rr+PF.cd*S.v*S.v+(gas<=.05&&Math.abs(S.v)>.3?.7+.015*Math.abs(S.v):0));   // rolling + air drag, engine braking off the gas
   else a-=Math.sign(S.v)*(boat?(.25+.0022*S.v*S.v):(.35+.0032*S.v*S.v));                // rolling + aero drag
-  if(!onRoad&&!boat&&!tractor) a-=S.v*.15;                               // mild grass drag
+  if(SF){ if(SF.drag||SF.rr) a-=S.v*SF.drag+(Math.abs(S.v)>.3?Math.sign(S.v)*SF.rr:0); }   // each surface drags differently (grass, woods, sand, mud...)
+  else if(!onRoad&&!boat&&!tractor) a-=S.v*.15;                          // mild grass drag
+  if(REAL&&terrainOn&&!boat&&Math.abs(S.v)>.3) a-=5*Math.sin(S.sp);      // hills: slower up, faster down (Medium/High graphics, where the ground has height)
   const prevV=S.v; S.v+=a*dt; if(prevV*S.v<0&&Math.abs(gas)<.05) S.v=0;
   if(S.v>cap) S.v=Math.max(cap,S.v-25*dt);                     // ease down to a lower cap instead of snapping
   S.v=Math.max(-REVMAX*pw,Math.min(vtop||MAXV,S.v)); if(Math.abs(S.v)<.05&&Math.abs(gas)<.05)S.v=0;
-  if(every('grip',2)){ const k=mu>=.95?0:mu>=.62?1:2;               // tell the driver once when the road turns wet or slick
+  if(every('grip',2)){ const wg=wxGrip(), k=wg>=.95?0:wg>=.62?1:2;               // tell the driver once when the road turns wet or slick
     if(k!==step.gripK){ if(k>(step.gripK||0)) toast(k===1?'🌧️ Wet road — brake earlier':'❄️ Slick road — brake much earlier, turn gently',3500); step.gripK=k; } }
 
   // steering (bicycle model, less lock at speed)
   const lock=boat?rad(30)/(1+Math.abs(S.v)/12):steerLock(S.v);
   S.steer+=(st*lock-S.steer)*Math.min(1,dt*9);
-  S.hdg+=(boat?S.v/7:S.v*SPEEDUP/WB)*Math.tan(S.steer)*dt*180/Math.PI;   // turn at the speed the world actually moves
+  let skid=0;
+  if(REAL&&mode==='car'&&!boat){ const av=Math.abs(S.v), latA=av*av*Math.abs(Math.tan(S.steer))/WB;   // cornering force, speedometer units
+    skid=Math.max(0,Math.min(1,(latA-9.5*mu)/4));                      // beyond ~1 g x grip the tyres let go
+    if(braking&&av>5&&(hand||-gas>.85*Math.min(1,mu+.15))) skid=Math.max(skid,Math.min(1,av/15));   // stamping on the brake
+    if(skid>0) S.v*=1-.5*skid*dt; }
+  S.skid=skid;
+  S.hdg+=(boat?S.v/7:S.v*SPEEDUP/WB)*Math.tan(S.steer)*dt*180/Math.PI*(1-.35*skid);   // turn at the speed the world actually moves
 
   // move, with collision against buildings & water
   const dm=S.v*dt*SPEEDUP, h=rad(S.hdg);
   const nLat=S.lat+Math.cos(h)*dm/111320, nLng=S.lng+Math.sin(h)*dm/(111320*Math.cos(rad(S.lat)));
   let blocked=false, inBuilding=false;
-  if(Math.abs(S.v)>.5 && styleReady && blockIds.length){
-    const ahead=[nLng+Math.sin(h)*2.4/(111320*Math.cos(rad(S.lat)))*Math.sign(S.v), nLat+Math.cos(h)*2.4/111320*Math.sign(S.v)];
+  // realistic driving: buildings, trees and traffic are solid. The car is drawn larger than life (EXAG), so its nose is too.
+  const SOLID=REAL&&(mode==='car'||mode==='tractor'), NOSE=2.4*(SOLID?Math.max(1,EXAG*.85):1);
+  if(Math.abs(S.v)>(SOLID?.05:.5) && styleReady && blockIds.length){
+    const ahead=[nLng+Math.sin(h)*NOSE/(111320*Math.cos(rad(S.lat)))*Math.sign(S.v), nLat+Math.cos(h)*NOSE/111320*Math.sign(S.v)];
     const p=map.project(ahead);
     // tall extrusions overlap the car on screen, so candidates are filtered by real footprint under the car's nose.
     // A small box is enough: fill-extrusion queries hit the whole projected prism, including its base footprint.
     const bh=hit(p.x,p.y,6,blockIds).filter(f=>contains(f.geometry,ahead[0],ahead[1]));
-    if(bh.length){ inBuilding=true;                                 // buildings stay standing; you just plow through
+    if(bh.length&&SOLID&&!bh.some(f=>contains(f.geometry,S.lng,S.lat))){ blocked=true; step.bid=null; }   // a wall stops you
+    else if(bh.length){ inBuilding=true;                            // realistic driving off (or already inside one): you plow through
       const b0=bh[0], bid=b0.id!=null?b0.id:JSON.stringify(bboxOf(partsOf(b0.geometry)[0]?.[0]||[[0,0]]));
       if(bid!==step.bid){ step.bid=bid; step.newHit=true; } }
     else step.bid=null;
@@ -1212,8 +1228,15 @@ function step(now){
     else if(smashCool<=0){ spawn(5,2,dir); smashCool=.06; shake=Math.max(shake,.35); }
     S.v*=Math.exp(-dt*1.6);                                    // buildings slow you, but you plow through
   }
-  smashing=inBuilding;
-  if(blocked){ S.v=-S.v*.3; } else { S.lat=nLat; S.lng=nLng; }
+  step.crashT=(step.crashT||0)-dt;
+  if(blocked){ const sp=Math.abs(S.v);                             // thud, a little debris, bounce back off the wall
+    if(sp>1.5&&smashCool<=0){ spawn(Math.min(24,4+Math.floor(sp*1.2)),Math.min(10,2+Math.floor(sp*.4)),S.v>=0?-1:1); smashCool=.35;
+      if(window.FEEL) FEEL.impact(sp,'wall'); else shake=Math.max(shake,.5); if(sp>4) step.crashT=.6; }
+    S.v=-Math.sign(S.v)*Math.min(sp*.25,3); }
+  else if(SOLID&&window.FEEL&&Math.abs(S.v)>.05){ const c=FEEL.hit(nLng,nLat,h,NOSE);   // trees and traffic
+    if(c){ S.v=c.v; S.hdg+=c.turn||0; blocked=!!c.stop; } }
+  smashing=inBuilding||step.crashT>0;
+  if(!blocked){ S.lat=nLat; S.lng=nLng; }
 
   // road detection
   if(every('place',1)) updatePlace(); if(every('house',.25)) updateHouseFilter(false);
@@ -1223,10 +1246,10 @@ function step(now){
     const p=map.project([S.lng,S.lat]); const f=hitRoad(p.x,p.y,48);
     const el=roadEl;
     if(f===null){ onRoad=true; el.textContent='Driving'; el.className=''; }      // road data unavailable: never punish
-    else if(f.length>0){ miss=0; onRoad=true; const nm=f.find(x=>x.properties&&x.properties.name); roadName=nm?nm.properties.name:''; el.textContent=roadName||'On road'; el.className=''; }
+    else if(f.length>0){ miss=0; onRoad=true; S.rcls=f.every(x=>{ const q=x.properties||{}; return q.surface==='unpaved'||/^(track|path)$/.test(String(q.class||'')); })?'gravel':'paved'; const nm=f.find(x=>x.properties&&x.properties.name); roadName=nm?nm.properties.name:''; el.textContent=roadName||'On road'; el.className=''; }
     else {                                                         // screen query missed: check the real road lines
       const g=nearRoadGeo();
-      if(g!==false){ miss=0; if(!onRoad||el.className){ onRoad=true; el.textContent=roadName||'On road'; el.className=''; } }
+      if(g!==false){ miss=0; S.rcls='paved'; if(!onRoad||el.className){ onRoad=true; el.textContent=roadName||'On road'; el.className=''; } }
       else if(++miss>=8){ onRoad=false; el.textContent='Off road'; el.className='off'; } }   // ~1s of sustained misses
     // ---- which vehicle? Decided from the map's real water/farmland polygons (point-in-polygon on
     //      lng/lat), not from what happens to be drawn under a screen pixel, then debounced by time.
@@ -1289,10 +1312,11 @@ function step(now){
     aimCam3D(H,PIT); placeGlider(); }
   const sc=EXAG/mpp(S.lat,S.zoom); car.scale.setScalar(sc); debris.scale.setScalar(sc);
   car.rotation.y=-rad(S.hdg-S.camB);
-  const tRoll=S.steer*Math.min(Math.abs(S.v)/12,1.2)*.35, tPitch=Math.max(-.05,Math.min(.05,a*.004));
+  const tRoll=S.steer*Math.min(Math.abs(S.v)/12,1.2)*.35, pk=REAL&&mode==='car'?1.8:1, tPitch=Math.max(-.05*pk,Math.min(.05*pk,a*.004*pk));   // realistic: the nose dives and the tail squats more
   S.roll+=(tRoll-S.roll)*Math.min(1,dt*6); S.pitch+=(tPitch-S.pitch)*Math.min(1,dt*6);
-  body.rotation.z=S.roll+S.sr; body.rotation.x=S.pitch+S.sp;
-  tractorG.rotation.z=S.roll*.6+S.sr; tractorG.rotation.x=S.pitch*.6+S.sp;
+  const bz=S.bz||0, bx=S.bx||0;                                  // rough ground and jolts (js/enh/feel.js)
+  body.rotation.z=S.roll+S.sr+bz; body.rotation.x=S.pitch+S.sp+bx; body.position.y=S.by||0;
+  tractorG.rotation.z=S.roll*.6+S.sr+bz; tractorG.rotation.x=S.pitch*.6+S.sp+bx;
   if(boat){ boatG.rotation.z=S.roll*1.6+Math.sin(now/420)*.03; boatG.rotation.x=S.pitch+Math.sin(now/510)*.025; boatG.position.y=-.1+Math.sin(now/360)*.05;
     if(Math.abs(S.v)>3 && every('wake',.035)) spawn(0,Math.min(3,1+Math.floor(Math.abs(S.v)/15)),1,0xf4fbff); }
   S.dist+=S.v*dt;
@@ -1308,7 +1332,7 @@ function step(now){
   const settling=Math.abs(tRoll-S.roll)>1e-3||Math.abs(tPitch-S.pitch)>1e-3||Math.abs(S.steer-(step.pst||0))>1e-4||braking!==step.pbr||Math.abs(S.sp)>1e-3&&!terrainOn;
   step.pst=S.steer; step.pbr=braking;
   const bob=boat&&(!POWER||frame%2===0);                         // parked boat still bobs, at half rate in saver
-  if(camMoved||settling||live>0||shake>0||bob||trafficMoving){ renderer.render(scene,camera); }
+  if(camMoved||settling||live>0||shake>0||bob||trafficMoving||(S.bj||0)>.02){ renderer.render(scene,camera); }
   dirty=false;
 
   const mph=Math.round(Math.abs(S.v)*2.237); if(mph!==step.mph){ step.mph=mph; mphEl.textContent=mph; }
