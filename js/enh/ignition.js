@@ -12,6 +12,9 @@
 (()=>{
 'use strict';
 const IGN={state:'on',t:0};
+// the Explorer's flare after it fires (owner's 2022 Explorer video): up in ~0.2 s, held high for about a second, then down
+// to idle within ~0.6 s
+function HOLD(u){ return Math.min(1,u*5)*(u<1?1:Math.exp(-(u-1)*3.2)); }
 window.IGN=IGN;
 const say=(m,ms)=>{ if(typeof toast==='function') toast(m,ms||1600); };
 const kind=()=>mode==='tractor'?'diesel':(typeof CARKEY==='string'&&CARKEY==='modely')?'ev':/^javelin/.test(CARKEY||'')?'v8':CARKEY==='navigator'?'lux':'gas';
@@ -39,13 +42,13 @@ IGN.rpm=function(idle){ const k=kind(), c=CRANK[k];
     const u=IGN.t-c;
     // Explorer (owner 2026-11-21, a video of a 2022 Explorer starting): a short, quiet crank, then it fires hard, flares to
     // about twice idle within ~0.2 s and settles back over a second and a half to a slightly fast cold idle
-    if(k==='gas') return idle*(1.06+1.0*Math.exp(-u*1.5)*Math.min(1,u*5));
+    if(k==='gas') return idle*(1.06+.95*HOLD(u));
     return idle*(1+(c?.7:.2)*Math.exp(-u*2.2)*Math.min(1,u*(c?8:3))); }
   return null; };
 // the throttle the engine sound should use while starting: a little while cranking; the Explorer fires hard (as loud as
 // a good push on the gas) and quietens as it settles, the way it does in the owner's video
 IGN.load=function(){ if(IGN.state!=='crank') return 0; const k=kind(), c=CRANK[k];
-  if(IGN.t<c) return .15; if(k!=='gas') return 0; const u=IGN.t-c; return .6*Math.exp(-u*1.5)*Math.min(1,u*5); };
+  if(IGN.t<c) return .15; if(k!=='gas') return 0; return .6*HOLD(IGN.t-c); };
 FRAME_HOOKS.push(function ignition(dt){
   if(IGN.state==='crank'){ IGN.t+=dt; if(IGN.t>CRANK[kind()]+(kind()==='gas'?2.4:1.2)){ IGN.state='on'; show(); } }
   else if(IGN.state==='stop'){ IGN.t+=dt; if(IGN.t>.8){ IGN.state='off'; show(); } }
@@ -72,9 +75,9 @@ function EXPLORER_START(sr){
       sph+=2*Math.PI*(38+14*Math.min(1,t/.15))/sr; const comp=.55+.45*Math.max(0,Math.sin(2*Math.PI*t*9));
       const env=Math.min(1,t/.02)*Math.min(1,(c+.04-t)/.04);
       y+=(Math.sin(sph)*.6+Math.sin(sph*2)*.25+b0(w)*.6+bs(w)*.08)*comp*env*.025; }
-    else { const u=t-c, r=idle*(1.06+1.0*Math.exp(-u*1.5)*Math.min(1,u*5));
+    else { const u=t-c, r=idle*(1.06+.95*HOLD(u));
       fph+=r/60*3/sr; const p=Math.pow(.5+.5*Math.cos(2*Math.PI*fph),3);              // one knock per firing (V6: 3 a turn)
-      const lvl=(.12+.8*Math.exp(-u*2.5)*Math.min(1,u*6))*Math.min(1,Math.max(0,(len-t)/1.1));
+      const lvl=(.12+.8*HOLD(u))*Math.min(1,Math.max(0,(len-t)/1.1));
       y+=(b1(w)*1.5*(.4+.6*p)+b2(w)*.15*(.3+.7*p)+b0(w)*.3*p)*lvl; }
     out[i]=y; }
   return out; }
@@ -84,7 +87,7 @@ function EXPLORER_START(sr){
 // and dying away ~40 dB a second. Plays straight to the speakers (it's the car's own chime speaker).
 function EXPLORER_CHIME(sr){
   const len=6, n=Math.round(sr*len), out=new Float32Array(n), P=[[440,1],[660,.36],[554,.085],[880,.03]];
-  for(let k=0;k<4;k++){ const i0=Math.round((.45+k*1.6)*sr);
+  for(let k=0;k<4;k++){ const i0=Math.round((.70+k*1.6)*sr);   // ~0.35 s after the engine fires, as in the video
     for(const [f,a] of P){ const w=2*Math.PI*f/sr, dec=Math.exp(-1/(.22*sr));
       let e=a; for(let i=i0;i<n&&e>1e-4;i++){ const j=i-i0; out[i]+=Math.sin(w*j)*e*Math.min(1,j/(sr*.005)); e*=dec; } } }
   let pk=0; for(const v of out) pk=Math.max(pk,Math.abs(v)); for(let i=0;i<n;i++) out[i]=out[i]/pk*.7*Math.min(1,(n-i)/(sr*.2));
@@ -92,7 +95,7 @@ function EXPLORER_CHIME(sr){
 let ECHIME=null;
 function explorerChime(){ const A=window.SOUND&&SOUND.state; if(!A||!A.ctx||!SOUND.on||A.ctx.state!=='running') return;
   try{ const sr=A.ctx.sampleRate; if(!ECHIME||ECHIME.sampleRate!==sr){ const d=EXPLORER_CHIME(sr); ECHIME=A.ctx.createBuffer(1,d.length,sr); ECHIME.getChannelData(0).set(d); }
-    const src=A.ctx.createBufferSource(); src.buffer=ECHIME; const g=A.ctx.createGain(); g.gain.value=window.COCKPIT&&COCKPIT.on?.45:.25;
+    const src=A.ctx.createBufferSource(); src.buffer=ECHIME; const g=A.ctx.createGain(); g.gain.value=window.COCKPIT&&COCKPIT.on?.35:.21;   // level set against the video
     src.connect(g); g.connect(A.ctx.destination); src.start(); }catch(e){ console.warn('explorer chime',e); } }
 let ESTART=null;
 function startLayer(){ const A=window.SOUND&&SOUND.state; if(!A||!A.ctx||!A.bus||!SOUND.on||A.ctx.state!=='running') return;
