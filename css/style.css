@@ -216,3 +216,5 @@ button{font-family:inherit;cursor:pointer}
 /* cockpit view (js/enh/cockpit.js): the dashboard shows speed and street, so the speed HUD steps aside; rain streaks only through the glass */
 body.cockpit #hud{display:none}
 body.cockpit #wx{-webkit-mask-image:linear-gradient(#000 40%,transparent 58%);mask-image:linear-gradient(#000 40%,transparent 58%)}
+/* a racing wheel is plugged in (js/enh/wheel.js): no on-screen steering slider or pedals */
+body.wheel #ctl{display:none}

@@ -61,7 +61,9 @@
   };
 
   // ⚙️ row, only shown once a wheel has been seen (keeps the phone panel unchanged)
-  function showRow(){ const row=document.getElementById('wheelRow'); if(!row) return; const g=find();
+  // the on-screen steering slider and pedals step aside while a wheel is plugged in (owner 2026-11-20), and come back if it's unplugged
+  function showRow(){ const g0=find(); document.body.classList.toggle('wheel',!!g0);
+    const row=document.getElementById('wheelRow'); if(!row) return; const g=g0;
     if(g) seen=true; row.style.display=seen?'':'none';
     const s=document.getElementById('wheelStat'); if(s) s.textContent=!g?'Not connected':cal?'Setting up…':learn?'Press the wheel button you want for the view':cfg[g.id]&&cfg[g.id].gas?'Ready'+(cfg[g.id].view!=null?' · view button '+(cfg[g.id].view+1):''):'Pedals not set up'; }
   addEventListener('gamepadconnected',showRow); addEventListener('gamepaddisconnected',showRow);
