@@ -1303,8 +1303,11 @@ function step(now){
   const WH=window.WHEEL&&WHEEL.read();
   const wS=WH&&Math.abs(kS)<.05?WH.st:kS, wG=WH&&Math.abs(kG)<.05&&(WH.ok||WH.cal)?WH.gas:kG;
   let st=Math.abs(tSteer)>.05?tSteer:wS, gas=Math.abs(tGas)>.05?tGas:wG; const hand=!!K[' '];
+  // the wheel's pedals as an automatic: gas drives the way the selector says, the brake only ever brakes (js/enh/wheel.js)
+  let wBrake=0; const WA=!!(WH&&WH.ok&&!WH.cal&&Math.abs(kG)<.05&&Math.abs(tGas)<.05&&mode!=='walk'&&mode!=='glider');
+  if(WA){ wBrake=WH.brake||0; gas=WH.sel==='D'?WH.pedal:WH.sel==='R'?-WH.pedal:0; S.sel=WH.sel; } else S.sel=null;
   // autopilot (js/enh/autopilot.js) drives until you touch the steering, gas or handbrake
-  if(window.AUTO&&AUTO.on){ if(Math.abs(st)>.05||Math.abs(gas)>.05||hand) AUTO.takeover(); else { const c=AUTO.control(dt); st=c.st; gas=c.gas; } }
+  if(window.AUTO&&AUTO.on){ if(Math.abs(st)>.05||Math.abs(gas)>.05||hand||wBrake>.05) AUTO.takeover(); else { const c=AUTO.control(dt); st=c.st; gas=c.gas; wBrake=0; } }
   S.gas=gas; S.stIn=st;                                            // pedal + steering input for add-ons (engine sound, cockpit wheel)
   if(mode==='glider'){ glideStep(dt,st,gas,now); return; }
   if(mode==='walk'&&window.WALK){ WALK.step(dt,st,gas,now); return; }   // on foot (js/enh/walk.js)
@@ -1332,7 +1335,10 @@ function step(now){
   else if(!onRoad&&!boat&&!tractor) a-=S.v*.15;                          // mild grass drag
   if(S.inWater&&!boat){ a-=S.v*1.2; }                                    // wading through water in a car or tractor: slow going (~5 mph)
   if(REAL&&terrainOn&&!boat&&Math.abs(S.v)>.3) a-=5*Math.sin(S.sp);      // hills: slower up, faster down (Medium/High graphics, where the ground has height)
-  const prevV=S.v; S.v+=a*dt; if(prevV*S.v<0&&Math.abs(gas)<.05) S.v=0;
+  if(wBrake>.03){ const dec=28*Math.min(1,wBrake*1.15)*mu; braking=Math.abs(S.v)>.5;   // the wheel's brake: slows to a stop and holds there, never reverses
+    if(Math.abs(S.v+a*dt)<=dec*dt&&Math.abs(gas)<=wBrake){ S.v=0; a=0; } else a-=Math.sign(S.v||1)*dec*(S.v===0?0:1); }
+  const prevV=S.v; S.v+=a*dt; if(prevV*S.v<0&&(Math.abs(gas)<.05||wBrake>.03)) S.v=0;
+  if(WA&&S.v<-7) S.v=Math.min(-7,S.v+12*dt);                          // reverse in an automatic tops out around 15 mph
   if(S.v>cap) S.v=Math.max(cap,S.v-25*dt);                     // ease down to a lower cap instead of snapping
   if(S.inWater&&!boat) S.v=Math.max(-2,Math.min(2.4,S.v));
   S.v=Math.max(-REVMAX*pw,Math.min(vtop||MAXV,S.v)); if(Math.abs(S.v)<.05&&Math.abs(gas)<.05)S.v=0;
