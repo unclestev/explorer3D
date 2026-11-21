@@ -372,7 +372,7 @@ const CARS={
   // tools/make-model-y.py from the owner's photos (Pearl White, 20" black aero wheels, glass roof). Electric: one gear,
   // instant torque (0-60 mph in 4.2 s with the Boost), regen braking when you lift (regen m/s^2 at speed), motor whine
   // instead of an engine (js/enh/sound.js 'tesla'). Top speed 135 mph.
-  modely:{name:'Tesla Model Y',paint:0xeceeee,model:'models/model-y.glb?v=1',W:1.92,lamp:.66,front:2.30,sound:'tesla',ev:true,regen:1.7,
+  modely:{name:'Tesla Model Y',paint:0xeceeee,model:'models/model-y.glb?v=2',W:1.92,lamp:.66,front:2.30,sound:'tesla',ev:true,regen:1.7,
     vmax:135/2.237,perf:{t60:4.2,top:135,a0:9.0}},
   // the farm tractor as its own choice (owner 2026-11-20: "just another car option… don't change to the tractor automatically
   // when you enter a farm field"): drives in tractor mode (its 3D model, 75% speed, diesel sound) wherever you take it

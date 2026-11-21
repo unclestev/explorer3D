@@ -10,14 +10,14 @@ from scipy.interpolate import PchipInterpolator as Pchip
 
 L = 4.751; ZF, ZR = L/2, -L/2                  # front and rear bumper
 WB = 2.890; ZA_F = 1.475; ZA_R = ZA_F-WB        # axles (front overhang ~0.90 m)
-TRACK = 1.636; TYRE_R = .369; TYRE_W = .255     # 255/45R20 on 20" wheels
+TRACK = 1.636; TYRE_R = .356; TYRE_W = .255     # 255/40R20 (the owner's Goodyears) on 20" wheels
 HW = .955                                       # half the 1.92 m body width (no mirrors)
 
 # ---------- side profile (z, y) ----------
-top = Pchip([ZR, -2.355, -2.30, -2.20, -2.12, -2.02, -1.80, -1.55, -1.10, -.45, .10, .55, 1.15, 1.45, 1.85, 2.15, 2.28, 2.34, ZF],
-            [.62,  .86,   .98,  1.09, 1.135, 1.17,  1.32,  1.45,  1.585, 1.624, 1.59, 1.40, 1.095, 1.04, .975, .895, .80, .70, .55])
+top = Pchip([ZR, -2.355, -2.31, -2.25, -2.18, -2.06, -1.80, -1.55, -1.10, -.45, .10, .55, 1.15, 1.45, 1.85, 2.15, 2.28, 2.34, ZF],
+            [.55,  .80,   1.00, 1.11, 1.155, 1.185, 1.32,  1.45,  1.585, 1.624, 1.59, 1.40, 1.10, 1.06, 1.005, .945, .865, .76, .58])
 belt = Pchip([-2.4, -1.9, -1.0, 0., 1.15, 2.4], [1.13, 1.115, 1.085, 1.06, 1.045, 1.04])
-bot = Pchip([ZR, -2.25, -1.95, -1.6, 1.6, 1.95, 2.25, ZF], [.40, .37, .30, .215, .215, .27, .30, .34])
+bot = Pchip([ZR, -2.25, -1.95, -1.6, 1.6, 1.95, 2.25, ZF], [.30, .27, .25, .215, .215, .27, .30, .34])
 
 def hw(z):                                       # plan view: half width at the widest point of the section
     h = HW - .014*math.exp(-((z+.25)/.9)**2) + .006*math.exp(-((z-ZA_R)/.45)**2)      # slight waist at the doors, rear haunch
@@ -88,7 +88,7 @@ for S in SECS:
     G.append(row)
 G = np.array(G)
 # wheel arches: push the body in to a dark wheel well around each wheel (radius RA in the side view)
-RA = .435; XW = .70
+RA = .42; XW = .70
 well = np.zeros(G.shape[:2], bool)
 for za in (ZA_F, ZA_R):
     dz, dy = G[:, :, 2]-za, G[:, :, 1]-TYRE_R; d = np.hypot(dz, dy)
@@ -106,8 +106,7 @@ def body_mat(i, j):
     if well[i:i+2, j:j+2].any(): return 'Trim'
     if j < 7: return 'Trim'                                              # underside
     if -1.0 < zc < 1.05 and j < 13: return 'Trim'                        # black sill strip
-    if zc > 2.05 and y < .385 and abs(G[i, j, 0]) < .78: return 'Trim'  # lower front intake
-    if zc < -1.9 and y < .47: return 'Trim'                              # rear diffuser
+    if zc < -1.9 and y < .45: return 'Trim'                              # the big black rear diffuser (owner's rear photo)
     return 'Paint'
 mirror_grid(body, G.tolist(), body_mat)
 # close the very ends (degenerate already: hw -> 0) — nothing to add.
@@ -122,7 +121,7 @@ def gpt(z, u):                                   # u 0 = glass base at the belt,
     a = (u-.5)/.5*math.pi/2; return [rw*math.cos(a)**(2/3.2), y0+(H-r)+r*math.sin(a)**(2/2.2), z]   # crown across the roof
 zz = np.linspace(-2.3, 1.4, 800)
 hasH = [float(top(z)) > section(float(z))['yw']+(section(float(z))['yt']-section(float(z))['yw'])*section(float(z))['frac']+.006 for z in zz]
-ZG0 = max(-2.08, float(zz[hasH.index(True)])); ZG1 = float(zz[len(hasH)-1-hasH[::-1].index(True)])
+ZG0 = max(-1.97, float(zz[hasH.index(True)])); ZG1 = float(zz[len(hasH)-1-hasH[::-1].index(True)])
 def ggrid(u0, u1, z0f, z1f, nz, nu, mat):
     G = [[gpt(z0f(u)+(z1f(u)-z0f(u))*i/nz, u) for u in np.linspace(u0, u1, nu+1)] for i in range(nz+1)]
     mirror_grid(gh, G, lambda i, j: mat)
@@ -152,17 +151,24 @@ def zrear(x, y, hi=-1.75):
         if halfwidth(m, y) >= abs(x): hi = m
         else: lo = m
     return hi
+def surf_normal(x, y, z, sgn, e=.004):
+    # gradient of |x| - halfwidth(z, y): points out of the body (x >= 0 side)
+    gy = -(halfwidth(z, y+e)-halfwidth(z, y-e))/(2*e); gz = -(halfwidth(z+e, y)-halfwidth(z-e, y))/(2*e)
+    if not all(map(math.isfinite, (gy, gz))) or abs(gy) > 50 or abs(gz) > 50: return (0, 0, sgn)
+    l = math.sqrt(1+gy*gy+gz*gz); return (1/l, gy/l, gz/l)
 def patch(m, mat, f, nu, nv, push=.004, zfn=zfront, sgn=1, shift=0.):
-    # a surface patch: f(u,v) -> (x,y); z found on the body's front (sgn 1) or rear (sgn -1); pushed `push` out along z
+    # a surface patch: f(u,v) -> (x,y); z found on the body's front (sgn 1) or rear (sgn -1); pushed `push` out along the
+    # body's surface normal (so the parts that wrap round a corner onto the side stand off the paint too)
+    pts = []
+    for i in range(nu+1):
+        row = []
+        for j in range(nv+1):
+            x, y = f(i/nu, j/nv); z = zfn(x, y)
+            if z is None: z = (1.3 if sgn > 0 else -1.3)
+            n = surf_normal(x, y, z, sgn); row.append((x+n[0]*push, y+n[1]*push, z+n[2]*push+shift))
+        pts.append(row)
     for side in (1, -1):
-        idx = []
-        for i in range(nu+1):
-            row = []
-            for j in range(nv+1):
-                x, y = f(i/nu, j/nv); z = zfn(x, y)
-                if z is None: z = (1.3 if sgn > 0 else -1.3)
-                row.append(m.v((side*x, y, z+sgn*push+shift)))
-            idx.append(row)
+        idx = [[m.v((side*p[0], p[1], p[2])) for p in row] for row in pts]
         for i in range(nu):
             for j in range(nv):
                 a, b, c, d = idx[i][j], idx[i+1][j], idx[i][j+1], idx[i+1][j+1]
@@ -171,10 +177,10 @@ def patch(m, mat, f, nu, nv, push=.004, zfn=zfront, sgn=1, shift=0.):
 # headlights: a narrow swept "eye" under the hood edge, thin at the inboard end, taller and higher outboard
 heads = Mesh('Headlights')
 def wmax(y, z): return max(halfwidth(z, y), .1)
-def headf(u, v):
-    yc = .752+.05*u**1.6; h = .028+.052*u**1.3
-    lower = yc-h/2+.012*math.sin(math.pi*u); y = lower+(yc+h/2-lower)*v
-    return (.42+.565*u**.95)*wmax(y, 1.7), y
+def headf(u, v):                                   # owner's front photo: a pointed tip up by the hood seam inboard,
+    top_ = .905-.04*u**1.4; low = .895-.14*u**1.15+.02*u**6   # deep and rounded at the outboard corner
+    y = low+(top_-low)*v
+    return (.40+.585*u**.9)*wmax(y, 1.7), y
 patch(heads, 'Headlight', lambda u, v: headf(.03+.94*u, .18+.64*v), 26, 4, push=.006, shift=-.035)
 hous = Mesh('HeadlightHousings')
 def housf(u, v):
@@ -182,9 +188,9 @@ def housf(u, v):
 patch(hous, 'Trim', housf, 26, 4, push=.0035)
 # tail lights: a wedge on each rear corner, pointed inboard on the hatch, deep outboard on the quarter panel
 tails = Mesh('Taillights')
-def tailf(u, v):
-    yt = 1.085-.03*u; yb = yt-(.026+.115*u**1.25); y = yb+(yt-yb)*v
-    return (.39+.595*u)*wmax(y, -1.75), y
+def tailf(u, v):                                   # owner's rear photo: top edge level under the lip, pointed inboard tip,
+    yt = 1.085-.012*u; yb = 1.062-.135*u**1.1; y = yb+(yt-yb)*v   # ~14 cm deep at the outboard corner, wrapping onto the side
+    return (.47+.515*u)*wmax(y, -1.75), y
 patch(tails, 'Taillight', tailf, 26, 5, push=.004, zfn=zrear, sgn=-1, shift=.035)
 # seams and black details drawn on the surface (Trim)
 trim = Mesh('Details')
@@ -195,13 +201,18 @@ def strip_front(pts, w, push=.003):
         return x+(-dy/l)*(v-.5)*w, y+(dx/l)*(v-.5)*w
     return f
 # rear: hatch seams (sides of the hatch through the tail lights, and its bottom edge)
-patch(trim, 'Trim', strip_front([(.60, .80), (.605, .95), (.61, 1.10)], .006), 12, 1, push=.0045, zfn=zrear, sgn=-1)
-patch(trim, 'Trim', strip_front([(0, .80), (.30, .80), (.60, .80)], .006), 12, 1, push=.0045, zfn=zrear, sgn=-1)
-plate = Mesh('Plate')
-patch(plate, 'Plate', lambda u, v: (.155*u, .515+.155*v), 4, 2, push=.006, zfn=zrear, sgn=-1)   # both halves: patch() mirrors it
-patch(trim, 'Trim', lambda u, v: (.168*u, .503+.18*v), 4, 2, push=.004, zfn=zrear, sgn=-1)
-# front: lower intake slot and the frunk lid edge line
-patch(trim, 'Trim', strip_front([(0, .875), (.35, .87), (.66, .845)], .0035), 14, 1, push=.003, zfn=zfront)
+# the hatch: its sides drop straight down through the tail lights, then round big corners into a low bottom edge
+HP = [(.70, 1.10), (.70, .76)]+[(.56+.14*math.cos(a), .74-.14*math.sin(a)) for a in np.linspace(0, math.pi/2, 7)]+[(.30, .60), (0, .60)]
+patch(trim, 'Trim', strip_front(HP, .006), 40, 1, push=.0045, zfn=zrear, sgn=-1)
+plate = Mesh('Plate')                                  # the licence plate sits on the hatch (owner's rear photo)
+patch(plate, 'Plate', lambda u, v: (.155*u, .69+.152*v), 4, 2, push=.007, zfn=zrear, sgn=-1)   # both halves: patch() mirrors it
+patch(trim, 'Trim', lambda u, v: (.170*u, .675+.182*v), 4, 2, push=.005, zfn=zrear, sgn=-1)
+patch(plate, 'Reflector', strip_front([(.56, .462), (.80, .462)], .022), 6, 1, push=.004, zfn=zrear, sgn=-1)   # red reflectors on the diffuser
+# front: the frunk lid edge, the wide lower intake, the corner slots, the front plate
+patch(trim, 'Trim', strip_front([(0, .93), (.35, .925), (.66, .905)], .0035), 14, 1, push=.003, zfn=zfront)
+patch(trim, 'Trim', lambda u, v: (.56*u, .305+.085*v-.02*u**4), 12, 2, push=.003, zfn=zfront)
+patch(trim, 'Trim', strip_front([(.78, .37), (.84, .40), (.88, .47)], .03), 6, 1, push=.003, zfn=zfront)
+
 # sides: door seams, flush door handles (on the body's side: found along x at a given z, y)
 def side_patch(m, mat, f, nu, nv, push=.003):
     for side in (1, -1):
@@ -209,7 +220,7 @@ def side_patch(m, mat, f, nu, nv, push=.003):
         for i in range(nu+1):
             row = []
             for j in range(nv+1):
-                z, y = f(i/nu, j/nv); x = halfwidth(z, y)+push
+                z, y = f(i/nu, j/nv); x = max(halfwidth(z, max(y, float(bot(z))+.012)), .3)+push
                 row.append(m.v((side*x, y, z)))
             idx.append(row)
         for i in range(nu):
@@ -222,6 +233,12 @@ def vline(z0, z1, y0, y1, w=.006):
 for zz in ((1.0, .97, .31, 1.03), (-.24, -.28, .31, 1.06), (-1.32, -1.16, 1.07, .80)):   # front door front edge, B pillar seam, rear door back edge
     side_patch(trim, 'Trim', vline(zz[0], zz[1], zz[2], zz[3]), 10, 1)
 side_patch(trim, 'Trim', lambda u, v: (.97+(-.97-.97)*u, .31+(v-.5)*.006), 30, 1)   # door bottoms along the sill
+for za in (ZA_F, ZA_R):                                               # matte black arch cladding (owner's wheel photo)
+    side_patch(trim, 'Trim', lambda u, v, za=za: (za+math.cos(math.radians(-12+204*u))*(RA-.01+.06*v), TYRE_R+math.sin(math.radians(-12+204*u))*(RA-.01+.06*v)), 40, 2, push=.005)
+side_patch(trim, 'Trim', lambda u, v: (ZA_F-RA-.03+((ZA_R+RA+.03)-(ZA_F-RA-.03))*u, .225+.075*v), 30, 2, push=.004)   # black rocker
+side_patch(trim, 'Glass', lambda u, v: (1.10-.10*u, .80+.035*v*(1-.6*u)+.012*u), 6, 2, push=.006)   # side repeater camera on the front fender
+side_patch(trim, 'Glass', lambda u, v: (-2.27+.25*u, (.945+.07*u**1.5)+(.125-.12*u**1.2)*v), 8, 2, push=.005)   # glossy black wrap of the tail light (owner's photo)
+side_patch(trim, 'Reflector', lambda u, v: (-2.24+.13*u, (.965+.03*u)+(.045-.035*u)*v), 4, 1, push=.008)
 for zc in (-.02, -1.08):                                               # flush handles (black, like the owner's)
     side_patch(trim, 'Trim', lambda u, v, zc=zc: (zc-.11*u+.012*math.sin(math.pi*u)*0, .905+.022*(v-.5)*2*(1 if u > .25 else .7)), 8, 1, push=.004)
 
@@ -259,22 +276,22 @@ def wheel_mesh(name, outward):
                 else: m.tri(mat, a_, c_, b_); m.tri(mat, b_, c_, d_)
     w = TYRE_W/2
     lathe('Tyre', [(-w*.9, RIM), (-w, RIM+.03), (-w*.98, TYRE_R-.035), (-w*.85, TYRE_R-.006), (-w*.5, TYRE_R), (w*.5, TYRE_R), (w*.85, TYRE_R-.006), (w*.98, TYRE_R-.035), (w, RIM+.03), (w*.9, RIM)])
-    lathe('Rim', [(w*.9, RIM), (w*.78, RIM-.012), (w*.70, RIM-.03), (w*.72, .06), (w*.80, 0.)])               # outer face: dished aero cover
-    lathe('Rim', [(-w*.9, RIM), (-w*.6, RIM-.01), (-w*.6, 0.)], 24)                                          # inner barrel / backing
+    lathe('Rim', [(w*.9, RIM), (w*.80, RIM-.008), (w*.74, RIM-.03), (w*.30, RIM-.03)])                       # outer lip and barrel
+    lathe('Well', [(w*.0, RIM-.03), (-w*.2, .17), (-w*.2, 0.)], 24)                                         # dark inside (brake, hub) seen between the spokes
     # turbine blades on the face
-    for k in range(14):
-        a0 = k/14*2*math.pi; pts = []
-        for q in range(7):
-            rr = .07+(RIM-.085)*q/6; a = a0+.55*q/6
-            pts.append((rr, a))
-        for (r1, a1), (r2, a2) in zip(pts, pts[1:]):
-            for da in (0, .045):
-                pass
-            quad = [(r1, a1), (r2, a2), (r2, a2+.06), (r1, a1+.06)]
-            ids = [m.v((outward*(w*.72+.006*(1-(r-.07)/.2)+.004), r*math.cos(a), r*math.sin(a))) for r, a in quad]
-            if outward > 0: m.tri('Spoke', ids[0], ids[1], ids[2]); m.tri('Spoke', ids[0], ids[2], ids[3])
-            else: m.tri('Spoke', ids[0], ids[2], ids[1]); m.tri('Spoke', ids[0], ids[3], ids[2])
-    lathe('Spoke', [(w*.80+.006, .055), (w*.82+.008, .03), (w*.82+.008, 0.)], 24)                              # centre cap
+    for k in range(10):                                                                                      # 10 swept spokes
+        a0 = k/10*2*math.pi; row = []
+        for q in range(9):
+            t = q/8; rr = .085+(RIM-.075-.085)*t; a = a0+.30*t*t; wd = .36-.06*t                            # widen toward the rim
+            xo = w*.74+.028*(1-t)**.6                                                                            # dished: the hub sits further out
+            row.append([m.v((outward*xo, rr*math.cos(a+s_*wd/2), rr*math.sin(a+s_*wd/2))) for s_ in (-1, 0, 1)])
+            row[-1][1] = m.v((outward*(xo+.008), rr*math.cos(a), rr*math.sin(a)))                              # a ridge down the middle
+        for q in range(8):
+            for j in range(2):
+                a_, b_, c_, d_ = row[q][j], row[q+1][j], row[q][j+1], row[q+1][j+1]
+                if outward > 0: m.tri('Spoke', a_, b_, c_); m.tri('Spoke', b_, d_, c_)
+                else: m.tri('Spoke', a_, c_, b_); m.tri('Spoke', b_, c_, d_)
+    lathe('Spoke', [(w*.74+.026, .092), (w*.74+.034, .08), (w*.74+.040, .05), (w*.74+.042, 0.)], 24)         # centre cap
     return m
 wheels = [(n, x, ZA) for n, x, ZA in (('Wheel_FL', TRACK/2, ZA_F), ('Wheel_FR', -TRACK/2, ZA_F), ('Wheel_RL', TRACK/2, ZA_R), ('Wheel_RR', -TRACK/2, ZA_R))]
 
@@ -287,8 +304,10 @@ MATS = {
  'Plate':     dict(c=[.55, .56, .58, 1], m=0, r=.6),
  'Taillight': dict(c=[.25, .02, .02, 1], m=.2, r=.2),
  'Tyre':      dict(c=[.022, .022, .024, 1], m=0, r=.85),
- 'Rim':       dict(c=[.03, .031, .034, 1], m=.5, r=.4),          # black aero wheel
- 'Spoke':     dict(c=[.05, .052, .056, 1], m=.2, r=.5),
+ 'Rim':       dict(c=[.025, .026, .028, 1], m=.15, r=.6),         # matte black Induction wheels
+ 'Spoke':     dict(c=[.022, .023, .025, 1], m=0, r=.7),        # matte black
+ 'Well':      dict(c=[.008, .008, .009, 1], m=0, r=.9),
+ 'Reflector': dict(c=[.35, .02, .02, 1], m=.1, r=.3),
 }
 matnames = list(MATS)
 J = dict(asset=dict(version='2.0', generator='explorer3d tools/make-model-y.py'), scene=0, scenes=[dict(nodes=[0])],
