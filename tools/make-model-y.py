@@ -238,8 +238,8 @@ for za in (ZA_F, ZA_R):                                               # matte bl
     side_patch(trim, 'Trim', lambda u, v, za=za: (za+math.cos(math.radians(-12+204*u))*(RA-.01+.06*v), TYRE_R+math.sin(math.radians(-12+204*u))*(RA-.01+.06*v)), 40, 2, push=.005)
 side_patch(trim, 'Trim', lambda u, v: (ZA_F-RA-.03+((ZA_R+RA+.03)-(ZA_F-RA-.03))*u, .225+.075*v), 30, 2, push=.004)   # black rocker
 if not PHOTO_REAR: side_patch(trim, 'Glass', lambda u, v: (1.10-.10*u, .80+.035*v*(1-.6*u)+.012*u), 6, 2, push=.006)   # side repeater camera on the front fender
-side_patch(trim, 'Glass', lambda u, v: (-2.27+.25*u, (.945+.07*u**1.5)+(.125-.12*u**1.2)*v), 8, 2, push=.005)   # glossy black wrap of the tail light (owner's photo)
-side_patch(trim, 'Reflector', lambda u, v: (-2.24+.13*u, (.965+.03*u)+(.045-.035*u)*v), 4, 1, push=.008)
+if not PHOTO_REAR: side_patch(trim, 'Glass', lambda u, v: (-2.27+.25*u, (.945+.07*u**1.5)+(.125-.12*u**1.2)*v), 8, 2, push=.005)   # glossy black wrap of the tail light (owner's photo)
+if not PHOTO_REAR: side_patch(trim, 'Reflector', lambda u, v: (-2.24+.13*u, (.965+.03*u)+(.045-.035*u)*v), 4, 1, push=.008)
 for zc in (() if PHOTO_REAR else (-.02, -1.08)):                       # flush handles (black, like the owner's)
     side_patch(trim, 'Trim', lambda u, v, zc=zc: (zc-.11*u+.012*math.sin(math.pi*u)*0, .905+.022*(v-.5)*2*(1 if u > .25 else .7)), 8, 1, push=.004)
 
@@ -298,7 +298,7 @@ wheels = [(n, x, ZA) for n, x, ZA in (('Wheel_FL', TRACK/2, ZA_F), ('Wheel_FR', 
 
 # ---------- write the .glb ----------
 MATS = {
- 'Paint':     dict(c=[.40, .405, .405, 1], m=0, r=.55),        # Pearl White multi-coat
+ 'Paint':     dict(c=[.31, .315, .315, 1], m=0, r=.55),        # Pearl White multi-coat
  'Glass':     dict(c=[.012, .014, .018, 1], m=.55, r=.06),
  'Trim':      dict(c=[.018, .018, .02, 1], m=.1, r=.55),
  'Headlight': dict(c=[.10, .105, .11, 1], m=.7, r=.1),
@@ -309,11 +309,11 @@ MATS = {
  'Spoke':     dict(c=[.022, .023, .025, 1], m=0, r=.7),        # matte black
  'Well':      dict(c=[.008, .008, .009, 1], m=0, r=.9),
  'Reflector': dict(c=[.35, .02, .02, 1], m=.1, r=.3),
- 'PhotoRear': dict(c=[.72, .72, .72, 1], m=0, r=.55, tex='base', ti=0),
- 'PhotoTaillight': dict(c=[.72, .72, .72, 1], m=0, r=.3, tex='both', ti=0),
- 'PhotoSide': dict(c=[.72, .72, .72, 1], m=0, r=.55, tex='base', ti=1),
- 'PhotoFront': dict(c=[.72, .72, .72, 1], m=0, r=.55, tex='base', ti=2),
- 'PhotoHeadlight': dict(c=[.72, .72, .72, 1], m=0, r=.2, tex='both', ti=2),
+ 'PhotoRear': dict(c=[.52, .52, .52, 1], m=0, r=.55, tex='base', ti=0),
+ 'PhotoTaillight': dict(c=[.52, .52, .52, 1], m=0, r=.6, tex='both', ti=0),
+ 'PhotoSide': dict(c=[.47, .47, .47, 1], m=0, r=.55, tex='base', ti=1),
+ 'PhotoFront': dict(c=[.52, .52, .52, 1], m=0, r=.55, tex='base', ti=2),
+ 'PhotoHeadlight': dict(c=[.52, .52, .52, 1], m=0, r=.2, tex='both', ti=2),
 }
 matnames = list(MATS)
 J = dict(asset=dict(version='2.0', generator='explorer3d tools/make-model-y.py'), scene=0, scenes=[dict(nodes=[0])],
@@ -347,6 +347,7 @@ def put(m, translation=None, parent=0, offset=(0, 0, 0)):
     pa = add(P, 5126, 'VEC3', 34962); na = add(N, 5126, 'VEC3', 34962)
     at = dict(POSITION=pa, NORMAL=na)
     if getattr(m, 'UV', None): at['TEXCOORD_0'] = add(np.array(m.UV, dtype='<f4'), 5126, 'VEC2', 34962)
+    if getattr(m, 'COL', None) is not None: at['COLOR_0'] = add(np.array(m.COL, dtype='<f4'), 5126, 'VEC3', 34962)
     prims = []
     for mat, I in m.prims.items():
         ia = add(np.array(I, dtype='<u4' if len(P) > 65535 else '<u2'), 5125 if len(P) > 65535 else 5123, 'SCALAR', 34963)
@@ -387,6 +388,7 @@ if PHOTOS:
     for name, ph in PHOTOS.items():                         # masks and depth for each photo
         W_, H_ = ph['size']; mk = Image.new('L', (W_, H_), 0); ImageDraw.Draw(mk).polygon([tuple(p) for p in ph['outline']], fill=255)
         ph['MASK'] = np.array(mk.filter(ImageFilter.MinFilter(25))) > 128          # ~12 px inside the outline
+        ph['OMASK'] = np.array(mk) > 128
         lk = Image.new('L', (W_, H_), 0)
         for L in ph['lamps']: ImageDraw.Draw(lk).polygon([tuple(p) for p in L], fill=255)
         ph['LMASK'] = np.array(lk) > 128
@@ -396,6 +398,7 @@ if PHOTOS:
     LAMPMAT = {'rear': 'PhotoTaillight', 'front': 'PhotoHeadlight'}            # the photo's own lamps, lit by the game
     for n in names: pm['lamp_'+n] = Mesh(LAMPMAT.get(n, 'Photo')+'s')
     for m in pm.values(): m.UV = []; m.N = []
+    PICKS = []
     for src in (body, gh, mir):
         V = np.array(src.P); NV = normals(V.astype('<f4'), src.prims)
         chase = NV@np.array([0, .5, -.866])                           # how square-on the game's chase camera sees it
@@ -405,29 +408,82 @@ if PHOTOS:
             if ph['mirror']: sg = np.where(V[:, 0] < 0, -1, 1); Vm[:, 0] *= sg; Nm[:, 0] *= sg   # the right side seen as the left
             u, v, z = cam_proj(Vm, ph['camera'], ph['size']); iu, iv = np.clip(u, 0, W_-1).astype(int), np.clip(v, 0, H_-1).astype(int)
             camp = np.array(ph['camera'][:3]); face = ((camp-Vm)/np.linalg.norm(camp-Vm, axis=1, keepdims=True)*Nm).sum(1)
-            seen = (z > .1)&(u >= 0)&(u < W_)&(v >= 0)&(v < H_)&ph['MASK'][iv, iu]&(face > .3)
+            seen = (z > .1)&(u >= 0)&(u < W_)&(v >= 0)&(v < H_)&ph['MASK'][iv, iu]&(face > (ph.get('glassface', .42) if src is gh else .3))   # glass: its edges reflect the background
             seen &= np.maximum(chase, 0) < 3.5*face                    # not where the chase camera would see the photo stretched >3.5x
             seen &= z <= ph['ZB'][np.clip(iv//4, 0, H_//4), np.clip(iu//4, 0, W_//4)]+.06
-            S_[name] = (u, v, face, seen, iu, iv)
-        maps = {}
+            # looser test for filling gaps next to faces that already have a photo: just in the picture, inside the car's
+            # outline (not shrunk), facing the camera at all and not far behind what it saw
+            loose = (z > .1)&(u >= 0)&(u < W_)&(v >= 0)&(v < H_)&ph['OMASK'][iv, iu]&(face > .03)
+            if src is gh: loose &= False                               # no filling on the glass (its edges show the background)
+            loose &= z <= ph['ZB'][np.clip(iv//4, 0, H_//4), np.clip(iu//4, 0, W_//4)]+.15
+            S_[name] = (u, v, face, seen, iu, iv, loose)
+        T_ = np.concatenate([np.array(I).reshape(-1, 3) for I in src.prims.values()])
+        pick = [None]*len(T_)
+        for i, t in enumerate(T_):                          # the photo that saw each face best
+            for name in PHOTOS:
+                face, seen = S_[name][2], S_[name][3]
+                if seen[t].all() and (pick[i] is None or face[t].min() > pick[i][1]): pick[i] = (name, face[t].min())
+        # fill the gaps: a face with no photo whose neighbours have one takes the photo most of them use, if that photo
+        # saw it at all (3 rings: closes the slivers between photos and round the lamps)
+        E_ = {}
+        for i, t in enumerate(T_):
+            for a_, b_ in ((t[0], t[1]), (t[1], t[2]), (t[2], t[0])): E_.setdefault((min(a_, b_), max(a_, b_)), []).append(i)
+        nb = [[] for _ in T_]
+        for fs in E_.values():
+            for i in fs:
+                nb[i].extend(j for j in fs if j != i)
+        for _ in range(3):
+            newp = {}
+            for i, t in enumerate(T_):
+                if pick[i]: continue
+                votes = {}
+                for j in nb[i]:
+                    if pick[j]: votes[pick[j][0]] = votes.get(pick[j][0], 0)+1
+                for name in sorted(votes, key=lambda n: -votes[n]):
+                    if S_[name][6][t].all(): newp[i] = (name, S_[name][2][t].min(), 'fill'); break
+            if not newp: break
+            for i, v_ in newp.items(): pick[i] = v_
+        maps = {}; picks = {}
+        for i, t in enumerate(T_):
+            if not pick[i]: continue
+            name = pick[i][0]; ph = PHOTOS[name]; u, v, face, seen, iu, iv, loose = S_[name]
+            lamp = bool(ph['lamps']) and ph['LMASK'][int(v[t].mean()), int(u[t].mean())]
+            if lamp and name == 'rear' and len(pick[i]) == 2 and (chase[t] > 1.6*face[t]).any(): lamp = False   # glancing: plain rear photo
+            key = 'lamp_'+name if lamp else name; dst = pm[key]; C_ = ph['crop']; ids = []
+            for vi in t:
+                if (key, vi) not in maps:
+                    maps[(key, vi)] = dst.v(tuple(V[vi]+NV[vi]*.002)); dst.N.append(NV[vi])
+                    dst.UV.append(((u[vi]-C_[0])/(C_[2]-C_[0]), (v[vi]-C_[1])/(C_[3]-C_[1])))
+                picks.setdefault(vi, (name, dst.UV[maps[(key, vi)]]))
+                ids.append(maps[(key, vi)])
+            dst.tri(LAMPMAT[name] if lamp else 'Photo'+name.capitalize(), *ids)
+        PICKS.append((src, picks))
+    pmeshes = [m for m in pm.values() if m.prims]
+    # the paint round the photos takes their colours: each vertex under a photo gets the (blurred) photo colour there, and
+    # that colour spreads out over the plain paint, fading back to clean white within ~30 cm — so a photo's edge (its
+    # shadows, its exposure) runs smoothly into the paint instead of stopping at a hard line
+    BL = {n: np.asarray(Image.open(os.path.join(PDIR, ph['image'])).convert('RGB').filter(ImageFilter.GaussianBlur(4)), dtype=np.float32)/255 for n, ph in PHOTOS.items()}
+    GAIN = {n: MATS['Photo'+n.capitalize()]['c'][0]/MATS['Paint']['c'][0] for n in PHOTOS}   # photo material vs paint brightness
+    for src, picks in PICKS:
+        V = np.array(src.P); n_ = len(V); col = np.zeros((n_, 3), np.float32); cnt = np.zeros(n_, np.float32)
+        for vi, (name, uv) in picks.items():
+            tx = BL[name]; th, tw = tx.shape[:2]
+            col[vi] += tx[min(th-1, max(0, int(uv[1]*th))), min(tw-1, max(0, int(uv[0]*tw)))]*GAIN[name]; cnt[vi] += 1
+        fixed = cnt > 0; col[fixed] /= cnt[fixed, None]
+        nb = [set() for _ in range(n_)]
         for I in src.prims.values():
             for t in np.array(I).reshape(-1, 3):
-                best = None
-                for name, ph in PHOTOS.items():
-                    u, v, face, seen, iu, iv = S_[name]
-                    if seen[t].all() and (best is None or face[t].min() > best[1]): best = (name, face[t].min())
-                if not best: continue
-                name = best[0]; ph = PHOTOS[name]; u, v, face, seen, iu, iv = S_[name]
-                lamp = bool(ph['lamps']) and ph['LMASK'][int(v[t].mean()), int(u[t].mean())]
-                if lamp and name == 'rear' and (chase[t] > 1.6*face[t]).any(): continue   # lamp glass belongs on upright faces only
-                key = 'lamp_'+name if lamp else name; dst = pm[key]; C_ = ph['crop']; ids = []
-                for vi in t:
-                    if (key, vi) not in maps:
-                        maps[(key, vi)] = dst.v(tuple(V[vi]+NV[vi]*.002)); dst.N.append(NV[vi])
-                        dst.UV.append(((u[vi]-C_[0])/(C_[2]-C_[0]), (v[vi]-C_[1])/(C_[3]-C_[1])))
-                    ids.append(maps[(key, vi)])
-                dst.tri(LAMPMAT[name] if lamp else 'Photo'+name.capitalize(), *ids)
-    pmeshes = [m for m in pm.values() if m.prims]
+                for a_ in t: nb[a_].update(t)
+        nb = [np.array(sorted(x)) for x in nb]
+        known = fixed.copy(); w = np.where(fixed, 1., 0.)
+        for it in range(14):                                    # spread outward one ring at a time, losing strength as it goes
+            new_c, new_w, nk = col.copy(), w.copy(), known.copy()
+            for i in np.where(~known)[0]:
+                k = nb[i][known[nb[i]]]
+                if len(k): new_c[i] = col[k].mean(0); new_w[i] = w[k].max()*.8; nk[i] = True
+            col, w, known = new_c, new_w, nk
+        white = np.ones(3, np.float32)
+        src.COL = np.where(known[:, None], col*w[:, None]+white*(1-w[:, None]), white)
     print('photo faces', {m.name: len(next(iter(m.prims.values())))//3 for m in pmeshes})
 for m in ((body, gh, *(() if 'front' in PHOTOS else (heads, hous)), trim, plate, mir, *pmeshes) if PHOTOS else (body, gh, heads, hous, tails, trim, plate, mir)):
     if m.prims: put(m)
