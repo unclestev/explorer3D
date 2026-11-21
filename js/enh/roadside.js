@@ -91,9 +91,9 @@ function build(){
         poles.set(key,{x,y,d}); });
       // a tree now and then, back from the road
       if(QL0>0) each(26,13,(px,py,d)=>{ const h0=hash(lid,Math.round(d)); if(h0>.28) return; const sd=h0<.14?1:-1, off=half+5+hash(Math.round(d),lid)*7;
-        const x=px+nx*sd*off, y=py+ny*sd*off; if(!ok(x,y,s,3)) return; const H=7+hash(lid+1,Math.round(d))*6, r=2+H*.2;
-        out.push(F(rect(L,x,y,ux,uy,.4,.4),{k:'trunk',b:0,h:H*.45,c:'#5a4029'}));
-        out.push(F(octa(L,x,y,r),{k:'crown',b:H*.35,h:H,c:['#3f6b2f','#4a7a35','#355f2a'][Math.floor(h0*30)%3]})); });
+        const x=px+nx*sd*off, y=py+ny*sd*off; if(!ok(x,y,s,3)) return; const q=L(x,y);
+        if(typeof roadClear==='function'&&roadClear(q[0],q[1])<2.5) return;   // clear of every street's drawn edge too
+        treeFeats(q[0],q[1],hash(lid+1,Math.round(d)),.95,Math.hypot(x-ox,y-oy)<TREE_NEAR(),out); });   // game.js: round trunk, limbs, leafy crown
     } else {
       // street lights: one side, arm out over the road, lamp lit after dark
       const big=/trunk|primary|secondary/.test(cls), stepL=big?38:52;
@@ -126,8 +126,11 @@ onReady(function roadside(){
     map.addLayer({id:'rs-walk',type:'line',source:'roadside',filter:['==',['get','k'],'walk'],minzoom:14,
       layout:{'line-cap':'butt','line-join':'round'},paint:{'line-color':RS.asphalt?'#a9a8a2':'#c9c7c0','line-width':mz(1.8,1)}},firstRoad);
     const top=map.getLayer('tree-trunk')?'tree-trunk':undefined;
-    map.addLayer({id:'rs-3d',type:'fill-extrusion',source:'roadside',filter:['==',['geometry-type'],'Polygon'],minzoom:14,
+    map.addLayer({id:'rs-3d',type:'fill-extrusion',source:'roadside',filter:['all',['==',['geometry-type'],'Polygon'],['!=',['get','k'],'crown']],minzoom:14,
       paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-height':['get','h'],'fill-extrusion-base':['get','b'],'fill-extrusion-vertical-gradient':false}},top);
+    if(typeof addLeafImages==='function') addLeafImages();
+    map.addLayer({id:'rs-crown',type:'fill-extrusion',source:'roadside',filter:['==',['get','k'],'crown'],minzoom:14,
+      paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-pattern':['coalesce',['get','p'],'lf-386529'],'fill-extrusion-height':['get','h'],'fill-extrusion-base':['get','b']}},top);
   }catch(e){ console.warn('roadside layers',e); }
   applyAsphalt();
 });

@@ -66,7 +66,8 @@ function computeBlades(){
     const ux=s[2]-s[0], uy=s[3]-s[1], ul=Math.hypot(ux,uy)||1, vx=t[2]-t[0], vy=t[3]-t[1], vl=Math.hypot(vx,vy)||1;
     const sin=Math.abs((ux*vy-uy*vx)/(ul*vl))||1, q=Math.floor(hash(Math.round(p[0]),Math.round(p[1]))*4);
     const da=(t[5]+2.5)/sin*(q&1?1:-1), db=(s[5]+2.5)/sin*(q&2?1:-1);   // (not a/b: those are the loop counters)
-    out.push({key,x:p[0]+ux/ul*da+vx/vl*db,y:p[1]+uy/ul*da+vy/vl*db,names,
+    let bx0=p[0]+ux/ul*da+vx/vl*db, by0=p[1]+uy/ul*da+vy/vl*db; try{ const c=offRoad(bx0/MLNG,by0/MLAT,1.2); bx0=c[0]*MLNG; by0=c[1]*MLAT; }catch(e){}   // a third road or a wide one: still behind the curb
+    out.push({key,x:bx0,y:by0,names,
       st:[{name:s[4],hd:Math.atan2(ux,uy),w:s[5]},{name:t[4],hd:Math.atan2(vx,vy),w:t[5]}]}); }
   out.sort((a,b)=>Math.hypot(a.x-cx,a.y-cy)-Math.hypot(b.x-cx,b.y-cy));
   blades=out.slice(0,50); bladeAt=[S.lng,S.lat]; ENH.signsDirty=true; SG.dirty=true;
@@ -75,7 +76,9 @@ function computeBlades(){
 function buildSigns(){
   const src=map.getSource('enh-signs'); if(!src) return;
   const cx=S.lng*MLNG, cy=S.lat*MLAT, R=450, F=[], near=o=>Math.hypot(o.x-cx,o.y-cy)<R;
-  const pt=(x,y,props)=>F.push({type:'Feature',properties:props,geometry:{type:'Point',coordinates:[x/MLNG,y/MLAT]}});
+  // every post is then moved out of the road bands to just behind the curb (game.js offRoad): the map's stop / signal
+  // points sit on the road's centre line, and a fixed few metres can still be in the lane on a wide or angled street
+  const pt=(x,y,props)=>{ let c=[x/MLNG,y/MLAT]; try{ c=offRoad(c[0],c[1],1.1); }catch(e){} F.push({type:'Feature',properties:props,geometry:{type:'Point',coordinates:c}}); };
   for(const o of OX.stops) if(near(o)) pt(o.x+3,o.y-3,{k:'stop'});
   for(const o of OX.sigs) if(near(o)) pt(o.x-6,o.y-6,{k:'sig',ph:hash(Math.round(o.x/60),Math.round(o.y/60))<.5?0:1});
   for(const o of OX.xings) if(near(o)) pt(o.x+4,o.y+4,{k:'xing'});

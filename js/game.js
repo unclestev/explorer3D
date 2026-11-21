@@ -224,10 +224,11 @@ map.on('load',()=>{ try{ initMini();
   try{
     const top=map.getLayer('hn-big')?'hn-big':undefined;
     map.addSource('decor',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+    addLeafImages();
     map.addLayer({id:'tree-trunk',type:'fill-extrusion',source:'decor',filter:['==',['get','k'],'trunk'],
-      paint:{'fill-extrusion-color':'#6b4a2b','fill-extrusion-height':['get','h'],'fill-extrusion-base':['get','b']}},top);
+      paint:{'fill-extrusion-color':['coalesce',['get','c'],'#5b4636'],'fill-extrusion-height':['get','h'],'fill-extrusion-base':['get','b']}},top);
     map.addLayer({id:'tree-crown',type:'fill-extrusion',source:'decor',filter:['==',['get','k'],'crown'],
-      paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-height':['get','h'],'fill-extrusion-base':['get','b'],'fill-extrusion-opacity':.95}},top);
+      paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-pattern':['coalesce',['get','p'],'lf-386529'],'fill-extrusion-height':['get','h'],'fill-extrusion-base':['get','b']}},top);
     map.addLayer({id:'poi-pin',type:'fill-extrusion',source:'decor',filter:['==',['get','k'],'pin'],
       paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-height':['get','h'],'fill-extrusion-base':['get','b']}},top);
     map.on('sourcedata',e=>{ if(e.sourceId!==bSrc||!e.tile) return;
@@ -834,6 +835,29 @@ function nearRoadGeo(){
   if(best) return true;
   return any?false:null;                                          // nothing loaded within 300 m: data missing, not off-road
 }
+/* Keep things off the street (owner 2026-11-21: "make sure that objects like trees and signs are not on the street").
+   ROAD_DRAWN = half the width each road kind is drawn at (js/enh/roads.js ROAD_W) plus its curb/shoulder edge, metres.
+   roadClear(lng,lat) = metres from the nearest drawn road edge (negative: on the road); offRoad(lng,lat,gap) moves a
+   point out of every road band until it is `gap` metres past the curb (a corner if two roads meet). Uses roadGeo. */
+const ROAD_DRAWN={motorway:7.7,trunk:6.7,primary:6.7,secondary:5.7,tertiary:5.7,minor:4.7,service:3,track:3,path:2,raceway:6.7,busway:4.7};
+const RCG={t:-1,grid:null,C:25};
+function roadCells(){ if(!roadGeo.segs||meters(roadGeo.lat,roadGeo.lng,S.lat,S.lng)>350) rebuildRoadGeo();
+  if(RCG.t===roadGeo.t&&RCG.grid) return RCG.grid; const C=RCG.C, G=new Map(); RCG.t=roadGeo.t; RCG.grid=G;
+  for(const s of roadGeo.segs||[]){ const h=ROAD_DRAWN[s[6]]||4.7, m=h+8;
+    for(let i=Math.floor((Math.min(s[0],s[2])-m)/C);i<=Math.floor((Math.max(s[0],s[2])+m)/C);i++)
+      for(let j=Math.floor((Math.min(s[1],s[3])-m)/C);j<=Math.floor((Math.max(s[1],s[3])+m)/C);j++){ const k=i+','+j; let a=G.get(k); if(!a) G.set(k,a=[]); a.push(s); } }
+  return G; }
+function roadNear(lng,lat){ const G=roadCells(); if(!G||!roadGeo.segs) return null; const kx=111320*Math.cos(rad(roadGeo.lat)),
+    x=(lng-roadGeo.lng)*kx, y=(lat-roadGeo.lat)*111320; let best=null, bc=1e9;
+  for(const s of G.get(Math.floor(x/RCG.C)+','+Math.floor(y/RCG.C))||[]){ const dx=s[2]-s[0], dy=s[3]-s[1], L2=dx*dx+dy*dy||1,
+      t=Math.max(0,Math.min(1,((x-s[0])*dx+(y-s[1])*dy)/L2)), px=s[0]+t*dx, py=s[1]+t*dy, d=Math.hypot(x-px,y-py), c=d-(ROAD_DRAWN[s[6]]||4.7);
+    if(c<bc){ bc=c; best={c,x,y,px,py,d,kx}; } }
+  return best; }
+function roadClear(lng,lat){ const r=roadNear(lng,lat); return r?r.c:99; }
+function offRoad(lng,lat,gap){ for(let it=0;it<5;it++){ const r=roadNear(lng,lat); if(!r||r.c>=gap) return [lng,lat];
+    let nx=r.x-r.px, ny=r.y-r.py; if(r.d<.01){ nx=1; ny=0; } const n=Math.hypot(nx,ny), push=gap-r.c+.05;
+    lng+=nx/n*push/r.kx; lat+=ny/n*push/111320; }
+  return [lng,lat]; }
 const hit=(x,y,r,ids)=>{ try{ return ids.length?map.queryRenderedFeatures([[x-r,y-r],[x+r,y+r]],{layers:ids}):[]; }catch(e){ return []; } };
 const roadEl=document.getElementById('road'), mphEl=document.getElementById('mph');
 const mapEl=document.getElementById('map');
@@ -886,6 +910,62 @@ const POIC={fuel:'#dc2626',restaurant:'#f97316',fast_food:'#f97316',cafe:'#f9731
 function hash(a,b){ let h=(a*374761393+b*668265263)|0; h=Math.imul(h^(h>>>13),1274126177); return ((h^(h>>>16))>>>0)/4294967296; }
 function ngon(lng,lat,r,n,rot){ const k=Math.cos(lat*Math.PI/180)*111320, ring=[];
   for(let i=0;i<=n;i++){ const t=rot+(i%n)/n*2*Math.PI; ring.push([lng+Math.cos(t)*r/k,lat+Math.sin(t)*r/111320]); } return [ring]; }
+/* ---------- trees (owner 2026-11-21: "enhance the tree models for realism (round trunks, branches and leaves… maybe some
+   different variety) as best we can within performance constraints"). Still map extrusions (cheap, and buildings in front
+   hide them properly), but built from pieces: a round 8-sided tapering trunk, a few limbs reaching into the crown, and a
+   crown of stacked rounded tiers with two side clumps so the outline isn't a drum. Leaf texture (map patterns lf-*) with
+   darker tiers underneath and lighter on top. Four kinds: maple (round), oak (wide, low), spruce (stepped cone), birch
+   (white bark, narrow). Leaves follow the real season: green, autumn colours in October–November, bare twigs Dec–March
+   (the conifers stay green). Full detail only near the car (TREE_NEAR m); farther away a trunk and two crown tiers. */
+const TREE_NEAR=()=>Q3(55,95,140);
+const LEAF={summer:['#2c5424','#386529','#467631','#58883b'], fall:['#6e3f19','#9a4e1b','#b97c1e','#8b6b2b'], bare:['#857e74','#8f887d','#9a9286','#a39b8f'],
+  pine:['#1c3b25','#23472c','#2c5434','#356040'], birchS:['#5d8a35','#6c9a40','#7aa84a','#88b455'], birchF:['#a88a22','#bf9e2a','#cfae35','#d9bd45']};
+function treeSeason(){ const d=new Date(), m=d.getMonth(); return m===9||m===10&&d.getDate()<=10?'fall':m>=10||m<=2?'bare':'summer'; }   // fall colours Oct 1 – Nov 10, bare Nov 11 – Mar 31
+function leafPat(tone){ return 'lf-'+tone.slice(1); }
+function addLeafImages(){ const all=new Set(); for(const k in LEAF) for(const c of LEAF[k]) all.add(c);
+  for(const c of all){ const id=leafPat(c); if(map.hasImage(id)) continue; const cv=document.createElement('canvas'); cv.width=cv.height=64; const x=cv.getContext('2d'), base=new THREE.Color(c);
+    x.fillStyle=c; x.fillRect(0,0,64,64); const bare=LEAF.bare.includes(c);
+    let r=1; const rnd=()=>{ r=Math.imul(r^(r>>>15),2246822507)+0x6d2b79f5|0; return ((r>>>0)%10000)/10000; };
+    if(bare){ for(let i=0;i<90;i++){ const x0=rnd()*64, y0=rnd()*64, a=rnd()*6.3, l=4+rnd()*10;   // twigs over sky-grey gaps
+        x.strokeStyle=rnd()<.6?'rgba(52,42,34,.8)':'rgba(200,205,210,.45)'; x.lineWidth=.6+rnd()*1.1; x.beginPath(); x.moveTo(x0,y0); x.lineTo(x0+Math.cos(a)*l,y0+Math.sin(a)*l); x.stroke(); } }
+    else for(let i=0;i<150;i++){ const k=.62+rnd()*.75, col=base.clone().multiplyScalar(k);   // overlapping leaves, lighter and darker
+      x.fillStyle='#'+col.getHexString(); x.beginPath(); x.ellipse(rnd()*64,rnd()*64,1.6+rnd()*2.6,1+rnd()*1.6,rnd()*3.14,0,7); x.fill(); }
+    try{ map.addImage(id,x.getImageData(0,0,64,64)); }catch(e){} } }
+// all the pieces of one tree at lng/lat (seed 0..1 picks kind and shape; size ~1), pushed onto out as map features
+function treeFeats(lng,lat,seed,size,near,out,kindIn){
+  const kx=Math.cos(lat*Math.PI/180)*111320, P=(dx,dy)=>[lng+dx/kx,lat+dy/111320], H2=(a)=>hash(Math.floor(seed*1e6)+a*7919,a*31+3);
+  const season=treeSeason(), kind=kindIn||(seed<.48?'maple':seed<.66?'oak':seed<.88?'spruce':'birch');
+  const poly=(cx,cy,r,n,rot)=>{ const ring=[]; for(let i=0;i<=n;i++){ const t=rot+(i%n)/n*2*Math.PI; ring.push(P(cx+Math.cos(t)*r,cy+Math.sin(t)*r)); } return [ring]; };
+  const F=(k,b,h,geo,c,p)=>out.push({type:'Feature',properties:p?{k,b,h,c,p}:{k,b,h,c},geometry:{type:'Polygon',coordinates:geo}});
+  const pal=kind==='spruce'?LEAF.pine:kind==='birch'?(season==='summer'?LEAF.birchS:season==='fall'?LEAF.birchF:LEAF.bare):LEAF[season];
+  const bark=kind==='birch'?'#d8d3c6':kind==='spruce'?'#4a3626':kind==='oak'?'#4d3f33':'#5b4636';
+  const sz=size*(.85+H2(1)*.35);
+  const Ht=kind==='spruce'?(9+H2(2)*7)*sz:kind==='oak'?(9+H2(2)*5)*sz:kind==='birch'?(9+H2(2)*5)*sz:(8+H2(2)*6)*sz;   // overall height (m)
+  const R=kind==='spruce'?Ht*.21:kind==='oak'?Ht*.42:kind==='birch'?Ht*.2:Ht*.3;           // crown radius
+  const cb=kind==='spruce'?Ht*.12:kind==='oak'?Ht*.3:Ht*.36;                                 // crown base
+  const tr=kind==='birch'?.13*sz:kind==='oak'?.3*sz:.2*sz;                                    // trunk radius
+  const rot=H2(3)*6.28, bareT=pal===LEAF.bare;
+  // trunk: round, two segments tapering; into the crown far enough that it never floats
+  if(near){ F('trunk',0,cb*.55+.2,poly(0,0,tr,8,rot),bark); F('trunk',cb*.55,Math.min(Ht*.85,cb+(bareT?Ht*.45:Ht*.18)),poly(0,0,tr*.72,8,rot),bark); }
+  else F('trunk',0,cb+Ht*.1,poly(0,0,tr*.85,6,rot),bark);
+  if(kind==='spruce'){ const T=near?6:3;
+    for(let i=0;i<T;i++){ const f=i/T, b=cb+(Ht-cb)*f, h=cb+(Ht-cb)*(i+1)/T+.01, r=R*Math.pow(1-f,.95)*(1-.12*(i%2));
+      F('crown',b,h,poly((H2(10+i)-.5)*.2,(H2(20+i)-.5)*.2,Math.max(.35,r),near?9:7,rot+i),pal[Math.min(3,i*4/T|0)],leafPat(pal[Math.min(3,i*4/T|0)])); }
+    return; }
+  // limbs: strips from the trunk reaching up under the canopy; when the leaves are down, a whole frame of them
+  if(near){ const nL=bareT?4:3; for(let i=0;i<nL;i++){ const a=rot+i*2.39+H2(30+i), l=R*(bareT?.62:.5);
+      const z=cb-.25-i*.22, w=Math.max(.06,tr*.4);
+      const ex=Math.cos(a)*l, ey=Math.sin(a)*l, nx=-Math.sin(a)*w, ny=Math.cos(a)*w;
+      F('trunk',z,z+w*1.4,[[P(nx*.6,ny*.6),P(ex+nx*.25,ey+ny*.25),P(ex-nx*.25,ey-ny*.25),P(-nx*.6,-ny*.6),P(nx*.6,ny*.6)]],bark); } }
+  // crown: stacked rounded tiers (an ellipsoid), the top of the tree lighter
+  const ell=(cx,cy,r,b,h,T,shift)=>{ for(let i=0;i<T;i++){ const m=((i+.5)/T)*2-1, rr=r*Math.sqrt(Math.max(.08,1-m*m))*(kind==='oak'&&i<T/2?1.08:1);
+      const tone=pal[Math.max(0,Math.min(3,Math.round((i/(T-1||1))*3+shift)))];
+      F('crown',b+(h-b)*i/T,b+(h-b)*(i+1)/T+.01,poly(cx+(H2(40+i)-.5)*r*.06,cy+(H2(50+i)-.5)*r*.06,Math.max(.3,rr),near?10:7,rot+i*1.3),tone,leafPat(tone)); } };
+  const crTop=kind==='oak'?Ht*.92:Ht, crR=bareT?R*.85:R, crB=cb;   // bare: the same outline, as a pale mass of twigs (pattern), a little smaller
+  ell(0,0,crR,crB,crTop,near?6:2,0);
+  if(near&&kind!=='birch'){ for(let j=0;j<2;j++){ const a=rot+j*2.6+1, d=crR*.55, r=crR*(.5+H2(60+j)*.15), mid=cb+(crTop-cb)*(.35+.2*j);
+      ell(Math.cos(a)*d,Math.sin(a)*d,r,mid-r*.8,mid+r*.75,3,-.4); } }
+}
 function buildDecor(){
   if(!styleReady||!map.getSource('decor')) return;
   const CKV=!!(window.COCKPIT&&COCKPIT.on), DS=CKV?.7:1;            // cockpit view: trees closer in and denser (the far ones are behind the haze)
@@ -929,10 +1009,9 @@ function buildDecor(){
           if(!inPoly(lng,lat,pl)) continue;
           seenT.add(key);
           const cr=2.2+hash(ix+1,iy)*1.8; if(!clear(lng,lat,cr)) continue;
-          const th=2.2+hash(ix,iy+1)*1.3, top=th+4+hash(ix+2,iy+5)*7;
-          feats.push({type:'Feature',properties:{k:'trunk',h:th+.6,b:0},geometry:{type:'Polygon',coordinates:ngon(lng,lat,.35,5,0)}});
-          feats.push({type:'Feature',properties:{k:'crown',h:top,b:th,c:TREEC[Math.floor(hash(ix+3,iy+9)*TREEC.length)]},
-            geometry:{type:'Polygon',coordinates:ngon(lng,lat,cr,7,r1*6)}});
+          if(roadClear(lng,lat)<Math.max(1.6,cr*.6)) continue;                // never on a street, and the crown barely over the curb
+          const dn=Math.hypot((lng-cx)*MLNG,(lat-cy)*MLAT)<TREE_NEAR();
+          treeFeats(lng,lat,hash(ix+3,iy+9),1,dn,feats,list===wood&&hash(ix+5,iy+2)<.3?'spruce':null);
           tp.push(lng*MLNG,lat*MLAT);
           if(++trees>=TMAX || performance.now()-t0>35) break outer;
         }
@@ -945,7 +1024,8 @@ function buildDecor(){
     for(const f of map.querySourceFeatures(bSrc,{sourceLayer:'poi'})){
       const g=f.geometry, pr=f.properties||{};
       if(!g||g.type!=='Point'||!pr.name) continue;
-      const lng=g.coordinates[0], lat=g.coordinates[1];
+      let lng=g.coordinates[0], lat=g.coordinates[1];
+      if(roadClear(lng,lat)<2.2){ const q=offRoad(lng,lat,2.2); lng=q[0]; lat=q[1]; }   // a pin on the street: stand it beside it
       if(lng<wx0-R/MLNG||lng>wx1+R/MLNG||lat<wy0-R/MLAT||lat>wy1+R/MLAT) continue;
       const key=pr.name+'|'+lng.toFixed(4)+','+lat.toFixed(4); if(seenP.has(key)) continue; seenP.add(key);
       const c=POIC[pr.class]||POIC[pr.subclass]||'#14b8a6';

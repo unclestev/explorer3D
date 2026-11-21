@@ -7,8 +7,10 @@ const ENH={};
 const EMPTY={type:'FeatureCollection',features:[]};
 const PXM=1/mpp(START.lat,20);                                   // screen px per metre at zoom 20
 // width/offset in real metres -> zoom-scaled pixels (optional minimum pixel size)
-function mz(m,min){ min=min||0; const f=v=>Math.sign(m)*Math.max(min,Math.abs(v)); return ['interpolate',['exponential',2],['zoom'],14,f(m*PXM/64),22,f(m*PXM*4)]; }
-function mzE(e){ return ['interpolate',['exponential',2],['zoom'],14,['*',e,PXM/64],22,['*',e,PXM*4]]; }
+// metres -> pixels at every zoom; the cockpit's camera sits at zoom 22.5–24 (eye height), so the scale runs to 24 —
+// stopping at 22 drew every road and marking narrower than life from the driver's seat
+function mz(m,min){ min=min||0; const f=v=>Math.sign(m)*Math.max(min,Math.abs(v)); return ['interpolate',['exponential',2],['zoom'],14,f(m*PXM/64),24,f(m*PXM*16)]; }
+function mzE(e){ return ['interpolate',['exponential',2],['zoom'],14,['*',e,PXM/64],24,['*',e,PXM*16]]; }
 function safe(name,fn){ try{ return fn(); }catch(e){ console.warn('['+name+']',e&&e.message||e); } }
 const UNDER='building';                                          // our ground layers sit just below the buildings
 function addUnder(l){ if(!map.getLayer(l.id)) map.addLayer(l,map.getLayer(UNDER)?UNDER:undefined); }
