@@ -1002,7 +1002,7 @@ CK.view=function(dt){
   CK.eyeLocal={f:eE*Math.sin(b)+eN*Math.cos(b),r:eE*Math.cos(b)-eN*Math.sin(b),h:camH,mm};
   // the car layer's camera: same place and direction, in pixels at this zoom (car centre = origin)
   const f=eE*Math.sin(b)+eN*Math.cos(b), r=eE*Math.cos(b)-eN*Math.sin(b);
-  camera.fov=fov; camera.aspect=W/H; camera.near=Math.max(1,.05/mm); camera.far=(VIEW()+60)/mm;   // no cars past where the ground stops camera.setViewOffset(W,H,0,pad/2,W,H);
+  camera.fov=fov; camera.aspect=W/H; camera.near=Math.max(1,.05/mm); camera.far=(VIEW()+60)/mm; camera.setViewOffset(W,H,0,pad/2,W,H);   // far: no cars past where the ground stops
   camera.position.set(r/mm,camH/mm,-f/mm); camera.up.set(0,1,0);
   camera.lookAt(r/mm,camH/mm-Math.cos(pr)*100,-f/mm-Math.sin(pr)*100); camera.updateProjectionMatrix();
   // cabin camera: in the car's own frame
