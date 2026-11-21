@@ -21,7 +21,12 @@ const SIG={dir:0,haz:false,lit:false,left:false,right:false,t:0,armed:false};
 window.SIG=SIG;
 const PERIOD=.70;                                                   // s per flash (~85 a minute)
 const say=(m,ms)=>{ if(typeof toast==='function') toast(m,ms||1400); };
-function sync(){ S.blink=SIG.haz?2:SIG.dir; showBtns(); }
+function sync(){ S.blink=SIG.haz?2:SIG.dir;
+  // owner 2026-11-21: "when you turn the turn signal off the signal light on the dashboard sometimes stays on" — cancelling
+  // reset SIG.lit but not SIG.left / SIG.right (what the dash reads), and the frame hook then saw nothing lit to clear
+  if(!SIG.dir&&!SIG.haz) SIG.lit=false;
+  SIG.left=SIG.lit&&(SIG.haz||SIG.dir<0); SIG.right=SIG.lit&&(SIG.haz||SIG.dir>0);
+  showBtns(); try{ lamps(); }catch(e){} }
 SIG.press=function(d){                                              // a stalk / paddle / key: d = -1 left, 1 right
   if(SIG.haz){ SIG.haz=false; }
   SIG.dir=SIG.dir===d?0:d; SIG.armed=false; SIG.t=0; SIG.lit=false; tickNow(); sync();
@@ -59,8 +64,10 @@ const RECIPES={
   tesla:{tick:[{f:1300,d:.012,g:1,a:.001},{f:2600,d:.004,g:.25},{fc:2500,q:2,d:.0012,g:.2}],
          tock:[{f:1000,d:.013,g:.9,a:.001},{f:2000,d:.004,g:.22},{fc:2000,q:2,d:.0012,g:.18}],len:.07,vol:.38},
   // thermal flasher can: a loud metallic clack with a bright ring
-  thermal:{tick:[{fc:5200,q:5,d:.003,g:1},{f:3100,d:.012,g:.6},{f:5300,d:.008,g:.35},{f:7400,d:.005,g:.2},{f:240,d:.01,g:.3}],
-           tock:[{fc:4200,q:5,d:.003,g:.85},{f:2700,d:.012,g:.5},{f:4600,d:.007,g:.3},{f:210,d:.01,g:.3}],len:.08,vol:.7},
+  // thermal flasher can (1972 Javelin): a bimetal strip snaps on and off, both nearly the same click, plus a short metallic
+  // ring from the can and its steel dash bracket (some went 'boing'); the beat drifts a little as the strip heats
+  thermal:{tick:[{fc:5200,q:5,d:.003,g:1},{f:3100,d:.012,g:.6},{f:5300,d:.008,g:.35},{f:7400,d:.005,g:.2},{f:1850,d:.045,g:.22},{f:240,d:.01,g:.3}],
+           tock:[{fc:4800,q:5,d:.003,g:.9},{f:2950,d:.012,g:.55},{f:5000,d:.007,g:.3},{f:1800,d:.04,g:.2},{f:220,d:.01,g:.3}],len:.11,vol:.7},
   tractor:{tick:[{fc:2000,q:3,d:.003,g:1},{f:1250,d:.012,g:.6},{f:150,d:.02,g:.5}],
            tock:[{fc:1700,q:3,d:.003,g:.9},{f:1050,d:.012,g:.5},{f:130,d:.02,g:.5}],len:.08,vol:.6}
 };
@@ -77,13 +84,14 @@ function click(which){
 /* ---------- timing, self-cancel ---------- */
 FRAME_HOOKS.push(function signals(dt){
   const on=SIG.dir||SIG.haz, driving=mode==='car'||mode==='tractor';
-  if(!on||!driving){ const was=SIG.lit; if(was){ SIG.lit=SIG.left=SIG.right=false; lamps(); } return was; }
+  if(!on||!driving){ const was=SIG.lit||SIG.left||SIG.right; if(was){ SIG.lit=SIG.left=SIG.right=false; lamps(); } return was; }
   // self-cancel: the wheel turned the signal's way past ~20 %, then back near the centre
   if(SIG.dir&&!SIG.haz){ const st=(S.stIn||0)*SIG.dir;
     if(st>.22) SIG.armed=true; else if(SIG.armed&&st<.06){ SIG.dir=0; SIG.armed=false; sync(); } }
-  const per=PERIOD*(STYLE()==='thermal'?1.12:1);                     // the thermal can is a bit slower
+  if(STYLE()==='thermal'&&!SIG.jit) SIG.jit=1+(Math.random()-.5)*.12;
+  const per=PERIOD*(STYLE()==='thermal'?1.12*(SIG.jit||1):1);        // the thermal can is a bit slower, and uneven
   SIG.t+=dt; let changed=false;
-  while(SIG.t>=per/2){ SIG.t-=per/2; SIG.lit=!SIG.lit; changed=true; click(SIG.lit?'tick':'tock'); }
+  while(SIG.t>=per/2){ SIG.t-=per/2; SIG.lit=!SIG.lit; changed=true; click(SIG.lit?'tick':'tock'); SIG.jit=0; }
   SIG.left=SIG.lit&&(SIG.haz||SIG.dir<0); SIG.right=SIG.lit&&(SIG.haz||SIG.dir>0);
   if(changed){ lamps(); return true; }                               // a redraw for the lamps
   return false;
