@@ -876,15 +876,33 @@ function wrapTiles(){ const t=map.transform; if(!t||t.__ckWrapped) return; t.__c
 // show; a flat screen band would also have striped every nearby building at eye height.
 
 /* ---------- camera ---------- */
-function enter(){ if(CK.on) return; CK.on=true; CK.exag=EXAG; EXAG=1; LOOK.yaw=0; LOOK.pitch=0; CK.look=0; wrapTiles(); refreshNear();
+function enter(){ if(CK.on) return; CK.on=true; CK.exag=EXAG; EXAG=1; LOOK.yaw=0; LOOK.pitch=0; CK.look=0; wrapTiles(); refreshNear(); labels(false);
   document.body.classList.add('cockpit'); build(CARKEY); dirty=true; if(CK.real) setSpeedScale(1); try{ SOUND.cabin(true,mode==='tractor'); }catch(e){} }
-function leave(){ if(!CK.on) return; CK.on=false; EXAG=CK.exag; setSpeedScale(3); glareEl.style.opacity='0'; CK.snd=null; try{ SOUND.cabin(false); }catch(e){} refreshNear(); try{ map.triggerRepaint(); }catch(e){}
+function leave(){ if(!CK.on) return; CK.on=false; EXAG=CK.exag; labels(true); setSpeedScale(3); glareEl.style.opacity='0'; CK.snd=null; try{ SOUND.cabin(false); }catch(e){} refreshNear(); try{ map.triggerRepaint(); }catch(e){}
   document.body.classList.remove('cockpit');
   try{ map.transform.fov=36.87; }catch(e){}
   camera.fov=36.87; camera.near=10; camera.far=50000; camera.updateProjectionMatrix();
   if(typeof shadow==='object') shadow.visible=mode!=='boat'&&mode!=='glider';
   if(typeof tractorG==='object'){ const vis=mode==='walk'?(window.WALK&&WALK.parked())||'car':mode; tractorG.visible=vis==='tractor'; }
   LOOK.yaw=0; LOOK.pitch=0; step.W=0; step.cam=null; step.pit=null; dirty=true; }
+/* map labels in the cockpit (owner's ?fps=1 2026-11-20: game 15 ms, map ~80 ms a frame on Low, the US 34 shields repeated all
+   down the road): from the driver's seat, looking far down the road, the map places and collision-sorts hundreds of
+   labels every frame. The driver reads street signs instead, so every map symbol layer (names, shields, POIs, house
+   numbers) is hidden while in the cockpit — our own stop-sign / signal icons (sg-*) stay — and restored on leaving. */
+const LBL={hidden:[]};
+function labels(show){ try{
+  if(!show){ LBL.hidden=[]; for(const l of map.getStyle().layers){ if(l.type!=='symbol'||/^sg-/.test(l.id)) continue;
+      if((map.getLayoutProperty(l.id,'visibility')||'visible')==='visible'){ map.setLayoutProperty(l.id,'visibility','none'); LBL.hidden.push(l.id); } } }
+  else { for(const id of LBL.hidden) if(map.getLayer(id)) map.setLayoutProperty(id,'visibility','visible'); LBL.hidden=[]; }
+}catch(e){ console.warn('cockpit labels',e); } }
+/* test switch to find what else is heavy: add ?hide=buildings,roofs,trees,roadside,roads,water,landuse,signs,traffic to the
+   address — those layer groups are hidden (in every view) so ?fps=1 can show what each one costs */
+{ const q=(new URLSearchParams(location.search).get('hide')||'').split(',').filter(Boolean);
+  const G={buildings:/^(building|rebuilt|roof-cap|rebuilt-roof)/,roofs:/^roof-3d$/,trees:/^tree-/,roadside:/^rs-/,roads:/^(road|bridge|tunnel)_|^tx-asph|^mk-/,
+    water:/^water|^waterway|^tx-water/,landuse:/^(landuse|landcover|park|lu-|lc-|tx-)/,signs:/^sg-/};
+  if(q.length) onReadyHide(()=>{ for(const l of map.getStyle().layers) for(const g of q) if(G[g]&&G[g].test(l.id)) try{ map.setLayoutProperty(l.id,'visibility','none'); }catch(e){}
+    if(q.includes('traffic')&&window.TRAFFIC&&TRAFFIC.state) TRAFFIC.state.on=false; /* this visit only, not saved */ toast('Hidden for testing: '+q.join(', '),4000); }); }
+function onReadyHide(fn){ if(YD&&YD.onReady) YD.onReady(()=>setTimeout(fn,1500)); }
 function refreshNear(){ try{ decorAt=null; }catch(e){} try{ if(window.ROOFS) ROOFS.state.pending=true; }catch(e){} }   // rebuild trees / windows at the new density
 CK.active=function(){ const a=CK.want&&(mode==='car'||mode==='tractor')&&!boat; if(a&&!CK.on) enter(); else if(!a&&CK.on) leave(); return a; };
 CK.view=function(dt){
