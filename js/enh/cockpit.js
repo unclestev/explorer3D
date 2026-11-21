@@ -869,6 +869,24 @@ function wrapTiles(){ const t=map.transform; if(!t||t.__ckWrapped) return; t.__c
   const oh=t.getHorizon;
   t.getHorizon=function(){ if(!CK.on) return oh.call(this);
     const a=Math.PI/2-this._pitch, cut=Math.atan((CK.eyeH||1.4)/VIEW()); return Math.tan(Math.max(a*.5,a-cut))*this.cameraToCenterDistance; };
+  // That alone wasn't enough (owner 2026-11-21: "other cars drive off into the horizon (into the sky)"): MapLibre's far-plane
+  // maths clamps the ground angle at 0.01 rad (≈0.6°), i.e. ~140 m ahead from 1.4 m up, and the cockpit's bottom padding cuts
+  // it to ~50 m. Its far plane scales with the camera-to-lowest-ground distance, so while in the cockpit the "lowest ground"
+  // (the terrain hook _minEleveationForCurrentTile) is lowered for the length of _calcMatrices until the far plane lies just
+  // beyond ground VIEW() metres down the road. Nothing else reads that value; it is restored straight after.
+  const oc=t._calcMatrices;
+  if(typeof oc==='function'&&'_minEleveationForCurrentTile' in t) t._calcMatrices=function(){
+    if(!CK.on||!this._pixelPerMeter||!this.height) return oc.call(this);
+    const keep=this._minEleveationForCurrentTile;
+    try{ const p=this._pitch, a=Math.PI/2-p, ppm=this._pixelPerMeter, cp=Math.max(.02,Math.cos(p)), H=this.height,
+        oy=-(this._edgeInsets?(this._edgeInsets.bottom-this._edgeInsets.top)/2:0), C=this.cameraToCenterDistance,
+        L=C+(this._elevation||0)*ppm/cp, h=Math.max(1,this.getHorizon()), cl=x=>Math.min(Math.PI-.01,Math.max(.01,x)),
+        ft=this._fov*(.5+oy/H), fh=2*Math.atan(h/C)*(.5+oy/(2*h)),
+        top=Math.min(Math.sin(ft)/Math.sin(cl(a-ft)),Math.sin(fh)/Math.sin(cl(a-fh))),
+        need=(VIEW()*Math.cos(a)+(CK.eyeH||1.4)*Math.sin(a))*ppm*1.03, Lw=need/((Math.cos(a)*top+1)*1.01);
+      if(isFinite(Lw)&&Lw>L) this._minEleveationForCurrentTile=Math.min(keep||0,(L-Lw)*cp/ppm);
+    }catch(e){}
+    try{ return oc.call(this); } finally{ this._minEleveationForCurrentTile=keep; } };
   t.coveringTiles=function(o){ const r=orig.call(this,o); if(!CK.on||!r||!r.length) return r;
     const lat=S.lat*DEG, e=CK.eyeLL||[S.lng,S.lat], mx=(e[0]+180)/360, my=(1-Math.log(Math.tan(e[1]*DEG)+1/Math.cos(e[1]*DEG))/Math.PI)/2;
     const M=40075016.7*Math.cos(lat), lim=VIEW()/M, out=[];
@@ -942,7 +960,7 @@ CK.view=function(dt){
   CK.eyeLocal={f:eE*Math.sin(b)+eN*Math.cos(b),r:eE*Math.cos(b)-eN*Math.sin(b),h:camH,mm};
   // the car layer's camera: same place and direction, in pixels at this zoom (car centre = origin)
   const f=eE*Math.sin(b)+eN*Math.cos(b), r=eE*Math.cos(b)-eN*Math.sin(b);
-  camera.fov=fov; camera.aspect=W/H; camera.near=Math.max(1,.05/mm); camera.far=4000/mm; camera.setViewOffset(W,H,0,pad/2,W,H);
+  camera.fov=fov; camera.aspect=W/H; camera.near=Math.max(1,.05/mm); camera.far=(VIEW()+60)/mm;   // no cars past where the ground stops camera.setViewOffset(W,H,0,pad/2,W,H);
   camera.position.set(r/mm,camH/mm,-f/mm); camera.up.set(0,1,0);
   camera.lookAt(r/mm,camH/mm-Math.cos(pr)*100,-f/mm-Math.sin(pr)*100); camera.updateProjectionMatrix();
   // cabin camera: in the car's own frame
