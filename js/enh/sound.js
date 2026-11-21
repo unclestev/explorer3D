@@ -115,7 +115,7 @@ FRAME_HOOKS.push(function engineSound(dt){
   if(key!==A.key){ A.key=key; const E=ENG[key]; A.rpm=E?(E.idle||0):700; A.gear=0; A.boost=0; A.load=0; }
   const e=ENG[key]?engine(ENG[key],dt||.016):null;
   // starting / stopping the engine (js/enh/ignition.js): cranking, catching and winding down override the revs
-  if(e&&window.IGN&&!ENG[key].ev){ const r=IGN.rpm(ENG[key].idle||700); if(r!==null){ A.rpm=e.rpm=r; e.load=IGN.state==='crank'?.15:0; e.boost=0; A.boost=0; } }
+  if(e&&window.IGN&&!ENG[key].ev){ const r=IGN.rpm(ENG[key].idle||700); if(r!==null){ A.rpm=e.rpm=r; e.load=IGN.load?IGN.load():IGN.state==='crank'?.15:0; e.boost=0; A.boost=0; } }
   for(const k of Object.keys(A.nodes)){
     const P=A.nodes[k].parameters, g=(want&&k===key)?ENG[k].gain:0;
     if(g>0&&e){ P.get('rpm').setTargetAtTime(e.rpm,t,.03); P.get('load').setTargetAtTime(e.load,t,.05);

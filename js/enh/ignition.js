@@ -15,7 +15,7 @@ const IGN={state:'on',t:0};
 window.IGN=IGN;
 const say=(m,ms)=>{ if(typeof toast==='function') toast(m,ms||1600); };
 const kind=()=>mode==='tractor'?'diesel':(typeof CARKEY==='string'&&CARKEY==='modely')?'ev':/^javelin/.test(CARKEY||'')?'v8':CARKEY==='navigator'?'lux':'gas';
-const CRANK={gas:.8,v8:1.3,diesel:1.6,ev:0,lux:0};                // the Navigator: no starter sound, just the chime
+const CRANK={gas:.35,v8:1.3,diesel:1.6,ev:0,lux:0};                // the Navigator: no starter sound, just the chime
                                                                   // as the engine comes quietly to life (owner 2026-11-21)                       // seconds of cranking before it catches
 IGN.drive=()=>IGN.state==='on';
 IGN.button=function(){
@@ -26,7 +26,7 @@ IGN.button=function(){
     say(kind()==='ev'?'⏻ Model Y off':'🔑 Engine off'); }
   else { const k=kind();
     if(k==='ev'){ IGN.state='on'; say('⏻ Model Y on — ready to drive'); }
-    else { IGN.state='crank'; IGN.t=0; if(k!=='lux') starter(CRANK[k],k); if(!custom()&&k==='lux') welcome(); say('🔑 Starting…',1000); } }
+    else { IGN.state='crank'; IGN.t=0; if(k==='gas') startLayer(); else if(k!=='lux') starter(CRANK[k],k); if(!custom()&&k==='lux') welcome(); say('🔑 Starting…',1000); } }
   show();
 };
 // how the engine's revs compare with a running engine's (sound.js multiplies its idle by this while starting/stopping):
@@ -35,10 +35,18 @@ IGN.rpm=function(idle){ const k=kind(), c=CRANK[k];
   if(IGN.state==='off') return 60;
   if(IGN.state==='stop') return Math.max(60,idle*(1-IGN.t/.7));            // winds down (the sound fades with it)
   if(IGN.state==='crank'){ if(IGN.t<c) return 200+60*Math.sin(IGN.t*2*Math.PI*(k==='diesel'?4:5));
-    const u=IGN.t-c; return idle*(1+(c?.7:.2)*Math.exp(-u*2.2)*Math.min(1,u*(c?8:3))); }
+    const u=IGN.t-c;
+    // Explorer (owner 2026-11-21, a video of a 2022 Explorer starting): a short, quiet crank, then it fires hard, flares to
+    // about twice idle within ~0.2 s and settles back over a second and a half to a slightly fast cold idle
+    if(k==='gas') return idle*(1.06+1.0*Math.exp(-u*1.5)*Math.min(1,u*5));
+    return idle*(1+(c?.7:.2)*Math.exp(-u*2.2)*Math.min(1,u*(c?8:3))); }
   return null; };
+// the throttle the engine sound should use while starting: a little while cranking; the Explorer fires hard (as loud as
+// a good push on the gas) and quietens as it settles, the way it does in the owner's video
+IGN.load=function(){ if(IGN.state!=='crank') return 0; const k=kind(), c=CRANK[k];
+  if(IGN.t<c) return .15; if(k!=='gas') return 0; const u=IGN.t-c; return .6*Math.exp(-u*1.5)*Math.min(1,u*5); };
 FRAME_HOOKS.push(function ignition(dt){
-  if(IGN.state==='crank'){ IGN.t+=dt; if(IGN.t>CRANK[kind()]+1.2){ IGN.state='on'; show(); } }
+  if(IGN.state==='crank'){ IGN.t+=dt; if(IGN.t>CRANK[kind()]+(kind()==='gas'?2.4:1.2)){ IGN.state='on'; show(); } }
   else if(IGN.state==='stop'){ IGN.t+=dt; if(IGN.t>.8){ IGN.state='off'; show(); } }
   return false;
 });
@@ -46,6 +54,35 @@ FRAME_HOOKS.push(function ignition(dt){
 { const prev=window.onCarChange; window.onCarChange=k=>{ if(prev) prev(k); IGN.state='on'; show(); }; }
 { const prev=window.onModeChange; window.onModeChange=(m,was)=>{ if(prev) prev(m,was); IGN.state='on'; show(); }; }
 
+/* Explorer start-up layer (owner 2026-11-21: "make it sound like the one I sent you" — a 2022 Explorer starting). The game's
+   engine sound is the smooth note of the exhaust; the video also has the starter's low groan and the engine's mechanical
+   clatter (valvetrain, injectors, intake) loud as it fires and fading as it settles — much more sound at 250-1000 Hz
+   and a ticking above 2 kHz. This adds those, timed to IGN.rpm(): a low, heavy starter for 0.35 s, then the clatter
+   pulsing with each firing, strongest at the flare, fading into the idle by ~3 s. Synthesized (no recording); its
+   band levels were set against the video's. EXPLORER_START is a pure function so tools can render it offline. */
+function EXPLORER_START(sr){
+  const len=3.3, n=Math.round(sr*len), out=new Float32Array(n), c=.35, idle=650;
+  const bp=(fc,q)=>{ const f=2*Math.sin(Math.PI*fc/sr); let lo=0,bd=0; return x=>{ const hi=x-lo-bd/q; bd+=f*hi; lo+=f*bd; return bd; }; };
+  const b1a=bp(380,2), b1b=bp(380,2), b1=x=>b1b(b1a(x))*.35, b2a=bp(780,2), b2b=bp(780,2), b2=x=>b2b(b2a(x))*.35, b0=bp(55,1.2), bs=bp(150,2);
+  let s=4242, fph=0, sph=0;
+  const rnd=()=>{ s=(s*1664525+1013904223)>>>0; return s/4294967296-.5; };
+  for(let i=0;i<n;i++){ const t=i/sr, w=rnd(); let y=0;
+    if(t<c+.04){ // the starter: a low groan loaded by the compression strokes
+      sph+=2*Math.PI*(38+14*Math.min(1,t/.15))/sr; const comp=.55+.45*Math.max(0,Math.sin(2*Math.PI*t*9));
+      const env=Math.min(1,t/.02)*Math.min(1,(c+.04-t)/.04);
+      y+=(Math.sin(sph)*.6+Math.sin(sph*2)*.25+b0(w)*.6+bs(w)*.08)*comp*env*.025; }
+    else { const u=t-c, r=idle*(1.06+1.0*Math.exp(-u*1.5)*Math.min(1,u*5));
+      fph+=r/60*3/sr; const p=Math.pow(.5+.5*Math.cos(2*Math.PI*fph),3);              // one knock per firing (V6: 3 a turn)
+      const lvl=(.12+.8*Math.exp(-u*2.5)*Math.min(1,u*6))*Math.min(1,Math.max(0,(len-t)/1.1));
+      y+=(b1(w)*1.5*(.4+.6*p)+b2(w)*.15*(.3+.7*p)+b0(w)*.3*p)*lvl; }
+    out[i]=y; }
+  return out; }
+let ESTART=null;
+function startLayer(){ const A=window.SOUND&&SOUND.state; if(!A||!A.ctx||!A.bus||!SOUND.on||A.ctx.state!=='running') return;
+  try{ const sr=A.ctx.sampleRate; if(!ESTART||ESTART.sampleRate!==sr){ const d=EXPLORER_START(sr); ESTART=A.ctx.createBuffer(1,d.length,sr); ESTART.getChannelData(0).set(d); }
+    const src=A.ctx.createBufferSource(); src.buffer=ESTART; const g=A.ctx.createGain(); g.gain.value=(window.COCKPIT&&COCKPIT.on?1:.6)*START_GAIN;
+    src.connect(g); g.connect(A.bus); src.start(); }catch(e){ console.warn('start layer',e); } }
+const START_GAIN=2;                                                // set against the engine sound's level (see EXPLORER_START)
 /* the starter motor: a geared whine rising as it spins up, with a grinding edge, through the engine sound's cabin filter */
 function starter(len,k){
   const A=window.SOUND&&SOUND.state; if(!A||!A.ctx||!A.bus||!SOUND.on||A.ctx.state!=='running') return;
@@ -56,7 +93,7 @@ function starter(len,k){
       const pulse=.75+.25*Math.sin(2*Math.PI*t*(k==='diesel'?4:5));                   // the compression strokes load it
       const env=Math.min(1,t/.03)*Math.min(1,(len+.05-t)/.05);
       d[i]=(Math.sin(ph)*.5+Math.sin(ph*2)*.25+Math.sin(ph2)*.12+lp*.6)*pulse*env*.5; }
-    const src=A.ctx.createBufferSource(); src.buffer=b; const g=A.ctx.createGain(); g.gain.value=window.COCKPIT&&COCKPIT.on?.8:.45;
+    const src=A.ctx.createBufferSource(); src.buffer=b; const g=A.ctx.createGain(); g.gain.value=(window.COCKPIT&&COCKPIT.on?.8:.45)*(k==='gas'?.5:1);   // the Explorer's starter is barely heard
     src.connect(g); g.connect(A.bus); src.start(); }catch(e){ console.warn('starter',e); } }
 
 /* Lincoln Navigator: the start-up chime (owner 2026-11-21, a recording of starting a 2025 Navigator). Transcribed from it
