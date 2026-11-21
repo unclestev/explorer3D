@@ -17,8 +17,7 @@ async function loadExtras(){
   const q=`[out:json][timeout:25];(node["highway"~"^(stop|traffic_signals)$"]${bb};node["railway"="level_crossing"]${bb};way["highway"]["maxspeed"]${bb};);out geom qt;`;
   let j=null;
   try{
-    for(const url of OVERPASS){ try{ const r=await fetch(url,{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'}});
-      if(r.ok){ j=await r.json(); break; } }catch(e){} }
+    try{ j=await ovFetch(q); }catch(e){ j=null; }                 // game.js: four mirrors, 40 s each
     if(!j){ OX.failT=Date.now(); OX.at=[cx,cy]; return; }
     const stops=[],sigs=[],xings=[],speeds=[], seen=new Set();
     for(const el of j.elements||[]){ const t=el.tags||{};

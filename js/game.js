@@ -834,7 +834,22 @@ function rebuildRoadGeo(){
       if(Math.max(x1,x2)<-R||Math.min(x1,x2)>R||Math.max(y1,y2)<-R||Math.min(y1,y2)>R){ along+=len; continue; }
       segs.push([x1,y1,x2,y2,half,pr.name||'',cl,along,lid,pr.brunnel||'']); along+=len; } } }
   roadGeo.segs=segs;
+  // street names live in the map's separate 'transportation_name' layer, not on the road lines above (so roadName was
+  // always empty): keep its named lines too, for the panel's "· NE · Main St" (streetHere) and the cockpit
+  const names=[], Rn=400; let nf=[]; try{ nf=map.querySourceFeatures(roadGeo.src,{sourceLayer:'transportation_name'}); }catch(e){}
+  for(const f of nf){ const pr=f.properties||{}, nm=pr['name:en']||pr.name||(pr.ref?String(pr.ref).replace(/;.*/,''):''); if(!nm) continue;
+    const g=f.geometry, lines=g&&(g.type==='LineString'?[g.coordinates]:g.type==='MultiLineString'?g.coordinates:null); if(!lines) continue;
+    for(const L of lines) for(let i=1;i<L.length;i++){ const x1=(L[i-1][0]-S.lng)*kx, y1=(L[i-1][1]-S.lat)*111320, x2=(L[i][0]-S.lng)*kx, y2=(L[i][1]-S.lat)*111320;
+      if(Math.max(x1,x2)<-Rn||Math.min(x1,x2)>Rn||Math.max(y1,y2)<-Rn||Math.min(y1,y2)>Rn) continue; names.push([x1,y1,x2,y2,nm]); } }
+  roadGeo.names=names;
 }
+// the street under the car: the nearest named line within 14 m, preferring one that runs the way you're heading
+function streetHere(){ const N=roadGeo.names; if(!N||!N.length) return '';
+  const kx=111320*Math.cos(rad(roadGeo.lat)), x=(S.lng-roadGeo.lng)*kx, y=(S.lat-roadGeo.lat)*111320, h=rad(S.hdg), hx=Math.sin(h), hy=Math.cos(h);
+  let best='', bs=1e9;
+  for(const s of N){ const dx=s[2]-s[0], dy=s[3]-s[1], L2=dx*dx+dy*dy; if(!L2) continue; const t=Math.max(0,Math.min(1,((x-s[0])*dx+(y-s[1])*dy)/L2)), d=Math.hypot(s[0]+t*dx-x,s[1]+t*dy-y);
+    if(d>14) continue; const al=Math.abs((dx*hx+dy*hy)/Math.sqrt(L2)), sc=d+(1-al)*10; if(sc<bs){ bs=sc; best=s[4]; } }
+  return best; }
 function nearRoadGeo(){
   if(!roadGeo.segs||meters(roadGeo.lat,roadGeo.lng,S.lat,S.lng)>300||performance.now()-roadGeo.t>(roadGeo.segs.length?15000:1500)) rebuildRoadGeo();   // each rebuild is a 15-65 ms pause: on distance, not every 4 s
   const segs=roadGeo.segs; if(!segs||!segs.length) return null;
@@ -863,7 +878,8 @@ function roadCells(){ if(!roadGeo.segs||meters(roadGeo.lat,roadGeo.lng,S.lat,S.l
   return G; }
 function roadNear(lng,lat){ const G=roadCells(); if(!G||!roadGeo.segs) return null; const kx=111320*Math.cos(rad(roadGeo.lat)),
     x=(lng-roadGeo.lng)*kx, y=(lat-roadGeo.lat)*111320; let best=null, bc=1e9;
-  for(const s of G.get(Math.floor(x/RCG.C)+','+Math.floor(y/RCG.C))||[]){ const dx=s[2]-s[0], dy=s[3]-s[1], L2=dx*dx+dy*dy||1,
+  for(const s of G.get(Math.floor(x/RCG.C)+','+Math.floor(y/RCG.C))||[]){ if(s[6]==='path') continue;   // sidewalks / footpaths are where posts belong: keep clear of drivable roads only
+    const dx=s[2]-s[0], dy=s[3]-s[1], L2=dx*dx+dy*dy||1,
       t=Math.max(0,Math.min(1,((x-s[0])*dx+(y-s[1])*dy)/L2)), px=s[0]+t*dx, py=s[1]+t*dy, d=Math.hypot(x-px,y-py), c=d-(ROAD_DRAWN[s[6]]||4.7);
     if(c<bc){ bc=c; best={c,x,y,px,py,d,kx,seg:s}; } }
   return best; }
@@ -1116,16 +1132,26 @@ function rebuildLandCache(){
 function inAny(list,lng,lat){ for(const q of list){ const b=q.bb; if(lng<b[0]||lng>b[2]||lat<b[1]||lat>b[3]) continue; if(inPoly(lng,lat,q.pl)) return true; } return false; }
 
 /* ---------- WATER TOWERS (OpenStreetMap man_made=water_tower via Overpass, keyless) ---------- */
-let towers=[], towerAt=null, towerBusy=false, miniReady=false;
+let towers=[], towerAt=null, towerBusy=false, miniReady=false, towerRetry=0;
 const towerSeen=new Set();
-const OVERPASS=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
-function loadTowers(ep=0){
+// OpenStreetMap's Overpass servers (water towers, stop signs, lights, speed limits, town limits). On 2026-11-21 the main
+// one and kumi failed or timed out from the owner's connection while mail.ru answered (slowly), so: four mirrors, 40 s each,
+// starting with the one that answered last time (remembered).
+const OVERPASS=['https://overpass-api.de/api/interpreter','https://maps.mail.ru/osm/tools/overpass/api/interpreter','https://overpass.kumi.systems/api/interpreter','https://overpass.private.coffee/api/interpreter'];
+async function ovFetch(q){ let first=0; try{ first=Math.max(0,OVERPASS.indexOf(localStorage.getItem('ydOvp'))); }catch(e){}
+  for(let n=0;n<OVERPASS.length;n++){ const url=OVERPASS[(first+n)%OVERPASS.length], c=new AbortController(), to=setTimeout(()=>c.abort(),40000);
+    try{ const r=await fetch(url,{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'},signal:c.signal});
+      if(r.ok){ const j=await r.json(); try{ localStorage.setItem('ydOvp',url); }catch(e){} return j; } }catch(e){} finally{ clearTimeout(to); } }
+  throw new Error('no Overpass server answered'); }
+function loadTowers(){
   if(towerBusy) return; towerBusy=true;
   const cx=S.lng, cy=S.lat, dy=.3, dx=.4;                          // ~33 km x 33 km around the car
   const bb=`(${(cy-dy).toFixed(4)},${(cx-dx).toFixed(4)},${(cy+dy).toFixed(4)},${(cx+dx).toFixed(4)})`;
   const q=`[out:json][timeout:25];(node["man_made"="water_tower"]${bb};way["man_made"="water_tower"]${bb};relation["man_made"="water_tower"]${bb};);out center tags;`;
-  fetch(OVERPASS[ep],{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'}})
-    .then(r=>{ if(!r.ok) throw new Error('overpass '+r.status); return r.json(); })
+  // the last answer for this area is kept, so the towers still show when the servers are down
+  const ck='ydTw:'+cy.toFixed(1)+','+cx.toFixed(1);
+  ovFetch(q).then(j=>{ try{ localStorage.setItem(ck,JSON.stringify({elements:(j.elements||[]).map(e=>({type:e.type,id:e.id,lat:e.lat,lon:e.lon,center:e.center,tags:e.tags}))})); }catch(e){} return j; })
+    .catch(e=>{ let c=null; try{ c=JSON.parse(localStorage.getItem(ck)||'null'); }catch(_){} if(c){ towerRetry=Date.now()+120000; return c; } throw e; })
     .then(j=>{
       for(const el of j.elements||[]){
         const lat=el.lat??(el.center&&el.center.lat), lng=el.lon??(el.center&&el.center.lon);
@@ -1139,7 +1165,7 @@ function loadTowers(ep=0){
       }
       towerAt=[cx,cy]; drawTowers();
     })
-    .catch(e=>{ console.warn('towers',e); if(ep+1<OVERPASS.length){ towerBusy=false; loadTowers(ep+1); return; } towerAt=[cx,cy]; })
+    .catch(e=>{ console.warn('towers',e); towerAt=[cx,cy]; towerRetry=Date.now()+120000; })   // try again in 2 minutes, not only after driving 15 km
     .finally(()=>{ towerBusy=false; });
 }
 function towerFC(pointsOnly){
@@ -1289,11 +1315,17 @@ function glideStep(dt,st,gas,now){
     const mph=Math.round(G.air*2.237); if(mph!==step.mph){ step.mph=mph; mphEl.textContent=mph; }
   }
   if(every('place',1)) updatePlace(); if(every('house',.25)) updateHouseFilter(false);
-  if(every('compass',POWER?.12:.05)) updateCompass();
+  if(every('compass',POWER?.12:.05)) updateCompass(); if(every('roadx',.25)) updateRoadX();
   if(every('clouds',2)) buildClouds(false);
   if(every('decor',.5) && styleReady && (!decorAt || meters(decorAt[1],decorAt[0],S.lat,S.lng)>250)) buildDecor();
 }
 const tick={};
+// next to "On road" in the top-left panel (owner 2026-11-21): · the street you're on (when on a road) · heading N / NE / E…
+const roadxEl=document.getElementById('roadx');
+function updateRoadX(){ if(!roadxEl) return; const H=['N','NE','E','SE','S','SW','W','NW'][Math.round((((S.hdg%360)+360)%360)/45)%8];
+  let st=''; if(mode!=='glider'&&mode!=='boat'&&(onRoad||mode==='walk')&&roadEl.className!=='off'){ if(!roadGeo.segs||meters(roadGeo.lat,roadGeo.lng,S.lat,S.lng)>300) rebuildRoadGeo(); st=streetHere(); }
+  roadName=st;                                                        /* the cockpit's cluster and speed-limit signs read this too */
+  const t='\u00a0· '+H+(st?' · '+st:'');   /* non-breaking: a flex item drops a plain leading space */ if(roadxEl.textContent!==t) roadxEl.textContent=t; }
 function every(k,sec){ const t=last/1000; if(tick[k]===undefined||t-tick[k]>=sec){ tick[k]=t; return true; } return false; }
 let lastStep=0;
 function loop(now){
@@ -1312,8 +1344,11 @@ function step(now){
   const WH=window.WHEEL&&WHEEL.read();
   const wS=WH&&Math.abs(kS)<.05?WH.st:kS, wG=WH&&Math.abs(kG)<.05&&(WH.ok||WH.cal)?WH.gas:kG;
   let st=Math.abs(tSteer)>.05?tSteer:wS, gas=Math.abs(tGas)>.05?tGas:wG; const hand=!!K[' '];
+  // the wheel's pedals as an automatic: gas drives the way the selector says, the brake only ever brakes (js/enh/wheel.js)
+  let wBrake=0; const WA=!!(WH&&WH.ok&&!WH.cal&&Math.abs(kG)<.05&&Math.abs(tGas)<.05&&mode!=='walk'&&mode!=='glider');
+  if(WA){ wBrake=WH.brake||0; gas=WH.sel==='D'?WH.pedal:WH.sel==='R'?-WH.pedal:0; S.sel=WH.sel; } else S.sel=null;
   // autopilot (js/enh/autopilot.js) drives until you touch the steering, gas or handbrake
-  if(window.AUTO&&AUTO.on){ if(Math.abs(st)>.05||Math.abs(gas)>.05||hand) AUTO.takeover(); else { const c=AUTO.control(dt); st=c.st; gas=c.gas; } }
+  if(window.AUTO&&AUTO.on){ if(Math.abs(st)>.05||Math.abs(gas)>.05||hand||wBrake>.05) AUTO.takeover(); else { const c=AUTO.control(dt); st=c.st; gas=c.gas; wBrake=0; } }
   S.gas=gas; S.stIn=st;                                            // pedal + steering input for add-ons (engine sound, cockpit wheel)
   if(mode==='glider'){ glideStep(dt,st,gas,now); return; }
   if(mode==='walk'&&window.WALK){ WALK.step(dt,st,gas,now); return; }   // on foot (js/enh/walk.js)
@@ -1335,15 +1370,19 @@ function step(now){
   if(hand){a-=Math.sign(S.v)*30*mu; braking=Math.abs(S.v)>.5;}
   const SF=REAL&&window.FEEL&&!boat&&!tractor?FEEL.surf:null;       // realistic driving: what the tyres are on (js/enh/feel.js)
   const cap=boat?BOATMAX:tractor?vmax:(SF?(SF.cap||Math.max(MAXV,vtop||0)):(onRoad?Math.max(MAXV,vtop||0):34));
-  // an electric car's regenerative braking off the pedal (Model Y: about 0.17 g at speed, fading out below ~8 mph, as the real one does)
-  const regen=CARSPEC.regen&&mode==='car'&&!boat&&gas<=.05&&Math.abs(S.v)>.3?CARSPEC.regen*Math.min(1,(Math.abs(S.v)-.3)/3.5)*Math.min(1,mu+.1):0;
+  // an electric car's regenerative braking off the pedal (Model Y: about 0.17 g at speed, fading out below ~8 mph, as the real one does);
+  // none in neutral (G29 shifter in N, S.sel): the real car coasts
+  const regen=CARSPEC.regen&&mode==='car'&&!boat&&S.sel!=='N'&&gas<=.05&&Math.abs(S.v)>.3?CARSPEC.regen*Math.min(1,(Math.abs(S.v)-.3)/3.5)*Math.min(1,mu+.1):0;
   if(PF) a-=Math.sign(S.v)*(PF.rr+PF.cd*S.v*S.v+(regen||(gas<=.05&&Math.abs(S.v)>.3?.7+.015*Math.abs(S.v):0)));   // rolling + air drag, engine braking (or regen) off the gas
   else a-=Math.sign(S.v)*((boat?(.25+.0022*S.v*S.v):(.35+.0032*S.v*S.v))+regen);         // rolling + aero drag
   if(SF){ if(SF.drag||SF.rr) a-=S.v*SF.drag+(Math.abs(S.v)>.3?Math.sign(S.v)*SF.rr:0); }   // each surface drags differently (grass, woods, sand, mud...)
   else if(!onRoad&&!boat&&!tractor) a-=S.v*.15;                          // mild grass drag
   if(S.inWater&&!boat){ a-=S.v*1.2; }                                    // wading through water in a car or tractor: slow going (~5 mph)
   if(REAL&&terrainOn&&!boat&&Math.abs(S.v)>.3) a-=5*Math.sin(S.sp);      // hills: slower up, faster down (Medium/High graphics, where the ground has height)
-  const prevV=S.v; S.v+=a*dt; if(prevV*S.v<0&&Math.abs(gas)<.05) S.v=0;
+  if(wBrake>.03){ const dec=28*Math.min(1,wBrake*1.15)*mu; braking=Math.abs(S.v)>.5;   // the wheel's brake: slows to a stop and holds there, never reverses
+    if(Math.abs(S.v+a*dt)<=dec*dt&&Math.abs(gas)<=wBrake){ S.v=0; a=0; } else a-=Math.sign(S.v||1)*dec*(S.v===0?0:1); }
+  const prevV=S.v; S.v+=a*dt; if(prevV*S.v<0&&(Math.abs(gas)<.05||wBrake>.03)) S.v=0;
+  if(WA&&S.v<-7) S.v=Math.min(-7,S.v+12*dt);                          // reverse in an automatic tops out around 15 mph
   if(S.v>cap) S.v=Math.max(cap,S.v-25*dt);                     // ease down to a lower cap instead of snapping
   if(S.inWater&&!boat) S.v=Math.max(-2,Math.min(2.4,S.v));
   S.v=Math.max(-REVMAX*pw,Math.min(vtop||MAXV,S.v)); if(Math.abs(S.v)<.05&&Math.abs(gas)<.05)S.v=0;
@@ -1407,16 +1446,16 @@ function step(now){
 
   // road detection
   if(every('place',1)) updatePlace(); if(every('house',.25)) updateHouseFilter(false);
-  if(every('compass',POWER?.12:.05)) updateCompass();
+  if(every('compass',POWER?.12:.05)) updateCompass(); if(every('roadx',.25)) updateRoadX();
   const parked=Math.abs(S.v)<.05 && step.detOnce;
   if(!parked && styleReady && every('det',POWER?.25:.12)){ step.detOnce=true;
     const p=map.project([S.lng,S.lat]); const f=QG?[]:hitRoad(p.x,p.y,48);   // cockpit: the car's own spot is never on screen
     const el=roadEl;
     if(f===null){ onRoad=true; el.textContent='Driving'; el.className=''; }      // road data unavailable: never punish
-    else if(f.length>0){ miss=0; onRoad=true; S.rcls=f.every(x=>{ const q=x.properties||{}; return q.surface==='unpaved'||/^(track|path)$/.test(String(q.class||'')); })?'gravel':'paved'; const nm=f.find(x=>x.properties&&x.properties.name); roadName=nm?nm.properties.name:''; el.textContent=roadName||'On road'; el.className=''; }
+    else if(f.length>0){ miss=0; onRoad=true; S.rcls=f.every(x=>{ const q=x.properties||{}; return q.surface==='unpaved'||/^(track|path)$/.test(String(q.class||'')); })?'gravel':'paved'; el.textContent='On road'; el.className=''; }
     else {                                                         // screen query missed: check the real road lines
       const g=nearRoadGeo();
-      if(g!==false){ miss=0; S.rcls=roadGeo.hit&&/^(track|path)$/.test(roadGeo.hit.cls||'')?'gravel':'paved'; if(roadGeo.hit&&roadGeo.hit.name&&roadGeo.hit.name!==roadName){ roadName=roadGeo.hit.name; el.textContent=roadName; } if(!onRoad||el.className){ onRoad=true; el.textContent=roadName||'On road'; el.className=''; } }
+      if(g!==false){ miss=0; S.rcls=roadGeo.hit&&/^(track|path)$/.test(roadGeo.hit.cls||'')?'gravel':'paved'; if(roadGeo.hit&&roadGeo.hit.name&&roadGeo.hit.name!==roadName) roadName=roadGeo.hit.name; if(!onRoad||el.className||el.textContent!=='On road'){ onRoad=true; el.textContent='On road'; el.className=''; } }
       else if(++miss>=8){ onRoad=false; el.textContent='Off road'; el.className='off'; } }   // ~1s of sustained misses
     // ---- which vehicle? Decided from the map's real water/farmland polygons (point-in-polygon on
     //      lng/lat), not from what happens to be drawn under a screen pixel, then debounced by time.
@@ -1446,7 +1485,7 @@ function step(now){
       if(txt!==step.surf){ step.surf=txt; surfEl.textContent=txt; }
     }
   }
-  if(every('towers',5) && !towerBusy && towerAt && meters(towerAt[1],towerAt[0],S.lat,S.lng)>15000) loadTowers();
+  if(every('towers',5) && !towerBusy && towerAt && (meters(towerAt[1],towerAt[0],S.lat,S.lng)>15000||towerRetry&&Date.now()>towerRetry)) { towerRetry=0; loadTowers(); }
   if(every('decor',.5)){
     if(styleReady && (!decorAt || meters(decorAt[1],decorAt[0],S.lat,S.lng)>250)) buildDecor();
     const nt=nearestPoi(); if(nt!==step.near){ step.near=nt; nearEl.textContent=nt; }

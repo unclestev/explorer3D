@@ -770,7 +770,8 @@ function engineState(c,dt){ const A=window.SOUND&&SOUND.state;
   if(S.v<-.2) c.gear=0;
   const t=Math.min(E.redline||6000,Math.max(E.idle||700,inG(c.gear),(E.idle||700)+1500*gas*Math.max(0,1-inG(c.gear)/2200)));
   c.rpm+=(t-c.rpm)*Math.min(1,dt*5); return {rpm:c.rpm,gear:c.gear}; }
-function gearLetter(){ const g=S.gas||0; if(S.v<-.2||(g<-.05&&Math.abs(S.v)<.5)) return 'R'; if(Math.abs(S.v)<.05&&Math.abs(g)<.05&&(CK.cab&&CK.cab.still>3)) return 'P'; return 'D'; }
+function gearLetter(){ if(S.sel) return S.sel;                    // the wheel's selector (shifter / paddles): D, R or N
+  const g=S.gas||0; if(S.v<-.2||(g<-.05&&Math.abs(S.v)<.5)) return 'R'; if(Math.abs(S.v)<.05&&Math.abs(g)<.05&&(CK.cab&&CK.cab.still>3)) return 'P'; return 'D'; }
 const txt=id=>{ const e=document.getElementById(id); return e?e.textContent.trim():''; };
 const navOn=()=>!!(YD.NAV&&YD.NAV.dest&&txt('navDist'));
 function hhmm(){ const d=new Date(); let h=d.getHours(); const m=d.getMinutes(); const ap=h>=12?'PM':'AM'; h=h%12||12; return h+':'+String(m).padStart(2,'0')+' '+ap; }

@@ -103,7 +103,7 @@ function tractor(E,dt){
 function electric(E,dt){
   const v=Math.abs(S.v||0), gas=Math.max(0,S.gas||0), brk=Math.max(0,-(S.gas||0));
   A.rpm=v/E.tyre*60*E.ratio; A.gear=0;
-  const regen=gas<=.05&&v>.3&&CARSPEC&&CARSPEC.regen?Math.min(1,(v-.3)/3.5)*.6+.3*brk:0;
+  const regen=gas<=.05&&v>.3&&CARSPEC&&CARSPEC.regen&&S.sel!=='N'?Math.min(1,(v-.3)/3.5)*.6+.3*brk:0;
   const want=gas>.05?gas:-regen; A.load=(A.load||0)+(want-(A.load||0))*Math.min(1,dt*6);
   return {rpm:A.rpm, load:A.load, boost:0, speed:v};
 }
