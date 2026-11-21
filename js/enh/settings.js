@@ -47,6 +47,12 @@ mapEl.addEventListener('pointermove',e=>{
 });
 const lift=e=>{ if(!pts.delete(e.pointerId)) return; if(pinch&&pts.size<2){ pinch=null; save(); show(); } };
 mapEl.addEventListener('pointerup',lift); mapEl.addEventListener('pointercancel',lift);
+// ⚙️ Location & speed panel (owner 2026-11-21: "add the visual location/speed overlay when in cockpit view too and maybe a
+// setting to turn that on and off in any view"): the top-left card, on by default, in every view
+{ let on=true; try{ on=localStorage.getItem('ydInfo')!=='off'; }catch(e){}
+  const b=document.getElementById('infoBtn'), show=()=>{ document.body.classList.toggle('noinfo',!on); if(b) b.classList.toggle('on',on); };
+  if(b) b.addEventListener('click',e=>{ e.stopPropagation(); on=!on; try{ localStorage.setItem('ydInfo',on?'on':'off'); }catch(e){} show(); });
+  show(); }
 // iPhone Safari: stop its own page-zoom gesture from fighting ours
 for(const t of ['gesturestart','gesturechange']) document.addEventListener(t,e=>e.preventDefault(),{passive:false});
 })();

@@ -20,7 +20,7 @@
 <link href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/3.6.2/maplibre-gl.css" rel="stylesheet">
 <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>window.THREE||document.write('<script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"><\/script>')</script>
-<link href="css/style.css?v=28" rel="stylesheet">
+<link href="css/style.css?v=29" rel="stylesheet">
 </head>
 <body>
 <div id="load">Loading map…</div>
@@ -45,6 +45,7 @@
   <div class="setRow carRow"><span>Car</span><div class="seg" id="carPick"><button data-car="explorer">Explorer</button><button data-car="javelin">Javelin</button><button data-car="javelin3d">Javelin 3D</button><button data-car="javelin3d2">Javelin 3D v2</button><button data-car="navigator">Navigator</button><button data-car="tractor">Tractor</button><button data-car="boat">🚤 Boat</button></div></div>
   <div class="setRow"><span>View<small>Chase camera, or from behind the wheel · C key</small></span><div class="seg" id="viewPick"><button data-view="chase">Chase</button><button data-view="cockpit">Cockpit</button></div></div>
   <div class="setRow" id="rsRow" style="display:none"><span>Real speed in cockpit<small>The world goes by at what the speedometer says (trips take 3× longer than in chase view)</small></span><button id="rsBtn" class="switch" aria-label="Real speed in cockpit"></button></div>
+  <div class="setRow"><span>Location &amp; speed panel<small>Speed, road, town, weather and what's nearby, top left · every view</small></span><button id="infoBtn" class="switch" aria-label="Location and speed panel"></button></div>
   <div class="setRow" id="hudRow" style="display:none"><span>Head-up display<small>Speed, limit, gear and next turn on the windshield · H key</small></span><button id="hudBtn" class="switch" aria-label="Head-up display"></button></div>
   <div class="setRow" id="fovRow" style="display:none"><span>Cockpit view angle<small>Wider shows more of the dash · drag to look around, hold Q / E to glance</small></span><div class="stepper"><button id="fovM" aria-label="Narrower">−</button><b id="fovVal">45°</b><button id="fovP" aria-label="Wider">+</button></div></div>
   <div class="setRow carRow"><span>Graphics<small id="qualStat">Auto picks what this device runs smoothly</small></span><div class="seg" id="qualPick"><button data-q="auto">Auto</button><button data-q="low">Low</button><button data-q="med">Medium</button><button data-q="high">High</button></div></div>
@@ -81,7 +82,7 @@
 <script src="js/enh/autopilot.js?v=13"></script>
 <script src="js/enh/vehicles.js?v=17"></script>
 <script src="js/enh/traffic.js?v=23"></script>
-<script src="js/enh/settings.js?v=18"></script>
+<script src="js/enh/settings.js?v=19"></script>
 <script src="js/enh/progress.js?v=18"></script>
 <script src="js/enh/challenges.js?v=17"></script>
 <script src="js/enh/police.js?v=17"></script>
