@@ -1291,11 +1291,17 @@ function glideStep(dt,st,gas,now){
     const mph=Math.round(G.air*2.237); if(mph!==step.mph){ step.mph=mph; mphEl.textContent=mph; }
   }
   if(every('place',1)) updatePlace(); if(every('house',.25)) updateHouseFilter(false);
-  if(every('compass',POWER?.12:.05)) updateCompass();
+  if(every('compass',POWER?.12:.05)) updateCompass(); if(every('roadx',.25)) updateRoadX();
   if(every('clouds',2)) buildClouds(false);
   if(every('decor',.5) && styleReady && (!decorAt || meters(decorAt[1],decorAt[0],S.lat,S.lng)>250)) buildDecor();
 }
 const tick={};
+// next to "On road" in the top-left panel (owner 2026-11-21): · the street you're on (when on a road) · heading N / NE / E…
+const roadxEl=document.getElementById('roadx');
+function updateRoadX(){ if(!roadxEl) return; const H=['N','NE','E','SE','S','SW','W','NW'][Math.round((((S.hdg%360)+360)%360)/45)%8];
+  let st=''; if(mode!=='glider'&&(onRoad||mode==='walk')&&roadEl.className!=='off') st=roadName||(roadGeo.hit&&roadGeo.hit.name)||'';
+  if(mode==='boat') st='';
+  const t='\u00a0· '+(st?st+' · ':'')+H;   /* non-breaking: a flex item drops a plain leading space */ if(roadxEl.textContent!==t) roadxEl.textContent=t; }
 function every(k,sec){ const t=last/1000; if(tick[k]===undefined||t-tick[k]>=sec){ tick[k]=t; return true; } return false; }
 let lastStep=0;
 function loop(now){
@@ -1413,16 +1419,16 @@ function step(now){
 
   // road detection
   if(every('place',1)) updatePlace(); if(every('house',.25)) updateHouseFilter(false);
-  if(every('compass',POWER?.12:.05)) updateCompass();
+  if(every('compass',POWER?.12:.05)) updateCompass(); if(every('roadx',.25)) updateRoadX();
   const parked=Math.abs(S.v)<.05 && step.detOnce;
   if(!parked && styleReady && every('det',POWER?.25:.12)){ step.detOnce=true;
     const p=map.project([S.lng,S.lat]); const f=QG?[]:hitRoad(p.x,p.y,48);   // cockpit: the car's own spot is never on screen
     const el=roadEl;
     if(f===null){ onRoad=true; el.textContent='Driving'; el.className=''; }      // road data unavailable: never punish
-    else if(f.length>0){ miss=0; onRoad=true; S.rcls=f.every(x=>{ const q=x.properties||{}; return q.surface==='unpaved'||/^(track|path)$/.test(String(q.class||'')); })?'gravel':'paved'; const nm=f.find(x=>x.properties&&x.properties.name); roadName=nm?nm.properties.name:''; el.textContent=roadName||'On road'; el.className=''; }
+    else if(f.length>0){ miss=0; onRoad=true; S.rcls=f.every(x=>{ const q=x.properties||{}; return q.surface==='unpaved'||/^(track|path)$/.test(String(q.class||'')); })?'gravel':'paved'; const nm=f.find(x=>x.properties&&x.properties.name); roadName=nm?nm.properties.name:''; el.textContent='On road'; el.className=''; }
     else {                                                         // screen query missed: check the real road lines
       const g=nearRoadGeo();
-      if(g!==false){ miss=0; S.rcls=roadGeo.hit&&/^(track|path)$/.test(roadGeo.hit.cls||'')?'gravel':'paved'; if(roadGeo.hit&&roadGeo.hit.name&&roadGeo.hit.name!==roadName){ roadName=roadGeo.hit.name; el.textContent=roadName; } if(!onRoad||el.className){ onRoad=true; el.textContent=roadName||'On road'; el.className=''; } }
+      if(g!==false){ miss=0; S.rcls=roadGeo.hit&&/^(track|path)$/.test(roadGeo.hit.cls||'')?'gravel':'paved'; if(roadGeo.hit&&roadGeo.hit.name&&roadGeo.hit.name!==roadName) roadName=roadGeo.hit.name; if(!onRoad||el.className||el.textContent!=='On road'){ onRoad=true; el.textContent='On road'; el.className=''; } }
       else if(++miss>=8){ onRoad=false; el.textContent='Off road'; el.className='off'; } }   // ~1s of sustained misses
     // ---- which vehicle? Decided from the map's real water/farmland polygons (point-in-polygon on
     //      lng/lat), not from what happens to be drawn under a screen pixel, then debounced by time.

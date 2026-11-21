@@ -28,7 +28,9 @@ button{font-family:inherit;cursor:pointer}
 .unit{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.5px;align-self:flex-end;margin-bottom:3px}
 #lim{display:none;margin-left:auto;background:#fff;color:#111;border:2px solid #111;border-radius:6px;padding:2px 5px 1px;text-align:center;line-height:1;box-shadow:0 0 0 1.5px #fff}
 #lim.on{display:block}#lim small{display:block;font-size:6px;font-weight:800;letter-spacing:.4px;line-height:1.1}#lim b{font-size:17px;font-variant-numeric:tabular-nums}#lim.est{opacity:.55}
-#road{font-size:14px;font-weight:700;color:#fff;margin-top:4px}
+#roadLine{margin-top:4px;font-size:14px;display:flex;align-items:baseline;gap:0;min-width:0}
+#road{font-weight:700;color:#fff;flex:none}
+#roadx{font-weight:600;color:#cbd5e1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}   /* · street · heading (game.js updateRoadX) */
 #road.off{color:#fbbf24}
 #place{color:var(--txt)}
 #wxl{color:#fde68a}
