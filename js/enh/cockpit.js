@@ -1022,7 +1022,7 @@ CK.toggle=function(v){ CK.want=v==null?!CK.want:!!v; LSs('ydView',CK.want?'cockp
 
 /* ---------- settings, keys, mode changes ---------- */
 function showPick(){ const p=document.getElementById('viewPick'); if(p) for(const b of p.querySelectorAll('button')) b.classList.toggle('on',(b.dataset.view==='cockpit')===CK.want);
-  const r=document.getElementById('fovRow'); if(r) r.style.display=CK.want?'':'none'; const hr=document.getElementById('hudRow'); if(hr) hr.style.display=CK.want?'':'none'; const hb=document.getElementById('hudBtn'); if(hb) hb.classList.toggle('on',CK.hud); const rr=document.getElementById('rsRow'); if(rr) rr.style.display=CK.want?'':'none'; const rb=document.getElementById('rsBtn'); if(rb) rb.classList.toggle('on',CK.real); const v=document.getElementById('fovVal'); if(v) v.textContent=Math.round(CK.fov)+'°'; }
+  const r=document.getElementById('fovRow'); if(r) r.style.display=CK.want?'':'none'; const hb=document.getElementById('hudBtn'); if(hb) hb.classList.toggle('on',CK.hud); const rr=document.getElementById('rsRow'); if(rr) rr.style.display=CK.want?'':'none'; const rb=document.getElementById('rsBtn'); if(rb) rb.classList.toggle('on',CK.real); const v=document.getElementById('fovVal'); if(v) v.textContent=Math.round(CK.fov)+'°'; }
 const pick=document.getElementById('viewPick');
 if(pick) pick.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; e.stopPropagation(); CK.toggle(b.dataset.view==='cockpit'); });
 for(const [id,d] of [['fovM',-5],['fovP',5]]){ const b=document.getElementById(id); if(b) b.addEventListener('click',e=>{ e.stopPropagation(); CK.fov=clamp(CK.fov+d,30,60); LSs('ydCkFov2',String(CK.fov)); showPick(); dirty=true; }); }

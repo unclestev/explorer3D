@@ -46,7 +46,7 @@
   <div class="setRow"><span>View<small>Chase camera, or from behind the wheel · C key</small></span><div class="seg" id="viewPick"><button data-view="chase">Chase</button><button data-view="cockpit">Cockpit</button></div></div>
   <div class="setRow" id="rsRow" style="display:none"><span>Real speed in cockpit<small>The world goes by at what the speedometer says (trips take 3× longer than in chase view)</small></span><button id="rsBtn" class="switch" aria-label="Real speed in cockpit"></button></div>
   <div class="setRow"><span>Location &amp; speed panel<small>Speed, road, town, weather and what's nearby, top left · every view</small></span><button id="infoBtn" class="switch" aria-label="Location and speed panel"></button></div>
-  <div class="setRow" id="hudRow" style="display:none"><span>Head-up display<small>Speed, limit, gear and next turn on the windshield · H key</small></span><button id="hudBtn" class="switch" aria-label="Head-up display"></button></div>
+  <div class="setRow" id="hudRow"><span>Head-up display<small>Speed, limit, gear and next turn on the windshield in the cockpit (not the Navigator) · H key</small></span><button id="hudBtn" class="switch" aria-label="Head-up display"></button></div>
   <div class="setRow" id="fovRow" style="display:none"><span>Cockpit view angle<small>Wider shows more of the dash · drag to look around, hold Q / E to glance</small></span><div class="stepper"><button id="fovM" aria-label="Narrower">−</button><b id="fovVal">45°</b><button id="fovP" aria-label="Wider">+</button></div></div>
   <div class="setRow carRow"><span>Graphics<small id="qualStat">Auto picks what this device runs smoothly</small></span><div class="seg" id="qualPick"><button data-q="auto">Auto</button><button data-q="low">Low</button><button data-q="med">Medium</button><button data-q="high">High</button></div></div>
   <div class="setRow carRow"><span>3D terrain<small>Real hills on Medium and High graphics · costly in the cockpit view</small></span><div class="seg" id="terrPick"><button data-t="off">Off</button><button data-t="chase">Chase view only</button><button data-t="all">Always</button></div></div>
@@ -97,7 +97,7 @@
 <script src="js/enh/savepos.js?v=2"></script>
 <script src="js/enh/quality.js?v=1"></script>
 <script src="js/enh/feel.js?v=2"></script>
-<script src="js/enh/cockpit.js?v=18"></script>
+<script src="js/enh/cockpit.js?v=19"></script>
 <script src="js/enh/roadside.js?v=2"></script>
 <script src="js/enh/boot.js?v=4"></script>
 </body>
