@@ -660,7 +660,11 @@ function dashClassic(G,P,parts){
   const gy=(Pd.y0+Pd.y1)/2+.008, gz=x=>zf(x)+.03;
   parts.gauges=[ roundGauge(G,P,[cx-.135,gy,gz(cx-.135)],.058,'speed'), roundGauge(G,P,[cx+.02,gy,gz(cx+.02)],.058,'tach'), roundGauge(G,P,[cx+.165,gy-.006,gz(cx+.165)],.046,'combo') ];
   // small warning lamps between the gauges
-  parts.lamps=[]; for(const [dx,col] of [[-.06,0x30ff50],[.095,0xff3020]]){ const l=mesh(new THREE.CircleGeometry(.006,12),new THREE.MeshBasicMaterial({color:0x111111}),G,false); l.position.set(cx+dx,Pd.y1-.02,zf(cx+dx)+.005); l.lookAt(new V3(...P.eye)); l.userData.on=col; parts.lamps.push(l); }
+  parts.lamps=[]; for(const [dx,col] of [[.095,0xff3020]]){ const l=mesh(new THREE.CircleGeometry(.006,12),new THREE.MeshBasicMaterial({color:0x111111}),G,false); l.position.set(cx+dx,Pd.y1-.02,zf(cx+dx)+.005); l.lookAt(new V3(...P.eye)); l.userData.on=col; parts.lamps.push(l); }
+  // turn signal arrows on the pod, between the speedometer and the rev counter (lit by update())
+  { const sh=new THREE.Shape(); sh.moveTo(.012,0); sh.lineTo(0,.009); sh.lineTo(0,.004); sh.lineTo(-.01,.004); sh.lineTo(-.01,-.004); sh.lineTo(0,-.004); sh.lineTo(0,-.009); sh.closePath();
+    parts.sig=[]; for(const dir of [-1,1]){ const m=new THREE.MeshBasicMaterial({color:0x0c1a0e}), a=mesh(new THREE.ShapeGeometry(sh),m,G,false,false);
+      a.position.set(cx-.058+dir*.016,Pd.y1-.022,zf(cx-.058)+.006); a.lookAt(new V3(...P.eye)); a.rotateZ(dir<0?Math.PI:0); parts.sig.push({m,dir}); } }
   // passenger side: woodgrain band, glovebox with chrome lock
   mesh(grid(30,4,(u,v)=>{ const x=lerp(Pd.x1+.02,xd-.05,u), q=new THREE.SplineCurve(P.dash.map(p=>new THREE.Vector2(p[1],p[0]))).getPoint(.62+.12*v); return [x,q.y,q.x+.003+.06*sstep(.6,1,Math.abs(x)/xd)]; }),wood,G);
   // radio with push buttons and dial window, heater slider panel
@@ -780,6 +784,10 @@ function limitTxt(){ const e=document.querySelector('#lim b'); const v=e?e.textC
 function street(){ const r=(typeof roadName==='string'&&roadName)||''; return r; }
 
 /* ---------- instruments: drawing ---------- */
+// a turn-signal arrow (dir -1 left, 1 right) centred at cx, cy, sz across, filled green with a soft glow
+function sigArrow(x,cx,cy,sz,dir){ const h=sz*.5; x.save(); x.shadowColor='rgba(40,255,90,.9)'; x.shadowBlur=sz*.3; x.fillStyle='#2ee05a'; x.beginPath();
+  x.moveTo(cx+dir*sz/2,cy); x.lineTo(cx,cy-h); x.lineTo(cx,cy-h*.45); x.lineTo(cx-dir*sz/2,cy-h*.45); x.lineTo(cx-dir*sz/2,cy+h*.45); x.lineTo(cx,cy+h*.45); x.lineTo(cx,cy+h); x.closePath(); x.fill(); x.restore(); }
+function sigArrows(x,d,cx,cy,gap,sz){ if(d.bl) sigArrow(x,cx-gap,cy,sz,-1); if(d.br) sigArrow(x,cx+gap,cy,sz,1); }
 function drawSport(cl,d){ const x=cl.T.x, W=cl.w, H=cl.h;
   // a digital cluster drawn as two round dials (rev counter left, speedometer right) with the trip computer between them
   x.fillStyle='#020306'; x.fillRect(0,0,W,H);
@@ -804,6 +812,7 @@ function drawSport(cl,d){ const x=cl.T.x, W=cl.w, H=cl.h;
   const mx=W/2; x.textAlign='center'; x.textBaseline='middle';
   const mid=x.createLinearGradient(0,0,0,H); mid.addColorStop(0,'#06101f'); mid.addColorStop(1,'#020306'); x.fillStyle=mid; x.fillRect(L+R*1.08,H*.08,Rt-L-R*2.16,H*.84);
   x.fillStyle='#7fb2ff'; x.fillRect(L+R*1.12,H*.12,Rt-L-R*2.24,2);
+  sigArrows(x,d,mx,H*.2,(Rt-L-R*2.24)/2-H*.07,H*.11);
   x.fillStyle='#ffffff'; x.font=`600 ${Math.round(H*.2)}px "Helvetica Neue",system-ui,Arial`; x.fillText(String(d.mph),mx,H*.34);
   x.fillStyle='#9fb0c8'; x.font=`500 ${Math.round(H*.06)}px system-ui`; x.fillText('MPH',mx,H*.46);
   if(d.nav){ x.fillStyle='#5aa0ff'; x.font=`700 ${Math.round(H*.11)}px system-ui`; x.fillText(d.navArrow||'↑',mx-H*.16,H*.62); x.fillStyle='#e8eef8'; x.font=`600 ${Math.round(H*.07)}px system-ui`; x.textAlign='left'; x.fillText(d.navDist,mx-H*.06,H*.62); x.textAlign='center'; }
@@ -825,6 +834,7 @@ function drawHud(h,d){ const x=h.T.x, W=h.T.c.width, H=h.T.c.height; x.clearRect
   x.fillStyle=col; x.font='700 64px system-ui,Arial'; x.fillText(d.gearL,W*.14,H*.42); x.fillStyle=dim; x.font='600 22px system-ui'; x.fillText('GEAR',W*.14,H*.66);
   if(d.limit){ const lx=W*.86, ly=H*.42, over=d.mph>+d.limit+4; x.lineWidth=7; x.strokeStyle=over?'#ff6a5a':col; x.beginPath(); x.arc(lx,ly,52,0,7); x.stroke();
     x.fillStyle=over?'#ff8a7a':col; x.font='700 48px system-ui,Arial'; x.fillText(d.limit,lx,ly+2); }
+  sigArrows(x,d,W/2,H*.40,W*.25,58);
   // next turn across the top while a route is set
   if(d.nav){ x.fillStyle=col; x.font='700 46px system-ui'; x.textAlign='right'; x.fillText(d.navArrow||'↑',W/2-12,H*.08+18); x.textAlign='left'; x.font='600 34px system-ui'; x.fillText(d.navDist,W/2+4,H*.08+20); }
   x.shadowBlur=0; h.T.t.needsUpdate=true; }
@@ -836,6 +846,7 @@ function drawPano(pn,d){ const x=pn.T.x, W=pn.w, H=pn.h; x.fillStyle='#03050a'; 
   const cx=W*((CK.cab.P.wheel.c[0]-CK.cab.P.pano.x0)/(CK.cab.P.pano.x1-CK.cab.P.pano.x0));
   x.fillStyle='#f4efe6'; x.font=`300 ${s(64)}px "Helvetica Neue",system-ui,Arial`; x.fillText(String(d.mph),cx,H*.48);
   x.fillStyle='#a99f8f'; x.font=`500 ${s(14)}px system-ui`; x.fillText('MPH',cx,H*.86);
+  sigArrows(x,d,cx,H*.2,W*.045,s(26));
   // rpm bar left of the speed, gear right
   const bw=W*.10; x.fillStyle='#1c222c'; x.fillRect(cx-bw-W*.05,H*.45,bw,s(5)); x.fillStyle='#e9dcc6'; x.fillRect(cx-bw-W*.05,H*.45,bw*clamp(d.rpm/(d.tach*1000),0,1),s(5));
   x.font=`500 ${s(13)}px system-ui`; x.fillStyle='#a99f8f'; x.fillText('RPM',cx-bw/2-W*.05,H*.70);
@@ -906,8 +917,7 @@ function drawEV(sc,d){ const x=sc.T.x, W=sc.w, H=sc.h, k=YD.AT?(YD.AT.k||0):0, d
   x.fillStyle=C.dim; x.font='500 22px system-ui'; x.fillText('MPH',cx,180);
   if(d.limit){ const lx=cx+128, ly=120; x.fillStyle='#fff'; rr(x,lx-28,ly-38,56,76,8); x.fill(); x.strokeStyle='#111'; x.lineWidth=3; rr(x,lx-24,ly-34,48,68,6); x.stroke();
     x.fillStyle='#111'; x.font='700 11px Arial'; x.fillText('SPEED',lx,ly-21); x.fillText('LIMIT',lx,ly-9); x.font='800 30px Arial'; x.fillText(d.limit,lx,ly+16); }
-  const bl=S.blink||0, on=Math.floor(performance.now()/380)%2===0;      // turn signals (js: S.blink -1 left / 1 right, when a signal is on)
-  for(const sd of [-1,1]) if(bl===sd&&on){ x.fillStyle='#21b24b'; x.beginPath(); const ax=cx+sd*130, ay=120; x.moveTo(ax+sd*22,ay); x.lineTo(ax-sd*4,ay-22); x.lineTo(ax-sd*4,ay-9); x.lineTo(ax-sd*22,ay-9); x.lineTo(ax-sd*22,ay+9); x.lineTo(ax-sd*4,ay+9); x.lineTo(ax-sd*4,ay+22); x.closePath(); x.fill(); }
+  sigArrows(x,d,cx,120,130,48);                                      // turn signals (js/enh/signals.js)
   // the driving picture: your lane in perspective, nearby traffic, your car
   const vy=232, by=MH-18, ap=window.AUTO&&AUTO.on, P0=(r,f)=>{ const t=8/(Math.max(0,f)+8); return [cx+r*t*58,vy+(by-vy)*t]; };
   x.lineWidth=4; for(const lx of [-1.8,1.8]){ x.strokeStyle=ap?'#3e6ae1':C.lane; x.beginPath(); let a=P0(lx,-4); x.moveTo(a[0],a[1]); for(let f=0;f<=80;f+=4){ a=P0(lx,f); x.lineTo(a[0],a[1]); } x.stroke(); }
@@ -931,7 +941,8 @@ function gather(c,dt){ const e=engineState(c,dt), sp=c.P, mph=Math.round(Math.ab
   return {mph, rpm:e.rpm, gear:e.gear, gearL:gearLetter(), tach:sp.tachMax, red:sp.red, vmax:sp.vmaxG, street:street(), limit:limitTxt(), time:hhmm(), temp:tempF(),
     wx:(YD.AT&&YD.AT.wx&&YD.AT.wx.text)||'', trip:(Math.max(0,(S.dist||0)-c.trip)/1609.34).toFixed(1),
     nav:navOn(), navArrow:txt('navArrow'), navDist:txt('navDist'), navStreet:txt('navStreet'), eta:txt('navEta'),
-    compass:['N','NE','E','SE','S','SW','W','NW'][Math.round(hd/45)%8]+' · '+Math.round(hd)+'°'}; }
+    compass:['N','NE','E','SE','S','SW','W','NW'][Math.round(hd/45)%8]+' · '+Math.round(hd)+'°',
+    bl:!!(window.SIG&&SIG.left), br:!!(window.SIG&&SIG.right)}; }   // turn signal arrows lit now (js/enh/signals.js)
 
 /* ---------- per frame ---------- */
 let lastHash='';
@@ -953,6 +964,7 @@ function update(dt){
   c.glow.intensity=k*.35;
   if(p.gauges) for(const g of p.gauges){ g.face.material.emissiveIntensity=.22+k*.7; g.nm.emissiveIntensity=.25+k*.9; }
   if(p.radio) p.radio.emissiveIntensity=k*.8;
+  if(p.sig) for(const a of p.sig){ const lit=a.dir<0?(window.SIG&&SIG.left):(window.SIG&&SIG.right); a.m.color.setHex(lit?0x40ff66:0x0c1a0e); }
   const dim=1-.25*k; for(const s of [p.cluster,p.screen,p.pano]) if(s) s.m.color.setScalar(.92*dim+.08);
   if(p.btns) p.btns.color.setScalar(.75+.25*(1-k));
   for(const m of MIR.mats) m.color.setScalar(.85-.2*k); for(const m of MIR.frames) m.color.setScalar(Math.max(.25,hi/.85));
@@ -967,7 +979,7 @@ function update(dt){
   }
   const now=performance.now();
   if(p.hud){ p.hud.g.visible=CK.hud; if(CK.hud) p.hud.m.opacity=1-.45*k; }
-  const ik=[d.mph,Math.round(d.rpm/60),d.gear,d.gearL,d.street,d.limit,d.time,d.temp,d.wx,d.trip,d.nav,d.navArrow,d.navDist,d.navStreet,d.eta,d.compass,CK.hud].join('|');
+  const ik=[d.mph,Math.round(d.rpm/60),d.gear,d.gearL,d.street,d.limit,d.time,d.temp,d.wx,d.trip,d.nav,d.navArrow,d.navDist,d.navStreet,d.eta,d.compass,CK.hud,d.bl,d.br].join('|');
   if(now-c.lastDraw>66){ c.lastDraw=now; if(ik!==c.ik){ c.ik=ik; if(p.hud&&CK.hud) drawHud(p.hud,d);   // only when a number on them changed (each redraw is a texture upload)
     if(p.cluster) drawSport(p.cluster,d); if(p.pano) drawPano(p.pano,d); } if(p.screen&&now-(c.lastMap||0)>130){ c.lastMap=now; if(P.style==='ev') drawEV(p.screen,d); else drawScreen(p.screen,d,P.style==='lux'); }
     if(p.prnd&&p.prnd.cur!==d.gearL){ const pr=p.prnd, x=pr.T.x, L=pr.classic?['P','R','N','D','2','1']:['P','R','N','D','S'], W=pr.T.c.width, step=pr.classic?42:pr.lux?102:50, o=pr.classic?22:pr.lux?52:28;

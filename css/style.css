@@ -220,3 +220,10 @@ body.noinfo #hud{display:none}   /* ⚙️ Location & speed panel off (any view,
 body.cockpit #wx{-webkit-mask-image:linear-gradient(#000 40%,transparent 58%);mask-image:linear-gradient(#000 40%,transparent 58%)}
 /* a racing wheel is plugged in (js/enh/wheel.js): no on-screen steering slider or pedals */
 body.wheel #ctl{display:none}
+/* turn signals (js/enh/signals.js): ◀ ⚠ ▶ above the steering slider; the lit one blinks green / amber */
+#sigBtns{position:absolute;left:0;bottom:calc(100% + var(--gap)*.6);display:flex;gap:calc(var(--gap)*.5);pointer-events:auto}
+#sigBtns button{width:calc(var(--btn)*.95);height:calc(var(--btn)*.8);border:1px solid var(--line);border-radius:12px;background:var(--panel);color:#fff;font-size:calc(var(--btn)*.38);line-height:1;padding:0;box-shadow:0 3px 10px rgba(0,0,0,.25);touch-action:manipulation}
+#sigBtns button:active{transform:scale(.94)}
+#sigBtns button.on{background:#15803d;box-shadow:0 0 0 2px #86efac inset;animation:sigBlink .7s steps(1) infinite}
+#sigBtns #sigH.on{background:#b45309;box-shadow:0 0 0 2px #fcd34d inset}
+@keyframes sigBlink{50%{filter:brightness(.55)}}
