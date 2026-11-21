@@ -8,7 +8,8 @@
    - Sound: each car's own relay sound, synthesized (no recordings): a "tick" when the lamps come on and a "tock" when they
      go off, through the engine sound's cabin filter, so it's clear from the cockpit and quiet in the chase view:
        Ford Explorer   Ford's crisp electronic tick-tock: a short bright click with a hollow ring, the tock a little lower
-       Lincoln         Lincoln's soft, muted wooden tock — a mallet-like knock in the spirit of its marimba chimes, not a click
+       Lincoln         modelled on a 2025 Lincoln recording the owner sent (2026-11-21): a soft, short knock ringing at
+                       ~1.6 kHz (with ~2.1 and ~1.4 kHz), gone in ~25 ms, tick and tock nearly alike, ~79 a minute
        Model Y         Tesla's quiet, round tick-tock
        Javelin         a 1970s thermal flasher can: a loud metallic clack, a little uneven
        tractor         a plain heavy relay
@@ -58,8 +59,11 @@ const RECIPES={
   ford:{tick:[{fc:3400,q:3,d:.0018,g:1},{f:2350,d:.007,g:.55},{f:4700,d:.003,g:.25},{f:190,d:.012,g:.35}],
         tock:[{fc:2400,q:3,d:.0018,g:.8},{f:1700,d:.008,g:.5},{f:3500,d:.003,g:.2},{f:160,d:.012,g:.35}],len:.06,vol:.55},
   // Lincoln: a soft, rounded wooden knock (mallet on a wood block); low, warm, almost no click
-  lincoln:{tick:[{f:880,d:.028,g:1,a:.0015},{f:3460,d:.006,g:.18,a:.001},{f:440,d:.02,g:.35},{fc:1500,q:2,d:.001,g:.15}],
-           tock:[{f:660,d:.032,g:.9,a:.0015},{f:2600,d:.006,g:.15,a:.001},{f:330,d:.022,g:.35},{fc:1200,q:2,d:.001,g:.12}],len:.14,vol:.5},
+  // Lincoln: measured from the owner's recording of a 2025 Lincoln's blinker (synthesized here, not the recording itself):
+  // every click a soft knock whose ring is strongest near 1.58 kHz with 2.13 and 1.42 kHz beside it, a little low body,
+  // down 20 dB in ~20 ms; tick and tock almost the same (the tock a touch lower); 0.38 s apart
+  lincoln:{tick:[{f:1584,d:.0075,g:1,a:.0006},{f:2135,d:.006,g:.5,a:.0006},{f:1430,d:.0085,g:.45,a:.0006},{f:1740,d:.005,g:.25},{f:560,d:.01,g:.22,a:.001},{fc:2500,q:1.6,d:.0014,g:.5}],
+           tock:[{f:1572,d:.008,g:1,a:.0006},{f:2108,d:.006,g:.45,a:.0006},{f:1364,d:.009,g:.45,a:.0006},{f:1740,d:.005,g:.2},{f:540,d:.01,g:.22,a:.001},{fc:2400,q:1.6,d:.0014,g:.47}],len:.07,vol:.55},
   // Tesla: quiet, round, short
   tesla:{tick:[{f:1300,d:.012,g:1,a:.001},{f:2600,d:.004,g:.25},{fc:2500,q:2,d:.0012,g:.2}],
          tock:[{f:1000,d:.013,g:.9,a:.001},{f:2000,d:.004,g:.22},{fc:2000,q:2,d:.0012,g:.18}],len:.07,vol:.38},
@@ -89,7 +93,7 @@ FRAME_HOOKS.push(function signals(dt){
   if(SIG.dir&&!SIG.haz){ const st=(S.stIn||0)*SIG.dir;
     if(st>.22) SIG.armed=true; else if(SIG.armed&&st<.06){ SIG.dir=0; SIG.armed=false; sync(); } }
   if(STYLE()==='thermal'&&!SIG.jit) SIG.jit=1+(Math.random()-.5)*.12;
-  const per=PERIOD*(STYLE()==='thermal'?1.12*(SIG.jit||1):1);        // the thermal can is a bit slower, and uneven
+  const sty=STYLE(), per=sty==='lincoln'?.76:PERIOD*(sty==='thermal'?1.12*(SIG.jit||1):1);   // the thermal can is a bit slower, and uneven; the Lincoln ~79 a minute
   SIG.t+=dt; let changed=false;
   while(SIG.t>=per/2){ SIG.t-=per/2; SIG.lit=!SIG.lit; changed=true; click(SIG.lit?'tick':'tock'); SIG.jit=0; }
   SIG.left=SIG.lit&&(SIG.haz||SIG.dir<0); SIG.right=SIG.lit&&(SIG.haz||SIG.dir>0);
