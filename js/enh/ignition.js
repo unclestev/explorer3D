@@ -90,15 +90,17 @@ function EXPLORER_START(sr){
 // bands in the crank, flare, hold and idle, from 10.2 — with only the starter's grind and a little low knock: the game's
 // own engine sound already carries the rest; the other parts stay here at 0 for later tuning)
 const XW={grind:2,sub0:.1,sub1:0,thump:0,c380f:0,c380i:0,c780f:0,c780i:0,tick:0};
-// Explorer start-up chime (owner 2026-11-21: "put that sound effect in for the Explorer chime", the dings in their 2022
-// Explorer video). Measured from it, synthesized: a soft "ding" every 1.6 s, four of them, the first as the engine fires —
-// an A major chord, A4 (440 Hz) strongest with E5 (660 Hz) ~9 dB under and C#5 (554 Hz) ~21 dB under, struck softly
-// and dying away ~40 dB a second. Plays straight to the speakers (it's the car's own chime speaker).
+// Explorer start-up chime (owner 2026-11-21: "make the chime like the video", the dings in their 2022 Explorer video).
+// Measured from it, synthesized: each "ding" is really three soft notes, one after the other — A4 (440 Hz), then 0.15 s
+// later E5 (661 Hz, with a second tone at 677 Hz beating against it), then 0.30 s after the start a note at 543 Hz — the
+// later two ~9 dB under the first, all nearly pure tones dying away ~43 dB a second. A ding every 1.6 s, four of them.
+// Plays straight to the speakers (it's the car's own chime speaker).
 function EXPLORER_CHIME(sr){
-  const len=6, n=Math.round(sr*len), out=new Float32Array(n), P=[[440,1],[660,.36],[554,.085],[880,.03]];
-  for(let k=0;k<4;k++){ const i0=Math.round((.70+k*1.6)*sr);   // ~0.35 s after the engine fires, as in the video
-    for(const [f,a] of P){ const w=2*Math.PI*f/sr, dec=Math.exp(-1/(.22*sr));
-      let e=a; for(let i=i0;i<n&&e>1e-4;i++){ const j=i-i0; out[i]+=Math.sin(w*j)*e*Math.min(1,j/(sr*.005)); e*=dec; } } }
+  const len=6, n=Math.round(sr*len), out=new Float32Array(n), tau=.2;
+  const NOTES=[[0,440.2,1],[.15,660.6,.35],[.15,676.8,.33],[.15,692.1,.18,.025],[.30,542.7,.36]];   // [delay, Hz, level, decay s]
+  for(let k=0;k<4;k++){ const t0=.70+k*1.6;   // ~0.35 s after the engine fires, as in the video
+    for(const [dt,f,a,d] of NOTES){ const i0=Math.round((t0+dt)*sr), w=2*Math.PI*f/sr, dec=Math.exp(-1/((d||tau)*sr));
+      let e=a; for(let i=i0;i<n&&e>1e-4;i++){ const j=i-i0; out[i]+=Math.sin(w*j)*e*Math.min(1,j/(sr*.004)); e*=dec; } } }
   let pk=0; for(const v of out) pk=Math.max(pk,Math.abs(v)); for(let i=0;i<n;i++) out[i]=out[i]/pk*.7*Math.min(1,(n-i)/(sr*.2));
   return out; }
 let ECHIME=null;
