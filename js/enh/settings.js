@@ -21,8 +21,9 @@ for(const id of ['cp','cm','zi','zo']) document.getElementById(id).addEventListe
 
 // car picker: Explorer / Javelin / Navigator (setCar in game.js swaps the photo, lights and sound and remembers the choice)
 const pick=document.getElementById('carPick');
-function showCar(){ if(pick) for(const b of pick.querySelectorAll('button')) b.classList.toggle('on',b.dataset.car===CARKEY); }
-if(pick) pick.addEventListener('click',e=>{ e.stopPropagation(); const b=e.target.closest('button[data-car]'); if(b){ setCar(b.dataset.car); showCar(); } });
+function showCar(){ if(pick) for(const b of pick.querySelectorAll('button')) b.classList.toggle('on',b.dataset.car==='boat'?mode==='boat':mode!=='boat'&&b.dataset.car===CARKEY); }
+if(pick) pick.addEventListener('click',e=>{ e.stopPropagation(); const b=e.target.closest('button[data-car]'); if(b){ if(b.dataset.car==='boat') pickBoat(); else setCar(b.dataset.car); showCar(); } });
+{ const prev=window.onModeChange; window.onModeChange=(m,was)=>{ if(prev) prev(m,was); showCar(); }; }   // the Boat button lights while boating
 showCar();
 function open(){ panel.classList.add('on'); gear.classList.add('on'); show(); }
 function close(){ panel.classList.remove('on'); gear.classList.remove('on'); }

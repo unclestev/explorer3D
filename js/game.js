@@ -395,8 +395,19 @@ function loadPhoto(key){
   },undefined,e=>console.warn('car photo could not load, using the 3D model',e));
 }
 // pick a car: swaps the photo, tells the headlights (atmos.js) and the engine sound (sound.js), remembers the choice
+// the boat is picked too (owner 2026-11-20: "the boat doesn't switch by default… a vehicle option that we can choose if we
+// are in water"): only while the car is in the water; picking any car (or the same one) takes you back out of it
+let BOATPICK=false;
+function pickBoat(){
+  if(mode==='boat') return;
+  if(mode!=='car'&&mode!=='tractor'){ toast('🚤 Get in your vehicle and drive into the water first',2600); return; }
+  if(!S.inWater){ toast('🚤 The boat is for the water: drive into a lake or river, then pick it',3000); return; }
+  BOATPICK=true; setMode('boat'); dirty=true;
+}
 function setCar(key){
-  if(!CARS[key]||key===CARKEY&&PHOTO.key===key) return;
+  if(!CARS[key]) return;
+  if(mode==='boat'||BOATPICK){ BOATPICK=false; if(mode==='boat') setMode(CARS[key].tractor?'tractor':'car'); if(S.inWater) toast('🌊 Back in the '+(CARS[key].tractor?'tractor':'car')+': wade to the shore',2400); }
+  if(key===CARKEY&&PHOTO.key===key) return;
   CARKEY=key; CARSPEC=CARS[key]; try{ localStorage.setItem('ydCar',key); }catch(e){}
   loadPhoto(key); loadFront(key);
   if(mode==='car'||mode==='tractor'){ const m=CARSPEC.tractor?'tractor':'car'; if(m!==mode) setMode(m); }   // the tractor is picked, never switched to by the ground
@@ -1193,9 +1204,11 @@ function step(now){
   else a-=Math.sign(S.v)*(boat?(.25+.0022*S.v*S.v):(.35+.0032*S.v*S.v));                // rolling + aero drag
   if(SF){ if(SF.drag||SF.rr) a-=S.v*SF.drag+(Math.abs(S.v)>.3?Math.sign(S.v)*SF.rr:0); }   // each surface drags differently (grass, woods, sand, mud...)
   else if(!onRoad&&!boat&&!tractor) a-=S.v*.15;                          // mild grass drag
+  if(S.inWater&&!boat){ a-=S.v*1.2; }                                    // wading through water in a car or tractor: slow going (~5 mph)
   if(REAL&&terrainOn&&!boat&&Math.abs(S.v)>.3) a-=5*Math.sin(S.sp);      // hills: slower up, faster down (Medium/High graphics, where the ground has height)
   const prevV=S.v; S.v+=a*dt; if(prevV*S.v<0&&Math.abs(gas)<.05) S.v=0;
   if(S.v>cap) S.v=Math.max(cap,S.v-25*dt);                     // ease down to a lower cap instead of snapping
+  if(S.inWater&&!boat) S.v=Math.max(-2,Math.min(2.4,S.v));
   S.v=Math.max(-REVMAX*pw,Math.min(vtop||MAXV,S.v)); if(Math.abs(S.v)<.05&&Math.abs(gas)<.05)S.v=0;
   if(every('grip',2)){ const wg=wxGrip(), k=wg>=.95?0:wg>=.62?1:2;               // tell the driver once when the road turns wet or slick
     if(k!==step.gripK){ if(k>(step.gripK||0)) toast(k===1?'🌧️ Wet road — brake earlier':'❄️ Slick road — brake much earlier, turn gently',3500); step.gripK=k; } }
@@ -1243,6 +1256,10 @@ function step(now){
     S.v=-Math.sign(S.v)*Math.min(sp*.25,3); }
   else if(SOLID&&window.FEEL&&Math.abs(S.v)>.05){ const c=FEEL.hit(nLng,nLat,h,NOSE);   // trees and traffic
     if(c){ S.v=c.v; S.hdg+=c.turn||0; blocked=!!c.stop; } }
+  if(boat&&!blocked&&landCache.water.length&&Math.abs(S.v)>.05){       // the boat stops at the shore (pick a car to go on land)
+    const h2=Math.sign(S.v)*3, bLng=nLng+Math.sin(h)*h2/(111320*Math.cos(rad(S.lat))), bLat=nLat+Math.cos(h)*h2/111320;
+    if(!inAny(landCache.water,bLng,bLat)){ blocked=true; S.v=-Math.sign(S.v)*Math.min(Math.abs(S.v)*.2,1.5);
+      if(!(step.shoreT>performance.now())){ step.shoreT=performance.now()+6000; toast('🏝️ Shore ahead: pick a car (or the tractor) in ⚙️ Car to drive on land',3500); } } }
   smashing=inBuilding||step.crashT>0;
   if(!blocked){ S.lat=nLat; S.lng=nLng; }
 
@@ -1266,7 +1283,9 @@ function step(now){
     const water=inAny(landCache.water,S.lng,S.lat) && !(CKP?onGeoRoad:hit(p.x,p.y,5,bridgeIds).length);
     const farm=!water && inAny(landCache.farm,S.lng,S.lat);
     const realRoad=farm && (CKP?onGeoRoad:(hitRoad(p.x,p.y,4)||[]).some(f=>!/^(track|path)$/.test(String(f.properties&&f.properties.class||''))));
-    const want=water?'boat':CARSPEC.tractor?'tractor':'car';        // car or tractor = what's picked in ⚙️ Car (fields no longer swap in the tractor)
+    if(water&&!S.inWater&&!boat&&(mode==='car'||mode==='tractor')) toast('🌊 You\'re in the water: pick 🚤 Boat in ⚙️ Car to go boating, or wade back out',3800);
+    S.inWater=water;
+    const want=BOATPICK?'boat':CARSPEC.tractor?'tractor':'car';    // what's picked in ⚙️ Car — neither fields nor water swap vehicles any more
     const tNow=last/1000, gap=Math.min(.5,tNow-(step.detT||tNow)); step.detT=tNow;
     if(want===mode){ candMode=null; candT=0; }
     else {

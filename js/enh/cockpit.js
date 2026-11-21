@@ -62,7 +62,13 @@ const SPECS={
     col:{dash:0x111111,top:0x0d0d0d,trim:0x121212,lower:0x121212,seat:0x141414,head:0x171717,stitch:0x2a2a2a,accent:'walnut',carpet:0x0f0f0f},
     eng:'amc401', vmaxG:140, red:5.2, tachMax:8}
 };
-const specKey=k=>/^javelin/.test(k||'')?'javelin':k==='navigator'?'navigator':'explorer';
+SPECS.tractor={style:'tractor', eye:[0,2.46,.9], pitch:80,
+    wheel:{c:[0,2.03,.56],r:.205,tilt:52,rim:.017,flat:false},
+    cluster:{c:[0,2.255,.36],w:.17,h:.075},
+    screen:{c:[.5,2.2,.3],w:.2,h:.13},
+    col:{dash:0x1a1b1d,top:0x161718,trim:0x2b2c2f,lower:0x1e1f21,seat:0x1d1e20,head:0x3d3f42,carpet:0x141516},
+    eng:'jd68', vmaxG:60, red:2.3, tachMax:3, wipers:[.5]};
+const specKey=k=>/^javelin/.test(k||'')?'javelin':k==='navigator'?'navigator':k==='tractor'?'tractor':'explorer';
 
 /* ---------- procedural textures ---------- */
 function cnv(w,h){ const c=document.createElement('canvas'); c.width=w; c.height=h; return c; }
@@ -296,22 +302,83 @@ function drawSideFrame(x,s){ const W=256,H=160; x.clearRect(0,0,W,H); const pc='
   x.fillStyle=g; x.beginPath(); x.moveTo(ix,H*.35); x.lineTo(ix+(s<0?-44:44),H*.62); x.lineTo(ix+(s<0?-52:52),H); x.lineTo(ix,H); x.fill();
   x.fillStyle='rgba(255,255,255,.06)'; x.fillRect(0,0,W,H*.4); }
 
+/* ---------- tractor cab (owner 2026-11-20: "make a cockpit view for tractor"): an original modern row-crop cab, glass all
+   round on four posts; the long green hood with its stack and air pre-cleaner ahead, the front tyres turning below it,
+   the big rear fenders and tyres beside you; a column display, a corner-post screen with the map, armrest console ---------- */
+function tractorCab(G,P,parts){
+  const T=textures(), green=M({color:0x23561c,roughness:.38,metalness:.05,clearcoat:.8,clearcoatRoughness:.08,out:true,env:.45}),
+    yellow=M({color:0xf2c500,roughness:.45,out:true,env:.5}), blk=M({color:0x101112,roughness:.55,normalMap:rep(T.grain,4,4)}),
+    rubber=M({color:0x151515,roughness:.95}), metal=M({color:0x9aa0a6,metalness:.9,roughness:.3,out:true});
+  // hood: rounded green box with vents on top and the yellow side stripes; grille at the front
+  const hood=mesh(rbox(.92,.8,2.06,.07,.12),green,G); hood.position.set(0,1.18,-.78);
+  for(const x of [-.465,.465]) mesh(new THREE.BoxGeometry(.012,.06,1.9),yellow,G).position.set(x,1.38,-.8);
+  for(let i=0;i<9;i++){ const v=mesh(new THREE.BoxGeometry(.5,.006,.035),blk,G,false); v.position.set(0,1.582,-1.55+i*.06); }
+  mesh(rbox(.84,.6,.06,.02,.05),blk,G).position.set(0,1.14,-1.83);
+  // exhaust stack with a rain cap and the air pre-cleaner, just ahead of the cab on the right
+  const st=mesh(new THREE.CylinderGeometry(.065,.07,1.35,18),M({color:0x1a1a1a,roughness:.4,metalness:.6}),G); st.position.set(.3,2.2,-1.22);
+  const cap=mesh(new THREE.CylinderGeometry(.08,.08,.02,18),metal,G); cap.position.set(.3,2.885,-1.22); cap.rotation.x=-.4;
+  const pc=mesh(new THREE.CylinderGeometry(.09,.09,.35,18),blk,G); pc.position.set(-.28,1.78,-1.05);
+  mesh(new THREE.CylinderGeometry(.11,.11,.08,18),blk,G).position.set(-.28,1.99,-1.05);
+  // front tyres (steer and roll) and the big rear tyres under their fenders
+  parts.tyres=[];
+  const tyre=(x,z,r,w,front)=>{ const pv=new THREE.Group(); pv.position.set(x,r,z); G.add(pv); const sp=new THREE.Group(); pv.add(sp);
+    const t=mesh(new THREE.CylinderGeometry(r,r,w,32),rubber,sp); t.rotation.z=Math.PI/2;
+    const h=mesh(new THREE.CylinderGeometry(r*.6,r*.6,w+.02,24),yellow,sp); h.rotation.z=Math.PI/2;
+    for(let i=0;i<18;i++){ const a=i/18*Math.PI*2, l=mesh(new THREE.BoxGeometry(w*.45,.06,r*.18),rubber,sp,false); l.position.set((i%2?1:-1)*w*.26,Math.cos(a)*r*1.01,Math.sin(a)*r*1.01); l.rotation.x=-a; l.rotation.y=(i%2?1:-1)*.35; }
+    parts.tyres.push({pv,sp,front,r}); };
+  tyre(-.72,-1.35,.48,.32,true); tyre(.72,-1.35,.48,.32,true); tyre(-1.0,.95,.85,.52,false); tyre(1.0,.95,.85,.52,false);
+  for(const x of [-1,1]){ mesh(grid(16,2,(u,v)=>{ const a=lerp(-.15,Math.PI+.15,u); return [x*1.0+(v-.5)*.6,.95+Math.sin(a)*.98,.95-Math.cos(a)*.98]; }),green,G); }
+  // cab: floor, posts, roof, headliner with an overhead console, glass, door rails
+  mesh(new THREE.BoxGeometry(1.3,.06,1.3),M({color:P.col.carpet,roughness:1,normalMap:rep(T.carpet,8,8)}),G).position.set(0,1.45,.8);
+  for(const [x,z] of [[-.62,.18],[.62,.18],[-.62,1.42],[.62,1.42]]) mesh(rbox(.075,1.3,.075,.02,.03),blk,G).position.set(x,2.1,z);
+  mesh(rbox(1.56,.1,1.56,.04,.12),green,G).position.set(0,2.83,.8);
+  mesh(grid(10,10,(u,v)=>[lerp(-.6,.6,u),2.76-.02*Math.sin(Math.PI*u)*Math.sin(Math.PI*v),lerp(.2,1.4,v)]),M({color:P.col.head,roughness:.95,normalMap:rep(T.fabric,12,12)}),G);
+  const oc=mesh(rbox(.9,.06,.3,.02,.05),M({color:0x2a2b2e,roughness:.6}),G); oc.position.set(0,2.71,.32);
+  for(let i=0;i<6;i++){ const b=mesh(rbox(.05,.012,.03,.004,.008),M({color:0x111,roughness:.4}),G,false); b.position.set(-.2+i*.08,2.678,.33); }
+  for(const x of [-.62,.62]) for(const y of [1.95]) mesh(new THREE.BoxGeometry(.02,.025,1.2),blk,G).position.set(x*.985,y,.8);   // door rails
+  const glass=(geo)=>{ const g1=mesh(geo,new THREE.MeshBasicMaterial({color:0x6f8d84,transparent:true,opacity:.07,depthWrite:false,side:THREE.DoubleSide}),G,false,false); g1.renderOrder=5;
+    const g2=mesh(geo,M({color:0,metalness:1,roughness:.04,transparent:true,opacity:.05,depthWrite:false,out:true}),G,false,false); g2.renderOrder=6; };
+  glass(new THREE.PlaneGeometry(1.18,1.24).translate(0,2.09,.175));
+  for(const x of [-.6,.6]){ const g=new THREE.PlaneGeometry(1.2,1.24); g.rotateY(Math.PI/2); g.translate(x,2.09,.8); glass(g); }
+  // steering column and its display, corner-post screen, armrest console with joystick and hand throttle
+  const colM=M({color:0x151617,roughness:.6,normalMap:rep(T.grain,3,3)});
+  mesh(bar([[0,1.48,.28],[0,1.75,.4],[0,1.98,.53]],.1,.08,[0,0,1],8,10),colM,G);
+  mesh(bar([[0,2.0,.5],[0,2.17,.36],[0,2.21,.32]],.05,.04,[0,0,1],6,8),colM,G);   // stalk up to the display
+  { const bk=mesh(rbox(.19,.088,.03,.01,.02),colM,G); bk.position.set(0,2.255,.36); bk.lookAt(new V3(...P.eye)); bk.translateZ(-.022); }
+  parts.cluster=screenMesh(G,P.cluster.c,P.cluster.w,P.cluster.h,0,768,P.eye);
+  const post=mesh(bar([[.6,2.3,.2],[.55,2.22,.27]],.03,.03,[0,0,1],3,6),blk,G);
+  parts.screen=screenMesh(G,P.screen.c,P.screen.w,P.screen.h,0,768,P.eye);
+  const arm=mesh(rbox(.17,.12,.5,.03,.05),M({color:P.col.seat,roughness:.6,normalMap:rep(T.leather,4,6),normalScale:new THREE.Vector2(.3,.3)}),G); arm.position.set(.32,1.86,.92);
+  const pad=mesh(rbox(.15,.03,.28,.01,.03),M({color:0x111214,roughness:.35}),G); pad.position.set(.32,1.935,.74);
+  for(let i=0;i<8;i++){ const b=mesh(rbox(.022,.012,.022,.004,.006),M({color:[0xd8d8d8,0xf2c500,0x2f7a26,0xc81e1e][i%4],roughness:.4}),G,false); b.position.set(.27+(i%3)*.04,1.952,.66+Math.floor(i/3)*.04); }
+  const js=mesh(new THREE.CylinderGeometry(.012,.016,.11,12),blk,G); js.position.set(.36,2.0,.82);
+  mesh(new THREE.SphereGeometry(.03,16,12),M({color:0x111,roughness:.4}),G).position.set(.36,2.06,.82);
+  const th=mesh(rbox(.03,.04,.09,.01,.015),M({color:0xc81e1e,roughness:.5}),G); th.position.set(.39,1.96,.62); parts.throttle=th;
+  // big door mirrors on arms
+  for(const s of [-1,1]){ const g=new THREE.Group(); g.position.set(s*1.02,2.5,.2); G.add(g);
+    mesh(rbox(.24,.32,.05,.015,.04),blk,g).position.z=-.03;
+    const gl=mesh(MIR.uv(new THREE.PlaneGeometry(.21,.29),s<0?0:.64,s<0?.36:1),new THREE.MeshBasicMaterial({map:MIR.tex(),toneMapped:false}),g,false); gl.position.z=-.003; MIR.mats.push(gl.material);
+    g.lookAt(new V3(...P.eye).add(new V3(s*.6,0,1.8)));
+    mesh(bar([[s*.62,2.55,.2],[s*.85,2.55,.22],[s*1.0,2.52,.21]],.025,.025,[0,1,0],6,8),blk,G); }
+  return {wsP:(u,v)=>[(u*2-1)*.58,lerp(1.48,2.7,v),.16]};
+}
+
 /* ---------- steering wheels ---------- */
 function steeringWheel(G,P){
   const W=P.wheel, grp=new THREE.Group(); grp.position.set(...W.c); grp.rotation.x=-W.tilt*DEG; G.add(grp);
   const spin=new THREE.Group(); grp.add(spin);
-  const classic=P.style==='classic';
+  const classic=P.style==='classic'||P.style==='tractor';           // the tractor gets a plain three-spoke wheel too
   const rimM=classic?M({color:0x161616,roughness:.35,normalMap:rep(textures().vinyl,8,1),normalScale:new THREE.Vector2(.4,.4)})
                     :M({color:P.style==='lux'?0x2a2420:0x141416,roughness:.5,normalMap:rep(textures().leather,24,1),normalScale:new THREE.Vector2(.8,.8)});
   // rim: round or flat-bottomed, slightly oval section
   const pts=[]; for(let i=0;i<64;i++){ const a=i/64*Math.PI*2; let x=Math.cos(a)*W.r, y=Math.sin(a)*W.r; if(W.flat&&y<-W.r*.80){ y=-W.r*.80-.006*(1-Math.abs(x)/W.r); } pts.push(new V3(x,y,0)); }
   const curve=new THREE.CatmullRomCurve3(pts,true,'centripetal');
   const rim=mesh(new THREE.TubeGeometry(curve,160,W.rim,14,true),rimM,spin); rim.scale.z=1.25;
-  if(classic){ for(let i=0;i<24;i++){ const a=i/24*Math.PI*2+.13, b=mesh(new THREE.SphereGeometry(W.rim*.6,8,6),rimM,spin); b.position.set(Math.cos(a)*(W.r-W.rim*.85),Math.sin(a)*(W.r-W.rim*.85),0); } }   // finger grips
+  if(P.style==='classic'){ for(let i=0;i<24;i++){ const a=i/24*Math.PI*2+.13, b=mesh(new THREE.SphereGeometry(W.rim*.6,8,6),rimM,spin); b.position.set(Math.cos(a)*(W.r-W.rim*.85),Math.sin(a)*(W.r-W.rim*.85),0); } }   // finger grips
   if(P.col.stitch&&P.style==='sport'){ const st=M({color:0x8e0c1e,roughness:.7}); for(const s of [-1,1]){ const sp=[]; for(let i=0;i<=40;i++){ const a=(s>0?-.55:Math.PI-.55)+i/40*1.1; sp.push(new V3(Math.cos(a)*(W.r),Math.sin(a)*(W.r),W.rim*1.21)); }
       mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(sp),60,.0016,5,false),st,spin,false); } }
   if(classic){
-    const al=M({map:rep(textures().alu,1,1),color:0xffffff,metalness:.85,roughness:.32}), cap=M({color:0x0e0e0e,roughness:.4});
+    const al=P.style==='tractor'?M({color:0x161718,roughness:.5}):M({map:rep(textures().alu,1,1),color:0xffffff,metalness:.85,roughness:.32}), cap=M({color:0x0e0e0e,roughness:.4});
     for(const a of [-8,188,270]){ const r=a*DEG, sp=mesh(new THREE.BoxGeometry(W.r-.03,.032,.006),al,spin); sp.position.set(Math.cos(r)*(W.r-.03)/2,Math.sin(r)*(W.r-.03)/2,-.012); sp.rotation.z=r;
       for(let k=0;k<3;k++){ const h=mesh(new THREE.CircleGeometry(.007,12),M({color:0x050505}),spin,false); h.position.set(Math.cos(r)*(.06+k*.03),Math.sin(r)*(.06+k*.03),-.0085); } }
     const hub=mesh(new THREE.CylinderGeometry(.045,.05,.03,32),cap,spin); hub.rotation.x=Math.PI/2; hub.position.z=-.005;
@@ -488,7 +555,7 @@ function wipers(G,P,wsP,parts){
   const T=canvasTex(512,256), m=new THREE.MeshBasicMaterial({map:T.t,transparent:true,depthWrite:false,side:THREE.DoubleSide});
   const g=mesh(grid(24,12,(u,v)=>{ const p=wsP(u,v); return [p[0],p[1],p[2]+.004]; }),m,G,false,false); g.renderOrder=7;
   const arms=[], am=M({color:0x0a0a0b,roughness:.6,metalness:.3});
-  for(const pu of [.12,.55]){ const a=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),am); a.castShadow=true; G.add(a); arms.push({o:a,pu}); }
+  for(const pu of (P.wipers||[.12,.55])){ const a=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),am); a.castShadow=true; G.add(a); arms.push({o:a,pu}); }
   parts.rain={T,arms,ang:0,dir:1,on:false,t:0,wsP};
 }
 const LU=.40, LV=.66, SWEEP=1.9;                                   // blade reach across / up the glass (uv), stroke (rad)
@@ -533,8 +600,8 @@ function build(key){
   const amb=new THREE.AmbientLight(0xffffff,.06); sc.add(amb);
   const glow=new THREE.PointLight(P.style==='classic'?0xff8a3a:0x8ab4ff,0,1.2,2); glow.position.set(P.wheel.c[0],P.wheel.c[1]+.12,P.wheel.c[2]-.25); G.add(glow);
   const parts={};
-  const sh=shell(G,P,parts);
-  if(P.style==='classic') dashClassic(G,P,parts); else dashModern(G,P,parts);
+  const sh=P.style==='tractor'?tractorCab(G,P,parts):shell(G,P,parts);
+  if(P.style==='classic') dashClassic(G,P,parts); else if(P.style!=='tractor') dashModern(G,P,parts);
   parts.wheel=steeringWheel(G,P);
   wipers(G,P,sh.wsP,parts);
   G.position.set(-P.eye[0],-P.eye[1],-P.eye[2]);                   // built in car coordinates; the eye sits at the origin
@@ -656,6 +723,7 @@ function update(dt){
   const st=S.stIn!=null?S.stIn:(S.steer||0)/Math.max(.1,steerLock(S.v||0));
   c.wAng=(c.wAng||0)+(st*450*DEG-(c.wAng||0))*Math.min(1,dt*30);
   p.wheel.rotation.z=-c.wAng;
+  if(p.tyres) for(const t of p.tyres){ t.sp.rotation.x=-(S.dist||0)/t.r; t.pv.rotation.y=t.front?-(S.steer||0):0; }
   // lighting from the world: sky light, the real sun through the glass, gauges glowing after dark
   const k=YD.AT?(YD.AT.k||0):0, mainHemi=scene.children.find(o=>o&&o.isHemisphereLight), hi=mainHemi?mainHemi.intensity:.85;
   c.hemi.intensity=hi*1.05*(1-.7*k); c.hemi.color.copy(mainHemi?mainHemi.color:new THREE.Color(0xdfeeff)); c.amb.intensity=.035+.02*(1-k);
@@ -715,8 +783,9 @@ function leave(){ if(!CK.on) return; CK.on=false; EXAG=CK.exag;
   try{ map.transform.fov=36.87; }catch(e){}
   camera.fov=36.87; camera.near=10; camera.far=50000; camera.updateProjectionMatrix();
   if(typeof shadow==='object') shadow.visible=mode!=='boat'&&mode!=='glider';
+  if(typeof tractorG==='object'){ const vis=mode==='walk'?(window.WALK&&WALK.parked())||'car':mode; tractorG.visible=vis==='tractor'; }
   LOOK.yaw=0; LOOK.pitch=0; step.W=0; step.cam=null; step.pit=null; dirty=true; }
-CK.active=function(){ const a=CK.want&&mode==='car'&&!boat; if(a&&!CK.on) enter(); else if(!a&&CK.on) leave(); return a; };
+CK.active=function(){ const a=CK.want&&(mode==='car'||mode==='tractor')&&!boat; if(a&&!CK.on) enter(); else if(!a&&CK.on) leave(); return a; };
 CK.view=function(dt){
   const c=CK.cab; if(!c||CK.built!==CARKEY+'|'+(CARSPEC.paint||0)) build(CARKEY);
   const P=CK.cab.P, W=innerWidth, H=innerHeight;
@@ -749,13 +818,13 @@ CK.view=function(dt){
   const cc=CK.cab.cam; cc.fov=fov; cc.aspect=W/H; cc.setViewOffset(W,H,0,pad/2,W,H);
   cc.position.set(ex-P.eye[0],eh-P.eye[1],ez-P.eye[2]); cc.rotation.set(-(90-pitch)*DEG,-yr,0); cc.updateProjectionMatrix();
   if(typeof shadow==='object') shadow.visible=false;
+  if(typeof tractorG==='object') tractorG.visible=false;
 };
 CK.render=function(dt){ const c=CK.cab; if(!c) return; update(dt||.016); try{ renderMirror(dt||.016); }catch(e){ console.warn('mirror',e); }
   renderer.autoClear=false; renderer.clearDepth(); renderer.render(c.scene,c.cam); renderer.autoClear=true; };
 CK.toggle=function(v){ CK.want=v==null?!CK.want:!!v; LSs('ydView',CK.want?'cockpit':'chase'); showPick();
   if(!CK.want&&CK.on) leave();
-  if(CK.want&&CARSPEC.tractor) toast('🎥 No cockpit for the tractor yet — pick a car in ⚙️ to drive from the seat',3000);
-  else if(CK.want&&mode!=='car') toast('🎥 Cockpit view comes on when you are driving the car',2600);
+  if(CK.want&&mode!=='car'&&mode!=='tractor') toast('🎥 Cockpit view comes on when you are driving the car or tractor',2600);
   else toast(CK.want?'🎥 Cockpit view · drag to look around · Q / E glance · C for chase':'🎥 Chase view',2400); dirty=true; };
 
 /* ---------- settings, keys, mode changes ---------- */
@@ -766,7 +835,7 @@ if(pick) pick.addEventListener('click',e=>{ const b=e.target.closest('button'); 
 for(const [id,d] of [['fovM',-5],['fovP',5]]){ const b=document.getElementById(id); if(b) b.addEventListener('click',e=>{ e.stopPropagation(); CK.fov=clamp(CK.fov+d,45,60); LSs('ydCkFov',String(CK.fov)); showPick(); dirty=true; }); }
 addEventListener('keydown',e=>{ if(e.repeat||(e.target&&e.target.tagName==='INPUT')) return; if(e.key.toLowerCase()==='c') CK.toggle(); });
 const prevMode=window.onModeChange;
-window.onModeChange=(m,was)=>{ if(prevMode) prevMode(m,was); if(CK.on&&m!=='car') leave(); };
+window.onModeChange=(m,was)=>{ if(prevMode) prevMode(m,was); if(CK.on&&m!=='car'&&m!=='tractor') leave(); else if(CK.on&&m!==was){ dispose(); } };
 const prevCar=window.onCarChange;
 window.onCarChange=(k)=>{ if(prevCar) prevCar(k); if(CK.cab) { dispose(); if(CK.on) build(k); } };
 const prevPow=window.onPowerChange;
