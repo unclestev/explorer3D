@@ -1221,7 +1221,10 @@ CK.view=function(dt){
   const kl=(K.q?-1:0)+(K.e?1:0); CK.look+=(kl*80-CK.look)*Math.min(1,dt*7);
   const yaw=clamp(LOOK.yaw,-140,140)+CK.look, yr=yaw*DEG;
   S.camB=((S.hdg+yaw)%360+360)%360;
-  const pitch=clamp(P.pitch+LOOK.pitch*.6,50,85), fov=CK.fov;   // default a little below level (more road, less sky); drag up to raise it
+  const want=P.pitch+LOOK.pitch*.6, pitch=clamp(want,50,85), fov=CK.fov;   // default a little below level (more road, less sky); drag up to raise it
+  // the map can't tilt past 85°, so looking higher than that (owner 2026-11-21: "move my screen so I can look higher")
+  // slides the whole picture down instead, like raising your eyes: map, cars and cabin all shift together
+  const lift=Math.round(.5*H/Math.tan(fov*DEG/2)*Math.tan(clamp(want-85,0,14)*DEG));
   try{ if(Math.abs(map.transform.fov-fov)>.01) map.transform.fov=fov; }catch(e){}
   // the eye turns about the neck (10 cm behind the eyes); bumps lift the head a little
   // your head moves with the car: sways out in corners, pitches forward braking / back accelerating (a damped spring)
@@ -1237,17 +1240,17 @@ CK.view=function(dt){
   const eE=ex*Math.cos(h)+(-ez)*Math.sin(h), eN=-ex*Math.sin(h)+(-ez)*Math.cos(h);   // eye over the ground, from the car's centre (m)
   const camH=Dpx*mm*Math.cos(pr), F=Dpx*mm*Math.sin(pr);
   const cE=eE+F*Math.sin(b), cN=eN+F*Math.cos(b);
-  const pad=Math.round(H*CK.pad);
-  map.jumpTo({center:[S.lng+cE/(111320*Math.cos(S.lat*DEG)),S.lat+cN/111320],bearing:S.camB,zoom:z,pitch,padding:{top:0,bottom:pad,left:0,right:0}});
+  const pad=Math.round(H*CK.pad), padT=2*lift, offY=(pad-padT)/2;
+  map.jumpTo({center:[S.lng+cE/(111320*Math.cos(S.lat*DEG)),S.lat+cN/111320],bearing:S.camB,zoom:z,pitch,padding:{top:padT,bottom:pad,left:0,right:0}});
   CK.eyeH=eh; CK.eyeWorld={x:S.lng*MLNG+eE,y:S.lat*MLAT+eN,h:camH}; CK.eyeLL=[S.lng+eE/(111320*Math.cos(S.lat*DEG)),S.lat+eN/111320];
   CK.eyeLocal={f:eE*Math.sin(b)+eN*Math.cos(b),r:eE*Math.cos(b)-eN*Math.sin(b),h:camH,mm};
   // the car layer's camera: same place and direction, in pixels at this zoom (car centre = origin)
   const f=eE*Math.sin(b)+eN*Math.cos(b), r=eE*Math.cos(b)-eN*Math.sin(b);
-  camera.fov=fov; camera.aspect=W/H; camera.near=Math.max(1,.05/mm); camera.far=(VIEW()+60)/mm; camera.setViewOffset(W,H,0,pad/2,W,H);   // far: no cars past where the ground stops
+  camera.fov=fov; camera.aspect=W/H; camera.near=Math.max(1,.05/mm); camera.far=(VIEW()+60)/mm; camera.setViewOffset(W,H,0,offY,W,H);   // far: no cars past where the ground stops
   camera.position.set(r/mm,camH/mm,-f/mm); camera.up.set(0,1,0);
   camera.lookAt(r/mm,camH/mm-Math.cos(pr)*100,-f/mm-Math.sin(pr)*100); camera.updateProjectionMatrix();
   // cabin camera: in the car's own frame
-  const cc=CK.cab.cam; cc.fov=fov; cc.aspect=W/H; cc.setViewOffset(W,H,0,pad/2,W,H);
+  const cc=CK.cab.cam; cc.fov=fov; cc.aspect=W/H; cc.setViewOffset(W,H,0,offY,W,H);
   cc.position.set(ex-P.eye[0],eh-P.eye[1],ez-P.eye[2]); cc.rotation.set(-(90-pitch)*DEG,-yr,0); cc.updateProjectionMatrix();
   if(typeof shadow==='object') shadow.visible=false;
   if(typeof tractorG==='object') tractorG.visible=false;
