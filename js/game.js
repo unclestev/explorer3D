@@ -715,7 +715,7 @@ function applyQuality(lvl){
   renderer.setPixelRatio(carPR()); step.W=0;                     // forces canvas resize next frame
   if(styleReady){
     try{ if(POWER){ map.setTerrain(null); terrainOn=false; }
-         else if(map.getSource('dem')&&!terrainOn){ map.setTerrain({source:'dem',exaggeration:TERRAIN_X}); terrainOn=true; } }catch(e){ console.warn('terrain toggle',e); }
+         else if(map.getSource('dem')&&!terrainOn&&!(window.COCKPIT&&COCKPIT.on)){ map.setTerrain({source:'dem',exaggeration:TERRAIN_X}); terrainOn=true; } }catch(e){ console.warn('terrain toggle',e); }   // no terrain in the cockpit (cockpit.js)
     try{ if(map.getLayer('hillshade')) map.setLayoutProperty('hillshade','visibility',QL===2?'visible':'none'); }catch(e){}   // hidden = its elevation tiles aren't downloaded
     decorAt=null;                                               // rebuild trees at the new density
   }
