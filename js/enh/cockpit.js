@@ -563,6 +563,7 @@ function dashModern(G,P,parts){
   { const vm=M({color:0x070707,roughness:.9}); for(const s of [-1,1]) for(let k=0;k<5;k++){ const v=mesh(new THREE.BoxGeometry(.16,.003,.006),vm,G,false); v.position.set(s*.32,lerp(P.dash[0][0],P.dash[1][0],.5)+.004,P.dash[0][1]+.05+k*.016); } }
   // vents: two in the middle beside the screen, one at each end
   const vent=(cx,cy,cz,w,h,rot)=>{ const g=new THREE.Group(); g.position.set(cx,cy,cz); g.rotation.set(rot[0]||0,rot[1]||0,0); G.add(g);
+    if(P.ex){ ventEx(g,w,h); return; }
     mesh(rbox(w+.016,h+.016,.02,.004,.008),M({color:lux?0xb9b2a5:0x0d0d0e,metalness:lux?.9:.2,roughness:lux?.25:.4}),g);
     if(!lux){ const ch=M({color:0xd5dade,metalness:1,roughness:.2,env:1.5});
       for(const yy of [-1,1]) mesh(new THREE.BoxGeometry(w+.01,.003,.004),ch,g,false).position.set(0,yy*(h/2+.006),.011);
@@ -571,8 +572,8 @@ function dashModern(G,P,parts){
     const bk=mesh(new THREE.PlaneGeometry(w,h),M({color:0x020202,roughness:1}),g,false); bk.position.z=.006;
     for(let k=0;k<5;k++){ const s=mesh(new THREE.BoxGeometry(w-.006,.0035,.014),M({color:0x1a1a1b,roughness:.5,metalness:.3}),g); s.position.set(0,-h/2+(k+.5)*h/5,.008); s.rotation.x=-.25; } };
   const fz=(y)=>{ let best=P.dash[4][1]; for(let i=0;i<P.dash.length-1;i++){ const A=P.dash[i],B=P.dash[i+1]; if((A[0]-y)*(B[0]-y)<=0&&A[0]!==B[0]) best=lerp(A[1],B[1],(y-A[0])/(B[0]-A[0])); } return best; };
-  const vy=P.ex?P.dash[4][0]-.025:P.dash[4][0]-.06, vw=P.ex?.16:lux?.12:.14, vh=P.ex?.058:lux?.055:.05;
-  vent(-xd+.13,vy,fz(vy)+.13,vw,vh,[0,.55]); vent(xd-.13,vy,fz(vy)+.13,vw,vh,[0,-.55]);
+  const vy=P.ex?P.dash[4][0]-.025:P.dash[4][0]-.06, vw=P.ex?.125:lux?.12:.14, vh=P.ex?.066:lux?.055:.05;
+  const ey=P.ex?0:.55; vent(-xd+.13,vy,fz(vy)+.13,vw,vh,[0,ey]); vent(xd-.13,vy,fz(vy)+.13,vw,vh,[0,-ey]);   // Explorer: facing straight back (owner: "make the vents straight")
   if(P.ex){ for(const s of [-1,1]) vent(s*.215,vy,fz(vy)+.024,.17,vh,[0,0]); }     // the two big ones either side of the screen
   else if(!lux){ for(const s of [-1,1]) vent(P.screen.c[0]+s*.23,vy-.035,fz(vy-.035)+.02,.15,.05,[0,0]); }
   else { for(const s of [-1,1]) vent(P.screen.c[0]+s*.24,vy-.02,fz(vy-.02)+.015,.11,.03,[0,0]); }
@@ -621,6 +622,26 @@ function dashModern(G,P,parts){
 // the whole dash under them, a centre stack of a storage cubby, the volume / tune knobs with the hazard button between,
 // then the climate panel; silver trim down the stack and console, the rotary gear dial beside the cup holders, and a
 // plain glovebox with its handle on the inboard side.
+// Explorer vent (owner 2026-11-21: "make the vents look exactly like the picture"): a rounded-rectangle bright chrome
+// surround, a deep black throat with thin horizontal slats, one chrome blade across the middle with a small chrome tab.
+// Explorer vent (owner 2026-11-21, from a close-up of the real one): flat and widest across the top, sides tapering in,
+// rounder bottom corners and the bottom edge bowed down; satin silver frame in a chunky dark pod, grey slats, a small tab.
+function ventEx(g,w,h){
+  const K=.80, sh=(W,H,e)=>{ const s=new THREE.Shape(), t=H/2, bt=-H/2, tw=W/2, bw=W/2*K, rt=Math.min(.006+e*.5,H*.2), rb=Math.min(.018+e,H*.42), bow=H*.10;
+    s.moveTo(-tw+rt,t); s.lineTo(tw-rt,t); s.quadraticCurveTo(tw,t,tw-rt*(1-K)*.6,t-rt);
+    s.lineTo(bw+rb*.25,bt+rb); s.quadraticCurveTo(bw,bt-bow*.2,bw-rb,bt-bow*.6);
+    s.quadraticCurveTo(0,bt-bow*1.3,-bw+rb,bt-bow*.6);
+    s.quadraticCurveTo(-bw,bt-bow*.2,-bw-rb*.25,bt+rb); s.lineTo(-tw+rt*(1-K)*.6,t-rt); s.quadraticCurveTo(-tw,t,-tw+rt,t); return s; };
+  const satin=M({color:0xb4b8bd,metalness:.8,roughness:.34,emissive:0x141516,env:1.4});
+  const pod=mesh(new THREE.ExtrudeGeometry(sh(w+.034,h+.034,.012),{depth:.012,bevelEnabled:true,bevelThickness:.006,bevelSize:.006,bevelSegments:4,curveSegments:12}),M({color:0x1b1c1e,roughness:.55,normalMap:rep(textures().grain,2,1),normalScale:new THREE.Vector2(.3,.3)}),g); pod.position.z=-.010;
+  const ring=sh(w+.010,h+.010,.004); ring.holes.push(sh(w,h,0));
+  const bz=mesh(new THREE.ExtrudeGeometry(ring,{depth:.004,bevelEnabled:true,bevelThickness:.0015,bevelSize:.0012,bevelSegments:3,curveSegments:12}),satin,g); bz.position.z=.007;
+  const throat=mesh(new THREE.ShapeGeometry(sh(w,h,0),12),M({color:0x020202,roughness:1}),g,false); throat.position.z=-.006;
+  const slatM=M({color:0x3a3b3e,roughness:.4,metalness:.3});
+  const n=6; for(let k=0;k<n;k++){ const f=(k+.5)/n, y=-h/2+f*h, ww=w*lerp(K,1,f)-(k===0?.02:.006);
+    const sl=mesh(new THREE.BoxGeometry(ww,.0024,.014),slatM,g); sl.position.set(0,y,.002); sl.rotation.x=-.15; }
+  const tab=mesh(rbox(.02,.009,.008,.003,.004),satin,g); tab.position.set(0,-h/n*.5,.011);
+}
 function explorerStack(G,P,parts,fz,xd,upM,loM){
   const T=textures(), wood=M({map:rep(T.ash,3,1),color:0x76675b,roughness:.38,clearcoat:.6,clearcoatRoughness:.15});
   const chrome=M({color:0xd5dade,metalness:1,roughness:.18,env:1.5}), satin=M({map:rep(T.alu,2,1),color:0xc4c9cf,metalness:.9,roughness:.3,env:1.3});
