@@ -66,7 +66,7 @@ function starter(len,k){
 const NOTE=n=>440*Math.pow(2,(n-69)/12);                            // MIDI note -> Hz
 let CHIME=null;
 function chimeBuf(ctx){ if(CHIME&&CHIME.sampleRate===ctx.sampleRate) return CHIME;
-  const sr=ctx.sampleRate, len=2.4, n=Math.round(sr*len), b=ctx.createBuffer(2,n,sr), L=b.getChannelData(0), R=b.getChannelData(1);
+  const sr=ctx.sampleRate, len=7, n=Math.round(sr*len), b=ctx.createBuffer(2,n,sr), L=b.getChannelData(0), R=b.getChannelData(1);
   const add=(t0,m,g,pan,parts,atk)=>{ const f=NOTE(m), i0=Math.round(t0*sr);
     for(const [r,a,d] of parts){ const w=2*Math.PI*f*r/sr, dec=Math.exp(-1/(d*sr)); let e=a*g;
       for(let i=i0;i<n&&e>1e-5;i++){ const k=i-i0, at=Math.min(1,k/(sr*atk)), v=Math.sin(w*k)*e*at; L[i]+=v*(1-pan*.5); R[i]+=v*(1+pan*.5); e*=dec; } } };
@@ -75,17 +75,19 @@ function chimeBuf(ctx){ if(CHIME&&CHIME.sampleRate===ctx.sampleRate) return CHIM
   const str=(t0,t1,m,g)=>{ const f=NOTE(m); for(const det of [-.004,0,.004]){ const w=2*Math.PI*f*(1+det)/sr;   // bowed string swell
       for(let i=Math.round(t0*sr);i<Math.min(n,Math.round((t1+.4)*sr));i++){ const t=i/sr, up=Math.min(1,(t-t0)/.18), dn=t>t1?Math.max(0,1-(t-t1)/.4):1, vib=1+.004*Math.sin(2*Math.PI*5.2*t);
         const v=(Math.sin(w*i*vib)+.45*Math.sin(2*w*i*vib)+.2*Math.sin(3*w*i*vib))*g*up*dn/3; L[i]+=v; R[i]+=v; } } };
-  bell(.12,94,.5,.3); mar(.16,78,.35,-.2);                 // A#6 bell over F#5
-  str(.3,.62,54,.5);                                       // F#3 string swell
-  mar(.38,80,.22,.2); mar(.66,80,.26,.2);                  // G#5
-  mar(.74,61,.42,-.3);                                     // C#4
-  mar(.82,66,.5,-.1); mar(.82,78,.32,.1); bell(.8,94,.3,.3);   // F#4 + F#5, the bell again
-  mar(.94,68,.5,0);                                        // G#4
-  str(1.02,1.34,73,.42); mar(1.02,73,.4,0);                 // C#5, held
-  mar(1.15,82,.38,.25); bell(1.15,94,.18,.3);              // A#5 on top
-  mar(1.48,70,.36,-.15);                                   // A#4 to close
+  // owner 2026-11-21: "get rid of the first part dinging and make it seven seconds long" — the opening A#6 bell / F#5 is
+  // gone, and the phrase repeats as in the video (every 1.77 s) to fill seven seconds, fading out at the end
+  for(let k=0;k<4;k++){ const o=k*1.77-.28;
+    str(o+.3,o+.62,54,.5);                                     // F#3 string swell
+    mar(o+.38,80,.22,.2); mar(o+.66,80,.26,.2);                // G#5
+    mar(o+.74,61,.42,-.3);                                     // C#4
+    mar(o+.82,66,.5,-.1); mar(o+.82,78,.32,.1); bell(o+.8,94,.3,.3);   // F#4 + F#5 with the bell
+    mar(o+.94,68,.5,0);                                        // G#4
+    str(o+1.02,o+1.34,73,.42); mar(o+1.02,73,.4,0);            // C#5, held
+    mar(o+1.15,82,.38,.25); bell(o+1.15,94,.18,.3);            // A#5 on top
+    mar(o+1.48,70,.36,-.15); }                                 // A#4 to close
   let pk=0; for(let i=0;i<n;i++) pk=Math.max(pk,Math.abs(L[i]),Math.abs(R[i]));
-  for(let i=0;i<n;i++){ const f=Math.min(1,(n-i)/(sr*.3)); L[i]=L[i]/pk*.8*f; R[i]=R[i]/pk*.8*f; }
+  for(let i=0;i<n;i++){ const f=Math.min(1,(n-i)/(sr*.5)); L[i]=L[i]/pk*.8*f; R[i]=R[i]/pk*.8*f; }
   return CHIME=b; }
 function welcome(){ const A=window.SOUND&&SOUND.state; if(!A||!A.ctx||!A.bus||!SOUND.on||A.ctx.state!=='running') return;
   try{ const src=A.ctx.createBufferSource(); src.buffer=chimeBuf(A.ctx); const g=A.ctx.createGain(); g.gain.value=window.COCKPIT&&COCKPIT.on?.55:.3;
