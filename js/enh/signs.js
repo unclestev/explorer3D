@@ -78,7 +78,9 @@ function buildSigns(){
   const cx=S.lng*MLNG, cy=S.lat*MLAT, R=450, F=[], near=o=>Math.hypot(o.x-cx,o.y-cy)<R;
   // every post is then moved out of the road bands to just behind the curb (game.js offRoad): the map's stop / signal
   // points sit on the road's centre line, and a fixed few metres can still be in the lane on a wide or angled street
-  const pt=(x,y,props)=>{ let c=[x/MLNG,y/MLAT]; try{ c=offRoad(c[0],c[1],1.1); }catch(e){} F.push({type:'Feature',properties:props,geometry:{type:'Point',coordinates:c}}); };
+  const pt=(x,y,props)=>{ let c=[x/MLNG,y/MLAT], ang=null; try{ c=offRoad(c[0],c[1],1.1); const r=roadNear(c[0],c[1]); if(r&&r.seg){ const q=r.seg; ang=Math.atan2(q[2]-q[0],q[3]-q[1]); } }catch(e){}
+    F.push({type:'Feature',properties:props,geometry:{type:'Point',coordinates:c}}); PTS.push({k:props.k,ph:props.ph||0,x:c[0]*MLNG,y:c[1]*MLAT,ang}); };   // ang: the road it stands by (for the cockpit's 3D signs)
+  PTS.length=0; CS.dirty=true;
   for(const o of OX.stops) if(near(o)) pt(o.x+3,o.y-3,{k:'stop'});
   for(const o of OX.sigs) if(near(o)) pt(o.x-6,o.y-6,{k:'sig',ph:hash(Math.round(o.x/60),Math.round(o.y/60))<.5?0:1});
   for(const o of OX.xings) if(near(o)) pt(o.x+4,o.y+4,{k:'xing'});
@@ -234,6 +236,61 @@ FRAME_HOOKS.push(function streetSigns(dt){
     const f=dx*sb+dy*cb, r=dx*cb-dy*sb;                              // metres ahead / to the right of the camera's view
     g.position.set(r/m,0,-f/m); g.scale.setScalar(sc*u.fade); g.rotation.y=b; }
   return changed;
+});
+/* ---------- cockpit: real-size stop signs, traffic signals and railroad crossbucks (owner 2026-11-21: "street lights and
+   stop signs from far away show up real big"). The map icons (sg-icons) keep one screen size at every distance, which
+   suits the chase camera; from the driver's seat they are hidden and these 3D ones stand in the car layer instead, at
+   real size, facing along the road they stand by (toward whoever drives that road), hidden behind buildings like traffic.
+   Stop: 0.76 m octagon, 2.1 m up. Signal: post-mounted head 1.05 m tall, top at 4.4 m, lamps follow the same cycle as
+   the icons. Crossbuck: two 1.22 m boards, centre 2.7 m up. ---------- */
+const PTS=[], CS={g:null,map:new Map(),dirty:false,occT:0,vis:null,mats:null};
+function csMats(){ if(CS.mats) return CS.mats;
+  const tex=(w,h,draw)=>{ const c=document.createElement('canvas'); c.width=w; c.height=h; draw(c.getContext('2d'),w,h); const t=new THREE.CanvasTexture(c); t.anisotropy=4; return t; };
+  const stop=tex(128,128,(x)=>{ octa(x,64,64,63); x.fillStyle='#fff'; x.fill(); octa(x,64,64,56); x.fillStyle='#c8102e'; x.fill();
+    x.fillStyle='#fff'; x.font='bold 34px Arial,sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText('STOP',64,66); });
+  const xb=tex(256,48,(x,w,h)=>{ x.fillStyle='#111'; x.fillRect(0,0,w,h); x.fillStyle='#fff'; x.fillRect(3,3,w-6,h-6); x.fillStyle='#111'; x.font='bold 30px Arial,sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText('RAILROAD',w/2,h/2+1); });
+  const xb2=tex(256,48,(x,w,h)=>{ x.fillStyle='#111'; x.fillRect(0,0,w,h); x.fillStyle='#fff'; x.fillRect(3,3,w-6,h-6); x.fillStyle='#111'; x.font='bold 30px Arial,sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText('CROSSING',w/2,h/2+1); });
+  const back=tex(128,128,(x)=>{ octa(x,64,64,63); x.fillStyle='#fff'; x.fill(); });
+  CS.plane=new THREE.PlaneGeometry(.76,.76);
+  CS.mats={stop:new THREE.MeshBasicMaterial({map:stop,alphaTest:.5}), back:new THREE.MeshBasicMaterial({map:back,alphaTest:.5,color:0x8d939a}),
+    post:new THREE.MeshBasicMaterial({color:0x8b949e}), head:new THREE.MeshBasicMaterial({color:0x1d2127}), visor:new THREE.MeshBasicMaterial({color:0x111316}),
+    xb:new THREE.MeshBasicMaterial({map:xb,side:THREE.DoubleSide}), xb2:new THREE.MeshBasicMaterial({map:xb2,side:THREE.DoubleSide}),
+    lamp:{r:[0xff2a1a,0x3a0d0b],y:[0xffb21a,0x3a2a0b],g:[0x22e07a,0x0b2e1a]}};
+  return CS.mats; }
+function csMake(o){ const M=csMats(), g=new THREE.Group(), cyl=(r,h,mat)=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,10),mat); m.position.y=h/2; g.add(m); return m; };
+  if(o.k==='stop'){ cyl(.03,2.1,M.post); const f=new THREE.Mesh(CS.plane,M.stop); f.position.set(0,2.1,.035); g.add(f);   // the octagon is in the picture (cut-out)
+    const bk=new THREE.Mesh(CS.plane,M.back); bk.rotation.y=Math.PI; bk.position.set(0,2.1,.03); g.add(bk); }
+  else if(o.k==='sig'){ cyl(.09,3.4,M.post); const hd=new THREE.Mesh(new THREE.BoxGeometry(.36,1.05,.26),M.head); hd.position.set(0,3.875,0); g.add(hd);
+    g.userData.lamps=[]; ['r','y','g'].forEach((c,i)=>{ const L=new THREE.Mesh(new THREE.CircleGeometry(.1,16),new THREE.MeshBasicMaterial({color:M.lamp[c][1]})); L.position.set(0,4.2-i*.33,.135); g.add(L);
+      const v=new THREE.Mesh(new THREE.BoxGeometry(.26,.02,.14),M.visor); v.position.set(0,4.31-i*.33,.2); g.add(v); g.userData.lamps.push({m:L.material,c}); }); }
+  else { cyl(.05,3.1,M.post); for(const [a,mat] of [[.785,M.xb],[-.785,M.xb2]]){ const b=new THREE.Mesh(new THREE.PlaneGeometry(1.22,.23),mat); b.rotation.z=a; b.position.set(0,2.7,.06); g.add(b); } }
+  g.userData.o=o; g.visible=false; CS.g.add(g); return g; }
+function csKill(g){ CS.g.remove(g); g.traverse(m=>{ if(m.geometry&&m.geometry!==CS.plane) m.geometry.dispose(); }); for(const L of g.userData.lamps||[]) L.m.dispose(); }
+function csSync(){ CS.dirty=false; const cx=S.lng*MLNG, cy=S.lat*MLAT, R=POWER?260:380, want=new Map();
+  for(const o of PTS){ if(want.size>=(POWER?24:48)) break; if(Math.hypot(o.x-cx,o.y-cy)<R) want.set(o.k+'@'+Math.round(o.x)+','+Math.round(o.y),o); }
+  for(const [k,g] of CS.map) if(!want.has(k)){ csKill(g); CS.map.delete(k); }
+  for(const [k,o] of want) if(!CS.map.has(k)) CS.map.set(k,csMake(o)); }
+FRAME_HOOKS.push(function cockpitSigns(dt){
+  const FP=!!(window.COCKPIT&&COCKPIT.on)&&mode!=='glider';
+  if(map.getLayer('sg-icons')&&CS.vis!==FP){ CS.vis=FP; try{ map.setLayoutProperty('sg-icons','visibility',FP?'none':'visible'); }catch(e){} }   // the flat icons only outside
+  if(!FP){ if(CS.g&&CS.g.visible){ CS.g.visible=false; return true; } return false; }
+  if(!CS.g){ CS.g=new THREE.Group(); scene.add(CS.g); CS.dirty=true; }
+  const cx=S.lng*MLNG, cy=S.lat*MLAT; if(!CS.at||Math.hypot(cx-CS.at[0],cy-CS.at[1])>60){ CS.at=[cx,cy]; CS.dirty=true; }
+  if(CS.dirty) csSync(); CS.g.visible=true;
+  const m=mpp(S.lat,S.zoom), b=rad(S.camB), sb=Math.sin(b), cb=Math.cos(b), sc=1/m, CE=COCKPIT.eyeWorld;
+  const now=performance.now(), doOcc=now-CS.occT>(POWER?700:300), hid=window.TRAFFIC&&TRAFFIC.hidden; if(doOcc) CS.occT=now;
+  const t=(Date.now()/1000)%30, ph=[t<12?'g':t<15?'y':'r', t<15?'r':t<27?'g':'y'];
+  const k=YD.AT?(YD.AT.k||0):0, M=csMats(), f=1-.45*k; M.post.color.setRGB(.55*f,.58*f,.62*f); M.back.color.setRGB(.55*f,.58*f,.6*f); M.stop.color.setScalar(f); M.xb.color.setScalar(f); M.xb2.color.setScalar(f);
+  for(const g of CS.map.values()){ const o=g.userData.o, dx=o.x-cx, dy=o.y-cy;
+    if(doOcc&&hid&&CE) g.userData.occ=hid({px:o.x,py:o.y},CE.x,CE.y,CE.h);
+    g.visible=!g.userData.occ; if(!g.visible) continue;
+    const fw=dx*sb+dy*cb, r=dx*cb-dy*sb; g.position.set(r/m,0,-fw/m); g.scale.setScalar(sc);
+    // face along the road it stands by, toward the side the driver is on (seen edge-on from the cross street); no road known: face the driver
+    const ex=CE?CE.x:cx, ey=CE?CE.y:cy; let de, dn;                  // world direction the sign's face points (east, north)
+    if(o.ang!=null){ const ux=Math.sin(o.ang), uy=Math.cos(o.ang), sd=(ex-o.x)*ux+(ey-o.y)*uy>=0?1:-1; de=ux*sd; dn=uy*sd; } else { de=ex-o.x; dn=ey-o.y; }
+    g.rotation.y=Math.atan2(de*cb-dn*sb,-(de*sb+dn*cb));               // local +z (the face) onto that direction in the car layer
+    if(g.userData.lamps){ const on=ph[o.ph?1:0]; for(const L of g.userData.lamps) L.m.color.setHex(M.lamp[L.c][L.c===on?0:1]); } }
+  return true;
 });
 Object.assign(YD,{OX});
 })();

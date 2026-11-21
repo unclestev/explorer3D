@@ -851,7 +851,7 @@ function roadNear(lng,lat){ const G=roadCells(); if(!G||!roadGeo.segs) return nu
     x=(lng-roadGeo.lng)*kx, y=(lat-roadGeo.lat)*111320; let best=null, bc=1e9;
   for(const s of G.get(Math.floor(x/RCG.C)+','+Math.floor(y/RCG.C))||[]){ const dx=s[2]-s[0], dy=s[3]-s[1], L2=dx*dx+dy*dy||1,
       t=Math.max(0,Math.min(1,((x-s[0])*dx+(y-s[1])*dy)/L2)), px=s[0]+t*dx, py=s[1]+t*dy, d=Math.hypot(x-px,y-py), c=d-(ROAD_DRAWN[s[6]]||4.7);
-    if(c<bc){ bc=c; best={c,x,y,px,py,d,kx}; } }
+    if(c<bc){ bc=c; best={c,x,y,px,py,d,kx,seg:s}; } }
   return best; }
 function roadClear(lng,lat){ const r=roadNear(lng,lat); return r?r.c:99; }
 function offRoad(lng,lat,gap){ for(let it=0;it<5;it++){ const r=roadNear(lng,lat); if(!r||r.c>=gap) return [lng,lat];
