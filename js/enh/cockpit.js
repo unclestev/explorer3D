@@ -29,13 +29,13 @@ const LSg=(k,d)=>{ try{ const v=localStorage.getItem(k); return v==null?d:v; }ca
 const LSs=(k,v)=>{ try{ localStorage.setItem(k,v); }catch(e){} };
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), lerp=(a,b,t)=>a+(b-a)*t, sstep=(a,b,x)=>{ const t=clamp((x-a)/(b-a),0,1); return t*t*(3-2*t); };
 
-const CK={real:LSg('ydRealSpd','1')!=='0', hud:LSg('ydHud','1')!=='0', want:LSg('ydView','chase')==='cockpit', fov:clamp(+LSg('ydCkFov',60)||60,45,60), on:false, exag:EXAG,
+const CK={real:LSg('ydRealSpd','1')!=='0', hud:LSg('ydHud','1')!=='0', want:LSg('ydView','chase')==='cockpit', fov:clamp(+LSg('ydCkFov2',45)||45,30,60), on:false, exag:EXAG,
   cab:null, built:null, pad:.07, look:0, W:0, H:0, eyeWorld:null};
 window.COCKPIT=CK;
 
 /* ---------- per-car cabins (car frame: metres, x right, y up from the ground, z toward the back; car centre = 0) ---------- */
 const SPECS={
-  explorer:{style:'sport', eye:[-.38,1.37,.08], pitch:85,
+  explorer:{style:'sport', eye:[-.38,1.37,.08], pitch:81,
     ws:{zB:-1.04,yB:1.09,hwB:.75,zT:-.33,yT:1.63,hwT:.67,bow:.05}, roof:{y:1.655,hw:.71,zR:1.75}, belt:1.16, winTop:1.58, door:.80, zBp:.52, zC:1.48,
     hood:{zr:-1.03,zf:-2.40,yr:1.085,yf:.985,hw:.99,crown:.03,gap:.80,nose:.07},
     dash:[[1.062,-1.045],[1.086,-.84],[1.086,-.68],[1.064,-.615],[.99,-.595],[.87,-.605],[.75,-.55],[.62,-.43]],
@@ -44,7 +44,7 @@ const SPECS={
     screen:{c:[.0,1.06,-.585],w:.25,h:.15,tilt:12},
     col:{dash:0x232427,top:0x1e1f22,trim:0x2a2b2f,lower:0x202124,seat:0x232325,head:0x3a3a3d,stitch:0xc8102e,accent:'alu',carpet:0x111112},
     eng:'ecoboost30', vmaxG:160, red:6.25, tachMax:8},
-  navigator:{style:'lux', eye:[-.42,1.565,.12], pitch:85,
+  navigator:{style:'lux', eye:[-.42,1.565,.12], pitch:81,
     ws:{zB:-1.10,yB:1.30,hwB:.81,zT:-.30,yT:1.855,hwT:.73,bow:.05}, roof:{y:1.88,hw:.77,zR:1.95}, belt:1.36, winTop:1.79, door:.86, zBp:.58, zC:1.62,
     hood:{zr:-1.15,zf:-2.62,yr:1.288,yf:1.205,hw:1.05,crown:.022,gap:.86,nose:.08},
     dash:[[1.272,-1.115],[1.292,-.94],[1.29,-.77],[1.268,-.70],[1.19,-.675],[1.06,-.69],[.93,-.635],[.79,-.50]],
@@ -53,7 +53,7 @@ const SPECS={
     screen:{c:[.02,1.13,-.652],w:.30,h:.17,tilt:14},
     col:{dash:0x2b2522,top:0x1f1b19,trim:0xc9b79c,lower:0xcbb99e,seat:0xd4c4a9,head:0xd9d1c3,stitch:0xa8977c,accent:'wood',carpet:0x3a332c},
     eng:'ecoboost35', vmaxG:160, red:6.0, tachMax:8},
-  javelin:{style:'classic', eye:[-.38,1.03,.22], pitch:85,
+  javelin:{style:'classic', eye:[-.38,1.03,.22], pitch:82,
     ws:{zB:-.78,yB:.862,hwB:.71,zT:-.09,yT:1.205,hwT:.60,bow:.065}, roof:{y:1.225,hw:.64,zR:1.02}, belt:.875, winTop:1.165, door:.76, zBp:null, zC:1.02,
     hood:{zr:-.80,zf:-2.33,yr:.862,yf:.765,hw:.95,crown:.012,gap:.70,nose:.05,humps:{x:.79,h:.065,w:.085}},
     dash:[[.85,-.795],[.872,-.62],[.868,-.52],[.848,-.47],[.77,-.455],[.64,-.475],[.52,-.40]],
@@ -62,7 +62,7 @@ const SPECS={
     col:{dash:0x111111,top:0x0d0d0d,trim:0x121212,lower:0x121212,seat:0x141414,head:0x171717,stitch:0x2a2a2a,accent:'walnut',carpet:0x0f0f0f},
     eng:'amc401', vmaxG:140, red:5.2, tachMax:8}
 };
-SPECS.tractor={style:'tractor', eye:[0,2.46,.9], pitch:80,
+SPECS.tractor={style:'tractor', eye:[0,2.46,.9], pitch:76,
     wheel:{c:[0,2.03,.56],r:.205,tilt:52,rim:.017,flat:false},
     cluster:{c:[0,2.255,.36],w:.17,h:.075},
     screen:{c:[.5,2.2,.3],w:.2,h:.13},
@@ -633,8 +633,9 @@ function build(key){
   // already shows it, owner's request): a projected image floating ~2.3 m ahead, just
   // above the hood in the driver's line of sight — speed, limit, gear, revs, next turn. ⚙️ Head-up display / H key.
   if(P.style!=='lux'){ const T=canvasTex(768,320), mt=new THREE.MeshBasicMaterial({map:T.t,transparent:true,depthTest:false,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false});
-    const g=new THREE.Group(); g.position.set(P.eye[0],P.eye[1]-(P.style==='tractor'?.34:.2),P.eye[2]-2.3); G.add(g); g.lookAt(new V3(...P.eye));
-    const m=mesh(new THREE.PlaneGeometry(.84,.35),mt,g,false,false); m.renderOrder=20; parts.hud={T,m:mt,g}; }
+    const hood=P.hood?Math.atan((P.eye[1]-P.hood.yf)/(P.eye[2]-P.hood.zf)):.33, ang=Math.max(.035,hood-.045);   // sits just above this car's hood line
+    const g=new THREE.Group(); g.position.set(P.eye[0],P.eye[1]-Math.tan(ang)*2.3,P.eye[2]-2.3); G.add(g); g.lookAt(new V3(...P.eye));
+    const m=mesh(new THREE.PlaneGeometry(.6,.25),mt,g,false,false); m.renderOrder=20; parts.hud={T,m:mt,g}; }
   G.position.set(-P.eye[0],-P.eye[1],-P.eye[2]);                   // built in car coordinates; the eye sits at the origin
   CK.cab={scene:sc,root,G,cam,hemi,sunL,amb,glow,P,parts,key,lastDraw:0,rpm:700,gear:0,trip:S.dist||0};
   CK.built=key+'|'+(CARSPEC.paint||0);
@@ -894,7 +895,7 @@ CK.view=function(dt){
   const kl=(K.q?-1:0)+(K.e?1:0); CK.look+=(kl*80-CK.look)*Math.min(1,dt*7);
   const yaw=clamp(LOOK.yaw,-140,140)+CK.look, yr=yaw*DEG;
   S.camB=((S.hdg+yaw)%360+360)%360;
-  const pitch=clamp(P.pitch+LOOK.pitch*.6,55,85), fov=CK.fov;
+  const pitch=clamp(P.pitch+LOOK.pitch*.6,50,85), fov=CK.fov;   // default a little below level (more road, less sky); drag up to raise it
   try{ if(Math.abs(map.transform.fov-fov)>.01) map.transform.fov=fov; }catch(e){}
   // the eye turns about the neck (10 cm behind the eyes); bumps lift the head a little
   // your head moves with the car: sways out in corners, pitches forward braking / back accelerating (a damped spring)
@@ -937,7 +938,7 @@ function showPick(){ const p=document.getElementById('viewPick'); if(p) for(cons
   const r=document.getElementById('fovRow'); if(r) r.style.display=CK.want?'':'none'; const hr=document.getElementById('hudRow'); if(hr) hr.style.display=CK.want?'':'none'; const hb=document.getElementById('hudBtn'); if(hb) hb.classList.toggle('on',CK.hud); const rr=document.getElementById('rsRow'); if(rr) rr.style.display=CK.want?'':'none'; const rb=document.getElementById('rsBtn'); if(rb) rb.classList.toggle('on',CK.real); const v=document.getElementById('fovVal'); if(v) v.textContent=Math.round(CK.fov)+'°'; }
 const pick=document.getElementById('viewPick');
 if(pick) pick.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; e.stopPropagation(); CK.toggle(b.dataset.view==='cockpit'); });
-for(const [id,d] of [['fovM',-5],['fovP',5]]){ const b=document.getElementById(id); if(b) b.addEventListener('click',e=>{ e.stopPropagation(); CK.fov=clamp(CK.fov+d,45,60); LSs('ydCkFov',String(CK.fov)); showPick(); dirty=true; }); }
+for(const [id,d] of [['fovM',-5],['fovP',5]]){ const b=document.getElementById(id); if(b) b.addEventListener('click',e=>{ e.stopPropagation(); CK.fov=clamp(CK.fov+d,30,60); LSs('ydCkFov2',String(CK.fov)); showPick(); dirty=true; }); }
 { const rb=document.getElementById('rsBtn'); if(rb) rb.addEventListener('click',e=>{ e.stopPropagation(); CK.real=!CK.real; LSs('ydRealSpd',CK.real?'1':'0'); if(CK.on) setSpeedScale(CK.real?1:3); showPick(); }); }
 function setHud(v){ CK.hud=v; LSs('ydHud',v?'1':'0'); showPick(); dirty=true; }
 { const hb=document.getElementById('hudBtn'); if(hb) hb.addEventListener('click',e=>{ e.stopPropagation(); setHud(!CK.hud); }); }
