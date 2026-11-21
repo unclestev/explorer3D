@@ -32,6 +32,7 @@ Drive a Ford Explorer over a real map. Play it on GitHub Pages.
   - `look.js` — drag one finger on the map to look around (orbit / tilt) in every mode; tap the compass to look ahead again
   - `buildings.js` — roof caps in roof colours, pitched roofs on nearby houses, rooftop units on stores/offices
   - `signals.js` — turn signals and hazards: G29 paddles, `[` `]` `\` keys, ◀ ⚠ ▶ on screen; each car's own tick-tock (Ford, Lincoln, Tesla, 1970s flasher, tractor), self-cancel, lamps on the car and arrows in every cockpit
+  - `ignition.js` — engine start / stop: the G29's red-dial Enter button (or one set in ⚙️), the I key or ⏻; starter crank, catch and idle in the engine sound, gas off while stopped
   - `boot.js` — starts the modules; must load last
 
 When a JS or CSS file changes, bump the `?v=` number on its tag in `index.html` so phones don't keep an old cached copy.
