@@ -103,7 +103,7 @@ function audio(){
     const len=Math.floor(ctx.sampleRate*2), buf=ctx.createBuffer(1,len,ctx.sampleRate), d=buf.getChannelData(0);
     let s=12345; for(let i=0;i<len;i++){ s=(Math.imul(s,1664525)+1013904223)|0; d[i]=(s>>>8)/8388608-1; }
     const src=ctx.createBufferSource(); src.buffer=buf; src.loop=true;
-    const out=ctx.createGain(); out.gain.value=1; out.connect(ctx.destination);
+    const out=ctx.createGain(); out.gain.value=1; out.connect(A.bus||ctx.destination);   // through the cabin filter (sound.js)
     const chain=(type,f,q)=>{ const b=ctx.createBiquadFilter(); b.type=type; b.frequency.value=f; b.Q.value=q;
       const g=ctx.createGain(); g.gain.value=0; src.connect(b); b.connect(g); g.connect(out); return {f:b.frequency,g:g.gain}; };
     SN.hum=chain('lowpass',300,.7); SN.grit=chain('bandpass',520,1.1); SN.wind=chain('bandpass',480,.5);

@@ -41,10 +41,15 @@ function start(){
   if(!AC){ A.failed=true; return; }
   try{ A.ctx=new AC({latencyHint:'interactive'}); A.ctx.resume().catch(()=>{}); }catch(e){ A.failed=true; return; }
   if(!A.ctx.audioWorklet){ A.failed=true; console.warn('engine sound: AudioWorklet not supported'); return; }
+  // everything goes through a "cabin" filter pair: wide open outside; from the cockpit view (js/enh/cockpit.js) the highs are
+  // muffled and the low boom comes up a little, the way an engine and the road sound from inside a closed car
+  A.bus=A.ctx.createBiquadFilter(); A.bus.type='lowpass'; A.bus.frequency.value=20000; A.bus.Q.value=.5;
+  A.boom=A.ctx.createBiquadFilter(); A.boom.type='peaking'; A.boom.frequency.value=110; A.boom.Q.value=.9; A.boom.gain.value=0;
+  A.bus.connect(A.boom); A.boom.connect(A.ctx.destination);
   A.ctx.audioWorklet.addModule('js/enh/engine-worklet.js?v=3').then(()=>{
     for(const k of Object.keys(ENG)){
       const n=new AudioWorkletNode(A.ctx,ENG[k].proc||k,{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2]});
-      n.connect(A.ctx.destination); A.nodes[k]=n; A.gainNow[k]=0; }
+      n.connect(A.bus); A.nodes[k]=n; A.gainNow[k]=0; }
     A.ready=true;
   }).catch(e=>{ A.failed=true; console.warn('engine sound',e); });
 }
@@ -113,5 +118,7 @@ function setOn(v){ on=v; try{ localStorage.setItem('ydAudio',v?'1':'0'); }catch(
 if(btn){ btn.classList.toggle('on',on); btn.addEventListener('click',e=>{ e.stopPropagation(); setOn(!on); }); }
 const prev=window.onCarChange;
 window.onCarChange=(k)=>{ if(prev) prev(k); if(wanted()) unlock(); };
-window.SOUND={setOn,get on(){ return on; },state:A,ENG};
+function cabin(inside,tractor){ if(!A.bus) return; const t=A.ctx.currentTime;
+  A.bus.frequency.setTargetAtTime(inside?(tractor?2600:1700):20000,t,.15); A.boom.gain.setTargetAtTime(inside?(tractor?2:3.5):0,t,.15); }
+window.SOUND={setOn,get on(){ return on; },state:A,ENG,cabin};
 })();

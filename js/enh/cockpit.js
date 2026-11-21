@@ -268,6 +268,22 @@ function shell(G,P,mats){
     const sf=canvasTex(256,160); drawSideFrame(sf.x,s); const so=mesh(new THREE.PlaneGeometry(W-.01,H-.01),new THREE.MeshBasicMaterial({map:sf.t,transparent:true}),g,false,false); so.position.z=.0045;
     const sail=mesh(rbox(.22,.13,.03,.01,.02),M({color:0x0c0c0d,roughness:.8}),G); sail.position.set(s*(P.door+.06),P.belt+.03,zA+.1); sail.rotation.y=s*.2;
     g.lookAt(new V3(...P.eye).add(new V3(s>0?-.4:.5,.05,1.6))); }
+  // reflections in the glass: the dash top as a faint grey veil low on the windshield by day, the glowing screens at night
+  { const T2=canvasTex(512,256), x=T2.x; x.clearRect(0,0,512,256);
+    const g=x.createLinearGradient(0,256,0,120); g.addColorStop(0,'rgba(150,152,156,.9)'); g.addColorStop(.55,'rgba(150,152,156,.35)'); g.addColorStop(1,'rgba(150,152,156,0)');
+    x.fillStyle=g; x.fillRect(0,120,512,136);
+    const veil=new THREE.MeshBasicMaterial({map:T2.t,transparent:true,opacity:.1,depthWrite:false,side:THREE.DoubleSide});
+    const v1=mesh(grid(16,8,(u,v)=>{ const p=wsP(u,v); return [p[0],p[1],p[2]+.003]; }),veil,G,false,false); v1.renderOrder=6;
+    const T3=canvasTex(512,256), y=T3.x; y.clearRect(0,0,512,256); y.filter='blur(6px)';
+    const blob=(u,w,col,v0)=>{ const cx=u*512; y.fillStyle=col; y.fillRect(cx-w*256,256-v0*256-26,w*512,26); };
+    const uOf=xx=>(xx/((ws.hwB+ws.hwT)/2)+1)/2;
+    if(P.cluster) blob(uOf(P.cluster.c[0]),.10,'rgba(90,150,255,.8)',.09);
+    if(P.screen) blob(uOf(P.screen.c[0]),.09,'rgba(170,200,255,.9)',.07);
+    if(P.pano) blob(.5,.62,'rgba(220,210,190,.6)',.06);
+    if(P.pod) blob(uOf(P.eye[0]),.12,'rgba(255,150,70,.6)',.06);
+    const glow=new THREE.MeshBasicMaterial({map:T3.t,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide});
+    const v2=mesh(grid(16,8,(u,v)=>{ const p=wsP(u,v); return [p[0],p[1],p[2]+.0035]; }),glow,G,false,false); v2.renderOrder=6;
+    mats.refl={veil,glow}; }
   return {wsP};
 }
 
@@ -768,8 +784,31 @@ function update(dt){
       x.fillStyle=pr.lux?'#16130f':pr.classic?'#0c0c0c':'#0a0a0b'; x.fillRect(0,0,W,64); x.font=pr.lux?'600 30px system-ui':pr.classic?'700 30px Arial':'700 34px system-ui'; x.textAlign='center'; x.textBaseline='middle';
       L.forEach((t,i)=>{ x.fillStyle=t===d.gearL?(pr.classic?'#ff7a2a':'#ffffff'):(pr.lux?'#a09c94':'#70757c'); x.fillText(t,o+i*step,32); }); pr.T.t.needsUpdate=true; pr.cur=d.gearL; } }
   updateRain(p.rain,dt,P);
+  if(p.refl){ const sunOn=c.sunL.intensity>0?Math.min(1,c.sunL.intensity):0; p.refl.veil.opacity=(.05+.12*sunOn)*(1-k); p.refl.glow.opacity=.32*k; }
+  updateGlare(c);
+  if(window.SOUND&&SOUND.state&&SOUND.state.bus&&CK.snd!==mode){ CK.snd=mode; SOUND.cabin(true,mode==='tractor'); }   // sound may start after you got in
   if(now-(c.envT||0)>3000){ c.envT=now; updateEnv(false); }
 }
+
+/* ---------- sun glare: looking toward a low sun through the glass dazzles (a warm bloom where the sun is and a veil over
+   everything); the roof, pillars and visors block it (a ray from the eye toward the sun through the cabin) ---------- */
+const glareEl=document.createElement('div'); glareEl.id='ckGlare';
+glareEl.style.cssText='position:absolute;inset:0;z-index:6;pointer-events:none;opacity:0;transition:opacity .25s;mix-blend-mode:screen';
+document.body.appendChild(glareEl);
+const RC=new THREE.Raycaster();
+function updateGlare(c){ const sp=YD.AT&&YD.AT.sun; let a=0;
+  if(CK.on&&sp&&sp.alt>-1&&c.sunL.intensity>0){ const dir=c.sunL.position.clone().normalize();          // toward the sun, car frame
+    const cam=c.cam, q=dir, fwd=new V3(0,0,-1).applyEuler(cam.rotation);
+    const cos=q.dot(fwd);
+    if(cos>.55){ const now=performance.now();
+      if(!c.glT||now-c.glT>200){ c.glT=now; RC.set(cam.getWorldPosition(new V3()),dir); RC.far=4;
+        const hits=RC.intersectObjects(c.G.children,true).filter(h=>h.object.material&&!h.object.material.transparent&&h.object.visible); c.glBlock=hits.length>0; }
+      if(!c.glBlock){ const p=cam.getWorldPosition(new V3()).add(dir.clone().multiplyScalar(10)).project(cam);
+        const low=1-Math.min(1,Math.max(0,(sp.alt-5)/40)), cl=1-.85*((YD.AT&&YD.AT.cloud)||0);
+        a=Math.pow((cos-.55)/.45,1.6)*(.35+.65*low)*cl*(1-(YD.AT.k||0));
+        const x=(p.x*.5+.5)*100, y=(-p.y*.5+.5)*100;
+        glareEl.style.background=`radial-gradient(circle at ${x.toFixed(1)}% ${y.toFixed(1)}%,rgba(255,250,235,.95) 0,rgba(255,236,200,.55) 6%,rgba(255,220,170,.18) 22%,rgba(255,220,170,.06) 45%,rgba(0,0,0,0) 70%)`; } } }
+  const o=Math.min(.9,a).toFixed(2); if(glareEl.style.opacity!==o) glareEl.style.opacity=o; }
 
 /* ---------- building footprints near the car (game.js asks when the car's nose is off screen) ---------- */
 const BI={cells:new Map(),at:null,t:0,cell:25};
@@ -808,8 +847,8 @@ function wrapTiles(){ const t=map.transform; if(!t||t.__ckWrapped) return; t.__c
 
 /* ---------- camera ---------- */
 function enter(){ if(CK.on) return; CK.on=true; CK.exag=EXAG; EXAG=1; LOOK.yaw=0; LOOK.pitch=0; CK.look=0; wrapTiles(); refreshNear();
-  document.body.classList.add('cockpit'); build(CARKEY); dirty=true; }
-function leave(){ if(!CK.on) return; CK.on=false; EXAG=CK.exag; refreshNear(); try{ map.triggerRepaint(); }catch(e){}
+  document.body.classList.add('cockpit'); build(CARKEY); dirty=true; try{ SOUND.cabin(true,mode==='tractor'); }catch(e){} }
+function leave(){ if(!CK.on) return; CK.on=false; EXAG=CK.exag; glareEl.style.opacity='0'; CK.snd=null; try{ SOUND.cabin(false); }catch(e){} refreshNear(); try{ map.triggerRepaint(); }catch(e){}
   document.body.classList.remove('cockpit');
   try{ map.transform.fov=36.87; }catch(e){}
   camera.fov=36.87; camera.near=10; camera.far=50000; camera.updateProjectionMatrix();
@@ -829,7 +868,12 @@ CK.view=function(dt){
   const pitch=clamp(P.pitch+LOOK.pitch*.6,55,85), fov=CK.fov;
   try{ if(Math.abs(map.transform.fov-fov)>.01) map.transform.fov=fov; }catch(e){}
   // the eye turns about the neck (10 cm behind the eyes); bumps lift the head a little
-  const ex=P.eye[0]+.1*Math.sin(yr), ez=P.eye[2]+.1*(1-Math.cos(yr)), eh=P.eye[1]+(S.by||0)*.5;
+  // your head moves with the car: sways out in corners, pitches forward braking / back accelerating (a damped spring)
+  const v=S.v||0, lon=dt>0?(v-(CK.pv==null?v:CK.pv))/dt:0, lat=v*v*Math.tan(S.steer||0)/WB; CK.pv=v;
+  const H0=CK.head||(CK.head={x:0,z:0,vx:0,vz:0});
+  const tx=clamp(-lat/9.8,-1,1)*.045, tz=clamp(-lon/9.8,-1.2,1.2)*.05;
+  H0.vx+=((tx-H0.x)*60-H0.vx*11)*dt; H0.vz+=((tz-H0.z)*60-H0.vz*11)*dt; H0.x+=H0.vx*dt; H0.z+=H0.vz*dt;
+  const ex=P.eye[0]+.1*Math.sin(yr)+H0.x, ez=P.eye[2]+.1*(1-Math.cos(yr))-H0.z, eh=P.eye[1]+(S.by||0)*.5-Math.abs(H0.z)*.15;
   const Dpx=.5*H/Math.tan(fov*DEG/2), pr=pitch*DEG, m=eh/(Dpx*Math.cos(pr)), z=Math.min(24,Math.log2(78271.517*Math.cos(S.lat*DEG)/m));
   const mm=78271.517*Math.cos(S.lat*DEG)/Math.pow(2,z);              // the zoom may have been capped: use what the map will draw
   S.zoom=z;
