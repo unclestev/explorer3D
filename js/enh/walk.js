@@ -187,7 +187,7 @@ function walkStep(dt,st,gas,now){
   if(every('decor',.5) && styleReady && (!decorAt || meters(decorAt[1],decorAt[0],S.lat,S.lng)>250)) buildDecor();
   if(every('walkhud',.3)){
     if(styleReady){ const p=map.project([S.lng,S.lat]), f=QGEO()?geoRoads(S.lng,S.lat,4):hitRoad(p.x,p.y,8);
-      const nm=f&&f.find(x=>x.properties&&x.properties.name); roadName=nm?nm.properties.name:'';
+
       roadEl.textContent='On foot'; roadEl.className=''; /* the street shows next to it: game.js updateRoadX */ }
     const st2=Math.abs(W.v)<.05?'Standing':W.v<0?'Stepping back':W.run>.6?'Running':W.run>.15?'Jogging':'Walking';
     if(st2!==step.surf){ step.surf=st2; surfEl.textContent=st2; surfEl.style.color=''; }

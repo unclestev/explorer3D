@@ -825,7 +825,22 @@ function rebuildRoadGeo(){
       if(Math.max(x1,x2)<-R||Math.min(x1,x2)>R||Math.max(y1,y2)<-R||Math.min(y1,y2)>R){ along+=len; continue; }
       segs.push([x1,y1,x2,y2,half,pr.name||'',cl,along,lid,pr.brunnel||'']); along+=len; } } }
   roadGeo.segs=segs;
+  // street names live in the map's separate 'transportation_name' layer, not on the road lines above (so roadName was
+  // always empty): keep its named lines too, for the panel's "· NE · Main St" (streetHere) and the cockpit
+  const names=[], Rn=400; let nf=[]; try{ nf=map.querySourceFeatures(roadGeo.src,{sourceLayer:'transportation_name'}); }catch(e){}
+  for(const f of nf){ const pr=f.properties||{}, nm=pr['name:en']||pr.name||(pr.ref?String(pr.ref).replace(/;.*/,''):''); if(!nm) continue;
+    const g=f.geometry, lines=g&&(g.type==='LineString'?[g.coordinates]:g.type==='MultiLineString'?g.coordinates:null); if(!lines) continue;
+    for(const L of lines) for(let i=1;i<L.length;i++){ const x1=(L[i-1][0]-S.lng)*kx, y1=(L[i-1][1]-S.lat)*111320, x2=(L[i][0]-S.lng)*kx, y2=(L[i][1]-S.lat)*111320;
+      if(Math.max(x1,x2)<-Rn||Math.min(x1,x2)>Rn||Math.max(y1,y2)<-Rn||Math.min(y1,y2)>Rn) continue; names.push([x1,y1,x2,y2,nm]); } }
+  roadGeo.names=names;
 }
+// the street under the car: the nearest named line within 14 m, preferring one that runs the way you're heading
+function streetHere(){ const N=roadGeo.names; if(!N||!N.length) return '';
+  const kx=111320*Math.cos(rad(roadGeo.lat)), x=(S.lng-roadGeo.lng)*kx, y=(S.lat-roadGeo.lat)*111320, h=rad(S.hdg), hx=Math.sin(h), hy=Math.cos(h);
+  let best='', bs=1e9;
+  for(const s of N){ const dx=s[2]-s[0], dy=s[3]-s[1], L2=dx*dx+dy*dy; if(!L2) continue; const t=Math.max(0,Math.min(1,((x-s[0])*dx+(y-s[1])*dy)/L2)), d=Math.hypot(s[0]+t*dx-x,s[1]+t*dy-y);
+    if(d>14) continue; const al=Math.abs((dx*hx+dy*hy)/Math.sqrt(L2)), sc=d+(1-al)*10; if(sc<bs){ bs=sc; best=s[4]; } }
+  return best; }
 function nearRoadGeo(){
   if(!roadGeo.segs||meters(roadGeo.lat,roadGeo.lng,S.lat,S.lng)>300||performance.now()-roadGeo.t>(roadGeo.segs.length?15000:1500)) rebuildRoadGeo();   // each rebuild is a 15-65 ms pause: on distance, not every 4 s
   const segs=roadGeo.segs; if(!segs||!segs.length) return null;
@@ -1299,9 +1314,9 @@ const tick={};
 // next to "On road" in the top-left panel (owner 2026-11-21): · the street you're on (when on a road) · heading N / NE / E…
 const roadxEl=document.getElementById('roadx');
 function updateRoadX(){ if(!roadxEl) return; const H=['N','NE','E','SE','S','SW','W','NW'][Math.round((((S.hdg%360)+360)%360)/45)%8];
-  let st=''; if(mode!=='glider'&&(onRoad||mode==='walk')&&roadEl.className!=='off') st=roadName||(roadGeo.hit&&roadGeo.hit.name)||'';
-  if(mode==='boat') st='';
-  const t='\u00a0· '+(st?st+' · ':'')+H;   /* non-breaking: a flex item drops a plain leading space */ if(roadxEl.textContent!==t) roadxEl.textContent=t; }
+  let st=''; if(mode!=='glider'&&mode!=='boat'&&(onRoad||mode==='walk')&&roadEl.className!=='off'){ if(!roadGeo.segs||meters(roadGeo.lat,roadGeo.lng,S.lat,S.lng)>300) rebuildRoadGeo(); st=streetHere(); }
+  roadName=st;                                                        /* the cockpit's cluster and speed-limit signs read this too */
+  const t='\u00a0· '+H+(st?' · '+st:'');   /* non-breaking: a flex item drops a plain leading space */ if(roadxEl.textContent!==t) roadxEl.textContent=t; }
 function every(k,sec){ const t=last/1000; if(tick[k]===undefined||t-tick[k]>=sec){ tick[k]=t; return true; } return false; }
 let lastStep=0;
 function loop(now){
@@ -1425,7 +1440,7 @@ function step(now){
     const p=map.project([S.lng,S.lat]); const f=QG?[]:hitRoad(p.x,p.y,48);   // cockpit: the car's own spot is never on screen
     const el=roadEl;
     if(f===null){ onRoad=true; el.textContent='Driving'; el.className=''; }      // road data unavailable: never punish
-    else if(f.length>0){ miss=0; onRoad=true; S.rcls=f.every(x=>{ const q=x.properties||{}; return q.surface==='unpaved'||/^(track|path)$/.test(String(q.class||'')); })?'gravel':'paved'; const nm=f.find(x=>x.properties&&x.properties.name); roadName=nm?nm.properties.name:''; el.textContent='On road'; el.className=''; }
+    else if(f.length>0){ miss=0; onRoad=true; S.rcls=f.every(x=>{ const q=x.properties||{}; return q.surface==='unpaved'||/^(track|path)$/.test(String(q.class||'')); })?'gravel':'paved'; el.textContent='On road'; el.className=''; }
     else {                                                         // screen query missed: check the real road lines
       const g=nearRoadGeo();
       if(g!==false){ miss=0; S.rcls=roadGeo.hit&&/^(track|path)$/.test(roadGeo.hit.cls||'')?'gravel':'paved'; if(roadGeo.hit&&roadGeo.hit.name&&roadGeo.hit.name!==roadName) roadName=roadGeo.hit.name; if(!onRoad||el.className||el.textContent!=='On road'){ onRoad=true; el.textContent='On road'; el.className=''; } }
