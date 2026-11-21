@@ -39,7 +39,7 @@ window.COCKPIT=CK;
 
 /* ---------- per-car cabins (car frame: metres, x right, y up from the ground, z toward the back; car centre = 0) ---------- */
 const SPECS={
-  explorer:{style:'sport', ex:true, eye:[-.38,1.37,.08], pitch:81,
+  explorer:{style:'sport', ex:true, sunroof:{hw:.40,z0:-.09,z1:.60}, eye:[-.38,1.37,.08], pitch:81,
     ws:{zB:-1.04,yB:1.09,hwB:.75,zT:-.33,yT:1.63,hwT:.67,bow:.05}, roof:{y:1.655,hw:.71,zR:1.75}, belt:1.16, winTop:1.58, door:.80, zBp:.52, zC:1.48,
     hood:{zr:-1.03,zf:-2.40,yr:1.085,yf:.985,hw:.99,crown:.03,gap:.80,nose:.07,crease:{x:.40,h:.016}},
     dash:[[1.062,-1.045],[1.086,-.84],[1.086,-.68],[1.064,-.615],[.99,-.595],[.87,-.605],[.75,-.55],[.62,-.43]],
@@ -241,7 +241,11 @@ function shell(G,P,mats){
   // backing between the glass's top edge and the headliner (looking up you saw a sliver of sky there)
   mesh(grid(16,2,(u,v)=>{ const s=u*2-1; return [s*(ws.hwT+.02),lerp(ws.yT-.012,P.roof.y+.01,v),lerp(ws.zT-.012,ws.zT+.05,v)]; }),M({color:0x0a0a0b,roughness:.9}),G,false);
   { const R=P.roof, rf=(u,v)=>{ const s=u*2-1, z=lerp(ws.zT-.02,R.zR,v); return [s*R.hw,R.y-.025*s*s-(v>.85?.06*Math.pow((v-.85)/.15,2):0),z]; };
-    if(!P.glassRoof) mesh(grid(16,16,rf),trimM,G);
+    if(P.sunroof){ const S=P.sunroof, zA=ws.zT-.02, V=z=>(z-zA)/(R.zR-zA), U=x=>(x/R.hw+1)/2, u0=U(-S.hw), u1=U(S.hw), v0=V(S.z0), v1=V(S.z1);
+      const part=(ua,ub,va,vb,nu,nv)=>mesh(grid(nu,nv,(u,v)=>rf(lerp(ua,ub,u),lerp(va,vb,v))),trimM,G);
+      part(0,1,0,v0,16,3); part(0,1,v1,1,16,10); part(0,u0,v0,v1,3,8); part(u1,1,v0,v1,3,8);
+      sunroof(G,P,R,rf,trimM,mats); }
+    else if(!P.glassRoof) mesh(grid(16,16,rf),trimM,G);
     else { // the Model Y's glass roof: tinted glass from the windshield header to the hatch (you see the sky), a black frit
       // border, and the black cross-member over the B pillars; it doesn't shade the cabin like a headliner would
       const T=canvasTex(256,512), x=T.x; x.fillStyle='rgba(8,16,26,.5)'; x.fillRect(0,0,256,512);
@@ -457,6 +461,30 @@ function tractorCab(G,P,parts){
 // the overhead console: a black rounded-square pod on the headliner just behind the mirror. The half toward the windshield is
 // the sunglasses-bin lid (a soft line across it); the half toward you has a strip with the two clear map-light lenses, the
 // light / sunroof / VENT keys between them, then the PASSENGER AIRBAG OFF / ON lamp with a speaker grille each side.
+// Explorer sunroof (owner 2026-11-21: "add a sunroof, and those buttons in the middle work to open the vent and close the
+// cover"): an opening in the headliner over the front seats with a dark well, the tinted glass panel up at roof level
+// (VENT tilts its back edge up ~4 cm, hinged at the front) and the fabric cover under it that slides back into the roof.
+function sunroof(G,P,R,rf,trimM,parts){
+  const S=P.sunroof, y0=R.y-.005, yg=R.y+.045, len=S.z1-S.z0, cz=(S.z0+S.z1)/2;
+  const well=M({color:0x0c0c0d,roughness:.85});
+  for(const s of [-1,1]){ mesh(grid(1,1,(u,v)=>[s*S.hw,lerp(y0-.01,yg,u),lerp(S.z0,S.z1,v)]),well,G,false);
+    mesh(grid(1,1,(u,v)=>[lerp(-S.hw,S.hw,v),lerp(y0-.01,yg,u),s<0?S.z0:S.z1]),well,G,false); }
+  // trim ring round the opening
+  const ring=new THREE.Shape(); ring.moveTo(-S.hw-.03,S.z0-.03); ring.lineTo(S.hw+.03,S.z0-.03); ring.lineTo(S.hw+.03,S.z1+.03); ring.lineTo(-S.hw-.03,S.z1+.03); ring.closePath();
+  const hole=new THREE.Path(); hole.moveTo(-S.hw,S.z0); hole.lineTo(-S.hw,S.z1); hole.lineTo(S.hw,S.z1); hole.lineTo(S.hw,S.z0); hole.closePath(); ring.holes.push(hole);
+  const rg=mesh(new THREE.ShapeGeometry(ring),M({color:0x2a2a2d,roughness:.7,normalMap:rep(textures().fabric,8,8),normalScale:new THREE.Vector2(.4,.4)}),G,false);
+  rg.rotation.x=Math.PI/2; rg.position.y=y0-.012;
+  // glass: hinged at its front edge
+  const hinge=new THREE.Group(); hinge.position.set(0,yg,S.z0-.02); G.add(hinge);
+  const T=canvasTex(256,256), x=T.x; x.fillStyle='rgba(10,18,28,.55)'; x.fillRect(0,0,256,256); x.fillStyle='rgba(6,6,7,.97)'; x.fillRect(0,0,256,14); x.fillRect(0,242,256,14); x.fillRect(0,0,14,256); x.fillRect(242,0,14,256);
+  const gl=mesh(new THREE.PlaneGeometry(S.hw*2+.06,len+.06),new THREE.MeshBasicMaterial({map:T.t,transparent:true,depthWrite:false,side:THREE.DoubleSide}),hinge,false,false);
+  gl.rotation.x=Math.PI/2; gl.position.z=(len+.06)/2; gl.renderOrder=5;
+  // the cover: fabric panel just above the headliner, slides back into the roof
+  const cov=new THREE.Group(); G.add(cov);
+  const cm=mesh(new THREE.BoxGeometry(S.hw*2+.02,.006,len+.02),M({color:P.col.head,roughness:.95,normalMap:rep(textures().fabric,10,10),normalScale:new THREE.Vector2(.6,.6)}),cov);
+  cm.position.set(0,y0+.008,cz); const pull=mesh(rbox(.10,.012,.02,.004,.006),M({color:0x2a2b2e,roughness:.5}),cov); pull.position.set(0,y0+.002,S.z0+.03);   // the handle at its front edge
+  parts.sunroof={hinge,cov,len,vent:0,cover:0};
+}
 function overheadEx(G,P,ws){
   const W=.25, D=.25, zf=ws.zT+.075, cz=zf+D/2, y0=P.roof.y-.006, th=.032;
   const g=new THREE.Group(); g.position.set(0,y0-th,cz); g.rotation.x=.10; G.add(g);    // face tipped a little toward the driver
@@ -486,6 +514,9 @@ function overheadEx(G,P,ws){
   face.rotation.x=Math.PI/2; face.position.y=-.0006;                                             // faces down into the cabin
   // a little relief: the lid stands proud, the key strip and lenses sit in
   const lid=mesh(rbox(W*.86,D*.40,.004,.008,.012),M({color:0x1c1d20,roughness:.6,transparent:true,opacity:0}),g,false,false); lid.visible=false;
+  // the four sunroof keys: invisible targets you can tap (canvas px -> pod: x right, z toward the driver)
+  const Wf=W-.004, kp=(px,py)=>[(px/1024-.5)*Wf,(.5-py/1024)*Wf], hm=new THREE.MeshBasicMaterial({visible:false}); CK.roofKeys=[];
+  for(const [k,px,py] of [['close',464,654],['vent',464,748],['open',560,654],['shut',560,748]]){ const q=kp(px,py), b=mesh(new THREE.BoxGeometry(.022,.012,.022),hm,g,false,false); b.position.set(q[0],-.004,q[1]); b.userData.roofKey=k; CK.roofKeys.push(b); }
   const lit=new THREE.MeshBasicMaterial({color:0xfff4dc,transparent:true,opacity:0}); for(const s of [-1,1]){ const l=mesh(new THREE.PlaneGeometry(.016,.02),lit,g,false,false); l.rotation.x=Math.PI/2; l.position.set(s*.083,-.001,.0); }
 }
 function steeringWheel(G,P){
@@ -1087,8 +1118,16 @@ function gather(c,dt){ const e=engineState(c,dt), sp=c.P, mph=Math.round(Math.ab
 
 /* ---------- per frame ---------- */
 let lastHash='';
+// sunroof motors: glass tilts in ~2 s, the cover slides in ~3 s
+const ROOF={vent:false,cover:false};
+CK.roof=function(k){ if(k==='vent') ROOF.vent=true; else if(k==='close') ROOF.vent=false; else if(k==='open') ROOF.cover=true; else if(k==='shut') ROOF.cover=false;
+  toast({vent:'Sunroof: vent open',close:'Sunroof: closed',open:'Sunroof cover: open',shut:'Sunroof cover: closed'}[k],1200); };
+function roofStep(c,dt){ const r=c.parts.sunroof; if(!r) return;
+  r.vent+=clamp((ROOF.vent?1:0)-r.vent,-dt/2,dt/2); r.cover+=clamp((ROOF.cover?1:0)-r.cover,-dt/3,dt/3);
+  const e=t=>t*t*(3-2*t); r.hinge.rotation.x=-.06*e(r.vent); r.cov.position.z=(r.len+.04)*e(r.cover); }
 function update(dt){
   const c=CK.cab, P=c.P, p=c.parts;
+  roofStep(c,dt);
   c.still=Math.abs(S.v||0)<.05&&Math.abs(S.gas||0)<.05?(c.still||0)+dt:0;
   // steering wheel: the input, 900° lock-to-lock (a G29 turns the same as your hands); otherwise from the road wheels
   const st=S.stIn!=null?S.stIn:(S.steer||0)/Math.max(.1,steerLock(S.v||0));
@@ -1265,7 +1304,7 @@ CK.view=function(dt){
   const lift=Math.round(.5*H/Math.tan(fov*DEG/2)*Math.tan(clamp(want-85,0,14)*DEG));
   // further still (up at the roof and the overhead console): the cabin and car cameras really tilt up, and the map
   // picture (its own canvas, under ours) slides down to match; past the windshield's top edge only the sky shows anyway
-  const tilt=clamp(want-99,0,30), drop=Math.round(.5*H/Math.tan(fov*DEG/2)*Math.tan(tilt*DEG));
+  const tilt=clamp(want-99,0,72), drop=Math.round(.5*H/Math.tan(fov*DEG/2)*Math.tan(tilt*DEG));
   if(drop!==(CK.drop||0)){ CK.drop=drop; mapEl.style.transform=drop?'translateY('+drop+'px)':''; }
   try{ if(Math.abs(map.transform.fov-fov)>.01) map.transform.fov=fov; }catch(e){}
   // the eye turns about the neck (10 cm behind the eyes); bumps lift the head a little
@@ -1321,6 +1360,14 @@ for(const [id,d] of [['fovM',-5],['fovP',5]]){ const b=document.getElementById(i
 { const rb=document.getElementById('rsBtn'); if(rb) rb.addEventListener('click',e=>{ e.stopPropagation(); CK.real=!CK.real; LSs('ydRealSpd',CK.real?'1':'0'); if(CK.on) setSpeedScale(CK.real?1:3); showPick(); }); }
 function setHud(v){ CK.hud=v; LSs('ydHud',v?'1':'0'); showPick(); dirty=true; }
 { const hb=document.getElementById('hudBtn'); if(hb) hb.addEventListener('click',e=>{ e.stopPropagation(); setHud(!CK.hud); }); }
+// tap the overhead console's sunroof keys (a tap, not a drag-to-look): VENT / △ tilt the glass, the two cover keys slide the cover
+{ let dn=null; const ray=new THREE.Raycaster();
+  mapEl.addEventListener('pointerdown',e=>{ dn={x:e.clientX,y:e.clientY}; });
+  mapEl.addEventListener('pointerup',e=>{ if(!dn||!CK.on||!CK.cab||!CK.roofKeys||Math.hypot(e.clientX-dn.x,e.clientY-dn.y)>8){ dn=null; return; } dn=null;
+    const c=CK.cab, r=mapEl.getBoundingClientRect(); c.scene.updateMatrixWorld(); c.cam.updateMatrixWorld();
+    ray.setFromCamera({x:(e.clientX/innerWidth)*2-1,y:-(e.clientY/innerHeight)*2+1},c.cam);
+    const hit=ray.intersectObjects(CK.roofKeys.filter(o=>o.parent&&c.scene.getObjectById(o.id)),false)[0];
+    if(hit) CK.roof(hit.object.userData.roofKey); }); }
 addEventListener('keydown',e=>{ if(e.repeat||(e.target&&e.target.tagName==='INPUT')) return; const k=e.key.toLowerCase(); if(k==='c') CK.toggle(); else if(k==='h'&&CK.on){ setHud(!CK.hud); toast(CK.hud?'Head-up display on':'Head-up display off',1400); } });
 const prevMode=window.onModeChange;
 window.onModeChange=(m,was)=>{ if(prevMode) prevMode(m,was); if(CK.on&&m!=='car'&&m!=='tractor') leave(); else if(CK.on&&m!==was){ dispose(); } };
