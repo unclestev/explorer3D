@@ -25,7 +25,7 @@ IGN.button=function(){
     say(kind()==='ev'?'⏻ Model Y off':'🔑 Engine off'); }
   else { const k=kind();
     if(k==='ev'){ IGN.state='on'; say('⏻ Model Y on — ready to drive'); }
-    else { IGN.state='crank'; IGN.t=0; starter(CRANK[k],k); if(CARKEY==='navigator') welcome(); say('🔑 Starting…',1000); } }
+    else { IGN.state='crank'; IGN.t=0; starter(CRANK[k],k); if(!custom()&&CARKEY==='navigator') welcome(); say('🔑 Starting…',1000); } }
   show();
 };
 // how the engine's revs compare with a running engine's (sound.js multiplies its idle by this while starting/stopping):
@@ -80,6 +80,30 @@ function chimeBuf(ctx){ if(CHIME&&CHIME.sampleRate===ctx.sampleRate) return CHIM
 function welcome(){ const A=window.SOUND&&SOUND.state; if(!A||!A.ctx||!A.bus||!SOUND.on||A.ctx.state!=='running') return;
   try{ const src=A.ctx.createBufferSource(); src.buffer=chimeBuf(A.ctx); const g=A.ctx.createGain(); g.gain.value=window.COCKPIT&&COCKPIT.on?.55:.3;
     src.connect(g); g.connect(A.ctx.destination); src.start(); }catch(e){ console.warn('chime',e); } }   // straight out: it's the car's speakers, not muffled
+
+/* ⚙️ Start-up sound: your own sound file for the car you're in (owner 2026-11-21: "make it the same exact thing as the
+   video"). Saved only in this browser (localStorage ydStartSnd_<car>), never uploaded or put in the game's files; plays
+   when you start that car, in place of the built-in chime. Audio or video files up to ~2.5 MB (only the sound is used). */
+const SKEY=()=>'ydStartSnd_'+(mode==='tractor'?'tractor':CARKEY), DEC={};
+function stored(){ try{ return localStorage.getItem(SKEY()); }catch(e){ return null; } }
+function custom(){ const d=stored(); if(!d) return false;
+  const A=window.SOUND&&SOUND.state; if(!A||!A.ctx||!SOUND.on||A.ctx.state!=='running') return true;
+  const play=buf=>{ try{ const src=A.ctx.createBufferSource(); src.buffer=buf; const g=A.ctx.createGain(); g.gain.value=window.COCKPIT&&COCKPIT.on?1:.6;
+      src.connect(g); g.connect(A.ctx.destination); src.start(); }catch(e){ console.warn('start sound',e); } };
+  if(DEC[d.length+d.slice(-32)]) play(DEC[d.length+d.slice(-32)]);
+  else { const bin=atob(d.split(',')[1]), u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i);
+    A.ctx.decodeAudioData(u.buffer).then(b=>{ DEC[d.length+d.slice(-32)]=b; play(b); }).catch(e=>{ console.warn('start sound',e); say('That sound file can\'t be played here'); }); }
+  return true; }
+function sndStat(){ const el=document.getElementById('startSndStat'); if(el) el.textContent=stored()?'Your file, for this car':'Built-in'; }
+{ const fb=document.getElementById('startSndBtn'), fi=document.getElementById('startSndFile'), rb=document.getElementById('startSndReset');
+  if(fb&&fi){ fb.addEventListener('click',e=>{ e.stopPropagation(); fi.click(); });
+    fi.addEventListener('change',()=>{ const f=fi.files&&fi.files[0]; fi.value=''; if(!f) return;
+      if(f.size>2.5e6){ say('That file is too big — trim it to a few seconds (under 2.5 MB)',3500); return; }
+      const r=new FileReader(); r.onload=()=>{ try{ localStorage.setItem(SKEY(),r.result); sndStat(); say('🔑 Start-up sound set for this car — press start to hear it',3000); }
+        catch(e){ say('Not enough room to save that file — try a shorter one',3500); } }; r.readAsDataURL(f); }); }
+  if(rb) rb.addEventListener('click',e=>{ e.stopPropagation(); try{ localStorage.removeItem(SKEY()); }catch(_){} sndStat(); say('Built-in start-up sound',1600); }); }
+{ const prev=window.onCarChange; window.onCarChange=k=>{ if(prev) prev(k); sndStat(); }; }
+sndStat();
 
 /* I key and the ⏻ button */
 addEventListener('keydown',e=>{ if(!e.repeat&&e.key.toLowerCase()==='i'&&!(e.target&&e.target.tagName==='INPUT')) IGN.button(); });
