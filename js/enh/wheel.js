@@ -9,7 +9,9 @@
    with the wheel, the brake only ever brakes (it holds the car at a stop) and the gas drives the way the selector says:
    D forward, R backward, N nothing. Selector = the Driving Force Shifter: 1st = D, 2nd = R, any other slot or the
    middle = N. Its button numbers are learned in ⚙️ (Shifter); before that the usual G29 numbers are tried (1st = 13,
-   2nd = 14, counting from 1). No shifter used yet: D, and the paddles pick D (right) / R (left).
+   2nd = 14, counting from 1). No shifter used yet: D; press both paddles together to switch between D and R.
+   Paddles (owner 2026-11-21, issue #1): the turn signals — left paddle left, right paddle right, again to cancel
+   (js/enh/signals.js). A press of both together within 0.25 s is the D/R switch instead (without a shifter).
    read() → {st, gas (pedal 0…1), brake (0…1), sel ('D','R','N'), ok}. */
 (function(){
   'use strict';
@@ -18,7 +20,7 @@
   let cfg={}; try{ cfg=JSON.parse(localStorage.getItem('ydWheel')||'{}')||{}; }catch(e){ cfg={}; }
   const save=()=>{ try{ localStorage.setItem('ydWheel',JSON.stringify(cfg)); }catch(e){} };
   const say=(m,ms)=>{ if(typeof toast==='function') toast(m,ms||3200); };
-  let pad=null, live={}, cal=null, seen=false, learn=false, prevB=[], shLearn=null, sel='D', shUsed=false;
+  let pad=null, live={}, cal=null, seen=false, learn=false, prevB=[], shLearn=null, sel='D', shUsed=false, paddleT=null;
 
   const isWheel=g=>g&&g.axes&&g.axes.length>=3&&g.mapping!=='standard'||/wheel|g29|g920|g923|g27|g25|driving force|racing|logitech/i.test(g&&g.id||'');
   function find(){ const ps=navigator.getGamepads(); let best=null;
@@ -46,7 +48,7 @@
     if(Math.abs(c.full-v)<.5){ c.ax=-1; return; }   // too small a travel: wait for a real press
     if(c.step==='gas'){ cal={step:'brake', base:g.axes.slice(), ax:-1, full:0, still:0, t:0, out:c.out, skip:c.ax}; say('Now press the BRAKE pedal all the way, then let go',6000); return; }
     cfg[g.id]=Object.assign(cfg[g.id]||{},{gas:c.out.gas, brake:c.out.brake}); save(); cal=null; live={}; live[c.out.gas.i]=live[c.out.brake.i]=1;
-    showRow(); say('🏁 Wheel ready — gas and brake; shifter 1st = Drive, 2nd = Reverse (or paddles: right D, left R)',4200); }
+    showRow(); say('🏁 Wheel ready — gas and brake; shifter 1st = Drive, 2nd = Reverse; paddles = turn signals',4200); }
 
   let last=performance.now();
   window.WHEEL={
@@ -62,11 +64,18 @@
           break; } }
       else if(learn){ for(let i=0;i<bs.length;i++) if(down(i)&&!prevB[i]){ cfg[g.id]=Object.assign(cfg[g.id]||{},{view:i}); save(); learn=false; showRow(); say('🎥 Wheel button '+(i+1)+' now switches chase / cockpit view',3600); break; } }
       else if(cfg[g.id]&&cfg[g.id].view!=null){ const v=cfg[g.id].view; if(down(v)&&!prevB[v]&&window.COCKPIT) COCKPIT.toggle(); }
-      // gear selector: the shifter when it's been used, otherwise the paddles (G29: right paddle button 5, left 6, counting from 1)
+      // gear selector: the shifter when it's been used (otherwise D, or R after both paddles together)
       if(!shLearn&&!learn){ const sh=(cfg[g.id]&&cfg[g.id].shift)||{d:12,r:13};
         if(down(sh.d)||down(sh.r)) shUsed=true;
         if(shUsed){ const s2=down(sh.d)?'D':down(sh.r)?'R':'N'; if(s2!==sel){ sel=s2; if(window.SOUND&&SOUND.click) try{ SOUND.click(); }catch(e){} } }
-        else { if(down(4)&&!prevB[4]) sel='D'; if(down(5)&&!prevB[5]) sel='R'; } }
+      }
+      // paddles: right = button 5, left = button 6 (counting from 1) — turn signals; both together = D/R without a shifter
+      if(!shLearn&&!learn){ const now2=performance.now();
+        for(const [b,d] of [[4,1],[5,-1]]) if(down(b)&&!prevB[b]){
+          if(paddleT&&now2-paddleT.t<250&&paddleT.d!==d){            // the other paddle just went: both together
+            if(window.SIG&&paddleT.did) SIG.press(paddleT.d);         // undo the signal the first press switched
+            if(!shUsed){ sel=sel==='R'?'D':'R'; say(sel==='R'?'⏪ Reverse':'⏩ Drive',1400); } paddleT=null; }
+          else { paddleT={t:now2,d,did:!!window.SIG}; if(window.SIG) SIG.press(d); } } }
       prevB=bs.map((b,i)=>down(i));
       if(cal){ runCal(g,dt); return {st:0,gas:0,cal:true}; }
       let st=g.axes[ST]||0; st=Math.abs(st)<DEAD?0:(st-Math.sign(st)*DEAD)/(1-DEAD);
