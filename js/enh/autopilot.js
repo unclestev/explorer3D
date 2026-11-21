@@ -7,7 +7,45 @@ const {ENH,safe,onTick,psd}=YD;
 const btn=document.getElementById('navAuto');
 const B=6;                                      // planned braking, game m/s^2 (full brakes are ~28)
 const CAN=()=>mode==='car'||mode==='tractor';
-const A={on:false,i:0,route:null,oxAt:null,stops:[],passed:new Set(),waitT:0,lastTarget:0};
+const A={on:false,i:0,route:null,oxAt:null,stops:[],passed:new Set(),waitT:0,lastTarget:0,
+  lane:1.6,laneT:0,off:0,pass:0,passCar:null,blockT:0,why:''};
+
+/* Traffic (owner 2026-11-20: "sometimes gets stuck behind a car and it just stops there… navigate around other cars").
+   The route is the road's centre line, so autopilot now keeps to the right-hand lane (like the AI cars do), follows
+   the car ahead at a safe gap, and passes a car that is stopped or crawling when the left lane is clear of oncoming
+   traffic for a good distance — never in the last stretch before a stop sign or red light on the route (that car is
+   just waiting), unless it has been stuck there a long time. It slows for anything coming straight at it. */
+function traffic(dt,x,y,along,limit,cap){
+  const T=window.TRAFFIC&&TRAFFIC.state; const out={target:1e9};
+  if(!T||!T.on||!T.agents) { A.pass=0; A.passCar=null; return out; }
+  const h=rad(S.hdg), fx=Math.sin(h), fy=Math.cos(h), L=A.lane, me=A.off;   // me: where we are across the road (+ = right of centre)
+  let lead=null, ld=1e9, oncomingNear=1e9, leftBusy=false, rightBusyNear=false;
+  for(const a of T.agents){ if(!a.path||!(a.fade>.3)) continue;
+    const dx=a.px-x, dy=a.py-y, f=dx*fx+dy*fy, r=dx*fy-dy*fx, dir=Math.sin(a.hd)*fx+Math.cos(a.hd)*fy;
+    if(f<-40||f>220||Math.abs(r)>12) continue;
+    const at=me+r;                                                   // its place across the road
+    if(dir<-.5){ if(at<.3&&f>-5&&f<200) oncomingNear=Math.min(oncomingNear,f);              // coming the other way in the left half
+      if(Math.abs(r)<1.8&&f>0&&f<70) out.target=Math.min(out.target,cap(0,f-12)); }        // straight at us: stop short
+    else if(dir>.5){
+      if(Math.abs(r)<2.1&&f>2&&f<ld){ lead=a; ld=f; }                // (the car being passed counts until we're beside it)
+      if(at<.3&&f>-15&&f<40&&a!==A.passCar) leftBusy=true;
+      if(at>.3&&f>-10&&f<12&&a!==A.passCar) rightBusyNear=true; } }
+  // follow the car ahead: never closer than ~12 m, at its speed
+  if(lead){ const lv=Math.max(0,lead.v)/SPEEDUP, passing=A.pass&&lead===A.passCar;
+    out.target=Math.min(out.target,passing?Math.max(ld>7?1.2:0,cap(lv,ld-7.5)):cap(lv*.95,ld-14)); }   // swinging out round it: creep, don't stop
+  // stuck behind it? (stopped, or far slower than the road allows)
+  const slow=lead&&lead!==A.passCar&&ld<45&&(lead.v/SPEEDUP<1||lead.v/SPEEDUP<limit*.45);
+  A.blockT=slow?A.blockT+dt:Math.max(0,A.blockT-dt*2);
+  let stopNear=false; for(const s of A.stops) if(!A.passed.has(s.id)&&s.at>along&&s.at<along+ld+35){ stopNear=true; break; }
+  if(!A.pass&&lead&&A.blockT>2.5&&(!stopNear||A.blockT>12)&&oncomingNear>170&&!leftBusy){
+    A.pass=1; A.passCar=lead; A.why='pass'; toast('🚗 Autopilot passing',1500); }
+  if(A.pass){ const c=A.passCar;
+    if(oncomingNear<90&&c&&c.path){ const dx=c.px-x, dy=c.py-y; if(dx*fx+dy*fy>2){ A.pass=0; A.passCar=null; } }   // something coming: tuck back in behind
+    if(A.pass){ out.target=Math.min(out.target,limit);
+      const gone=!c||!c.path||((c.px-x)*fx+(c.py-y)*fy)<-9;          // it's well behind us now
+      if(gone&&!rightBusyNear){ A.pass=0; A.passCar=null; A.blockT=0; } } }
+  return out;
+}
 
 // the game's own steering limit (js/game.js steerLock); the car turns at world speed: heading rate = v*SPEEDUP/WB*tan(steer)
 // fastest speed (game m/s) that can still hold a curve of curvature kap (1/world m), with 15% steering in reserve
@@ -48,9 +86,15 @@ function control(dt){
   for(let i=Math.max(0,A.i-3);i<Math.min(P.length-1,A.i+60);i++){ const [d,t]=psd(x,y,P[i][0],P[i][1],P[i+1][0],P[i+1][1]); if(d<bd){ bd=d; bi=i; bt=t; } }
   if(bd>60) for(let i=0;i<P.length-1;i++){ const [d,t]=psd(x,y,P[i][0],P[i][1],P[i+1][0],P[i+1][1]); if(d<bd){ bd=d; bi=i; bt=t; } }
   A.i=bi; const along=N.cum[bi]+bt*(N.cum[bi+1]-N.cum[bi]), v=S.v, vw=Math.abs(v)*SPEEDUP;
+  // our lane: the middle of the right-hand half of the road (half its width from the centre line); left lane to pass
+  A.laneT-=dt; if(A.laneT<=0){ A.laneT=.5; try{ if(typeof nearRoadGeo==='function'){ nearRoadGeo(); const g=roadGeo.hit, hw=g&&ROAD_HALF[g.cls]; if(hw) A.lane=Math.max(.9,Math.min(3.6,hw/2)); } }catch(e){} }
+  const offT=A.pass?-A.lane:A.lane; A.off+=(offT-A.off)*Math.min(1,dt*(A.pass?3:.8));
 
   // steering: aim at a point a little way ahead on the route
-  const Ld=Math.max(10,Math.min(45,8+vw*.35)), tp=pointAt(along+Ld,bi);
+  const changing=Math.abs(A.off-(A.pass?-A.lane:A.lane))>.4||(A.pass&&vw<8);
+  const Ld=changing?Math.max(4.5,Math.min(45,3.5+vw*.3)):Math.max(10,Math.min(45,8+vw*.35)),   // tighter aim while changing lanes
+        tp0=pointAt(along+Ld,bi), tq=pointAt(along+Ld+3,bi), ux=tq[0]-tp0[0], uy=tq[1]-tp0[1], ul=Math.hypot(ux,uy)||1;
+  const tp=[tp0[0]+uy/ul*A.off,tp0[1]-ux/ul*A.off,tp0[2]];           // aim at our lane, not the centre line
   const h=rad(S.hdg), fx=Math.sin(h), fy=Math.cos(h), dx=tp[0]-x, dy=tp[1]-y;
   const alpha=-Math.atan2(fx*dy-fy*dx,fx*dx+fy*dy);                   // + = target to the right
   const k=2*Math.sin(alpha)/Math.max(Ld,Math.hypot(dx,dy));
@@ -70,6 +114,7 @@ function control(dt){
     p1=p2; h0=h1;
   }
   const endAt=N.total-6; target=Math.min(target,cap(0,endAt-along));   // stop at the destination
+  target=Math.min(target,traffic(dt,x,y,along,lim,cap).target);       // other cars: follow, pass, or wait
   for(const s of A.stops){
     if(A.passed.has(s.id)||s.at<along-15) continue;
     const ds=s.at-6-along; if(ds>D) break;                       // stop line a few metres before the sign or light
@@ -108,7 +153,7 @@ function start(){
   const N=YD.NAV;
   if(!N.pts){ toast('Set a destination first: tap 🔍',2200); return; }
   if(!CAN()){ toast('Autopilot only drives the SUV and tractor',2200); return; }
-  A.on=true; A.i=0; A.route=null; A.waitT=0; paint(); dirty=true; wakeOn();
+  A.on=true; A.i=0; A.route=null; A.waitT=0; A.pass=0; A.passCar=null; A.blockT=0; A.off=0; A.laneT=0; paint(); dirty=true; wakeOn();
   toast('Autopilot on · touch the controls to take over',2600);
 }
 function stop(msg){ if(!A.on) return; A.on=false; A.waitT=0; paint(); wakeOff(); if(msg) toast(msg,2200); }
