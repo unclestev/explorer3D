@@ -26,7 +26,8 @@ IGN.button=function(){
     say(kind()==='ev'?'⏻ Model Y off':'🔑 Engine off'); }
   else { const k=kind();
     if(k==='ev'){ IGN.state='on'; say('⏻ Model Y on — ready to drive'); }
-    else { IGN.state='crank'; IGN.t=0; if(k==='gas') startLayer(); else if(k!=='lux') starter(CRANK[k],k); if(!custom()&&k==='lux') welcome(); say('🔑 Starting…',1000); } }
+    else { IGN.state='crank'; IGN.t=0; const own=custom();             // your own start-up sound (⚙️), if you chose one, replaces the chimes
+      if(k==='gas'){ startLayer(); if(!own) explorerChime(); } else if(k!=='lux') starter(CRANK[k],k); if(!own&&k==='lux') welcome(); say('🔑 Starting…',1000); } }
   show();
 };
 // how the engine's revs compare with a running engine's (sound.js multiplies its idle by this while starting/stopping):
@@ -77,6 +78,22 @@ function EXPLORER_START(sr){
       y+=(b1(w)*1.5*(.4+.6*p)+b2(w)*.15*(.3+.7*p)+b0(w)*.3*p)*lvl; }
     out[i]=y; }
   return out; }
+// Explorer start-up chime (owner 2026-11-21: "put that sound effect in for the Explorer chime", the dings in their 2022
+// Explorer video). Measured from it, synthesized: a soft "ding" every 1.6 s, four of them, the first as the engine fires —
+// an A major chord, A4 (440 Hz) strongest with E5 (660 Hz) ~9 dB under and C#5 (554 Hz) ~21 dB under, struck softly
+// and dying away ~40 dB a second. Plays straight to the speakers (it's the car's own chime speaker).
+function EXPLORER_CHIME(sr){
+  const len=6, n=Math.round(sr*len), out=new Float32Array(n), P=[[440,1],[660,.36],[554,.085],[880,.03]];
+  for(let k=0;k<4;k++){ const i0=Math.round((.45+k*1.6)*sr);
+    for(const [f,a] of P){ const w=2*Math.PI*f/sr, dec=Math.exp(-1/(.22*sr));
+      let e=a; for(let i=i0;i<n&&e>1e-4;i++){ const j=i-i0; out[i]+=Math.sin(w*j)*e*Math.min(1,j/(sr*.005)); e*=dec; } } }
+  let pk=0; for(const v of out) pk=Math.max(pk,Math.abs(v)); for(let i=0;i<n;i++) out[i]=out[i]/pk*.7*Math.min(1,(n-i)/(sr*.2));
+  return out; }
+let ECHIME=null;
+function explorerChime(){ const A=window.SOUND&&SOUND.state; if(!A||!A.ctx||!SOUND.on||A.ctx.state!=='running') return;
+  try{ const sr=A.ctx.sampleRate; if(!ECHIME||ECHIME.sampleRate!==sr){ const d=EXPLORER_CHIME(sr); ECHIME=A.ctx.createBuffer(1,d.length,sr); ECHIME.getChannelData(0).set(d); }
+    const src=A.ctx.createBufferSource(); src.buffer=ECHIME; const g=A.ctx.createGain(); g.gain.value=window.COCKPIT&&COCKPIT.on?.45:.25;
+    src.connect(g); g.connect(A.ctx.destination); src.start(); }catch(e){ console.warn('explorer chime',e); } }
 let ESTART=null;
 function startLayer(){ const A=window.SOUND&&SOUND.state; if(!A||!A.ctx||!A.bus||!SOUND.on||A.ctx.state!=='running') return;
   try{ const sr=A.ctx.sampleRate; if(!ESTART||ESTART.sampleRate!==sr){ const d=EXPLORER_START(sr); ESTART=A.ctx.createBuffer(1,d.length,sr); ESTART.getChannelData(0).set(d); }
