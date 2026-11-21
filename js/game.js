@@ -368,6 +368,12 @@ const CARS={
   javelin3d:{name:'AMC Javelin AMX',paint:0x141518,model:'models/javelin-amx.glb?v=1',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237,perf:{t60:6.8,top:120,a0:6.0}},
   // the owner's second version of that model (2026-10-02): wheel wells, window frames, non-metallic black paint, darker glass
   javelin3d2:{name:'AMC Javelin AMX',paint:0x141518,model:'models/javelin-amx-v2.glb?v=2',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237,perf:{t60:6.8,top:120,a0:6.0}},
+  // 2023 Tesla Model Y Long Range AWD with Acceleration Boost (the owner's car, 2026-11-21, issue #5): a 3D model built by
+  // tools/make-model-y.py from the owner's photos (Pearl White, 20" black aero wheels, glass roof). Electric: one gear,
+  // instant torque (0-60 mph in 4.2 s with the Boost), regen braking when you lift (regen m/s^2 at speed), motor whine
+  // instead of an engine (js/enh/sound.js 'tesla'). Top speed 135 mph.
+  modely:{name:'Tesla Model Y',paint:0xeceeee,model:'models/model-y.glb?v=5',W:1.92,lamp:.66,front:2.30,sound:'tesla',ev:true,regen:1.7,
+    vmax:135/2.237,perf:{t60:4.2,top:135,a0:9.0}},
   // the farm tractor as its own choice (owner 2026-11-20: "just another car option… don't change to the tractor automatically
   // when you enter a farm field"): drives in tractor mode (its 3D model, 75% speed, diesel sound) wherever you take it
   tractor:{name:'Farm tractor',tractor:true,paint:0x367c2b,W:2.3,lamp:.55,front:2.1,sound:'jd68'}
@@ -455,7 +461,7 @@ function loadModel(key){
   loadModel.busy=key;
   const go=()=>new THREE.GLTFLoader().load(c.model,gl=>{
     loadModel.busy=null;
-    const g=new THREE.Group(), root=gl.scene, env=envTex(), mats=new Set(), wheels=[]; let tail=null, head=null, r=.33;
+    const g=new THREE.Group(), root=gl.scene, env=envTex(), mats=new Set(), wheels=[], photos=[]; let tail=null, head=null, r=.33, tailPhoto=false;
     g.rotation.y=Math.PI; g.add(root); g.visible=false;
     root.traverse(o=>{
       // the outermost node of each wheel; not wheel *wells* or arches (v2 has a "Wheel_Wells" part, which was being spun round the car)
@@ -464,20 +470,22 @@ function loadModel(key){
       if(!o.isMesh) return;
       const ms=Array.isArray(o.material)?o.material:[o.material];
       // lamps flush with (or just inside) the body would be hidden by the paint: move them 3.5 cm out from the car's end
-      if(ms.some(m=>/tail|head/i.test(m.name||''))){ const bb=new THREE.Box3().setFromObject(o), cz=(bb.min.z+bb.max.z)/2; o.position.z+=Math.sign(cz)*.035; }
+      if(ms.some(m=>/tail|head/i.test(m.name||''))&&!ms.some(m=>/photo/i.test(m.name||''))){ const bb=new THREE.Box3().setFromObject(o), cz=(bb.min.z+bb.max.z)/2; o.position.z+=Math.sign(cz)*.035; }
       for(const m of ms){ if(mats.has(m)) continue; mats.add(m);
         // near-black colours stay as they are: converted, they turn mid-grey under the scene's lights (black paint looked charcoal)
         if(m.color&&Math.max(m.color.r,m.color.g,m.color.b)>=.05) m.color.convertLinearToSRGB(); if(m.emissive) m.emissive.convertLinearToSRGB();
         for(const t of [m.map,m.emissiveMap]) if(t){ t.encoding=THREE.LinearEncoding; t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy()); }
+        // a "Photo…" material is the owner's photo of that part of the car (Model Y: the back), lit like the paint around it
+        const ph=/photo/i.test(m.name||''); if(ph){ m.userData.photo=true; photos.push(m); }
         if(m.isMeshStandardMaterial){ m.envMap=env; m.envMapIntensity=1; }
         if(/paint/i.test(m.name||'')&&m.map){ m.map.dispose(); m.map=null; }       // its metal-flake texture streaks across the panels
-        if(/glass|trim|stripe/i.test(m.name||'')){ m.polygonOffset=true; m.polygonOffsetFactor=-2; m.polygonOffsetUnits=-4; }   // thin layers on the paint always win the depth test (no flicker)
-        if(/tail/i.test(m.name)){ tail=m; m.color.setRGB(.3,.025,.02); m.emissive.setRGB(1,.04,.02); m.emissiveIntensity=.05; }   // dark red lens, lit below
+        if(/glass|trim|stripe|photo/i.test(m.name||'')){ m.polygonOffset=true; m.polygonOffsetFactor=-2; m.polygonOffsetUnits=-4; }   // thin layers on the paint always win the depth test (no flicker)
+        if(/tail/i.test(m.name)){ tail=m; if(ph) tailPhoto=true; else { m.color.setRGB(.3,.025,.02); m.emissive.setRGB(1,.04,.02); m.emissiveIntensity=.05; } }   // dark red lens, lit below
         if(/head/i.test(m.name)){ head=m; m.emissive.setRGB(1,.98,.88); m.emissiveIntensity=.35; }
         m.needsUpdate=true; }
     });
     for(const w of wheels){ const bb=new THREE.Box3().setFromObject(w.o); r=Math.max(.15,(bb.max.y-bb.min.y)/2); }
-    body.add(g); MODELS[key]={g,wheels,r,tail,head,mats:[...mats],lit:-1}; dirty=true;
+    body.add(g); MODELS[key]={g,wheels,r,tail,head,mats:[...mats],photos,tailPhoto,lit:-1}; dirty=true;
   },undefined,e=>{ loadModel.busy=null; console.warn('car model could not load, using the 3D SUV',e); });
   if(THREE.GLTFLoader) go();
   else{ const s=document.createElement('script'); s.src='js/lib/GLTFLoader.js?v=1'; s.onload=go;
@@ -496,7 +504,8 @@ function placeModel(braking,show){
   const night=tailOff.color.r>.7, lit=(braking?2:0)+(night?1:0)+b;              // only touch materials when something changed
   if(Math.abs(lit-md.lit)>.01){ md.lit=lit;
     for(const m of md.mats) if(m.isMeshStandardMaterial) m.envMapIntensity=b;
-    if(md.tail) md.tail.emissiveIntensity=braking?2.4:night?.6:.05;
+    if(md.tail&&md.tailPhoto){ const e=braking?[2.4,.42,.34]:night?[1,.16,.13]:[0,0,0]; md.tail.emissive.setRGB(e[0],e[1],e[2]); md.tail.emissiveIntensity=1; }   // the photo's own lamps glow red
+    else if(md.tail) md.tail.emissiveIntensity=braking?2.4:night?.6:.05;
     if(md.head) md.head.emissiveIntensity=night?1.6:.35; }
 }
 loadPhoto(CARKEY); loadFront(CARKEY);
@@ -1361,8 +1370,11 @@ function step(now){
   if(hand){a-=Math.sign(S.v)*30*mu; braking=Math.abs(S.v)>.5;}
   const SF=REAL&&window.FEEL&&!boat&&!tractor?FEEL.surf:null;       // realistic driving: what the tyres are on (js/enh/feel.js)
   const cap=boat?BOATMAX:tractor?vmax:(SF?(SF.cap||Math.max(MAXV,vtop||0)):(onRoad?Math.max(MAXV,vtop||0):34));
-  if(PF) a-=Math.sign(S.v)*(PF.rr+PF.cd*S.v*S.v+(gas<=.05&&Math.abs(S.v)>.3?.7+.015*Math.abs(S.v):0));   // rolling + air drag, engine braking off the gas
-  else a-=Math.sign(S.v)*(boat?(.25+.0022*S.v*S.v):(.35+.0032*S.v*S.v));                // rolling + aero drag
+  // an electric car's regenerative braking off the pedal (Model Y: about 0.17 g at speed, fading out below ~8 mph, as the real one does);
+  // none in neutral (G29 shifter in N, S.sel): the real car coasts
+  const regen=CARSPEC.regen&&mode==='car'&&!boat&&S.sel!=='N'&&gas<=.05&&Math.abs(S.v)>.3?CARSPEC.regen*Math.min(1,(Math.abs(S.v)-.3)/3.5)*Math.min(1,mu+.1):0;
+  if(PF) a-=Math.sign(S.v)*(PF.rr+PF.cd*S.v*S.v+(regen||(gas<=.05&&Math.abs(S.v)>.3?.7+.015*Math.abs(S.v):0)));   // rolling + air drag, engine braking (or regen) off the gas
+  else a-=Math.sign(S.v)*((boat?(.25+.0022*S.v*S.v):(.35+.0032*S.v*S.v))+regen);         // rolling + aero drag
   if(SF){ if(SF.drag||SF.rr) a-=S.v*SF.drag+(Math.abs(S.v)>.3?Math.sign(S.v)*SF.rr:0); }   // each surface drags differently (grass, woods, sand, mud...)
   else if(!onRoad&&!boat&&!tractor) a-=S.v*.15;                          // mild grass drag
   if(S.inWater&&!boat){ a-=S.v*1.2; }                                    // wading through water in a car or tractor: slow going (~5 mph)

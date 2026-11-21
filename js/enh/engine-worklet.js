@@ -158,3 +158,52 @@ class JD68 extends AudioWorkletProcessor{
   }
 }
 registerProcessor('jd68',JD68);
+
+/* Tesla Model Y (2023 Long Range AWD): no engine. What you hear from an electric car (owner's issue #5):
+   - motor whine: the permanent-magnet motors and their single-speed (9:1) gearbox sing a few clean tones locked to motor
+     speed (rpm here is motor rpm, ~6,300 at 60 mph), rising smoothly with speed with no gear changes. Loudest when you
+     press hard; a quieter, slightly different whine under regen (load < 0) and almost nothing when just rolling.
+   - inverter: a faint high hiss under power.
+   - pedestrian warning hum (AVAS, the law since 2019): a soft two-note whirr that plays when the car moves below
+     ~19 mph and rises a little in pitch with speed, fading out by 20 mph. Silent when stopped.
+   Tyre and wind noise come from js/enh/feel.js as for every car. */
+class Tesla extends AudioWorkletProcessor{
+  static get parameterDescriptors(){ return [
+    {name:'rpm',defaultValue:0,minValue:0,maxValue:20000,automationRate:'k-rate'},
+    {name:'load',defaultValue:0,minValue:-1,maxValue:1,automationRate:'k-rate'},
+    {name:'speed',defaultValue:0,minValue:0,maxValue:80,automationRate:'k-rate'},
+    {name:'gain',defaultValue:0,minValue:0,maxValue:1,automationRate:'k-rate'}]; }
+  constructor(){ super(); this.p=[0,0,0,0]; this.a=[0,0,0,0]; this.seed=13579; this.hl=0; this.hb=0; this.al=0; this.ab=0; this.av=0; this.trem=0; }
+  rnd(){ this.seed=(this.seed*1664525+1013904223)>>>0; return this.seed/4294967296; }
+  process(_in,outputs,P){
+    const out=outputs[0], L=out[0], R=out[1]||out[0], n=L.length, sr=sampleRate, TAU=6.283185307;
+    const rpm=P.rpm[0], load=P.load[0], v=P.speed[0], gain=P.gain[0];
+    if(gain<=1e-4){ silence(L,R,n); return true; }
+    const fr=rpm/60, pw=Math.max(0,load), rg=Math.max(0,-load);
+    // motor tones (orders of the motor speed) and the gearbox mesh, each fading in with speed
+    const vin=Math.min(1,v/3);
+    const f=[fr*4.5, fr*9.02, fr*13.5, fr*29.7];                      // the last one: gear mesh, high and faint
+    const tgt=[(.045+.30*pw+.12*rg)*vin, (.02+.16*pw+.05*rg)*vin, (.006+.05*pw)*vin, (.004+.035*pw+.01*rg)*vin];
+    for(let k=0;k<4;k++) if(f[k]>sr*.45) tgt[k]=0;
+    // inverter hiss (band-passed noise ~7 kHz) under power
+    const hf=2*Math.sin(Math.PI*Math.min(7000,sr*.4)/sr), hA=.012*pw*vin;
+    // pedestrian warning: below 19 mph, fades out 15-20 mph, silent when stopped
+    const avas=v<.15?0:v<.6?(v-.15)/.45:v<6.7?1:Math.max(0,1-(v-6.7)/2.2);
+    const af1=TAU*(196+v*9)/sr, af2=TAU*(293+v*12)/sr, abf=2*Math.sin(Math.PI*(420+v*25)/sr);
+    for(let i=0;i<n;i++){
+      let y=0;
+      for(let k=0;k<4;k++){ this.a[k]+=(tgt[k]-this.a[k])*.0006; this.p[k]+=TAU*f[k]/sr; if(this.p[k]>TAU) this.p[k]-=TAU; y+=Math.sin(this.p[k])*this.a[k]; }
+      const nz=this.rnd()-.5;
+      this.hl+=hf*this.hb; const hh=nz-this.hl-.5*this.hb; this.hb+=hf*hh; y+=this.hb*hA;
+      this.av+=(avas-this.av)*.0004;
+      if(this.av>.002){ this.trem+=TAU*3.1/sr; if(this.trem>TAU) this.trem-=TAU;
+        this.al+=af1; if(this.al>TAU) this.al-=TAU; this.ab+=af2; if(this.ab>TAU) this.ab-=TAU;
+        const tone=Math.sin(this.al)*.55+Math.sin(this.ab)*.35+Math.sin(this.al*2)*.08;
+        this.ah=(this.ah||0)+abf*(this.ahb||0); const ah=nz-this.ah-.9*(this.ahb||0); this.ahb=(this.ahb||0)+abf*ah;   // soft whoosh
+        y+=(tone*.10+this.ahb*.05)*this.av*(.85+.15*Math.sin(this.trem)); }
+      const o=Math.tanh(y*1.4)*gain; L[i]=o; if(R!==L) R[i]=o;
+    }
+    return true;
+  }
+}
+registerProcessor('tesla',Tesla);
