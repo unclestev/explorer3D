@@ -822,7 +822,7 @@ function rebuildRoadGeo(){
   roadGeo.segs=segs;
 }
 function nearRoadGeo(){
-  if(!roadGeo.segs||meters(roadGeo.lat,roadGeo.lng,S.lat,S.lng)>350||performance.now()-roadGeo.t>4000) rebuildRoadGeo();
+  if(!roadGeo.segs||meters(roadGeo.lat,roadGeo.lng,S.lat,S.lng)>300||performance.now()-roadGeo.t>(roadGeo.segs.length?15000:1500)) rebuildRoadGeo();   // each rebuild is a 15-65 ms pause: on distance, not every 4 s
   const segs=roadGeo.segs; if(!segs||!segs.length) return null;
   const kx=111320*Math.cos(rad(roadGeo.lat)), px=(S.lng-roadGeo.lng)*kx, py=(S.lat-roadGeo.lat)*111320, M=3.5;   // margin: lane offset, car width, map mismatch
   let any=false, best=null, bd=1e9;
@@ -1086,10 +1086,13 @@ function rebuildLandCache(){
     const farm=pick(map.querySourceFeatures(bSrc,{sourceLayer:'landcover',filter:['==',['get','class'],'farmland']}));
     const water=pick(map.querySourceFeatures(bSrc,{sourceLayer:'water'}));
     // land under the car for the HUD, from the data (geoLand): land cover first, then land use, then parks — the same order the screen check used
-    const land=[], R2=600, w2=[cx-R2/MLNG,cy-R2/MLAT,cx+R2/MLNG,cy+R2/MLAT];
+    // (only when it's used — terrain on or the cockpit — and at most every 10 s / 300 m: it was a 60 ms pause every 3 s)
+    if(QGEO()&&(!landCache.landAt||meters(landCache.landAt[1],landCache.landAt[0],cy,cx)>300||performance.now()-landCache.landT>10000)){
+    landCache.landAt=[cx,cy]; landCache.landT=performance.now();
+    const land=[], R2=450, w2=[cx-R2/MLNG,cy-R2/MLAT,cx+R2/MLNG,cy+R2/MLAT];
     for(const [sl,rank] of [['landcover',0],['landuse',1],['park',2]]) for(const f of map.querySourceFeatures(bSrc,{sourceLayer:sl})){ const pr=f.properties||{};
       for(const pl of partsOf(f.geometry)){ const bb=bboxOf(pl[0]); if(bb[2]<w2[0]||bb[0]>w2[2]||bb[3]<w2[1]||bb[1]>w2[3]) continue; land.push({bb,pl,rank,cls:pr.class,name:pr.name}); } }
-    if(land.length||!landCache.at) landCache.land=land;
+    if(land.length||!landCache.land) landCache.land=land; }
     // keep the old lists if tiles are mid-reload and returned nothing
     if(farm.length||!landCache.at) landCache.farm=farm;
     if(water.length||!landCache.at) landCache.water=water;

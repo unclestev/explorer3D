@@ -278,11 +278,11 @@ FRAME_HOOKS.push(function cockpitSigns(dt){
   const cx=S.lng*MLNG, cy=S.lat*MLAT; if(!CS.at||Math.hypot(cx-CS.at[0],cy-CS.at[1])>60){ CS.at=[cx,cy]; CS.dirty=true; }
   if(CS.dirty) csSync(); CS.g.visible=true;
   const m=mpp(S.lat,S.zoom), b=rad(S.camB), sb=Math.sin(b), cb=Math.cos(b), sc=1/m, CE=COCKPIT.eyeWorld;
-  const now=performance.now(), doOcc=now-CS.occT>(POWER?700:300), hid=window.TRAFFIC&&TRAFFIC.hidden; if(doOcc) CS.occT=now;
+  const now=performance.now(), doOcc=now-CS.occT>(POWER?300:120), hid=window.TRAFFIC&&TRAFFIC.hidden; if(doOcc){ CS.occT=now; CS.rr=(CS.rr||0)+1; }
   const t=(Date.now()/1000)%30, ph=[t<12?'g':t<15?'y':'r', t<15?'r':t<27?'g':'y'];
   const k=YD.AT?(YD.AT.k||0):0, M=csMats(), f=1-.45*k; M.post.color.setRGB(.55*f,.58*f,.62*f); M.back.color.setRGB(.55*f,.58*f,.6*f); M.stop.color.setScalar(f); M.xb.color.setScalar(f); M.xb2.color.setScalar(f);
   for(const g of CS.map.values()){ const o=g.userData.o, dx=o.x-cx, dy=o.y-cy;
-    if(doOcc&&hid&&CE) g.userData.occ=hid({px:o.x,py:o.y},CE.x,CE.y,CE.h);
+    if(doOcc&&hid&&CE&&((g.id+CS.rr)%3===0)) g.userData.occ=hid({px:o.x,py:o.y},CE.x,CE.y,CE.h);   // a third of them per check: no pile-up in one frame
     g.visible=!g.userData.occ; if(!g.visible) continue;
     const fw=dx*sb+dy*cb, r=dx*cb-dy*sb; g.position.set(r/m,0,-fw/m); g.scale.setScalar(sc);
     // face along the road it stands by, toward the side the driver is on (seen edge-on from the cross street); no road known: face the driver
