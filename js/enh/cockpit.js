@@ -483,7 +483,7 @@ function sunroof(G,P,R,rf,trimM,parts){
   const cov=new THREE.Group(); G.add(cov);
   const cm=mesh(new THREE.BoxGeometry(S.hw*2+.02,.006,len+.02),M({color:P.col.head,roughness:.95,normalMap:rep(textures().fabric,10,10),normalScale:new THREE.Vector2(.6,.6)}),cov);
   cm.position.set(0,y0+.008,cz); const pull=mesh(rbox(.10,.012,.02,.004,.006),M({color:0x2a2b2e,roughness:.5}),cov); pull.position.set(0,y0+.002,S.z0+.03);   // the handle at its front edge
-  parts.sunroof={hinge,cov,len,vent:0,cover:0};
+  parts.sunroof={hinge,cov,len,vent:0,cover:0,slide:0,z0:hinge.position.z};
 }
 function overheadEx(G,P,ws){
   const W=.25, D=.25, zf=ws.zT+.075, cz=zf+D/2, y0=P.roof.y-.006, th=.032;
@@ -1119,12 +1119,23 @@ function gather(c,dt){ const e=engineState(c,dt), sp=c.P, mph=Math.round(Math.ab
 /* ---------- per frame ---------- */
 let lastHash='';
 // sunroof motors: glass tilts in ~2 s, the cover slides in ~3 s
-const ROOF={vent:false,cover:false};
-CK.roof=function(k){ if(k==='vent') ROOF.vent=true; else if(k==='close') ROOF.vent=false; else if(k==='open') ROOF.cover=true; else if(k==='shut') ROOF.cover=false;
-  toast({vent:'Sunroof: vent open',close:'Sunroof: closed',open:'Sunroof cover: open',shut:'Sunroof cover: closed'}[k],1200); };
-function roofStep(c,dt){ const r=c.parts.sunroof; if(!r) return;
-  r.vent+=clamp((ROOF.vent?1:0)-r.vent,-dt/2,dt/2); r.cover+=clamp((ROOF.cover?1:0)-r.cover,-dt/3,dt/3);
-  const e=t=>t*t*(3-2*t); r.hinge.rotation.x=-.06*e(r.vent); r.cov.position.z=(r.len+.04)*e(r.cover); }
+// △ slides the glass all the way back (owner: "make the sunroof go all the way back"; the cover goes back with it, as
+// in the real car); VENT tilts it, and pressed again (tilted or open) closes it; the cover keys open / close the cover.
+const ROOF={vent:false,slide:false,cover:false};
+CK.roof=function(k){ let t;
+  if(k==='close'){ ROOF.slide=true; ROOF.vent=false; ROOF.cover=true; t='Sunroof: opening all the way'; }
+  else if(k==='vent'){ if(ROOF.slide||ROOF.vent){ ROOF.slide=ROOF.vent=false; t='Sunroof: closing'; } else { ROOF.vent=true; t='Sunroof: vent open'; } }
+  else if(k==='open'){ ROOF.cover=true; t='Sunroof cover: open'; }
+  else if(k==='shut'){ if(ROOF.slide){ t='Close the sunroof first (VENT)'; } else { ROOF.cover=false; t='Sunroof cover: closed'; } }
+  toast(t,1300); };
+function roofStep(c,dt){ const r=c.parts.sunroof; if(!r) return; r.slide=r.slide||0;
+  const wantV=ROOF.vent||(ROOF.slide&&r.slide<.98)?1:0;                    // to slide, the back edge first lifts a little, then the glass runs back over the roof
+  const lift=ROOF.slide?.35:wantV;
+  r.vent+=clamp(lift-r.vent,-dt/2,dt/2);
+  const canSlide=!ROOF.slide||r.vent>.3; r.slide+=clamp((ROOF.slide&&canSlide?1:0)-r.slide,-dt/4,dt/4);
+  if(!ROOF.slide&&r.slide>0) r.vent=Math.max(r.vent,.35*Math.min(1,r.slide*4));   // closing: stays lifted until it's back over the opening
+  r.cover+=clamp((ROOF.cover?1:0)-r.cover,-dt/3,dt/3);
+  const e=t=>t*t*(3-2*t); r.hinge.rotation.x=-.06*e(r.vent); r.hinge.position.z=r.z0+(r.len+.02)*e(r.slide); r.cov.position.z=(r.len+.04)*e(r.cover); }
 function update(dt){
   const c=CK.cab, P=c.P, p=c.parts;
   roofStep(c,dt);
