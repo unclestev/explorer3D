@@ -361,14 +361,17 @@ const CARS={
   // Same engine and top speed as the photo Javelin, which stays as its own choice.
   javelin3d:{name:'AMC Javelin AMX',paint:0x141518,model:'models/javelin-amx.glb?v=1',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237,perf:{t60:6.8,top:120,a0:6.0}},
   // the owner's second version of that model (2026-10-02): wheel wells, window frames, non-metallic black paint, darker glass
-  javelin3d2:{name:'AMC Javelin AMX',paint:0x141518,model:'models/javelin-amx-v2.glb?v=2',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237,perf:{t60:6.8,top:120,a0:6.0}}
+  javelin3d2:{name:'AMC Javelin AMX',paint:0x141518,model:'models/javelin-amx-v2.glb?v=2',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237,perf:{t60:6.8,top:120,a0:6.0}},
+  // the farm tractor as its own choice (owner 2026-11-20: "just another car option… don't change to the tractor automatically
+  // when you enter a farm field"): drives in tractor mode (its 3D model, 75% speed, diesel sound) wherever you take it
+  tractor:{name:'Farm tractor',tractor:true,paint:0x367c2b,W:2.3,lamp:.55,front:2.1,sound:'jd68'}
 };
 let CARKEY='explorer'; try{ const k=localStorage.getItem('ydCar'); if(CARS[k]) CARKEY=k; }catch(e){}
 let CARSPEC=CARS[CARKEY];
 const PHOTO={mesh:null,glow:null,lights:null,fm:null,on:!/[?&]car=3d\b/.test(location.search),key:null};
 function loadPhoto(key){
   const c=CARS[key]; if(c&&c.model){ loadModel(key); return; }
-  if(!PHOTO.on||!c) return;
+  if(!PHOTO.on||!c||!c.img) return;                                   // the tractor has its own 3D model, no photo
   new THREE.TextureLoader().load(c.img,tex=>{
     if(key!==CARKEY){ tex.dispose(); return; }                     // switched again while this one was loading
     tex.anisotropy=renderer.capabilities.getMaxAnisotropy?Math.min(4,renderer.capabilities.getMaxAnisotropy()):1;
@@ -396,6 +399,7 @@ function setCar(key){
   if(!CARS[key]||key===CARKEY&&PHOTO.key===key) return;
   CARKEY=key; CARSPEC=CARS[key]; try{ localStorage.setItem('ydCar',key); }catch(e){}
   loadPhoto(key); loadFront(key);
+  if(mode==='car'||mode==='tractor'){ const m=CARSPEC.tractor?'tractor':'car'; if(m!==mode) setMode(m); }   // the tractor is picked, never switched to by the ground
   try{ if(window.onCarChange) window.onCarChange(key); }catch(e){ console.warn('car change',e); }
   dirty=true;
 }
@@ -540,7 +544,7 @@ seat(0,-1.85); seat(-.4,.6); seat(.4,.6);
 bx(.1,.6,.1,metalM,0,.72,-2.6); bx(.35,.16,.3,seatM,0,1.05,-2.55);               // bow trolling motor
 bx(.55,.6,.6,hullM,0,1.1,2.85); bx(.2,.7,.35,metalM,0,.3,2.95);                  // outboard
 
-/* ---------- FARM TRACTOR (swaps in on farmland) ---------- */
+/* ---------- FARM TRACTOR (⚙️ Car → Tractor; no longer swaps in on farmland by itself) ---------- */
 const tractorG=new THREE.Group(); tractorG.visible=false; car.add(tractorG);
 const tRed=new THREE.MeshPhongMaterial({color:0x367c2b,specular:0xd9f5c8,shininess:70});   // tractor green
 const tCream=new THREE.MeshPhongMaterial({color:0xffde00,shininess:50});                        // yellow wheels & trim
@@ -1262,18 +1266,18 @@ function step(now){
     const water=inAny(landCache.water,S.lng,S.lat) && !(CKP?onGeoRoad:hit(p.x,p.y,5,bridgeIds).length);
     const farm=!water && inAny(landCache.farm,S.lng,S.lat);
     const realRoad=farm && (CKP?onGeoRoad:(hitRoad(p.x,p.y,4)||[]).some(f=>!/^(track|path)$/.test(String(f.properties&&f.properties.class||''))));
-    const want=water?'boat':(farm&&!realRoad)?'tractor':'car';
+    const want=water?'boat':CARSPEC.tractor?'tractor':'car';        // car or tractor = what's picked in ⚙️ Car (fields no longer swap in the tractor)
     const tNow=last/1000, gap=Math.min(.5,tNow-(step.detT||tNow)); step.detT=tNow;
     if(want===mode){ candMode=null; candT=0; }
     else {
       if(want!==candMode){ candMode=want; candT=0; }
       candT+=gap;
-      const need=want==='boat'?.25 : mode==='boat'?.4 : want==='tractor'?.5 : 1.0;   // seconds the new answer must hold
+      const need=want==='boat'?.25 : mode==='boat'?.4 : 0;           // seconds the new answer must hold (car <-> tractor: the picker's choice, at once)
       if(candT>=need){ setMode(want); candMode=null; candT=0; }
     }
     if(boat){ onRoad=true; el.textContent='Boating'; el.className=''; }
     else {
-      if(mode==='tractor'){ onRoad=true; el.textContent='In the field'; el.className=''; }
+      if(mode==='tractor'&&farm&&!realRoad){ onRoad=true; el.textContent='In the field'; el.className=''; }
     }
     if(every('surf',.4)&&!(CKP&&Math.abs(LOOK.yaw)>60)){            // cockpit: only while looking roughly ahead (the probe must be on screen)
       const lt=boat?'Water':landHere(CKP?map.project([S.lng+Math.sin(rad(S.hdg))*7/(111320*Math.cos(rad(S.lat))),S.lat+Math.cos(rad(S.hdg))*7/111320]):p);   // cockpit: just ahead of the car (on screen)

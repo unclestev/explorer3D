@@ -754,7 +754,8 @@ CK.render=function(dt){ const c=CK.cab; if(!c) return; update(dt||.016); try{ re
   renderer.autoClear=false; renderer.clearDepth(); renderer.render(c.scene,c.cam); renderer.autoClear=true; };
 CK.toggle=function(v){ CK.want=v==null?!CK.want:!!v; LSs('ydView',CK.want?'cockpit':'chase'); showPick();
   if(!CK.want&&CK.on) leave();
-  if(CK.want&&mode!=='car') toast('🎥 Cockpit view comes on when you are driving the car',2600);
+  if(CK.want&&CARSPEC.tractor) toast('🎥 No cockpit for the tractor yet — pick a car in ⚙️ to drive from the seat',3000);
+  else if(CK.want&&mode!=='car') toast('🎥 Cockpit view comes on when you are driving the car',2600);
   else toast(CK.want?'🎥 Cockpit view · drag to look around · Q / E glance · C for chase':'🎥 Chase view',2400); dirty=true; };
 
 /* ---------- settings, keys, mode changes ---------- */
