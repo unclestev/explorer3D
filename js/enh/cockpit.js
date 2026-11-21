@@ -14,7 +14,11 @@
    - Three original interiors in each car's class and era (no badges or logos): a modern sport SUV (Explorer ST:
      digital cluster, landscape centre screen, red stitching, brushed-metal strip, flat-bottom wheel), a luxury SUV
      (Navigator: panoramic screen across the dash, floating centre screen, two-tone leather, wood), and a 1972 muscle
-     car (all three Javelins: wrap-around driver's pod with round gauges, woodgrain, chrome, thin three-spoke wheel).
+     car (all three Javelins: wrap-around driver's pod with round gauges, woodgrain, chrome, thin three-spoke wheel),
+     and the owner's 2023 Tesla Model Y (issue #5: no instrument cluster — speed, gear, signals and the road picture on
+     the left of the 15" landscape centre screen, the map on its right; a low flat dash with one full-width vent slot over
+     a wood strip, two phone pads, round two-spoke wheel with scroll wheels, thin A pillars, white seats (or black, ⚙️),
+     and the all-glass roof: a brighter cabin with the sky overhead).
    - Live: the steering wheel turns with the input (a G29's 900° = ±450° on screen, 1:1 with your hands), speedometer,
      tach (the engine sound's own drivetrain model), gear, fuel/temp, clock, outside temperature, trip, street name,
      speed limit, a moving map with the route on the centre screen, turn arrows; gauge lighting at night; sunlight and
@@ -62,13 +66,24 @@ const SPECS={
     col:{dash:0x111111,top:0x0d0d0d,trim:0x121212,lower:0x121212,seat:0x141414,head:0x171717,stitch:0x2a2a2a,accent:'walnut',carpet:0x0f0f0f},
     eng:'amc401', vmaxG:140, red:5.2, tachMax:8}
 };
+// 2023 Model Y Long Range (the owner's car): seats white or black (⚙️ Seats, saved as ydSeatsY)
+SPECS.modely={style:'ev', eye:[-.37,1.235,.20], pitch:81,
+    ws:{zB:-1.13,yB:1.075,hwB:.70,zT:-.05,yT:1.57,hwT:.62,bow:.05}, roof:{y:1.595,hw:.70,zR:1.85}, glassRoof:true, belt:1.03, winTop:1.50, door:.79, zBp:.30, zC:1.55,
+    hood:{zr:-1.15,zf:-2.18,yr:1.085,yf:.885,hw:.90,crown:.035,gap:.80,nose:.07},
+    dash:[[1.02,-1.11],[.99,-.90],[.968,-.72],[.958,-.64],[.925,-.60],[.855,-.595],[.75,-.53],[.62,-.42]],
+    wheel:{c:[-.37,.84,-.27],r:.185,tilt:22,rim:.017,flat:false},
+    screen:{c:[.02,1.085,-.60],w:.335,h:.205,tilt:6},
+    col:{dash:0x1c1c1e,top:0x18181a,trim:0x222224,lower:0x1d1d1f,seat:0xe7e4dd,head:0x2a2a2c,stitch:0,accent:'ash',carpet:0x111112},
+    eng:'tesla', vmaxG:140, red:0, tachMax:1};
+const SEATS={white:0xe7e4dd,black:0x1f1f21};
+CK.seats=LSg('ydSeatsY','white')==='black'?'black':'white';
 SPECS.tractor={style:'tractor', eye:[0,2.46,.9], pitch:76,
     wheel:{c:[0,2.03,.56],r:.205,tilt:52,rim:.017,flat:false},
     cluster:{c:[0,2.255,.36],w:.17,h:.075},
     screen:{c:[.5,2.2,.3],w:.2,h:.13},
     col:{dash:0x1a1b1d,top:0x161718,trim:0x2b2c2f,lower:0x1e1f21,seat:0x1d1e20,head:0x3d3f42,carpet:0x141516},
     eng:'jd68', vmaxG:60, red:2.3, tachMax:3, wipers:[.5]};
-const specKey=k=>/^javelin/.test(k||'')?'javelin':k==='navigator'?'navigator':k==='tractor'?'tractor':'explorer';
+const specKey=k=>/^javelin/.test(k||'')?'javelin':k==='navigator'?'navigator':k==='tractor'?'tractor':k==='modely'?'modely':'explorer';
 
 /* ---------- procedural textures ---------- */
 function cnv(w,h){ const c=document.createElement('canvas'); c.width=w; c.height=h; return c; }
@@ -217,13 +232,22 @@ function shell(G,P,mats){
     const rm=M({color:0x000000,roughness:.02,metalness:1,transparent:true,opacity:.05,depthWrite:false,out:true,env:1});
     const r=mesh(grid(12,6,(u,v)=>{ const p=wsP(u,v); return [p[0],p[1],p[2]+.002]; }),rm,G,false,false); r.renderOrder=6; }
   // A-pillars (inner trim), front header with sun visors, headliner, roof rails
-  const pil=P.style==='classic'?{w:.055,t:.04}:{w:P.style==='lux'?.115:.105,t:.07};
+  const pil=P.style==='classic'?{w:.055,t:.04}:{w:P.style==='lux'?.115:P.style==='ev'?.08:.105,t:P.style==='ev'?.055:.07};
   const trimM=M({color:P.col.head,roughness:.95,normalMap:rep(textures().fabric,20,20),normalScale:new THREE.Vector2(.6,.6)});
   const hardTrim=M({color:P.style==='classic'?0x0f0f0f:P.col.trim,roughness:.8,normalMap:rep(textures().grain,4,4)});
   for(const s of [-1,1]){ const bx=s*(ws.hwB+.012), tx=s*(ws.hwT+.012);
     mesh(bar([[bx,ws.yB-.02,ws.zB-.005],[lerp(bx,tx,.5),lerp(ws.yB,ws.yT,.5),lerp(ws.zB,ws.zT,.5)+.012],[tx,ws.yT+.01,ws.zT+.02]],[pil.w*1.1,pil.w],pil.t,[-s*.6,0,1]),P.style==='classic'?hardTrim:trimM,G); }
   mesh(bar([[-ws.hwT-.01,ws.yT+.015,ws.zT+.03],[0,ws.yT+.03,ws.zT+.04],[ws.hwT+.01,ws.yT+.015,ws.zT+.03]],.09,.05,[0,-1,.4]),trimM,G);
-  { const R=P.roof; mesh(grid(16,16,(u,v)=>{ const s=u*2-1, z=lerp(ws.zT+.03,R.zR,v); return [s*R.hw,R.y-.025*s*s-(v>.85?.06*Math.pow((v-.85)/.15,2):0),z]; }),trimM,G);
+  { const R=P.roof, rf=(u,v)=>{ const s=u*2-1, z=lerp(ws.zT+.03,R.zR,v); return [s*R.hw,R.y-.025*s*s-(v>.85?.06*Math.pow((v-.85)/.15,2):0),z]; };
+    if(!P.glassRoof) mesh(grid(16,16,rf),trimM,G);
+    else { // the Model Y's glass roof: tinted glass from the windshield header to the hatch (you see the sky), a black frit
+      // border, and the black cross-member over the B pillars; it doesn't shade the cabin like a headliner would
+      const T=canvasTex(256,512), x=T.x; x.fillStyle='rgba(8,16,26,.5)'; x.fillRect(0,0,256,512);
+      x.fillStyle='rgba(6,6,7,.97)'; x.fillRect(0,0,20,512); x.fillRect(236,0,20,512); x.fillRect(0,0,256,14); x.fillRect(0,498,256,14);
+      for(let k=0;k<3;k++){ x.globalAlpha=.75-k*.22; for(let j=12;j<500;j+=7){ x.beginPath(); x.arc(24+k*6,j,2.2-k*.5,0,7); x.arc(232-k*6,j,2.2-k*.5,0,7); x.fill(); } } x.globalAlpha=1;
+      const gm=new THREE.MeshBasicMaterial({map:T.t,transparent:true,depthWrite:false,side:THREE.DoubleSide});
+      const rg=mesh(grid(16,16,rf),gm,G,false,false); rg.renderOrder=5;
+      const zb=(P.zBp||.3)+.05; mesh(bar([[-R.hw,R.y-.035,zb],[0,R.y-.005,zb],[R.hw,R.y-.035,zb]],.07,.035,[0,-1,0],16,8),trimM,G); }
     for(const s of [-1,1]) mesh(bar([[s*(ws.hwT+.01),ws.yT+.005,ws.zT+.03],[s*(R.hw+.01),P.winTop+.04,ws.zT+.5],[s*(R.hw+.015),P.winTop+.04,R.zR-.1]],.07,.06,[-s,-.3,0]),trimM,G); }
   // sun visors folded up against the headliner
   for(const s of [-1,1]){ const v=mesh(rbox(.36,.18,.024,.01,.03),trimM,G); v.position.set(s<0?eyeX:-eyeX,P.roof.y-.035,ws.zT+.14); v.rotation.x=-Math.PI/2+.08; }
@@ -254,7 +278,7 @@ function shell(G,P,mats){
   if(P.zBp!=null) for(const s of [-1,1]) mesh(bar([[s*(P.door-.01),P.belt,P.zBp],[s*(P.roof.hw-.005),P.winTop+.03,P.zBp+.03]],.13,.08,[-s,0,0],4,10),trimM,G);
   for(const s of [-1,1]){ mesh(bar([[s*(P.door-.02),P.belt,P.zC],[s*(P.roof.hw-.01),P.winTop+.02,P.zC+.12]],P.style==='classic'?.30:.2,.09,[-s,0,0],4,10),trimM,G);
     if(P.zBp!=null) mesh(grid(10,8,(u,v)=>[s*(P.door-.01),lerp(.34,P.belt,v),lerp(P.zBp+.06,P.zC,u)]),doorM,G); }
-  { const seatM=M({color:P.col.seat,roughness:.6,normalMap:rep(textures().leather,9,9),normalScale:new THREE.Vector2(.25,.25)});
+  { const seatM=M({color:P.style==='ev'?SEATS[CK.seats]:P.col.seat,roughness:.6,normalMap:rep(textures().leather,9,9),normalScale:new THREE.Vector2(.25,.25)});
     const zr=(P.zBp!=null?P.zBp:.5)+.55, rb=mesh(rbox(P.door*2-.1,.55,.16,.06,.12),seatM,G); rb.position.set(0,P.belt+.02,zr+.18); rb.rotation.x=-.18;
     const rc=mesh(rbox(P.door*2-.1,.14,.5,.05,.1),seatM,G); rc.position.set(0,P.belt-.36,zr-.05);
     // front passenger seat
@@ -276,9 +300,9 @@ function shell(G,P,mats){
     // modern door mirror (owner 2026-11-21: "the mirrors on the explorer are just rectangles"): the glass is a rounded
     // trapezoid, short on the inboard edge and tall outboard with a big rounded lower-outer corner, in a black surround; the
     // body-colour housing wraps round it and swells out behind; a black foot on the door with the sail filling the window corner
-    const lux=P.style==='lux', W=lux?.27:.245, H=lux?.185:.165, g=new THREE.Group(); g.position.set(s*(P.door+.235),P.belt+.075,zA+.16); G.add(g);
+    const lux=P.style==='lux', ev=P.style==='ev', W=lux?.27:ev?.235:.245, H=lux?.185:ev?.15:.165, g=new THREE.Group(); g.position.set(s*(P.door+.235),P.belt+.075,zA+.16); G.add(g);
     const o=-s;                                                     // the group faces the driver: +x is the driver's right, so outboard is -s
-    const shp=(w,h,grow)=>mirShape(w+grow*2,h+grow*2,o);
+    const shp=(w,h,grow)=>(ev?mirShapeEV:mirShape)(w+grow*2,h+grow*2,o);
     const glass=new THREE.ShapeGeometry(shp(W,H,0),12); uvFit(glass);
     const gl=mesh(MIR.uv(glass,s<0?0:.64,s<0?.36:1),new THREE.MeshBasicMaterial({map:MIR.tex(),toneMapped:false}),g,false); gl.position.z=.004; MIR.mats.push(gl.material);
     const sf=canvasTex(256,160); drawSideFrame(sf.x,s); const sg=new THREE.ShapeGeometry(shp(W,H,0),12); uvFit(sg);
@@ -323,6 +347,13 @@ function mirShape(w,h,o){ const hw=w/2, hh=h/2, ti=hh*.78, bi=-hh*.70, to=hh, bo
   s.quadraticCurveTo(X(0),hh*.97,X(hw-r2),to); s.quadraticCurveTo(X(hw),to,X(hw),to-r2);
   s.lineTo(X(hw),bo+r3); s.quadraticCurveTo(X(hw),bo,X(hw-r3),bo);
   s.quadraticCurveTo(X(-hw*.1),bo+.01,X(-hw+r4),bi); s.quadraticCurveTo(X(-hw),bi,X(-hw),bi+r4); s.lineTo(X(-hw),ti-r1); return s; }
+// Tesla door-mirror glass: frameless and soft — an arched top rising outboard, a big round outboard end, a nearly straight
+// bottom edge that lifts toward the inboard end
+function mirShapeEV(w,h,o){ const hw=w/2, hh=h/2, X=v=>v*o, s=new THREE.Shape();
+  s.moveTo(X(-hw),hh*.25); s.quadraticCurveTo(X(-hw),hh*.62,X(-hw*.62),hh*.7);
+  s.quadraticCurveTo(X(hw*.2),hh*1.08,X(hw*.72),hh*.96); s.quadraticCurveTo(X(hw),hh*.86,X(hw),hh*.2);
+  s.quadraticCurveTo(X(hw),-hh*.92,X(hw*.55),-hh); s.lineTo(X(-hw*.55),-hh*.8);
+  s.quadraticCurveTo(X(-hw),-hh*.7,X(-hw),-hh*.15); s.lineTo(X(-hw),hh*.25); return s; }
 // ShapeGeometry UVs are in shape units: spread them over 0..1 so a texture covers the glass once
 function uvFit(g){ g.computeBoundingBox(); const b=g.boundingBox, p=g.attributes.position, uv=g.attributes.uv;
   for(let i=0;i<p.count;i++) uv.setXY(i,(p.getX(i)-b.min.x)/(b.max.x-b.min.x),(p.getY(i)-b.min.y)/(b.max.y-b.min.y)); uv.needsUpdate=true; return g; }
@@ -438,6 +469,15 @@ function steeringWheel(G,P){
       for(let k=0;k<3;k++){ const h=mesh(new THREE.CircleGeometry(.007,12),M({color:0x050505}),spin,false); h.position.set(Math.cos(r)*(.06+k*.03),Math.sin(r)*(.06+k*.03),-.0085); } }
     const hub=mesh(new THREE.CylinderGeometry(.045,.05,.03,32),cap,spin); hub.rotation.x=Math.PI/2; hub.position.z=-.005;
     const ring=mesh(new THREE.TorusGeometry(.046,.004,8,32),M({color:0xd9dde2,metalness:1,roughness:.1,out:true}),spin); ring.position.z=.011;
+  } else if(P.style==='ev'){
+    // Model Y: round rim, an oval hub pad and two horizontal spokes, each with a scroll wheel by the hub (no bottom spoke)
+    const hubM=M({color:0x151517,roughness:.55,normalMap:rep(textures().leather,6,6),normalScale:new THREE.Vector2(.18,.18)});
+    const pad=mesh(rbox(.118,.088,.05,.02,.036),hubM,spin); pad.position.set(0,-.004,-.014);
+    const gloss=M({color:0x0c0c0d,roughness:.18,metalness:.25});
+    for(const s of [-1,1]){ const len=W.r-.058, sp=mesh(rbox(len,.036,.02,.008,.014),hubM,spin); sp.position.set(s*(.058+len/2-.004),-.012,-.019);
+      const bez=mesh(rbox(.038,.03,.008,.003,.008),gloss,spin); bez.position.set(s*.086,-.012,-.008);          // glossy surround
+      const sw=mesh(new THREE.CylinderGeometry(.0105,.0105,.014,20),M({color:0x2a2b2e,roughness:.45,metalness:.5,normalMap:rep(textures().grain,1,4)}),spin);
+      sw.rotation.z=Math.PI/2; sw.position.set(s*.086,-.012,-.0035); }                                       // the scroll wheel (axis across)
   } else {
     const hubM=M({color:P.style==='lux'?0x2a2420:0x161618,roughness:.55,normalMap:rep(textures().leather,3,3),normalScale:new THREE.Vector2(.5,.5)});
     const trimM=P.style==='lux'?M({color:0xc8c2b6,metalness:.9,roughness:.25}):M({map:rep(textures().alu,1,1),metalness:.85,roughness:.3});
@@ -569,6 +609,39 @@ function dashModern(G,P,parts){
       const pl=mesh(new THREE.PlaneGeometry(.23,.026),new THREE.MeshBasicMaterial({map:pr.t}),keys,false,false); pl.position.z=.0065; parts.prnd={T:pr,cur:'D',lux:true}; } }
   // glovebox seam and passenger knee panel
 }
+function dashEV(G,P,parts){
+  // Model Y: a low, flat dash — soft black top, one air-vent slot across the whole width over a wood strip, the 15" screen
+  // floating on a short stem, and a console with two phone pads in front of the armrest
+  const T=textures();
+  const upM=M({color:P.col.top,roughness:.82,normalMap:rep(T.grain,16,4),normalScale:new THREE.Vector2(.5,.5)});
+  const loM=M({color:P.col.lower,roughness:.75,normalMap:rep(T.grain,10,4),normalScale:new THREE.Vector2(.5,.5)});
+  const xd=P.door+.005, end=x=>.10*sstep(.55,1,Math.abs(x)/xd), n=P.dash.length-1;
+  loftDash(G,P,upM,-xd,xd,P.dash.slice(0,5),(x,v)=>[end(x)*sstep(.2,.6,v),0]);
+  loftDash(G,P,loM,-xd,xd,P.dash.slice(4),(x,v)=>[end(x),0]);
+  const sp=new THREE.SplineCurve(P.dash.map(p=>new THREE.Vector2(p[1],p[0])));
+  const band=(i0,i1,mat,out,nv)=>{ const a=sp.getPoint(i0/n), b=sp.getPoint(i1/n);
+    return mesh(grid(60,nv||2,(u,v)=>{ const x=lerp(-xd+.035,xd-.035,u), q=a.clone().lerp(b,v), o=end(x); return [x,q.y,q.x+o+out]; }),mat,G); };
+  band(4.02,4.22,M({color:0x030303,roughness:1}),.002);                     // the vent slot (dark)
+  band(4.02,4.04,M({color:0x2a2a2c,roughness:.5,metalness:.3}),.006,1);     // its upper lip
+  const wood=M({map:rep(T.ash,3,1),color:0x8f7c68,roughness:.55});
+  band(4.30,4.95,wood,.004,3);                                               // the wood strip
+  for(const s of [-1,1]){ const zA=P.ws.zB+.06, zE=P.zBp!=null?P.zBp:P.zC-.1;  // ...and on round into the doors
+    mesh(grid(20,2,(u,v)=>[s*(P.door-.014),lerp(P.belt-.135,P.belt-.095,v),lerp(zA+.1,zE-.06,u)]),wood,G); }
+  // footwell front wall under the dash (otherwise the road shows through between the dash and the floor)
+  mesh(grid(12,2,(u,v)=>[lerp(-xd,xd,u),lerp(P.dash[n][0]+.01,.30,v),lerp(P.dash[n][1]+.01,P.ws.zB+.2,v)]),M({color:P.col.carpet,roughness:1,normalMap:rep(T.carpet,8,4)}),G);
+  // the screen and its stem
+  const C=P.screen; parts.screen=screenMesh(G,C.c,C.w,C.h,C.tilt,1024,null);
+  const stem=mesh(rbox(.06,.05,.025,.008,.01),M({color:0x0b0b0c,roughness:.4}),G); stem.position.set(C.c[0],C.c[1]-C.h/2-.005,C.c[2]-.035);
+  // centre console: glossy black top, phone pads at the front, armrest in the seat colour
+  { const cm=M({color:0x0d0d0e,roughness:.2,metalness:.15,env:1.2}), zc0=P.dash[n][1]-.03, zc1=P.eye[2]+.45;
+    mesh(grid(10,10,(u,v)=>{ const s=u*2-1, z=lerp(zc0,zc1,v); return [s*.15,.60+.025*(1-s*s)-.05*v+(v<.15?.10*(1-v/.15):0),z]; }),cm,G);
+    for(const s of [-1,1]) mesh(grid(2,8,(u,v)=>[s*.155,lerp(.34,.62-.05*v,u),lerp(zc0,zc1,v)]),loM,G);
+    const padM=M({color:0x0a0a0b,roughness:.7,normalMap:rep(T.grain,2,4)}), rib=M({color:0x1b1b1d,roughness:.6});
+    for(const s of [-1,1]){ const g=new THREE.Group(); g.position.set(s*.05,.69,zc0+.075); g.rotation.x=-1.05; G.add(g);
+      mesh(rbox(.088,.16,.014,.004,.012),padM,g);
+      for(let k=0;k<6;k++) mesh(new THREE.BoxGeometry(.07,.004,.004),rib,g,false).position.set(0,-.06+k*.024,.008); }
+    const ar=mesh(rbox(.2,.07,.34,.03,.05),M({color:SEATS[CK.seats],roughness:.6,normalMap:rep(T.leather,3,4),normalScale:new THREE.Vector2(.25,.25)}),G); ar.position.set(0,.64,zc1-.19); }
+}
 function dashClassic(G,P,parts){
   const T=textures();
   const vin=M({color:P.col.top,roughness:.55,normalMap:rep(T.vinyl,14,4),normalScale:new THREE.Vector2(.7,.7)});
@@ -665,13 +738,13 @@ function build(key){
   const glow=new THREE.PointLight(P.style==='classic'?0xff8a3a:0x8ab4ff,0,1.2,2); glow.position.set(P.wheel.c[0],P.wheel.c[1]+.12,P.wheel.c[2]-.25); G.add(glow);
   const parts={};
   const sh=P.style==='tractor'?tractorCab(G,P,parts):shell(G,P,parts);
-  if(P.style==='classic') dashClassic(G,P,parts); else if(P.style!=='tractor') dashModern(G,P,parts);
+  if(P.style==='classic') dashClassic(G,P,parts); else if(P.style==='ev') dashEV(G,P,parts); else if(P.style!=='tractor') dashModern(G,P,parts);
   parts.wheel=steeringWheel(G,P);
   wipers(G,P,sh.wsP,parts);
   // head-up display (owner 2026-11-20: "I can't see the gauges in cockpit view"; not in the Navigator — its panoramic dash screen
-  // already shows it, owner's request): a projected image floating ~2.3 m ahead, just
+  // already shows it, owner's request — nor the Model Y, whose centre screen shows the speed, as in the real car): a projected image floating ~2.3 m ahead, just
   // above the hood in the driver's line of sight — speed, limit, gear, revs, next turn. ⚙️ Head-up display / H key.
-  if(P.style!=='lux'){ const T=canvasTex(768,320,true), mt=new THREE.MeshBasicMaterial({map:T.t,transparent:true,depthTest:false,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false});
+  if(P.style!=='lux'&&P.style!=='ev'){ const T=canvasTex(768,320,true), mt=new THREE.MeshBasicMaterial({map:T.t,transparent:true,depthTest:false,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false});
     const hood=P.hood?Math.atan((P.eye[1]-P.hood.yf)/(P.eye[2]-P.hood.zf)):.33, ang=Math.max(.035,hood-.045);   // sits just above this car's hood line
     const g=new THREE.Group(); g.position.set(P.eye[0],P.eye[1]-Math.tan(ang)*2.3,P.eye[2]-2.3); G.add(g); g.lookAt(new V3(...P.eye));
     const m=mesh(new THREE.PlaneGeometry(.6,.25),mt,g,false,false); m.renderOrder=20; parts.hud={T,m:mt,g}; }
@@ -774,23 +847,26 @@ function drawPano(pn,d){ const x=pn.T.x, W=pn.w, H=pn.h; x.fillStyle='#03050a'; 
   x.fillStyle='#a99f8f'; x.font=`400 ${s(22)}px system-ui`; x.fillText(d.time,W*.80,H*.40); x.font=`400 ${s(18)}px system-ui`; x.fillText(d.temp+'  ·  '+d.wx,W*.80,H*.70);
   x.fillStyle='#e9dcc6'; x.font=`300 ${s(18)}px system-ui`; x.fillText('Trip '+d.trip+' mi',W*.93,H*.55);
   pn.T.t.needsUpdate=true; }
-function drawScreen(sc,d,lux){ const x=sc.T.x, W=sc.w, H=sc.h; const bg=lux?'#0e0d0b':'#0c0f14'; x.fillStyle=bg; x.fillRect(0,0,W,H);
-  // moving map: nearby roads around the car, heading up, with the route
-  const cx=W*.5, cy=H*.66, sc0=(H*.55)/220;                         // ~220 m from the car to the top
-  x.save(); x.beginPath(); x.rect(0,56,W,H-56); x.clip();
-  x.fillStyle=lux?'#171512':'#121820'; x.fillRect(0,56,W,H-56);
+// moving map: nearby roads around the car, heading up, with the route, in the box R; th = colours
+function drawMap(x,R,th){
+  const cx=R.cx, cy=R.cy, sc0=R.s, X1=R.x+R.w, Y1=R.y+R.h;
+  x.save(); x.beginPath(); x.rect(R.x,R.y,R.w,R.h); x.clip();
+  x.fillStyle=th.land; x.fillRect(R.x,R.y,R.w,R.h);
   const h=(S.hdg||0)*DEG, ch=Math.cos(h), sh=Math.sin(h);
   const tr=(ex,ny)=>{ const f=ex*sh+ny*ch, r=ex*ch-ny*sh; return [cx+r*sc0,cy-f*sc0]; };
   const rg=typeof roadGeo==='object'&&roadGeo.segs;
   if(rg){ const kx=111320*Math.cos(roadGeo.lat*DEG), ox=(S.lng-roadGeo.lng)*kx, oy=(S.lat-roadGeo.lat)*111320;
     x.lineCap='round'; for(const pass of [0,1]) for(const s of rg){ const a=tr(s[0]-ox,s[1]-oy), b=tr(s[2]-ox,s[3]-oy);
-      if((a[0]<-50&&b[0]<-50)||(a[0]>W+50&&b[0]>W+50)||(a[1]<0&&b[1]<0)||(a[1]>H+50&&b[1]>H+50)) continue;
-      x.strokeStyle=pass?(lux?'#5b554b':'#4a5566'):(lux?'#2a2722':'#212a36'); x.lineWidth=Math.max(2,s[4]*sc0*2)+(pass?0:5); x.beginPath(); x.moveTo(a[0],a[1]); x.lineTo(b[0],b[1]); x.stroke(); } }
-  const N=YD.NAV; if(N&&N.coords&&N.dest){ x.strokeStyle='#3d8bff'; x.lineWidth=9; x.beginPath(); let first=true; const kx=111320*Math.cos(S.lat*DEG);
+      if((a[0]<R.x-50&&b[0]<R.x-50)||(a[0]>X1+50&&b[0]>X1+50)||(a[1]<R.y&&b[1]<R.y)||(a[1]>Y1+50&&b[1]>Y1+50)) continue;
+      x.strokeStyle=pass?th.road:th.edge; x.lineWidth=Math.max(2,s[4]*sc0*2)+(pass?0:5); x.beginPath(); x.moveTo(a[0],a[1]); x.lineTo(b[0],b[1]); x.stroke(); } }
+  const N=YD.NAV; if(N&&N.coords&&N.dest){ x.strokeStyle=th.route; x.lineWidth=9; x.beginPath(); let first=true; const kx=111320*Math.cos(S.lat*DEG);
     for(let i=Math.max(0,(N.idx||0));i<N.coords.length&&i<(N.idx||0)+400;i++){ const c=N.coords[i], p=tr((c[0]-S.lng)*kx,(c[1]-S.lat)*111320); if(first){ x.moveTo(p[0],p[1]); first=false; } else x.lineTo(p[0],p[1]); } x.stroke(); }
   // the car arrow
-  x.fillStyle='#ffffff'; x.strokeStyle=lux?'#c9b79c':'#3d8bff'; x.lineWidth=4; x.beginPath(); x.moveTo(cx,cy-20); x.lineTo(cx+14,cy+14); x.lineTo(cx,cy+6); x.lineTo(cx-14,cy+14); x.closePath(); x.fill(); x.stroke();
-  x.restore();
+  x.fillStyle=th.arrow; x.strokeStyle=th.arrowEdge; x.lineWidth=4; x.beginPath(); x.moveTo(cx,cy-20); x.lineTo(cx+14,cy+14); x.lineTo(cx,cy+6); x.lineTo(cx-14,cy+14); x.closePath(); x.fill(); x.stroke();
+  x.restore(); }
+function drawScreen(sc,d,lux){ const x=sc.T.x, W=sc.w, H=sc.h; const bg=lux?'#0e0d0b':'#0c0f14'; x.fillStyle=bg; x.fillRect(0,0,W,H);
+  drawMap(x,{x:0,y:56,w:W,h:H-56,cx:W*.5,cy:H*.66,s:(H*.55)/220},                       // ~220 m from the car to the top
+    {land:lux?'#171512':'#121820',edge:lux?'#2a2722':'#212a36',road:lux?'#5b554b':'#4a5566',route:'#3d8bff',arrow:'#ffffff',arrowEdge:lux?'#c9b79c':'#3d8bff'});
   // status bar
   x.fillStyle=lux?'#1a1814':'#141a22'; x.fillRect(0,0,W,56); x.fillStyle=lux?'#e9dcc6':'#e8eef8'; x.font='500 26px system-ui,Arial'; x.textBaseline='middle';
   x.textAlign='left'; x.fillText(d.time,22,29); x.textAlign='right'; x.fillText(d.temp,W-22,29); x.textAlign='center'; x.font='600 24px system-ui'; x.fillText(d.compass,W/2,29);
@@ -799,6 +875,55 @@ function drawScreen(sc,d,lux){ const x=sc.T.x, W=sc.w, H=sc.h; const bg=lux?'#0e
   if(d.nav){ x.fillText((d.navArrow||'↑')+'  '+d.navDist+'  ·  '+d.navStreet.slice(0,30),22,H-32); x.textAlign='right'; x.font='400 22px system-ui'; x.fillText(d.eta,W-22,H-32); }
   else x.fillText(d.street||'—',22,H-32);
   if(d.limit){ x.fillStyle='#fff'; x.fillRect(W-82,72,62,72); x.fillStyle='#000'; x.textAlign='center'; x.font='700 13px Arial'; x.fillText('SPEED',W-51,86); x.fillText('LIMIT',W-51,100); x.font='800 30px Arial'; x.fillText(d.limit,W-51,124); }
+  sc.T.t.needsUpdate=true; }
+// Model Y centre screen (no cluster behind the wheel): on the left, the "car" panel — gear, speed, speed limit, battery,
+// turn signals and the driving picture (your lane, other cars near you, blue lane lines while AUTO drives); on the right
+// the map with the next turn; along the bottom the dock (car, climate, apps, volume). Light by day, dark after dusk.
+function rr(x,X,Y,w,h,r){ x.beginPath(); x.moveTo(X+r,Y); x.arcTo(X+w,Y,X+w,Y+h,r); x.arcTo(X+w,Y+h,X,Y+h,r); x.arcTo(X,Y+h,X,Y,r); x.arcTo(X,Y,X+w,Y,r); x.closePath(); }
+function drawEV(sc,d){ const x=sc.T.x, W=sc.w, H=sc.h, k=YD.AT?(YD.AT.k||0):0, dark=k>.45;
+  const C=dark?{bg:'#111214',fg:'#f2f3f5',dim:'#7c8088',lane:'#5d626b',car:'#c9ccd2',other:'#6c717a',dock:'#0a0a0b',land:'#1d2026',edge:'#14161a',road:'#3b414b'}
+              :{bg:'#f3f4f6',fg:'#16181b',dim:'#8c9097',lane:'#b9bdc4',car:'#ffffff',other:'#9ea3ab',dock:'#e6e7ea',land:'#e9e7e1',edge:'#d2cfc6',road:'#ffffff'};
+  const LW=Math.round(W*.37), DH=58, MH=H-DH;
+  // map (right)
+  drawMap(x,{x:LW,y:0,w:W-LW,h:MH,cx:LW+(W-LW)*.5,cy:MH*.68,s:(MH*.6)/240},{land:C.land,edge:C.edge,road:C.road,route:'#3e6ae1',arrow:'#3e6ae1',arrowEdge:'#ffffff'});
+  x.textBaseline='middle';
+  x.fillStyle=dark?'rgba(17,18,20,.82)':'rgba(255,255,255,.88)'; rr(x,W-262,14,248,40,20); x.fill();
+  x.fillStyle=C.fg; x.font='500 22px system-ui,Arial'; x.textAlign='center'; x.fillText(d.time+'   '+d.temp,W-138,35);
+  if(d.nav){ x.fillStyle=dark?'#1d1f23':'#ffffff'; rr(x,LW+14,14,W-LW-300,96,14); x.fill();
+    x.fillStyle='#3e6ae1'; x.font='700 52px system-ui'; x.textAlign='center'; x.fillText(d.navArrow||'↑',LW+58,62);
+    x.textAlign='left'; x.fillStyle=C.fg; x.font='600 30px system-ui'; x.fillText(d.navDist,LW+100,46);
+    x.fillStyle=C.dim; x.font='400 22px system-ui'; x.fillText(d.navStreet.slice(0,26),LW+100,84);
+    if(d.eta){ x.fillStyle=dark?'#1d1f23':'#ffffff'; rr(x,LW+14,MH-56,W-LW-28,42,12); x.fill(); x.fillStyle=C.fg; x.font='500 22px system-ui'; x.fillText(d.eta,LW+30,MH-35); } }
+  // car panel (left)
+  x.fillStyle=C.bg; x.fillRect(0,0,LW,MH); x.fillStyle=dark?'#000':'#d9dbdf'; x.fillRect(LW-1,0,1,MH);
+  x.textAlign='left'; x.font='600 26px system-ui,Arial';
+  ['P','R','N','D'].forEach((g,i)=>{ x.fillStyle=g===d.gearL?C.fg:C.dim; x.font=(g===d.gearL?'700':'500')+' 26px system-ui,Arial'; x.fillText(g,24+i*30,34); });
+  const bat=Math.max(5,Math.round(80-(+d.trip)*.32));               // Long Range: ~310 miles to a full battery
+  x.textAlign='right'; x.fillStyle=C.fg; x.font='500 22px system-ui'; x.fillText(bat+'%',LW-24,34);
+  x.strokeStyle=C.fg; x.lineWidth=2; rr(x,LW-122,24,40,20,4); x.stroke(); x.fillStyle=bat<20?'#e0443e':C.fg; x.fillRect(LW-119,27,34*bat/100,14); x.fillRect(LW-81,30,3,8);
+  const cx=LW*.5; x.textAlign='center'; x.fillStyle=C.fg; x.font='600 104px "Helvetica Neue",system-ui,Arial'; x.fillText(String(d.mph),cx,120);
+  x.fillStyle=C.dim; x.font='500 22px system-ui'; x.fillText('MPH',cx,180);
+  if(d.limit){ const lx=cx+128, ly=120; x.fillStyle='#fff'; rr(x,lx-28,ly-38,56,76,8); x.fill(); x.strokeStyle='#111'; x.lineWidth=3; rr(x,lx-24,ly-34,48,68,6); x.stroke();
+    x.fillStyle='#111'; x.font='700 11px Arial'; x.fillText('SPEED',lx,ly-21); x.fillText('LIMIT',lx,ly-9); x.font='800 30px Arial'; x.fillText(d.limit,lx,ly+16); }
+  const bl=S.blink||0, on=Math.floor(performance.now()/380)%2===0;      // turn signals (js: S.blink -1 left / 1 right, when a signal is on)
+  for(const sd of [-1,1]) if(bl===sd&&on){ x.fillStyle='#21b24b'; x.beginPath(); const ax=cx+sd*130, ay=120; x.moveTo(ax+sd*22,ay); x.lineTo(ax-sd*4,ay-22); x.lineTo(ax-sd*4,ay-9); x.lineTo(ax-sd*22,ay-9); x.lineTo(ax-sd*22,ay+9); x.lineTo(ax-sd*4,ay+9); x.lineTo(ax-sd*4,ay+22); x.closePath(); x.fill(); }
+  // the driving picture: your lane in perspective, nearby traffic, your car
+  const vy=232, by=MH-18, ap=window.AUTO&&AUTO.on, P0=(r,f)=>{ const t=8/(Math.max(0,f)+8); return [cx+r*t*58,vy+(by-vy)*t]; };
+  x.lineWidth=4; for(const lx of [-1.8,1.8]){ x.strokeStyle=ap?'#3e6ae1':C.lane; x.beginPath(); let a=P0(lx,-4); x.moveTo(a[0],a[1]); for(let f=0;f<=80;f+=4){ a=P0(lx,f); x.lineTo(a[0],a[1]); } x.stroke(); }
+  x.strokeStyle=C.lane; x.lineWidth=2; x.setLineDash([10,12]); for(const lx of [-5.4,5.4]){ x.beginPath(); let a=P0(lx,-4); x.moveTo(a[0],a[1]); for(let f=0;f<=80;f+=4){ a=P0(lx,f); x.lineTo(a[0],a[1]); } x.stroke(); } x.setLineDash([]);
+  const T=window.TRAFFIC&&TRAFFIC.state, MX=typeof MLNG==='number'?MLNG:111320*Math.cos(S.lat*DEG), MY=typeof MLAT==='number'?MLAT:111320;
+  if(T&&T.on&&T.agents){ const h=(S.hdg||0)*DEG, px=S.lng*MX, py=S.lat*MY, L=[];
+    for(const a of T.agents){ if(!a.path||!(a.fade>.3)) continue; const dx=a.px-px, dy=a.py-py, f=dx*Math.sin(h)+dy*Math.cos(h), r=dx*Math.cos(h)-dy*Math.sin(h);
+      if(f>-3&&f<70&&Math.abs(r)<9) L.push([f,r]); }
+    L.sort((a,b)=>b[0]-a[0]); for(const [f,r] of L){ const p=P0(r,f), sz=8/(Math.max(0,f)+8); x.fillStyle=C.other; rr(x,p[0]-46*sz,p[1]-62*sz,92*sz,70*sz,16*sz); x.fill(); } }
+  { const w=96, h=70, X=cx-w/2, Y=by-h-6; x.fillStyle=dark?'rgba(0,0,0,.5)':'rgba(0,0,0,.12)'; x.beginPath(); x.ellipse(cx,Y+h+4,w*.6,10,0,0,7); x.fill();
+    x.fillStyle=C.car; x.strokeStyle=dark?'#9aa0a8':'#c4c8ce'; x.lineWidth=2; rr(x,X,Y+8,w,h-8,22); x.fill(); x.stroke();
+    x.fillStyle=dark?'#2b2e33':'#3a3f46'; rr(x,X+12,Y,w-24,34,14); x.fill();                                         // glass roof
+    x.fillStyle='#c8202a'; rr(x,X+4,Y+40,24,8,4); x.fill(); rr(x,X+w-28,Y+40,24,8,4); x.fill(); }                       // tail lights
+  if(ap){ x.fillStyle='#3e6ae1'; x.font='600 18px system-ui'; x.fillText('Autosteer',cx,212); }
+  // dock
+  x.fillStyle=C.dock; x.fillRect(0,MH,W,DH); x.fillStyle=C.fg; x.textAlign='center'; x.font='500 24px system-ui,Arial';
+  x.fillText('🚗',46,MH+DH/2); x.fillText('‹  68°  ›',210,MH+DH/2); x.fillText('📞    🎵    •••',W*.52,MH+DH/2); x.fillText('‹  68°  ›',W-230,MH+DH/2); x.fillText('🔊',W-48,MH+DH/2);
   sc.T.t.needsUpdate=true; }
 const ARROWS={'↑':'↑','↗':'↗','→':'→','↘':'↘','↓':'↓','↙':'↙','←':'←','↖':'↖'};
 function gather(c,dt){ const e=engineState(c,dt), sp=c.P, mph=Math.round(Math.abs(S.v||0)*2.237), hd=((S.hdg%360)+360)%360;
@@ -819,7 +944,7 @@ function update(dt){
   if(p.tyres) for(const t of p.tyres){ t.sp.rotation.x=-(S.dist||0)/t.r; t.pv.rotation.y=t.front?-(S.steer||0):0; }
   // lighting from the world: sky light, the real sun through the glass, gauges glowing after dark
   const k=YD.AT?(YD.AT.k||0):0, mainHemi=scene.children.find(o=>o&&o.isHemisphereLight), hi=mainHemi?mainHemi.intensity:.85;
-  c.hemi.intensity=hi*1.05*(1-.7*k); c.hemi.color.copy(mainHemi?mainHemi.color:new THREE.Color(0xdfeeff)); c.amb.intensity=.035+.02*(1-k);
+  c.hemi.intensity=hi*1.05*(1-.7*k)*(P.glassRoof?1.22:1); c.hemi.color.copy(mainHemi?mainHemi.color:new THREE.Color(0xdfeeff)); c.amb.intensity=.035+.02*(1-k);
   const sp=YD.AT&&YD.AT.sun; if(sp){ const rb=(sp.az-S.hdg)*DEG, al=Math.max(sp.alt,-2)*DEG;
     c.sunL.position.set(Math.sin(rb)*Math.cos(al)*10,Math.sin(al)*10,-Math.cos(rb)*Math.cos(al)*10).add(new V3(...P.eye).negate().multiplyScalar(0));
     c.sunL.target.position.set(0,0,0); c.sunL.intensity=sp.alt>0?sun.intensity*(c.sunL.castShadow?1.35:.45):0; c.sunL.color.copy(sun.color); }
@@ -843,7 +968,7 @@ function update(dt){
   if(p.hud){ p.hud.g.visible=CK.hud; if(CK.hud) p.hud.m.opacity=1-.45*k; }
   const ik=[d.mph,Math.round(d.rpm/60),d.gear,d.gearL,d.street,d.limit,d.time,d.temp,d.wx,d.trip,d.nav,d.navArrow,d.navDist,d.navStreet,d.eta,d.compass,CK.hud].join('|');
   if(now-c.lastDraw>66){ c.lastDraw=now; if(ik!==c.ik){ c.ik=ik; if(p.hud&&CK.hud) drawHud(p.hud,d);   // only when a number on them changed (each redraw is a texture upload)
-    if(p.cluster) drawSport(p.cluster,d); if(p.pano) drawPano(p.pano,d); } if(p.screen&&now-(c.lastMap||0)>130){ c.lastMap=now; drawScreen(p.screen,d,P.style==='lux'); }
+    if(p.cluster) drawSport(p.cluster,d); if(p.pano) drawPano(p.pano,d); } if(p.screen&&now-(c.lastMap||0)>130){ c.lastMap=now; if(P.style==='ev') drawEV(p.screen,d); else drawScreen(p.screen,d,P.style==='lux'); }
     if(p.prnd&&p.prnd.cur!==d.gearL){ const pr=p.prnd, x=pr.T.x, L=pr.classic?['P','R','N','D','2','1']:['P','R','N','D','S'], W=pr.T.c.width, step=pr.classic?42:pr.lux?102:50, o=pr.classic?22:pr.lux?52:28;
       x.fillStyle=pr.lux?'#16130f':pr.classic?'#0c0c0c':'#0a0a0b'; x.fillRect(0,0,W,64); x.font=pr.lux?'600 30px system-ui':pr.classic?'700 30px Arial':'700 34px system-ui'; x.textAlign='center'; x.textBaseline='middle';
       L.forEach((t,i)=>{ x.fillStyle=t===d.gearL?(pr.classic?'#ff7a2a':'#ffffff'):(pr.lux?'#a09c94':'#70757c'); x.fillText(t,o+i*step,32); }); pr.T.t.needsUpdate=true; pr.cur=d.gearL; } }
@@ -889,7 +1014,7 @@ function buildIndex(){ BI.t=performance.now(); BI.at=[S.lng,S.lat]; BI.cells=new
 // where this car's headlights are, for the cockpit beams (atmos.js makeCkBeams): lamp centres off the centre line and the
 // front of the car (m), and the colour of the light (LED white on the Fords, warm halogen on the Javelin and the tractor)
 const LAMPS={explorer:{lamp:.70,front:2.42,col:[236,244,255]},navigator:{lamp:.75,front:2.64,col:[236,244,255]},
-  javelin:{lamp:.60,front:2.36,col:[255,238,205]},tractor:{lamp:.34,front:1.86,col:[255,236,200]}};
+  javelin:{lamp:.60,front:2.36,col:[255,238,205]},modely:{lamp:.66,front:2.30,col:[240,246,255]},tractor:{lamp:.34,front:1.86,col:[255,236,200]}};
 CK.lamps=function(){ const k=mode==='tractor'?'tractor':specKey(CARKEY), L=LAMPS[k]||LAMPS.explorer; return {...L,key:k}; };
 CK.blocksAt=function(lng,lat){
   const now=performance.now(), moved=BI.at?meters(BI.at[1],BI.at[0],S.lat,S.lng):1e9;
@@ -1023,6 +1148,12 @@ CK.toggle=function(v){ CK.want=v==null?!CK.want:!!v; LSs('ydView',CK.want?'cockp
 /* ---------- settings, keys, mode changes ---------- */
 function showPick(){ const p=document.getElementById('viewPick'); if(p) for(const b of p.querySelectorAll('button')) b.classList.toggle('on',(b.dataset.view==='cockpit')===CK.want);
   const r=document.getElementById('fovRow'); if(r) r.style.display=CK.want?'':'none'; const hb=document.getElementById('hudBtn'); if(hb) hb.classList.toggle('on',CK.hud); const rr=document.getElementById('rsRow'); if(rr) rr.style.display=CK.want?'':'none'; const rb=document.getElementById('rsBtn'); if(rb) rb.classList.toggle('on',CK.real); const v=document.getElementById('fovVal'); if(v) v.textContent=Math.round(CK.fov)+'°'; }
+// ⚙️ Seats (shown while the Model Y is picked): white (the owner's) or black
+function showSeats(){ const r=document.getElementById('seatRow'); if(r) r.style.display=CARKEY==='modely'?'':'none';
+  const p=document.getElementById('seatPick'); if(p) for(const b of p.querySelectorAll('button')) b.classList.toggle('on',b.dataset.s===CK.seats); }
+{ const p=document.getElementById('seatPick'); if(p) p.addEventListener('click',e=>{ const b=e.target.closest('button[data-s]'); if(!b) return; e.stopPropagation();
+    CK.seats=b.dataset.s; LSs('ydSeatsY',CK.seats); showSeats(); if(CK.cab){ dispose(); if(CK.on) build(CARKEY); } dirty=true; }); }
+showSeats();
 const pick=document.getElementById('viewPick');
 if(pick) pick.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; e.stopPropagation(); CK.toggle(b.dataset.view==='cockpit'); });
 for(const [id,d] of [['fovM',-5],['fovP',5]]){ const b=document.getElementById(id); if(b) b.addEventListener('click',e=>{ e.stopPropagation(); CK.fov=clamp(CK.fov+d,30,60); LSs('ydCkFov2',String(CK.fov)); showPick(); dirty=true; }); }
@@ -1033,7 +1164,7 @@ addEventListener('keydown',e=>{ if(e.repeat||(e.target&&e.target.tagName==='INPU
 const prevMode=window.onModeChange;
 window.onModeChange=(m,was)=>{ if(prevMode) prevMode(m,was); if(CK.on&&m!=='car'&&m!=='tractor') leave(); else if(CK.on&&m!==was){ dispose(); } };
 const prevCar=window.onCarChange;
-window.onCarChange=(k)=>{ if(prevCar) prevCar(k); if(CK.cab) { dispose(); if(CK.on) build(k); } };
+window.onCarChange=(k)=>{ if(prevCar) prevCar(k); showSeats(); if(CK.cab) { dispose(); if(CK.on) build(k); } };
 const prevPow=window.onPowerChange;
 window.onPowerChange=(...a)=>{ if(prevPow) prevPow(...a); applyShadows(); };
 showPick();

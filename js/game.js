@@ -368,6 +368,12 @@ const CARS={
   javelin3d:{name:'AMC Javelin AMX',paint:0x141518,model:'models/javelin-amx.glb?v=1',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237,perf:{t60:6.8,top:120,a0:6.0}},
   // the owner's second version of that model (2026-10-02): wheel wells, window frames, non-metallic black paint, darker glass
   javelin3d2:{name:'AMC Javelin AMX',paint:0x141518,model:'models/javelin-amx-v2.glb?v=2',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237,perf:{t60:6.8,top:120,a0:6.0}},
+  // 2023 Tesla Model Y Long Range AWD with Acceleration Boost (the owner's car, 2026-11-21, issue #5): a 3D model built by
+  // tools/make-model-y.py from the owner's photos (Pearl White, 20" black aero wheels, glass roof). Electric: one gear,
+  // instant torque (0-60 mph in 4.2 s with the Boost), regen braking when you lift (regen m/s^2 at speed), motor whine
+  // instead of an engine (js/enh/sound.js 'tesla'). Top speed 135 mph.
+  modely:{name:'Tesla Model Y',paint:0xeceeee,model:'models/model-y.glb?v=1',W:1.92,lamp:.66,front:2.30,sound:'tesla',ev:true,regen:1.7,
+    vmax:135/2.237,perf:{t60:4.2,top:135,a0:9.0}},
   // the farm tractor as its own choice (owner 2026-11-20: "just another car option… don't change to the tractor automatically
   // when you enter a farm field"): drives in tractor mode (its 3D model, 75% speed, diesel sound) wherever you take it
   tractor:{name:'Farm tractor',tractor:true,paint:0x367c2b,W:2.3,lamp:.55,front:2.1,sound:'jd68'}
@@ -1326,8 +1332,10 @@ function step(now){
   if(hand){a-=Math.sign(S.v)*30*mu; braking=Math.abs(S.v)>.5;}
   const SF=REAL&&window.FEEL&&!boat&&!tractor?FEEL.surf:null;       // realistic driving: what the tyres are on (js/enh/feel.js)
   const cap=boat?BOATMAX:tractor?vmax:(SF?(SF.cap||Math.max(MAXV,vtop||0)):(onRoad?Math.max(MAXV,vtop||0):34));
-  if(PF) a-=Math.sign(S.v)*(PF.rr+PF.cd*S.v*S.v+(gas<=.05&&Math.abs(S.v)>.3?.7+.015*Math.abs(S.v):0));   // rolling + air drag, engine braking off the gas
-  else a-=Math.sign(S.v)*(boat?(.25+.0022*S.v*S.v):(.35+.0032*S.v*S.v));                // rolling + aero drag
+  // an electric car's regenerative braking off the pedal (Model Y: about 0.17 g at speed, fading out below ~8 mph, as the real one does)
+  const regen=CARSPEC.regen&&mode==='car'&&!boat&&gas<=.05&&Math.abs(S.v)>.3?CARSPEC.regen*Math.min(1,(Math.abs(S.v)-.3)/3.5)*Math.min(1,mu+.1):0;
+  if(PF) a-=Math.sign(S.v)*(PF.rr+PF.cd*S.v*S.v+(regen||(gas<=.05&&Math.abs(S.v)>.3?.7+.015*Math.abs(S.v):0)));   // rolling + air drag, engine braking (or regen) off the gas
+  else a-=Math.sign(S.v)*((boat?(.25+.0022*S.v*S.v):(.35+.0032*S.v*S.v))+regen);         // rolling + aero drag
   if(SF){ if(SF.drag||SF.rr) a-=S.v*SF.drag+(Math.abs(S.v)>.3?Math.sign(S.v)*SF.rr:0); }   // each surface drags differently (grass, woods, sand, mud...)
   else if(!onRoad&&!boat&&!tractor) a-=S.v*.15;                          // mild grass drag
   if(S.inWater&&!boat){ a-=S.v*1.2; }                                    // wading through water in a car or tractor: slow going (~5 mph)

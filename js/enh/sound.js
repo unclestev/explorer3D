@@ -4,6 +4,8 @@
        Explorer ST  3.0 L twin-turbo EcoBoost V6, 10-speed automatic, turbo whistle and boost
        AMC Javelin  401 V8 with dual exhaust, 3-speed automatic
        Navigator    3.5 L twin-turbo EcoBoost V6 (the EcoBoost synth through the Navigator's 10-speed, axle and 22" tyres)
+       Model Y      electric (2023 Long Range AWD): no engine — motor whine locked to motor speed through its 9:1 single-speed
+                    gearbox, a quieter whine under regen, and the low-speed pedestrian warning hum below 19 mph
        Tractor      John Deere PowerTech 6.8 L inline-six turbo diesel (6R-series style), IVT transmission: the engine
                     speed follows the throttle (850 idle -> 2,100 rated), not the road speed
    - Engine speed comes from a model of each car's drivetrain (gear ratios, axle, tyre size, torque converter, shift
@@ -27,7 +29,8 @@ const ENG={
   amc401:{                                                       // Javelin: 3-speed TorqueCommand, 3.15 axle, 26.5" tyres
     gears:[2.45,1.45,1.0], axle:3.15, tyre:.673*Math.PI,
     idle:700, redline:5200, up:[1700,3000], down:[1050,1300], kick:4200, flare:[1500,2400], gain:.32, skip:false},
-  jd68:{ivt:true, idle:850, rated:2100, gain:.17}                 // John Deere 6R-style tractor (any car: used in the tractor)
+  jd68:{ivt:true, idle:850, rated:2100, gain:.17},                // John Deere 6R-style tractor (any car: used in the tractor)
+  tesla:{ev:true, ratio:9.04, tyre:.737*Math.PI, gain:.42}        // Model Y: 9.04:1 single speed, 255/45R20 tyres (no idle, no gears)
 };
 const A={ctx:null,nodes:{},ready:false,failed:false,rpm:700,gear:0,shiftT:0,boost:0,gainNow:{},key:null};
 const engKey=()=>mode==='tractor'?'jd68':typeof CARSPEC!=='undefined'?CARSPEC.sound:null;
@@ -46,7 +49,7 @@ function start(){
   A.bus=A.ctx.createBiquadFilter(); A.bus.type='lowpass'; A.bus.frequency.value=20000; A.bus.Q.value=.5;
   A.boom=A.ctx.createBiquadFilter(); A.boom.type='peaking'; A.boom.frequency.value=110; A.boom.Q.value=.9; A.boom.gain.value=0;
   A.bus.connect(A.boom); A.boom.connect(A.ctx.destination);
-  A.ctx.audioWorklet.addModule('js/enh/engine-worklet.js?v=3').then(()=>{
+  A.ctx.audioWorklet.addModule('js/enh/engine-worklet.js?v=4').then(()=>{
     for(const k of Object.keys(ENG)){
       const n=new AudioWorkletNode(A.ctx,ENG[k].proc||k,{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2]});
       n.connect(A.bus); A.nodes[k]=n; A.gainNow[k]=0; }
@@ -59,6 +62,7 @@ for(const t of ['pointerdown','touchend','click','keydown']) document.addEventLi
 // drivetrain model -> engine rpm, load and (EcoBoost) turbo boost
 function engine(E,dt){
   if(E.ivt) return tractor(E,dt);
+  if(E.ev) return electric(E,dt);
   const v=Math.abs(S.v||0), gas=Math.max(0,S.gas||0), shaft=v/E.tyre*60*E.axle, G=E.gears;
   const inGear=g=>shaft*G[g];
   if(S.v<-.2) A.gear=0;                                          // reverse: low ratio
@@ -95,16 +99,26 @@ function tractor(E,dt){
   return {rpm:A.rpm, load:gas, boost:A.boost};
 }
 
+// electric: motor speed is road speed through the one fixed gear; load is the pedal, or minus the regen when you lift
+function electric(E,dt){
+  const v=Math.abs(S.v||0), gas=Math.max(0,S.gas||0), brk=Math.max(0,-(S.gas||0));
+  A.rpm=v/E.tyre*60*E.ratio; A.gear=0;
+  const regen=gas<=.05&&v>.3&&CARSPEC&&CARSPEC.regen?Math.min(1,(v-.3)/3.5)*.6+.3*brk:0;
+  const want=gas>.05?gas:-regen; A.load=(A.load||0)+(want-(A.load||0))*Math.min(1,dt*6);
+  return {rpm:A.rpm, load:A.load, boost:0, speed:v};
+}
+
 // called every frame by the game loop; never asks for a redraw
 FRAME_HOOKS.push(function engineSound(dt){
   if(!A.ready) return false;
   const want=wanted(), key=engKey(), t=A.ctx.currentTime;
-  if(key!==A.key){ A.key=key; const E=ENG[key]; A.rpm=E?E.idle:700; A.gear=0; A.boost=0; }
+  if(key!==A.key){ A.key=key; const E=ENG[key]; A.rpm=E?(E.idle||0):700; A.gear=0; A.boost=0; A.load=0; }
   const e=ENG[key]?engine(ENG[key],dt||.016):null;
   for(const k of Object.keys(A.nodes)){
     const P=A.nodes[k].parameters, g=(want&&k===key)?ENG[k].gain:0;
     if(g>0&&e){ P.get('rpm').setTargetAtTime(e.rpm,t,.03); P.get('load').setTargetAtTime(e.load,t,.05);
-      const b=P.get('boost'); if(b) b.setTargetAtTime(e.boost,t,.05); }
+      const b=P.get('boost'); if(b) b.setTargetAtTime(e.boost,t,.05);
+      const sp=P.get('speed'); if(sp) sp.setTargetAtTime(e.speed||0,t,.05); }
     if(Math.abs(g-A.gainNow[k])>.001){ P.get('gain').setTargetAtTime(g,t,g>A.gainNow[k]?.15:.25); A.gainNow[k]=g; }
   }
   // let the phone rest when there's nothing to play
