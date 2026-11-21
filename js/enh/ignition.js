@@ -12,6 +12,9 @@
 (()=>{
 'use strict';
 const IGN={state:'on',t:0};
+// the Explorer's flare after it fires (owner's 2022 Explorer video): up in ~0.2 s, held high for about a second, then down
+// to idle within ~0.6 s
+function HOLD(u){ return Math.min(1,u*5)*(u<1?1:Math.exp(-(u-1)*3.2)); }
 window.IGN=IGN;
 const say=(m,ms)=>{ if(typeof toast==='function') toast(m,ms||1600); };
 const kind=()=>mode==='tractor'?'diesel':(typeof CARKEY==='string'&&CARKEY==='modely')?'ev':/^javelin/.test(CARKEY||'')?'v8':CARKEY==='navigator'?'lux':'gas';
@@ -39,13 +42,13 @@ IGN.rpm=function(idle){ const k=kind(), c=CRANK[k];
     const u=IGN.t-c;
     // Explorer (owner 2026-11-21, a video of a 2022 Explorer starting): a short, quiet crank, then it fires hard, flares to
     // about twice idle within ~0.2 s and settles back over a second and a half to a slightly fast cold idle
-    if(k==='gas') return idle*(1.06+1.0*Math.exp(-u*1.5)*Math.min(1,u*5));
+    if(k==='gas') return idle*(1.06+.95*HOLD(u));
     return idle*(1+(c?.7:.2)*Math.exp(-u*2.2)*Math.min(1,u*(c?8:3))); }
   return null; };
 // the throttle the engine sound should use while starting: a little while cranking; the Explorer fires hard (as loud as
 // a good push on the gas) and quietens as it settles, the way it does in the owner's video
 IGN.load=function(){ if(IGN.state!=='crank') return 0; const k=kind(), c=CRANK[k];
-  if(IGN.t<c) return .15; if(k!=='gas') return 0; const u=IGN.t-c; return .6*Math.exp(-u*1.5)*Math.min(1,u*5); };
+  if(IGN.t<c) return .15; if(k!=='gas') return 0; return .6*HOLD(IGN.t-c); };
 FRAME_HOOKS.push(function ignition(dt){
   if(IGN.state==='crank'){ IGN.t+=dt; if(IGN.t>CRANK[kind()]+(kind()==='gas'?2.4:1.2)){ IGN.state='on'; show(); } }
   else if(IGN.state==='stop'){ IGN.t+=dt; if(IGN.t>.8){ IGN.state='off'; show(); } }
@@ -62,44 +65,55 @@ FRAME_HOOKS.push(function ignition(dt){
    pulsing with each firing, strongest at the flare, fading into the idle by ~3 s. Synthesized (no recording); its
    band levels were set against the video's. EXPLORER_START is a pure function so tools can render it offline. */
 function EXPLORER_START(sr){
-  const len=3.3, n=Math.round(sr*len), out=new Float32Array(n), c=.35, idle=650;
+  const len=6.5, n=Math.round(sr*len), out=new Float32Array(n), c=.35, idle=650, W=XW;
   const bp=(fc,q)=>{ const f=2*Math.sin(Math.PI*fc/sr); let lo=0,bd=0; return x=>{ const hi=x-lo-bd/q; bd+=f*hi; lo+=f*bd; return bd; }; };
-  const b1a=bp(380,2), b1b=bp(380,2), b1=x=>b1b(b1a(x))*.35, b2a=bp(780,2), b2b=bp(780,2), b2=x=>b2b(b2a(x))*.35, b0=bp(55,1.2), bs=bp(150,2);
+  const two=(fc,q)=>{ const a=bp(fc,q), b=bp(fc,q); return x=>b(a(x))*.35; };
+  const b1=two(380,2), b2=two(780,2), b3=two(3500,1.2), bg=two(900,1.2), b0=bp(55,1.2), bs=bp(150,2), bsub=bp(40,1.5);
   let s=4242, fph=0, sph=0;
   const rnd=()=>{ s=(s*1664525+1013904223)>>>0; return s/4294967296-.5; };
   for(let i=0;i<n;i++){ const t=i/sr, w=rnd(); let y=0;
-    if(t<c+.04){ // the starter: a low groan loaded by the compression strokes
+    if(t<c+.04){ // the starter: a low groan loaded by the compression strokes, with the gear's grind on top
       sph+=2*Math.PI*(38+14*Math.min(1,t/.15))/sr; const comp=.55+.45*Math.max(0,Math.sin(2*Math.PI*t*9));
       const env=Math.min(1,t/.02)*Math.min(1,(c+.04-t)/.04);
-      y+=(Math.sin(sph)*.6+Math.sin(sph*2)*.25+b0(w)*.6+bs(w)*.08)*comp*env*.025; }
-    else { const u=t-c, r=idle*(1.06+1.0*Math.exp(-u*1.5)*Math.min(1,u*5));
-      fph+=r/60*3/sr; const p=Math.pow(.5+.5*Math.cos(2*Math.PI*fph),3);              // one knock per firing (V6: 3 a turn)
-      const lvl=(.12+.8*Math.exp(-u*2.5)*Math.min(1,u*6))*Math.min(1,Math.max(0,(len-t)/1.1));
-      y+=(b1(w)*1.5*(.4+.6*p)+b2(w)*.15*(.3+.7*p)+b0(w)*.3*p)*lvl; }
+      y+=(Math.sin(sph)*.6+Math.sin(sph*2)*.25+b0(w)*.6+bs(w)*.08+bg(w)*W.grind)*comp*env*.025; }
+    else { const u=t-c, h=HOLD(u), r=idle*(1.06+.95*h);
+      fph+=r/60*3/sr; const pc=.5+.5*Math.cos(2*Math.PI*fph), p=pc*pc*pc;           // one knock per firing (V6: 3 a turn)
+      const fade=Math.min(1,Math.max(0,(len-t)/1.5));
+      y+=( b0(w)*p*(W.sub0+W.sub1*h) + bsub(w)*W.thump*h                             // the low thump of the firings (strong at the flare)
+         + b1(w)*(.4+.6*p)*(W.c380f*h+W.c380i)                                       // 380 Hz clatter
+         + b2(w)*(.3+.7*p)*(W.c780f*h+W.c780i*(1-h))                                 // 780 Hz: the idle's valvetrain
+         + b3(w)*p*p*W.tick*(1-h) )*fade; }                                          // a fine ticking above 2 kHz at idle
     out[i]=y; }
   return out; }
-// Explorer start-up chime (owner 2026-11-21: "put that sound effect in for the Explorer chime", the dings in their 2022
-// Explorer video). Measured from it, synthesized: a soft "ding" every 1.6 s, four of them, the first as the engine fires —
-// an A major chord, A4 (440 Hz) strongest with E5 (660 Hz) ~9 dB under and C#5 (554 Hz) ~21 dB under, struck softly
-// and dying away ~40 dB a second. Plays straight to the speakers (it's the car's own chime speaker).
+// weights of each part, set by rendering the start and comparing band by band with the owner's video
+// (an automatic search over these, 2026-11-21, came out closest to the video — 4.7 dB average difference across eight
+// bands in the crank, flare, hold and idle, from 10.2 — with only the starter's grind and a little low knock: the game's
+// own engine sound already carries the rest; the other parts stay here at 0 for later tuning)
+const XW={grind:2,sub0:.1,sub1:0,thump:0,c380f:0,c380i:0,c780f:0,c780i:0,tick:0};
+// Explorer start-up chime (owner 2026-11-21: "make the chime like the video", the dings in their 2022 Explorer video).
+// Measured from it, synthesized: each "ding" is really three soft notes, one after the other — A4 (440 Hz), then 0.15 s
+// later E5 (661 Hz, with a second tone at 677 Hz beating against it), then 0.30 s after the start a note at 543 Hz — the
+// later two ~9 dB under the first, all nearly pure tones dying away ~43 dB a second. A ding every 1.6 s, four of them.
+// Plays straight to the speakers (it's the car's own chime speaker).
 function EXPLORER_CHIME(sr){
-  const len=6, n=Math.round(sr*len), out=new Float32Array(n), P=[[440,1],[660,.36],[554,.085],[880,.03]];
-  for(let k=0;k<4;k++){ const i0=Math.round((.45+k*1.6)*sr);
-    for(const [f,a] of P){ const w=2*Math.PI*f/sr, dec=Math.exp(-1/(.22*sr));
-      let e=a; for(let i=i0;i<n&&e>1e-4;i++){ const j=i-i0; out[i]+=Math.sin(w*j)*e*Math.min(1,j/(sr*.005)); e*=dec; } } }
+  const len=6, n=Math.round(sr*len), out=new Float32Array(n), tau=.2;
+  const NOTES=[[0,440.2,1],[.15,660.6,.35],[.15,676.8,.33],[.15,692.1,.18,.025],[.30,542.7,.36]];   // [delay, Hz, level, decay s]
+  for(let k=0;k<4;k++){ const t0=.70+k*1.6;   // ~0.35 s after the engine fires, as in the video
+    for(const [dt,f,a,d] of NOTES){ const i0=Math.round((t0+dt)*sr), w=2*Math.PI*f/sr, dec=Math.exp(-1/((d||tau)*sr));
+      let e=a; for(let i=i0;i<n&&e>1e-4;i++){ const j=i-i0; out[i]+=Math.sin(w*j)*e*Math.min(1,j/(sr*.004)); e*=dec; } } }
   let pk=0; for(const v of out) pk=Math.max(pk,Math.abs(v)); for(let i=0;i<n;i++) out[i]=out[i]/pk*.7*Math.min(1,(n-i)/(sr*.2));
   return out; }
 let ECHIME=null;
 function explorerChime(){ const A=window.SOUND&&SOUND.state; if(!A||!A.ctx||!SOUND.on||A.ctx.state!=='running') return;
   try{ const sr=A.ctx.sampleRate; if(!ECHIME||ECHIME.sampleRate!==sr){ const d=EXPLORER_CHIME(sr); ECHIME=A.ctx.createBuffer(1,d.length,sr); ECHIME.getChannelData(0).set(d); }
-    const src=A.ctx.createBufferSource(); src.buffer=ECHIME; const g=A.ctx.createGain(); g.gain.value=window.COCKPIT&&COCKPIT.on?.45:.25;
+    const src=A.ctx.createBufferSource(); src.buffer=ECHIME; const g=A.ctx.createGain(); g.gain.value=window.COCKPIT&&COCKPIT.on?.35:.21;   // level set against the video
     src.connect(g); g.connect(A.ctx.destination); src.start(); }catch(e){ console.warn('explorer chime',e); } }
 let ESTART=null;
 function startLayer(){ const A=window.SOUND&&SOUND.state; if(!A||!A.ctx||!A.bus||!SOUND.on||A.ctx.state!=='running') return;
   try{ const sr=A.ctx.sampleRate; if(!ESTART||ESTART.sampleRate!==sr){ const d=EXPLORER_START(sr); ESTART=A.ctx.createBuffer(1,d.length,sr); ESTART.getChannelData(0).set(d); }
     const src=A.ctx.createBufferSource(); src.buffer=ESTART; const g=A.ctx.createGain(); g.gain.value=(window.COCKPIT&&COCKPIT.on?1:.6)*START_GAIN;
     src.connect(g); g.connect(A.bus); src.start(); }catch(e){ console.warn('start layer',e); } }
-const START_GAIN=2;                                                // set against the engine sound's level (see EXPLORER_START)
+const START_GAIN=4;                                                // set against the engine sound's level (see EXPLORER_START)
 /* the starter motor: a geared whine rising as it spins up, with a grinding edge, through the engine sound's cabin filter */
 function starter(len,k){
   const A=window.SOUND&&SOUND.state; if(!A||!A.ctx||!A.bus||!SOUND.on||A.ctx.state!=='running') return;
