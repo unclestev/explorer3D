@@ -137,7 +137,7 @@ function updateEnv(force){
   const s=skyCols(), key=s.sky.getHexString()+s.k.toFixed(1);
   if(!force&&key===ENV.key) return; ENV.key=key;
   const o=ENV.out, i=ENV.inn;
-  ENV.out=gradEnv(s.sky,s.hor,s.gnd);
+  ENV.out=gradEnv(s.sky,s.hor,s.gnd); ENV.hor=s.hor.clone();
   const d=1-.75*s.k, cab=new THREE.Color(0x2a2a2c).multiplyScalar(d), win=s.hor.clone().multiplyScalar(.9);
   ENV.inn=gradEnv(cab,new THREE.Color(0x111214).multiplyScalar(d),new THREE.Color(0x060607),win);
   for(const m of MATS) if(m.envMap!==undefined){ m.envMap=m.userData.out?ENV.out:ENV.inn; m.needsUpdate=true; }
@@ -284,7 +284,7 @@ const MIR={rt:null,cam:null,bg:null,bgT:null,mats:[],frames:[],t:0,
 function mirrorBackdrop(){ const x=MIR.bgC.getContext('2d'), s=skyCols(), sky='#'+s.sky.getHexString(), hor='#'+s.hor.getHexString(), k=s.k;
   const g=x.createLinearGradient(0,0,0,128); g.addColorStop(0,sky); g.addColorStop(.5,hor); g.addColorStop(.5,k>.5?'#15171a':'#6d7a5f'); g.addColorStop(.62,k>.5?'#101113':'#5b5f63'); g.addColorStop(1,k>.5?'#0d0e10':'#4a4d51');
   x.fillStyle=g; x.fillRect(0,0,4,128); MIR.bgT.needsUpdate=true; }
-function renderMirror(dt){ if(!MIR.rt) return; MIR.t-=dt; if(MIR.t>0) return; MIR.t=QL>=2?0:QL>=1?.033:.066;
+function renderMirror(dt){ if(!MIR.rt) return; MIR.t-=dt; if(MIR.t>0) return; MIR.t=QL>=1?.033:.066;
   if(!MIR.bgKey||MIR.bgKey!==ENV.key){ MIR.bgKey=ENV.key; mirrorBackdrop(); }
   const e=CK.eyeLocal; if(!e) return; const mm=e.mm, d=(S.hdg-S.camB)*DEG, bx=-Math.sin(d), bz=Math.cos(d);
   const c=MIR.cam; c.position.set(e.r/mm,(e.h+.05)/mm,-e.f/mm); c.near=.5/mm; c.far=900/mm; c.up.set(0,1,0);
@@ -790,16 +790,33 @@ CK.blocksAt=function(lng,lat){
   const i=Math.floor((lng-BI.o[0])*BI.kx/BI.cell), j=Math.floor((lat-BI.o[1])*111320/BI.cell);
   return BI.cells.get(i+','+j)||[]; };
 
+/* ---------- view distance (owner 2026-11-20: "in cockpit view… processing too much data… pull significantly fewer map
+   tiles while enriching the closer detail"). At 85° the map's view reaches the horizon, so MapLibre fetches, parses and
+   draws tiles tens of km out that are a sliver of the screen. While in the cockpit, tiles farther than VIEW() metres from
+   the eye are dropped from every source's tile list (map.transform.coveringTiles, wrapped once); from eye height
+   the horizon would be within a pixel of where they stop anyway. Near the car: trees and windows get denser instead. ---------- */
+const VIEW=()=>Q3(1500,2500,3500);
+function wrapTiles(){ const t=map.transform; if(!t||t.__ckWrapped) return; t.__ckWrapped=true; const orig=t.coveringTiles;
+  t.coveringTiles=function(o){ const r=orig.call(this,o); if(!CK.on||!r||!r.length) return r;
+    const lat=S.lat*DEG, e=CK.eyeLL||[S.lng,S.lat], mx=(e[0]+180)/360, my=(1-Math.log(Math.tan(e[1]*DEG)+1/Math.cos(e[1]*DEG))/Math.PI)/2;
+    const M=40075016.7*Math.cos(lat), lim=VIEW()/M, out=[];
+    for(const id of r){ const c=id.canonical, n=Math.pow(2,c.z), x0=c.x/n, x1=(c.x+1)/n, y0=c.y/n, y1=(c.y+1)/n;
+      const dx=Math.max(x0-mx,0,mx-x1), dy=Math.max(y0-my,0,my-y1); if(Math.hypot(dx,dy)<=lim) out.push(id); }
+    CK.tiles=[r.length,out.length]; return out.length?out:r.slice(0,1); }; }
+// No haze band: seen from ~1.4 m up, ground 2.5 km away is within a pixel of the horizon, so where the tiles stop doesn't
+// show; a flat screen band would also have striped every nearby building at eye height.
+
 /* ---------- camera ---------- */
-function enter(){ if(CK.on) return; CK.on=true; CK.exag=EXAG; EXAG=1; LOOK.yaw=0; LOOK.pitch=0; CK.look=0;
+function enter(){ if(CK.on) return; CK.on=true; CK.exag=EXAG; EXAG=1; LOOK.yaw=0; LOOK.pitch=0; CK.look=0; wrapTiles(); refreshNear();
   document.body.classList.add('cockpit'); build(CARKEY); dirty=true; }
-function leave(){ if(!CK.on) return; CK.on=false; EXAG=CK.exag;
+function leave(){ if(!CK.on) return; CK.on=false; EXAG=CK.exag; refreshNear(); try{ map.triggerRepaint(); }catch(e){}
   document.body.classList.remove('cockpit');
   try{ map.transform.fov=36.87; }catch(e){}
   camera.fov=36.87; camera.near=10; camera.far=50000; camera.updateProjectionMatrix();
   if(typeof shadow==='object') shadow.visible=mode!=='boat'&&mode!=='glider';
   if(typeof tractorG==='object'){ const vis=mode==='walk'?(window.WALK&&WALK.parked())||'car':mode; tractorG.visible=vis==='tractor'; }
   LOOK.yaw=0; LOOK.pitch=0; step.W=0; step.cam=null; step.pit=null; dirty=true; }
+function refreshNear(){ try{ decorAt=null; }catch(e){} try{ if(window.ROOFS) ROOFS.state.pending=true; }catch(e){} }   // rebuild trees / windows at the new density
 CK.active=function(){ const a=CK.want&&(mode==='car'||mode==='tractor')&&!boat; if(a&&!CK.on) enter(); else if(!a&&CK.on) leave(); return a; };
 CK.view=function(dt){
   const c=CK.cab; if(!c||CK.built!==CARKEY+'|'+(CARSPEC.paint||0)) build(CARKEY);
@@ -822,7 +839,7 @@ CK.view=function(dt){
   const cE=eE+F*Math.sin(b), cN=eN+F*Math.cos(b);
   const pad=Math.round(H*CK.pad);
   map.jumpTo({center:[S.lng+cE/(111320*Math.cos(S.lat*DEG)),S.lat+cN/111320],bearing:S.camB,zoom:z,pitch,padding:{top:0,bottom:pad,left:0,right:0}});
-  CK.eyeWorld={x:S.lng*MLNG+eE,y:S.lat*MLAT+eN,h:camH};
+  CK.eyeWorld={x:S.lng*MLNG+eE,y:S.lat*MLAT+eN,h:camH}; CK.eyeLL=[S.lng+eE/(111320*Math.cos(S.lat*DEG)),S.lat+eN/111320];
   CK.eyeLocal={f:eE*Math.sin(b)+eN*Math.cos(b),r:eE*Math.cos(b)-eN*Math.sin(b),h:camH,mm};
   // the car layer's camera: same place and direction, in pixels at this zoom (car centre = origin)
   const f=eE*Math.sin(b)+eN*Math.cos(b), r=eE*Math.cos(b)-eN*Math.sin(b);

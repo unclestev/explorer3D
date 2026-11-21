@@ -872,7 +872,8 @@ function ngon(lng,lat,r,n,rot){ const k=Math.cos(lat*Math.PI/180)*111320, ring=[
   for(let i=0;i<=n;i++){ const t=rot+(i%n)/n*2*Math.PI; ring.push([lng+Math.cos(t)*r/k,lat+Math.sin(t)*r/111320]); } return [ring]; }
 function buildDecor(){
   if(!styleReady||!map.getSource('decor')) return;
-  const t0=performance.now(), cx=S.lng, cy=S.lat, R=Q3(350,500,650), TMAX=Q3(300,1200,2500), feats=[], seenT=new Set();
+  const CKV=!!(window.COCKPIT&&COCKPIT.on), DS=CKV?.7:1;            // cockpit view: trees closer in and denser (the far ones are behind the haze)
+  const t0=performance.now(), cx=S.lng, cy=S.lat, R=CKV?Q3(250,340,430):Q3(350,500,650), TMAX=Q3(300,1200,2500), feats=[], seenT=new Set();
   const wx0=cx-R/MLNG, wx1=cx+R/MLNG, wy0=cy-R/MLAT, wy1=cy+R/MLAT;
   let trees=0; const tp=[];
   // building footprints near the car (local metres, 20 m grid) so no tree is planted in or against a building
@@ -899,7 +900,7 @@ function buildDecor(){
   try{
     const wood=map.querySourceFeatures(bSrc,{sourceLayer:'landcover',filter:['==',['get','class'],'wood']});
     const park=map.querySourceFeatures(bSrc,{sourceLayer:'park'});
-    outer: for(const [list,step,dens] of Q3([[wood,20,.8],[park,36,.4]],[[wood,15,.85],[park,28,.45]],[[wood,12,.9],[park,22,.5]])){
+    outer: for(const [list,step0,dens] of Q3([[wood,20,.8],[park,36,.4]],[[wood,15,.85],[park,28,.45]],[[wood,12,.9],[park,22,.5]])){ const step=step0*DS;
       for(const f of list) for(const pl of partsOf(f.geometry)){
         const bb=bboxOf(pl[0]);
         const x0=Math.max(bb[0],wx0), x1=Math.min(bb[2],wx1), y0=Math.max(bb[1],wy0), y1=Math.min(bb[3],wy1);
