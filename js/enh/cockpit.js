@@ -684,12 +684,24 @@ function explorerStack(G,P,parts,fz,xd,upM,loM){
     x.fillStyle='#ff9a2e'; for(const X of [198,446]) x.fillRect(X-10,66,20,4);                 // the little amber "on" lamps
     const lab=mesh(new THREE.PlaneGeometry(.24,.05),new THREE.MeshBasicMaterial({map:T4.t}),g,false,false); lab.position.z=.0065;
     const b2=mesh(new THREE.BoxGeometry(.235,.0025,.003),satin,g,false); b2.position.set(0,0,.0075); }
-  // glovebox: a seam on the passenger's lower dash and a handle at its inboard end
-  { const gy0=.715, gy1=.85, gx0=.20, gx1=xd-.13, dk=M({color:0x070707,roughness:.9});
-    for(const y of [gy0,gy1]) mesh(grid(20,1,(u,v)=>{ const x=lerp(gx0,gx1,u); return [x,y+(v-.5)*.0025,fz(y)+.0035+.10*sstep(.55,1,x/xd)]; }),dk,G,false);
-    for(const x of [gx0,gx1]) mesh(grid(1,12,(u,v)=>{ const y=lerp(gy0,gy1,v); return [x+(u-.5)*.0025,y,fz(y)+.0035+.10*sstep(.55,1,x/xd)]; }),dk,G,false);
-    const g=onFace(gx0+.10,gy1-.03,.006), hnd=mesh(rbox(.075,.016,.01,.004,.006),M({color:0x2a2b2e,roughness:.4,metalness:.4}),g); hnd.position.z=.002;
-    mesh(new THREE.PlaneGeometry(.065,.008),M({color:0x030303,roughness:1}),g,false).position.set(0,-.002,.0075); }
+  // glovebox (owner 2026-11-21, a photo of the real one): one big door filling the passenger's lower dash, a soft seam
+  // round it with a wide rounded corner at the top outboard end, and a recessed pull handle at the top inboard corner
+  { const gy0=.635, gy1=.855, gx0=.19, gx1=xd-.12, sweep=x=>.10*sstep(.55,1,x/xd);
+    const sp=new THREE.Shape(), rt=.07, ri=.016, rb=.025;
+    sp.moveTo(gx0+ri,gy1); sp.lineTo(gx1-rt,gy1); sp.quadraticCurveTo(gx1,gy1,gx1,gy1-rt); sp.lineTo(gx1,gy0+rb); sp.quadraticCurveTo(gx1,gy0,gx1-rb,gy0);
+    sp.lineTo(gx0+rb,gy0); sp.quadraticCurveTo(gx0,gy0,gx0,gy0+rb); sp.lineTo(gx0,gy1-ri); sp.quadraticCurveTo(gx0,gy1,gx0+ri,gy1);
+    const pts=sp.getSpacedPoints(220);
+    const ribbon=(off,wd,dz,mat)=>{ const pos=[],idx=[]; for(let i=0;i<pts.length;i++){ const a=pts[Math.max(0,i-1)], c=pts[Math.min(pts.length-1,i+1)], tx=c.x-a.x, ty=c.y-a.y, L=Math.hypot(tx,ty)||1, nx=ty/L, ny=-tx/L;
+        for(const k of [-.5,.5]){ const x=pts[i].x+nx*(off+k*wd), y=pts[i].y+ny*(off+k*wd); pos.push(x,y,fz(y)+sweep(x)+dz); } if(i) idx.push(2*i-2,2*i-1,2*i, 2*i-1,2*i+1,2*i); }
+      const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setIndex(idx); g.computeVertexNormals(); return mesh(g,mat,G,false); };
+    ribbon(0,.0028,.0034,M({color:0x050505,roughness:.9}));                    // the gap
+    ribbon(-.003,.0025,.0036,M({color:0x2b2c2f,roughness:.5}));                // the door's rounded edge catching the light, just inside it
+    const g=onFace(gx0+.072,gy1-.034,.0035), shp=(W,H,R)=>rbox(W,H,.004,R,R*1.6);
+    const pocket=mesh(shp(.10,.028,.009),M({color:0x060606,roughness:.85}),g); pocket.position.z=-.001;   // the recess
+    const lip=mesh(new THREE.TorusGeometry(1,.06,6,40),M({color:0x232427,roughness:.45}),g); lip.scale.set(.051,.015,.02); lip.position.z=.002;
+    const lev=new THREE.Group(); lev.position.set(.004,-.002,.003); lev.rotation.z=-.10; g.add(lev);       // the pull, angled down toward the outboard end
+    mesh(rbox(.074,.011,.008,.004,.006),M({color:0x3a3b3f,roughness:.35,metalness:.35,env:1.1}),lev);
+    const end=mesh(new THREE.CylinderGeometry(.0065,.0065,.008,18),M({color:0x3a3b3f,roughness:.35,metalness:.35,env:1.1}),lev); end.rotation.x=Math.PI/2; end.position.x=-.036; }
   // console: silver flanks, a lidded bin in front of the dial, cup holders beside it
   { const zc0=P.dash[P.dash.length-1][1]-.03;
     for(const s of [-1,1]) mesh(bar([[s*.152,.62,zc0+.01],[s*.155,.64,zc0+.22],[s*.155,.62,zc0+.45]],.006,.012,[1,0,0],20,6),satin,G);
