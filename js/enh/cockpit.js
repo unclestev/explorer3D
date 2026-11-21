@@ -37,7 +37,7 @@ window.COCKPIT=CK;
 const SPECS={
   explorer:{style:'sport', eye:[-.38,1.37,.08], pitch:81,
     ws:{zB:-1.04,yB:1.09,hwB:.75,zT:-.33,yT:1.63,hwT:.67,bow:.05}, roof:{y:1.655,hw:.71,zR:1.75}, belt:1.16, winTop:1.58, door:.80, zBp:.52, zC:1.48,
-    hood:{zr:-1.03,zf:-2.40,yr:1.085,yf:.985,hw:.99,crown:.03,gap:.80,nose:.07},
+    hood:{zr:-1.03,zf:-2.40,yr:1.085,yf:.985,hw:.99,crown:.03,gap:.80,nose:.07,crease:{x:.40,h:.016}},
     dash:[[1.062,-1.045],[1.086,-.84],[1.086,-.68],[1.064,-.615],[.99,-.595],[.87,-.605],[.75,-.55],[.62,-.43]],
     wheel:{c:[-.38,.935,-.37],r:.188,tilt:24,rim:.0175,flat:true},
     cluster:{c:[-.38,1.003,-.672],w:.31,h:.118},
@@ -46,7 +46,7 @@ const SPECS={
     eng:'ecoboost30', vmaxG:160, red:6.25, tachMax:8},
   navigator:{style:'lux', eye:[-.42,1.565,.12], pitch:81,
     ws:{zB:-1.10,yB:1.30,hwB:.81,zT:-.30,yT:1.855,hwT:.73,bow:.05}, roof:{y:1.88,hw:.77,zR:1.95}, belt:1.36, winTop:1.79, door:.86, zBp:.58, zC:1.62,
-    hood:{zr:-1.15,zf:-2.62,yr:1.288,yf:1.205,hw:1.05,crown:.022,gap:.86,nose:.08},
+    hood:{zr:-1.15,zf:-2.62,yr:1.288,yf:1.205,hw:1.05,crown:.022,gap:.86,nose:.08,crease:{x:.50,h:.012}},
     dash:[[1.272,-1.115],[1.292,-.94],[1.29,-.77],[1.268,-.70],[1.19,-.675],[1.06,-.69],[.93,-.635],[.79,-.50]],
     wheel:{c:[-.42,1.115,-.40],r:.192,tilt:24,rim:.0185,flat:false},
     pano:{x0:-.88,x1:.88,y:1.338,z:-.83,h:.072,tilt:22},
@@ -119,11 +119,13 @@ function textures(){
 }
 
 /* ---------- environment (reflections): outdoor sky for the hood, paint and mirrors; darker cabin for the inside ---------- */
-function gradEnv(top,hor,gnd,band){
-  const es=new THREE.Scene(), geo=new THREE.SphereGeometry(10,32,16), pos=geo.attributes.position, col=[], c=new THREE.Color(),
+function gradEnv(top,hor,gnd,band,low){
+  const es=new THREE.Scene(), geo=new THREE.SphereGeometry(10,32,low?64:16), pos=geo.attributes.position, col=[], c=new THREE.Color(),
         T=new THREE.Color(top), Hc=new THREE.Color(hor), G=new THREE.Color(gnd), B=band?new THREE.Color(band):null;
   for(let i=0;i<pos.count;i++){ const y=pos.getY(i)/10; if(y>=0) c.copy(Hc).lerp(T,Math.pow(y,.55)); else c.copy(Hc).lerp(G,Math.pow(-y,.35));
-    if(B&&y>-.05&&y<.35) c.lerp(B,.55*(1-Math.abs(y-.15)/.2>0?1-Math.abs(y-.15)/.2:0)); col.push(c.r,c.g,c.b); }
+    if(B&&!low&&y>-.05&&y<.35) c.lerp(B,.55*(1-Math.abs(y-.15)/.2>0?1-Math.abs(y-.15)/.2:0));
+    if(B&&low){ const t=1-Math.abs(y-.08)/.17; if(t>0) c.lerp(B,.8*Math.min(1,t*1.8)); }   // skyline: just above the horizon
+    col.push(c.r,c.g,c.b); }
   geo.setAttribute('color',new THREE.Float32BufferAttribute(col,3));
   es.add(new THREE.Mesh(geo,new THREE.MeshBasicMaterial({vertexColors:true,side:THREE.BackSide})));
   const pm=new THREE.PMREMGenerator(renderer), t=pm.fromScene(es,.03).texture; pm.dispose(); geo.dispose(); return t;
@@ -137,7 +139,7 @@ function updateEnv(force){
   const s=skyCols(), key=s.sky.getHexString()+s.k.toFixed(1);
   if(!force&&key===ENV.key) return; ENV.key=key;
   const o=ENV.out, i=ENV.inn;
-  ENV.out=gradEnv(s.sky,s.hor,s.gnd); ENV.hor=s.hor.clone();
+  ENV.out=gradEnv(s.sky,s.hor,s.gnd,s.sky.clone().lerp(new THREE.Color(s.k>.5?0x0d1014:0x4c5548),.75),true); ENV.hor=s.hor.clone();   // paint reflects the skyline, not just sky
   const d=1-.75*s.k, cab=new THREE.Color(0x2a2a2c).multiplyScalar(d), win=s.hor.clone().multiplyScalar(.9);
   ENV.inn=gradEnv(cab,new THREE.Color(0x111214).multiplyScalar(d),new THREE.Color(0x060607),win);
   for(const m of MATS) if(m.envMap!==undefined){ m.envMap=m.userData.out?ENV.out:ENV.inn; m.needsUpdate=true; }
@@ -178,6 +180,8 @@ function shell(G,P,mats){
     x.fillStyle=pc; x.fillRect(0,0,1024,1024);
     if(P.style==='classic'){ x.fillStyle='#b8902f'; const cx=512; x.fillRect(cx-70,30,140,900); x.fillRect(cx-300,860,600,70);   // gold T-stripe
       x.fillStyle=pc; x.fillRect(cx-58,30,116,830); x.fillRect(cx-288,872,576,46); x.fillStyle='#b8902f'; x.fillRect(cx-46,30,92,818); x.fillRect(cx-276,884,552,22); }
+    if(hd.crease){ const cu=hd.crease.x/hd.hw; for(const s of [-1,1]){ const px=512+s*cu*512;   // the creases catch the light on their crest, shade just outboard
+        x.fillStyle='rgba(255,255,255,.16)'; x.fillRect(px-2,0,4,1024); x.fillStyle='rgba(0,0,0,.18)'; x.fillRect(s>0?px+2:px-12,0,10,1024); } }
     const g=hd.gap/hd.hw; x.fillStyle='rgba(0,0,0,.92)'; for(const s of [-1,1]){ const px=512+s*g*512; x.fillRect(px-3,0,6,1024); } x.fillRect(0,4,1024,6);
     T.t.anisotropy=8; T.t.needsUpdate=true;
     const m=M({map:T.t,color:0xffffff,metalness:.08,roughness:.42,clearcoat:1,clearcoatRoughness:.05,out:true,env:.55});
@@ -185,13 +189,19 @@ function shell(G,P,mats){
     const geo=grid(64,48,(u,v)=>{ const s=u*2-1, as=Math.abs(s), z=lerp(hd.zr,hd.zf,v);
       let y=lerp(hd.yr,hd.yf,Math.pow(v,1.15))+hd.crown*(1-s*s);
       if(hu){ const xs=as*hd.hw; y+=hu.h*Math.exp(-Math.pow((xs-hu.x)/hu.w,2))*sstep(0,.15,v)*(1-.3*v); }
+      if(hd.crease){ const xs=as*hd.hw, c=hd.crease; y+=c.h*(1-sstep(c.x-.025,c.x+.035,xs))*(1-.4*v); }   // raised centre section between two sharp creases (Explorer / Navigator)
       if(as>.86) y-=.11*Math.pow((as-.86)/.14,2);                   // fender tops roll down toward the sides
       if(v>.93) y-=hd.nose*Math.pow((v-.93)/.07,2);                 // and the nose rolls over
       const hw=hd.hw*(1-.05*Math.pow(v,3)); return [s*hw*(as>.97?1-.02*(as-.97)/.03:1),y,z]; });
     mesh(geo,m,G,false,true); }
   // cowl: black plastic between hood and glass, with the wipers
   { const m=M({color:0x0c0c0d,roughness:.85,normalMap:rep(textures().grain,6,1)});
-    mesh(grid(24,6,(u,v)=>{ const s=u*2-1; return [s*lerp(hd.hw*.86,ws.hwB,v),lerp(hd.yr-.008,ws.yB-.005,v),lerp(hd.zr+.01,ws.zB+.01,v)]; }),m,G,false); }
+    mesh(grid(24,6,(u,v)=>{ const s=u*2-1; return [s*lerp(hd.hw*.9,ws.hwB+.03,v),lerp(hd.yr-.035,ws.yB-.004,v),lerp(hd.zr-.16,ws.zB+.008,v)]; }),m,G,false); }   // runs forward under the hood's back edge, so no slit of road shows between them
+  // under the hood: a dark engine-bay floor from the cowl to the nose (looking just under the hood's back edge you saw the road through the empty bay)
+  mesh(grid(8,4,(u,v)=>{ const s=u*2-1; return [s*lerp(ws.hwB+.05,hd.hw*1.02,v),lerp(hd.yr-.035,hd.yf-.14,v),lerp(hd.zr-.16,hd.zf+.06,v)]; }),M({color:0x070708,roughness:.95}),G,false);
+  // the dash top meets the glass: close the slit between the dash's front edge and the windshield base (the ground showed through)
+  if(P.dash){ const y0=P.dash[0][0]-.015, z0=P.dash[0][1]; mesh(grid(16,2,(u,v)=>{ const sx=u*2-1; return [sx*(ws.hwB+.02),lerp(y0,ws.yB+.006,v),lerp(z0+.004,ws.zB+.004,v)-ws.bow*(1-sx*sx)*Math.sin(Math.PI*.3)*v]; }),
+      M({color:P.col.top,roughness:.85,normalMap:rep(textures().grain,8,1)}),G,false); }
   // windshield glass + black ceramic band and (modern) dotted frit, light tint shade band at the top
   const wsP=(u,v)=>{ const s=u*2-1; return [s*lerp(ws.hwB,ws.hwT,v),lerp(ws.yB,ws.yT,v),lerp(ws.zB,ws.zT,v)-ws.bow*(1-s*s)*Math.sin(Math.PI*(.3+.7*v))]; };
   { const T=canvasTex(1024,512), x=T.x, W=1024, H=512; x.clearRect(0,0,W,H);
@@ -263,12 +273,29 @@ function shell(G,P,mats){
       const gl=mesh(MIR.uv(new THREE.CircleGeometry(.058,28),0,.36),new THREE.MeshBasicMaterial({map:MIR.tex(),toneMapped:false}),g,false); gl.position.z=.002; gl.scale.set(1.25,1,1); MIR.mats.push(gl.material);
       mesh(bar([[s*(P.door+.02),P.belt+.0,zA+.12],[s*(P.door+.12),P.belt+.05,zA+.1],[s*(P.door+.17),P.belt+.07,zA+.1]],.02,.015,[0,0,1],6,8),cr,G);
       g.lookAt(new V3(...P.eye).add(new V3(.25,0,1.5))); continue; }
-    const W=P.style==='lux'?.25:.22, H=P.style==='lux'?.17:.15, g=new THREE.Group(); g.position.set(s*(P.door+.22),P.belt+.06,zA+.14); G.add(g);
+    // modern door mirror (owner 2026-11-21: "the mirrors on the explorer are just rectangles"): the glass is a rounded
+    // trapezoid, short on the inboard edge and tall outboard with a big rounded lower-outer corner, in a black surround; the
+    // body-colour housing wraps round it and swells out behind; a black foot on the door with the sail filling the window corner
+    const lux=P.style==='lux', W=lux?.27:.245, H=lux?.185:.165, g=new THREE.Group(); g.position.set(s*(P.door+.235),P.belt+.075,zA+.16); G.add(g);
+    const o=-s;                                                     // the group faces the driver: +x is the driver's right, so outboard is -s
+    const shp=(w,h,grow)=>mirShape(w+grow*2,h+grow*2,o);
+    const glass=new THREE.ShapeGeometry(shp(W,H,0),12); uvFit(glass);
+    const gl=mesh(MIR.uv(glass,s<0?0:.64,s<0?.36:1),new THREE.MeshBasicMaterial({map:MIR.tex(),toneMapped:false}),g,false); gl.position.z=.004; MIR.mats.push(gl.material);
+    const sf=canvasTex(256,160); drawSideFrame(sf.x,s); const sg=new THREE.ShapeGeometry(shp(W,H,0),12); uvFit(sg);
+    const so=mesh(sg,new THREE.MeshBasicMaterial({map:sf.t,transparent:true}),g,false,false); so.position.z=.0045;
+    mesh(new THREE.ShapeGeometry(shp(W,H,.008),12),M({color:0x060607,roughness:.5}),g,false).position.z=.0025;   // black glass surround
     const pm=M({color:CARSPEC.paint||0x333333,metalness:.08,roughness:.42,clearcoat:1,clearcoatRoughness:.05,out:true,env:.55});
-    const hs=mesh(new THREE.SphereGeometry(.5,28,18,0,Math.PI*2,0,Math.PI/2),pm,g); hs.rotation.x=-Math.PI/2; hs.scale.set(W*1.06,H*1.08,.13);
-    const gl=mesh(MIR.uv(new THREE.PlaneGeometry(W-.01,H-.01),s<0?0:.64,s<0?.36:1),new THREE.MeshBasicMaterial({map:MIR.tex(),toneMapped:false}),g,false); gl.position.z=.004; MIR.mats.push(gl.material);
-    const sf=canvasTex(256,160); drawSideFrame(sf.x,s); const so=mesh(new THREE.PlaneGeometry(W-.01,H-.01),new THREE.MeshBasicMaterial({map:sf.t,transparent:true}),g,false,false); so.position.z=.0045;
-    const sail=mesh(rbox(.22,.13,.03,.01,.02),M({color:0x0c0c0d,roughness:.8}),G); sail.position.set(s*(P.door+.06),P.belt+.03,zA+.1); sail.rotation.y=s*.2;
+    const hg=new THREE.ExtrudeGeometry(shp(W,H,.012),{depth:.045,bevelEnabled:true,bevelThickness:.035,bevelSize:.012,bevelSegments:5,curveSegments:12});
+    hg.translate(0,0,-.045-.035); const pz=hg.attributes.position;
+    for(let k=0;k<pz.count;k++){ const z=pz.getZ(k); if(z<-.05){ const t=(-.05-z)/.065; pz.setX(k,pz.getX(k)*(1-.22*t)+o*.012*t); pz.setY(k,pz.getY(k)*(1-.18*t)); } }   // the back of the shell tapers and leans outboard
+    hg.computeVertexNormals(); mesh(hg,pm,g);
+    const blk=M({color:0x0b0b0c,roughness:.7,normalMap:rep(textures().grain,2,2)});
+    // foot: a tapered black arm from the door's front corner to the inboard lower edge of the shell
+    { const xe=P.door+.235-W/2+.02; mesh(bar([[s*(P.door+.025),P.belt+.025,zA+.09],[s*lerp(P.door+.025,xe,.55),P.belt+.04,zA+.085],[s*xe,P.belt+.05,zA+.1]],[.07,.045],.04,[0,1,0],6,8),blk,G); }   // ends at the shell's inboard edge, in front of the glass
+    // sail: the black triangle in the front corner of the door glass
+    { const t=new THREE.Shape(); t.moveTo(0,0); t.lineTo(.2,0); t.quadraticCurveTo(.06,.07,0,.17); t.lineTo(0,0);
+      const sm=mesh(new THREE.ShapeGeometry(t,8),M({color:0x0a0a0b,roughness:.8,side:THREE.DoubleSide}),G,false);
+      sm.rotation.y=-Math.PI/2; sm.position.set(s*(P.door+.035),P.belt+.005,zA+.02); }   // shape x runs back along the sill, y up the pillar
     g.lookAt(new V3(...P.eye).add(new V3(s>0?-.4:.5,.05,1.6))); }
   // reflections in the glass: the dash top as a faint grey veil low on the windshield by day, the glowing screens at night
   { const T2=canvasTex(512,256), x=T2.x; x.clearRect(0,0,512,256);
@@ -289,6 +316,16 @@ function shell(G,P,mats){
   return {wsP};
 }
 
+// door-mirror glass outline, centred; o = which way is outboard (+1 / -1 along x)
+function mirShape(w,h,o){ const hw=w/2, hh=h/2, ti=hh*.78, bi=-hh*.70, to=hh, bo=-hh;    // inboard edge shorter, top rises outboard
+  const r1=.018, r2=.03, r3=Math.min(.075,h*.42), r4=.025, X=v=>v*o, s=new THREE.Shape();
+  s.moveTo(X(-hw),ti-r1); s.quadraticCurveTo(X(-hw),ti,X(-hw+r1),ti);
+  s.quadraticCurveTo(X(0),hh*.97,X(hw-r2),to); s.quadraticCurveTo(X(hw),to,X(hw),to-r2);
+  s.lineTo(X(hw),bo+r3); s.quadraticCurveTo(X(hw),bo,X(hw-r3),bo);
+  s.quadraticCurveTo(X(-hw*.1),bo+.01,X(-hw+r4),bi); s.quadraticCurveTo(X(-hw),bi,X(-hw),bi+r4); s.lineTo(X(-hw),ti-r1); return s; }
+// ShapeGeometry UVs are in shape units: spread them over 0..1 so a texture covers the glass once
+function uvFit(g){ g.computeBoundingBox(); const b=g.boundingBox, p=g.attributes.position, uv=g.attributes.uv;
+  for(let i=0;i<p.count;i++) uv.setXY(i,(p.getX(i)-b.min.x)/(b.max.x-b.min.x),(p.getY(i)-b.min.y)/(b.max.y-b.min.y)); uv.needsUpdate=true; return g; }
 /* ---------- mirrors: one small rear-facing render of the car layer (traffic, signs behind you) over a sky / road
    backdrop, mirrored; the inside mirror shows its middle framed by the rear window, each door mirror its own side ---------- */
 const MIR={rt:null,cam:null,bg:null,bgT:null,mats:[],frames:[],t:0,
@@ -849,6 +886,11 @@ function buildIndex(){ BI.t=performance.now(); BI.at=[S.lng,S.lat]; BI.cells=new
     const ff={geometry:g,id:f.id,properties:f.properties};
     for(let i=Math.floor(x0/BI.cell);i<=Math.floor(x1/BI.cell);i++) for(let j=Math.floor(y0/BI.cell);j<=Math.floor(y1/BI.cell);j++){ const k=i+','+j; let L=BI.cells.get(k); if(!L) BI.cells.set(k,L=[]); L.push(ff); } }
   BI.kx=kx; BI.o=[S.lng,S.lat]; }
+// where this car's headlights are, for the cockpit beams (atmos.js makeCkBeams): lamp centres off the centre line and the
+// front of the car (m), and the colour of the light (LED white on the Fords, warm halogen on the Javelin and the tractor)
+const LAMPS={explorer:{lamp:.70,front:2.42,col:[236,244,255]},navigator:{lamp:.75,front:2.64,col:[236,244,255]},
+  javelin:{lamp:.60,front:2.36,col:[255,238,205]},tractor:{lamp:.34,front:1.86,col:[255,236,200]}};
+CK.lamps=function(){ const k=mode==='tractor'?'tractor':specKey(CARKEY), L=LAMPS[k]||LAMPS.explorer; return {...L,key:k}; };
 CK.blocksAt=function(lng,lat){
   const now=performance.now(), moved=BI.at?meters(BI.at[1],BI.at[0],S.lat,S.lng):1e9;
   if(moved>150||now-BI.t>(BI.cells.size?10000:800)) buildIndex();

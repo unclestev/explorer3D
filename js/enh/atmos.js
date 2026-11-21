@@ -98,6 +98,7 @@ function setWindows(on){
 // Sized to the Explorer photo: lamps ~1.4 m apart, each beam spreading to ~1.1 m, so the pair lights a strip about
 // as wide as the car (2.5 m) out to 18 m ahead. Plane is 4 m x 18 m on the ground; canvas is 32 px per metre across.
 function makeBeams(){
+  const ck=!!(window.COCKPIT&&COCKPIT.on&&COCKPIT.lamps); if(ck) return makeCkBeams(COCKPIT.lamps());
   const C=(typeof CARSPEC!=='undefined'&&CARSPEC)||{lamp:.68,front:2.4};   // headlight spacing and bumper position of the chosen car
   const W=4, L=18, PX=128/W, LAMP=C.lamp, NEAR=.12, FAR=.55;      // metres: lamp offset from centre, beam half-width near / far
   const c=document.createElement('canvas'); c.width=128; c.height=256; const x=c.getContext('2d');
@@ -108,6 +109,34 @@ function makeBeams(){
   const m=new THREE.Mesh(new THREE.PlaneGeometry(W,L),new THREE.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false,opacity:.9}));
   m.rotation.x=-Math.PI/2; m.position.set(0,.07,-(C.front+L/2)); m.visible=false; car.add(m); return m;   // starts at the front bumper
 }
+/* cockpit beams (owner 2026-11-21: "relocate the headlight beams in a more accurate location"). Seen from the seat the old
+   pair of 18 m stripes from the bumper was mostly under the hood. Real low beams: two lamps at this car's own lamp
+   positions, overlapping into one pool that lights the lane from a few metres ahead to ~35 m on the left and ~60 m on the
+   right (US low-beam cut-off reaches further on the kerb side), brightest around 15-25 m, spreading to the shoulders.
+   One 14 m x 64 m ground decal from the bumper, cut short in front of a building (cockpit.js blocksAt). */
+function makeCkBeams(C){
+  const W=14, L=64, cw=256, ch=1024, c=document.createElement('canvas'); c.width=cw; c.height=ch;
+  const x=c.getContext('2d'), im=x.createImageData(cw,ch), d=im.data, col=C.col||[255,248,232];
+  const ss=(a,b,v)=>{ const t=Math.max(0,Math.min(1,(v-a)/(b-a))); return t*t*(3-2*t); };
+  for(let j=0;j<ch;j++){ const dz=(1-(j+.5)/ch)*L;                              // metres ahead of the bumper (row 0 = far end)
+    for(let i=0;i<cw;i++){ const lx=((i+.5)/cw-.5)*W;                        // metres right of the centre line
+      let lat=0; for(const s of [-1,1]){ const w=.35+.3*dz, u=(lx-s*C.lamp-.12*dz*.25)/w; lat+=Math.exp(-u*u); }   // each lamp's cone, aimed a touch right
+      lat=Math.min(1,lat*.75);
+      const reach=34+26*ss(-1.5,3.5,lx);                                      // cut-off: short on the left, long on the kerb side
+      const along=ss(.5,5,dz)*(.5+.5*Math.exp(-Math.pow((dz-19)/13,2)))*(1-ss(reach-10,reach+4,dz));
+      const a=Math.min(1,lat*along)*.62*(1-ss(W/2-2.2,W/2,Math.abs(lx))), k=(j*cw+i)*4;   // fades out before the decal's edges
+      d[k]=col[0]; d[k+1]=col[1]; d[k+2]=col[2]; d[k+3]=Math.round(a*255); } }
+  x.putImageData(im,0,0);
+  const tex=new THREE.CanvasTexture(c);
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(W,L),new THREE.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false}));
+  m.rotation.x=-Math.PI/2; m.position.set(0,.05,-(C.front+L/2)); m.visible=false; m.userData={ck:true,L,front:C.front,len:1}; car.add(m); return m;
+}
+// in the cockpit: stop the pool at the first building straight ahead (it would paint across the wall otherwise)
+function cutCkBeams(b){ if(!b||!b.userData.ck||!window.COCKPIT||!COCKPIT.blocksAt) return; const u=b.userData;
+  let f=1; try{ const h=S.hdg*Math.PI/180, kx=111320*Math.cos(S.lat*Math.PI/180);
+    for(let dz=4;dz<=u.L;dz+=4){ const ah=u.front+dz, lng=S.lng+Math.sin(h)*ah/kx, lat=S.lat+Math.cos(h)*ah/111320;
+      if(COCKPIT.blocksAt(lng,lat).some(g=>contains(g.geometry,lng,lat))){ f=Math.max(.06,(dz-2)/u.L); break; } } }catch(e){}
+  if(Math.abs(f-u.len)<.01) return; u.len=f; b.scale.y=f; b.position.z=-(u.front+u.L*f/2); b.material.map.repeat.y=f; b.material.map.offset.y=0; dirty=true; }
 function applyAtmos(){
   const W=AT.wx, sp=sunPos(nowDate(),S.lat,S.lng), alt=sp.alt;
   const k=clamp01((6-alt)/14);                                    // 0 in daylight (sun >6 deg), 1 by nautical dusk (-8 deg)
@@ -148,8 +177,12 @@ function applyAtmos(){
 // a different car has its lamps elsewhere: rebuild the beams for it
 const prevCar=window.onCarChange;
 window.onCarChange=(k)=>{ if(prevCar) prevCar(k); safe('beams',()=>{ const b=AT.beams; if(b){ car.remove(b); b.geometry.dispose(); b.material.map.dispose(); b.material.dispose(); AT.beams=makeBeams(); updateBeams(); } }); };
-function updateBeams(){ const b=AT.beams; if(!b) return; const on=AT.k>.35&&(mode==='car'||mode==='tractor');
-  if(b.visible!==on){ b.visible=on; dirty=true; } }
+function updateBeams(){ let b=AT.beams; if(!b) return; const on=AT.k>.35&&(mode==='car'||mode==='tractor');
+  const ck=!!(window.COCKPIT&&COCKPIT.on&&COCKPIT.lamps);
+  if(!!b.userData.ck!==ck||ck&&b.userData.key!==COCKPIT.lamps().key){   // into / out of the cockpit, or another car: the other kind of beam
+    car.remove(b); b.geometry.dispose(); b.material.map.dispose(); b.material.dispose(); b=AT.beams=makeBeams(); if(ck) b.userData.key=COCKPIT.lamps().key; }
+  if(b.visible!==on){ b.visible=on; dirty=true; }
+  if(on&&ck) cutCkBeams(b); }
 onTick(10000,function atmosTick(){ applyAtmos(); });
 onTick(300,updateBeams);
 
