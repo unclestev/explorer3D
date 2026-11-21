@@ -10,6 +10,7 @@ Drive a Ford Explorer over a real map. Play it on GitHub Pages.
 - `js/game.js` — map, vehicles (SUV, bass boat, tractor, hang glider), physics and steering, camera, compass, pedals, trees, water towers
 - `img/explorer-rear.webp` — cut-out photo of the Explorer ST used as the car body (`?car=3d` in the address shows the 3D model instead); `img/explorer-top.webp` is a spare, more top-down view
 - `models/` — 3D model cars: `javelin-amx.glb` and `javelin-amx-v2.glb` (the owner's), and `model-y.glb`, the 2023 Tesla Model Y, made by `tools/make-model-y.py` from the owner's photos (after changing the script: `python3 tools/make-model-y.py models/model-y.glb`, needs numpy and scipy, then bump the model's `?v=` in `CARS` in `js/game.js`)
+- `tools/photos/` — the owner's Model Y photos used as textures on `model-y.glb` (rear, left side — mirrored for the right — and front; licence plates blanked, background greyed out), with each photo's car outline and fitted camera in `model-y-photos.json`; `tools/fit-model-y-photo.py` re-fits a camera after the body shape changes
 - `js/enh/` — optional enhancements; each file is independent and wrapped so a failure can't stop the game
   - `core.js` — shared helpers (`window.YD`), must load first
   - `roads.js` — lane markings, bridges, rivers

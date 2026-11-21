@@ -372,7 +372,7 @@ const CARS={
   // tools/make-model-y.py from the owner's photos (Pearl White, 20" black aero wheels, glass roof). Electric: one gear,
   // instant torque (0-60 mph in 4.2 s with the Boost), regen braking when you lift (regen m/s^2 at speed), motor whine
   // instead of an engine (js/enh/sound.js 'tesla'). Top speed 135 mph.
-  modely:{name:'Tesla Model Y',paint:0xeceeee,model:'models/model-y.glb?v=2',W:1.92,lamp:.66,front:2.30,sound:'tesla',ev:true,regen:1.7,
+  modely:{name:'Tesla Model Y',paint:0xeceeee,model:'models/model-y.glb?v=3',W:1.92,lamp:.66,front:2.30,sound:'tesla',ev:true,regen:1.7,
     vmax:135/2.237,perf:{t60:4.2,top:135,a0:9.0}},
   // the farm tractor as its own choice (owner 2026-11-20: "just another car option… don't change to the tractor automatically
   // when you enter a farm field"): drives in tractor mode (its 3D model, 75% speed, diesel sound) wherever you take it
@@ -461,7 +461,7 @@ function loadModel(key){
   loadModel.busy=key;
   const go=()=>new THREE.GLTFLoader().load(c.model,gl=>{
     loadModel.busy=null;
-    const g=new THREE.Group(), root=gl.scene, env=envTex(), mats=new Set(), wheels=[]; let tail=null, head=null, r=.33;
+    const g=new THREE.Group(), root=gl.scene, env=envTex(), mats=new Set(), wheels=[], photos=[]; let tail=null, head=null, r=.33, tailPhoto=false;
     g.rotation.y=Math.PI; g.add(root); g.visible=false;
     root.traverse(o=>{
       // the outermost node of each wheel; not wheel *wells* or arches (v2 has a "Wheel_Wells" part, which was being spun round the car)
@@ -470,20 +470,22 @@ function loadModel(key){
       if(!o.isMesh) return;
       const ms=Array.isArray(o.material)?o.material:[o.material];
       // lamps flush with (or just inside) the body would be hidden by the paint: move them 3.5 cm out from the car's end
-      if(ms.some(m=>/tail|head/i.test(m.name||''))){ const bb=new THREE.Box3().setFromObject(o), cz=(bb.min.z+bb.max.z)/2; o.position.z+=Math.sign(cz)*.035; }
+      if(ms.some(m=>/tail|head/i.test(m.name||''))&&!ms.some(m=>/photo/i.test(m.name||''))){ const bb=new THREE.Box3().setFromObject(o), cz=(bb.min.z+bb.max.z)/2; o.position.z+=Math.sign(cz)*.035; }
       for(const m of ms){ if(mats.has(m)) continue; mats.add(m);
         // near-black colours stay as they are: converted, they turn mid-grey under the scene's lights (black paint looked charcoal)
         if(m.color&&Math.max(m.color.r,m.color.g,m.color.b)>=.05) m.color.convertLinearToSRGB(); if(m.emissive) m.emissive.convertLinearToSRGB();
         for(const t of [m.map,m.emissiveMap]) if(t){ t.encoding=THREE.LinearEncoding; t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy()); }
+        // a "Photo…" material is the owner's photo of that part of the car (Model Y: the back), lit like the paint around it
+        const ph=/photo/i.test(m.name||''); if(ph){ m.userData.photo=true; photos.push(m); }
         if(m.isMeshStandardMaterial){ m.envMap=env; m.envMapIntensity=1; }
         if(/paint/i.test(m.name||'')&&m.map){ m.map.dispose(); m.map=null; }       // its metal-flake texture streaks across the panels
-        if(/glass|trim|stripe/i.test(m.name||'')){ m.polygonOffset=true; m.polygonOffsetFactor=-2; m.polygonOffsetUnits=-4; }   // thin layers on the paint always win the depth test (no flicker)
-        if(/tail/i.test(m.name)){ tail=m; m.color.setRGB(.3,.025,.02); m.emissive.setRGB(1,.04,.02); m.emissiveIntensity=.05; }   // dark red lens, lit below
+        if(/glass|trim|stripe|photo/i.test(m.name||'')){ m.polygonOffset=true; m.polygonOffsetFactor=-2; m.polygonOffsetUnits=-4; }   // thin layers on the paint always win the depth test (no flicker)
+        if(/tail/i.test(m.name)){ tail=m; if(ph) tailPhoto=true; else { m.color.setRGB(.3,.025,.02); m.emissive.setRGB(1,.04,.02); m.emissiveIntensity=.05; } }   // dark red lens, lit below
         if(/head/i.test(m.name)){ head=m; m.emissive.setRGB(1,.98,.88); m.emissiveIntensity=.35; }
         m.needsUpdate=true; }
     });
     for(const w of wheels){ const bb=new THREE.Box3().setFromObject(w.o); r=Math.max(.15,(bb.max.y-bb.min.y)/2); }
-    body.add(g); MODELS[key]={g,wheels,r,tail,head,mats:[...mats],lit:-1}; dirty=true;
+    body.add(g); MODELS[key]={g,wheels,r,tail,head,mats:[...mats],photos,tailPhoto,lit:-1}; dirty=true;
   },undefined,e=>{ loadModel.busy=null; console.warn('car model could not load, using the 3D SUV',e); });
   if(THREE.GLTFLoader) go();
   else{ const s=document.createElement('script'); s.src='js/lib/GLTFLoader.js?v=1'; s.onload=go;
@@ -502,7 +504,8 @@ function placeModel(braking,show){
   const night=tailOff.color.r>.7, lit=(braking?2:0)+(night?1:0)+b;              // only touch materials when something changed
   if(Math.abs(lit-md.lit)>.01){ md.lit=lit;
     for(const m of md.mats) if(m.isMeshStandardMaterial) m.envMapIntensity=b;
-    if(md.tail) md.tail.emissiveIntensity=braking?2.4:night?.6:.05;
+    if(md.tail&&md.tailPhoto){ const e=braking?[2.4,.42,.34]:night?[1,.16,.13]:[0,0,0]; md.tail.emissive.setRGB(e[0],e[1],e[2]); md.tail.emissiveIntensity=1; }   // the photo's own lamps glow red
+    else if(md.tail) md.tail.emissiveIntensity=braking?2.4:night?.6:.05;
     if(md.head) md.head.emissiveIntensity=night?1.6:.35; }
 }
 loadPhoto(CARKEY); loadFront(CARKEY);

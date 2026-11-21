@@ -4,7 +4,7 @@
 # (js/game.js loadModel) wants: wheels as nodes named Wheel_* with their centre at the node origin; lamp meshes on their own
 # with materials named Headlight / Taillight (it lights them, and pushes them 3.5 cm out from the car's end, so they're
 # built 3.5 cm in); glass and trim materials named Glass / Trim (drawn over the paint without flicker).
-import sys, json, struct, math
+import sys, os, json, struct, math
 import numpy as np
 from scipy.interpolate import PchipInterpolator as Pchip
 
@@ -14,15 +14,15 @@ TRACK = 1.636; TYRE_R = .356; TYRE_W = .255     # 255/40R20 (the owner's Goodyea
 HW = .955                                       # half the 1.92 m body width (no mirrors)
 
 # ---------- side profile (z, y) ----------
-top = Pchip([ZR, -2.355, -2.31, -2.25, -2.18, -2.06, -1.80, -1.55, -1.10, -.45, .10, .55, 1.15, 1.45, 1.85, 2.15, 2.28, 2.34, ZF],
-            [.55,  .80,   1.00, 1.11, 1.155, 1.185, 1.32,  1.45,  1.585, 1.624, 1.59, 1.40, 1.10, 1.06, 1.005, .945, .865, .76, .58])
+top = Pchip([ZR, -2.355, -2.33, -2.29, -2.22, -2.08, -1.80, -1.55, -1.10, -.45, .10, .55, 1.15, 1.45, 1.85, 2.15, 2.28, 2.34, ZF],
+            [.55,  .80,   1.02, 1.10, 1.15, 1.185, 1.32,  1.45,  1.585, 1.624, 1.59, 1.40, 1.10, 1.06, 1.005, .945, .865, .76, .58])
 belt = Pchip([-2.4, -1.9, -1.0, 0., 1.15, 2.4], [1.13, 1.115, 1.085, 1.06, 1.045, 1.04])
 bot = Pchip([ZR, -2.25, -1.95, -1.6, 1.6, 1.95, 2.25, ZF], [.30, .27, .25, .215, .215, .27, .30, .34])
 
 def hw(z):                                       # plan view: half width at the widest point of the section
     h = HW - .014*math.exp(-((z+.25)/.9)**2) + .006*math.exp(-((z-ZA_R)/.45)**2)      # slight waist at the doors, rear haunch
     if z > 1.92: u = min(1, (z-1.92)/(ZF-1.92)); h *= (1-u**2.6)**(1/2.6)                    # rounded nose
-    if z < -1.95: u = min(1, (-1.95-z)/(-1.95-ZR)); h *= (1-u**3.4)**(1/3.4)                 # squarer tail
+    if z < -2.0: u = min(1, (-2.0-z)/(-2.0-ZR)); h *= (1-u**4.5)**(1/4.5)                 # squarer tail
     return max(h, 1e-4)
 def ease(a, b, t): t = min(1, max(0, t)); return a+(b-a)*t*t*(3-2*t)
 def expo(z):                                     # section shape: hood/tail boxier, cabin flanks rounder
@@ -202,12 +202,13 @@ def strip_front(pts, w, push=.003):
     return f
 # rear: hatch seams (sides of the hatch through the tail lights, and its bottom edge)
 # the hatch: its sides drop straight down through the tail lights, then round big corners into a low bottom edge
+PHOTO_REAR = True                                     # the owner's photos are mapped onto the car (see below)
 HP = [(.70, 1.10), (.70, .76)]+[(.56+.14*math.cos(a), .74-.14*math.sin(a)) for a in np.linspace(0, math.pi/2, 7)]+[(.30, .60), (0, .60)]
-patch(trim, 'Trim', strip_front(HP, .006), 40, 1, push=.0045, zfn=zrear, sgn=-1)
+if not PHOTO_REAR: patch(trim, 'Trim', strip_front(HP, .006), 40, 1, push=.0045, zfn=zrear, sgn=-1)
 plate = Mesh('Plate')                                  # the licence plate sits on the hatch (owner's rear photo)
-patch(plate, 'Plate', lambda u, v: (.155*u, .69+.152*v), 4, 2, push=.007, zfn=zrear, sgn=-1)   # both halves: patch() mirrors it
-patch(trim, 'Trim', lambda u, v: (.170*u, .675+.182*v), 4, 2, push=.005, zfn=zrear, sgn=-1)
-patch(plate, 'Reflector', strip_front([(.56, .462), (.80, .462)], .022), 6, 1, push=.004, zfn=zrear, sgn=-1)   # red reflectors on the diffuser
+if not PHOTO_REAR: patch(plate, 'Plate', lambda u, v: (.155*u, .69+.152*v), 4, 2, push=.007, zfn=zrear, sgn=-1)   # both halves: patch() mirrors it
+if not PHOTO_REAR: patch(trim, 'Trim', lambda u, v: (.170*u, .675+.182*v), 4, 2, push=.005, zfn=zrear, sgn=-1)
+if not PHOTO_REAR: patch(plate, 'Reflector', strip_front([(.56, .462), (.80, .462)], .022), 6, 1, push=.004, zfn=zrear, sgn=-1)   # red reflectors on the diffuser
 # front: the frunk lid edge, the wide lower intake, the corner slots, the front plate
 patch(trim, 'Trim', strip_front([(0, .93), (.35, .925), (.66, .905)], .0035), 14, 1, push=.003, zfn=zfront)
 patch(trim, 'Trim', lambda u, v: (.56*u, .305+.085*v-.02*u**4), 12, 2, push=.003, zfn=zfront)
@@ -230,16 +231,16 @@ def side_patch(m, mat, f, nu, nv, push=.003):
                 else: m.tri(mat, a, b, c); m.tri(mat, b, d, c)
 def vline(z0, z1, y0, y1, w=.006):
     return lambda u, v: (z0+(z1-z0)*u+(v-.5)*w, y0+(y1-y0)*u)
-for zz in ((1.0, .97, .31, 1.03), (-.24, -.28, .31, 1.06), (-1.32, -1.16, 1.07, .80)):   # front door front edge, B pillar seam, rear door back edge
+for zz in (() if PHOTO_REAR else ((1.0, .97, .31, 1.03), (-.24, -.28, .31, 1.06), (-1.32, -1.16, 1.07, .80))):   # front door front edge, B pillar seam, rear door back edge
     side_patch(trim, 'Trim', vline(zz[0], zz[1], zz[2], zz[3]), 10, 1)
-side_patch(trim, 'Trim', lambda u, v: (.97+(-.97-.97)*u, .31+(v-.5)*.006), 30, 1)   # door bottoms along the sill
+if not PHOTO_REAR: side_patch(trim, 'Trim', lambda u, v: (.97+(-.97-.97)*u, .31+(v-.5)*.006), 30, 1)   # door bottoms along the sill
 for za in (ZA_F, ZA_R):                                               # matte black arch cladding (owner's wheel photo)
     side_patch(trim, 'Trim', lambda u, v, za=za: (za+math.cos(math.radians(-12+204*u))*(RA-.01+.06*v), TYRE_R+math.sin(math.radians(-12+204*u))*(RA-.01+.06*v)), 40, 2, push=.005)
 side_patch(trim, 'Trim', lambda u, v: (ZA_F-RA-.03+((ZA_R+RA+.03)-(ZA_F-RA-.03))*u, .225+.075*v), 30, 2, push=.004)   # black rocker
-side_patch(trim, 'Glass', lambda u, v: (1.10-.10*u, .80+.035*v*(1-.6*u)+.012*u), 6, 2, push=.006)   # side repeater camera on the front fender
+if not PHOTO_REAR: side_patch(trim, 'Glass', lambda u, v: (1.10-.10*u, .80+.035*v*(1-.6*u)+.012*u), 6, 2, push=.006)   # side repeater camera on the front fender
 side_patch(trim, 'Glass', lambda u, v: (-2.27+.25*u, (.945+.07*u**1.5)+(.125-.12*u**1.2)*v), 8, 2, push=.005)   # glossy black wrap of the tail light (owner's photo)
 side_patch(trim, 'Reflector', lambda u, v: (-2.24+.13*u, (.965+.03*u)+(.045-.035*u)*v), 4, 1, push=.008)
-for zc in (-.02, -1.08):                                               # flush handles (black, like the owner's)
+for zc in (() if PHOTO_REAR else (-.02, -1.08)):                       # flush handles (black, like the owner's)
     side_patch(trim, 'Trim', lambda u, v, zc=zc: (zc-.11*u+.012*math.sin(math.pi*u)*0, .905+.022*(v-.5)*2*(1 if u > .25 else .7)), 8, 1, push=.004)
 
 # ---------- door mirrors: painted caps on black arms at the base of the A pillar ----------
@@ -297,7 +298,7 @@ wheels = [(n, x, ZA) for n, x, ZA in (('Wheel_FL', TRACK/2, ZA_F), ('Wheel_FR', 
 
 # ---------- write the .glb ----------
 MATS = {
- 'Paint':     dict(c=[.62, .625, .62, 1], m=.05, r=.35),        # Pearl White multi-coat
+ 'Paint':     dict(c=[.40, .405, .405, 1], m=0, r=.55),        # Pearl White multi-coat
  'Glass':     dict(c=[.012, .014, .018, 1], m=.55, r=.06),
  'Trim':      dict(c=[.018, .018, .02, 1], m=.1, r=.55),
  'Headlight': dict(c=[.10, .105, .11, 1], m=.7, r=.1),
@@ -308,11 +309,19 @@ MATS = {
  'Spoke':     dict(c=[.022, .023, .025, 1], m=0, r=.7),        # matte black
  'Well':      dict(c=[.008, .008, .009, 1], m=0, r=.9),
  'Reflector': dict(c=[.35, .02, .02, 1], m=.1, r=.3),
+ 'PhotoRear': dict(c=[.72, .72, .72, 1], m=0, r=.55, tex='base', ti=0),
+ 'PhotoTaillight': dict(c=[.72, .72, .72, 1], m=0, r=.3, tex='both', ti=0),
+ 'PhotoSide': dict(c=[.72, .72, .72, 1], m=0, r=.55, tex='base', ti=1),
+ 'PhotoFront': dict(c=[.72, .72, .72, 1], m=0, r=.55, tex='base', ti=2),
+ 'PhotoHeadlight': dict(c=[.72, .72, .72, 1], m=0, r=.2, tex='both', ti=2),
 }
 matnames = list(MATS)
 J = dict(asset=dict(version='2.0', generator='explorer3d tools/make-model-y.py'), scene=0, scenes=[dict(nodes=[0])],
          nodes=[dict(name='Tesla_Model_Y_2023', children=[])], meshes=[], accessors=[], bufferViews=[], buffers=[],
-         materials=[dict(name=k, pbrMetallicRoughness=dict(baseColorFactor=v['c'], metallicFactor=v['m'], roughnessFactor=v['r']), doubleSided=True) for k, v in MATS.items()])
+         materials=[dict(name=k, pbrMetallicRoughness=dict(baseColorFactor=v['c'], metallicFactor=v['m'], roughnessFactor=v['r']), doubleSided=True,
+                         **(dict(emissiveTexture=dict(index=v['ti']), emissiveFactor=[0, 0, 0]) if v.get('tex') == 'both' else {})) for k, v in MATS.items()])
+for mt, (k, v) in zip(J['materials'], MATS.items()):
+    if v.get('tex'): mt['pbrMetallicRoughness']['baseColorTexture'] = dict(index=v['ti'])   # the photo, lit like the paint around it
 BIN = bytearray()
 def add(arr, ctype, typ, target):
     global BIN
@@ -321,6 +330,7 @@ def add(arr, ctype, typ, target):
     J['bufferViews'].append(dict(buffer=0, byteOffset=off, byteLength=len(b), target=target))
     a = dict(bufferView=len(J['bufferViews'])-1, componentType=ctype, count=len(arr), type=typ)
     if typ == 'VEC3': a['min'] = arr.min(0).tolist(); a['max'] = arr.max(0).tolist()
+    if target is None: del J['bufferViews'][-1]['target']
     J['accessors'].append(a); return len(J['accessors'])-1
 def normals(P, prims):
     N = np.zeros_like(P)
@@ -333,16 +343,101 @@ def put(m, translation=None, parent=0, offset=(0, 0, 0)):
     P = np.array(m.P, dtype='<f4')-np.array(offset, dtype='<f4')
     # weld nothing; smooth normals per mesh (shared vertices already shared)
     N = normals(P, m.prims)
+    if getattr(m, 'N', None) is not None: N = np.array(m.N, dtype='<f4')
     pa = add(P, 5126, 'VEC3', 34962); na = add(N, 5126, 'VEC3', 34962)
+    at = dict(POSITION=pa, NORMAL=na)
+    if getattr(m, 'UV', None): at['TEXCOORD_0'] = add(np.array(m.UV, dtype='<f4'), 5126, 'VEC2', 34962)
     prims = []
     for mat, I in m.prims.items():
         ia = add(np.array(I, dtype='<u4' if len(P) > 65535 else '<u2'), 5125 if len(P) > 65535 else 5123, 'SCALAR', 34963)
-        prims.append(dict(attributes=dict(POSITION=pa, NORMAL=na), indices=ia, material=matnames.index(mat)))
+        prims.append(dict(attributes=at, indices=ia, material=matnames.index(mat)))
     J['meshes'].append(dict(name=m.name, primitives=prims))
     node = dict(name=m.name, mesh=len(J['meshes'])-1)
     if translation: node['translation'] = list(translation)
     J['nodes'].append(node); J['nodes'][parent]['children'].append(len(J['nodes'])-1)
-for m in (body, gh, heads, hous, tails, trim, plate, mir): put(m)
+# ---------- the owner's photos on the car (issue #5: "make everything like the picture") ----------
+# tools/photos/model-y-photos.json lists the owner's photos used as textures: the straight-on rear photo (licence plate
+# blanked) and the left-side photo (also used, mirrored, on the right side), each with the car's outline in the photo,
+# the crop kept as the texture image, and the photo's camera fitted to this model by matching outlines
+# (tools/fit-model-y-photo.py): position (m), yaw, pitch, roll (rad), focal length (px). Every face of the body, glass and
+# mirrors that a camera saw square-on, unhidden and inside the car's outline gets a copy 2 mm out, textured with the
+# photo that saw it best; faces inside the tail lights go in their own mesh so the game can light them.
+PDIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'photos')
+PHOTOS = json.load(open(os.path.join(PDIR, 'model-y-photos.json'))) if PHOTO_REAR else {}
+def cam_proj(X, CAM, size):
+    cx, cy, cz, yaw, pit, rol, f = CAM
+    d = X-np.array([cx, cy, cz]); cyw, syw = math.cos(yaw), math.sin(yaw)
+    x = cyw*d[:, 0]-syw*d[:, 2]; z = syw*d[:, 0]+cyw*d[:, 2]; y = d[:, 1]
+    cp, sp = math.cos(pit), math.sin(pit); y2 = cp*y-sp*z; z2 = sp*y+cp*z
+    u = -x/z2*f; v = -y2/z2*f; cr, sr = math.cos(rol), math.sin(rol)
+    return cr*u-sr*v+size[0]/2, sr*u+cr*v+size[1]/2, z2
+pmeshes = []
+if PHOTOS:
+    from PIL import Image, ImageDraw, ImageFilter
+    np.random.seed(5)
+    def scatter(m, CAM, size, ZB, Q):
+        V = np.array(m.P)
+        for I in m.prims.values():
+            T = np.array(I).reshape(-1, 3); A, B, C = V[T[:, 0]], V[T[:, 1]], V[T[:, 2]]
+            n = np.ceil(np.linalg.norm(np.cross(B-A, C-A), axis=1)/2/.00004).astype(int).clip(1, 300)
+            k = np.repeat(np.arange(len(T)), n); r1 = np.sqrt(np.random.rand(len(k))); r2 = np.random.rand(len(k))
+            X = A[k]*(1-r1)[:, None]+B[k]*(r1*(1-r2))[:, None]+C[k]*(r1*r2)[:, None]
+            u, v, z = cam_proj(X, CAM, size); ok = (z > .1)&(u >= 0)&(u < size[0])&(v >= 0)&(v < size[1])
+            np.minimum.at(ZB, ((v[ok]/Q).astype(int), (u[ok]/Q).astype(int)), z[ok])
+    for name, ph in PHOTOS.items():                         # masks and depth for each photo
+        W_, H_ = ph['size']; mk = Image.new('L', (W_, H_), 0); ImageDraw.Draw(mk).polygon([tuple(p) for p in ph['outline']], fill=255)
+        ph['MASK'] = np.array(mk.filter(ImageFilter.MinFilter(25))) > 128          # ~12 px inside the outline
+        lk = Image.new('L', (W_, H_), 0)
+        for L in ph['lamps']: ImageDraw.Draw(lk).polygon([tuple(p) for p in L], fill=255)
+        ph['LMASK'] = np.array(lk) > 128
+        ph['Q'] = 4; ph['ZB'] = np.full((H_//4+1, W_//4+1), np.inf)
+        for m in (body, gh, mir, trim, hous, heads): scatter(m, ph['camera'], ph['size'], ph['ZB'], 4)
+    names = list(PHOTOS); pm = {n: Mesh('Photo'+n.capitalize()) for n in names}
+    LAMPMAT = {'rear': 'PhotoTaillight', 'front': 'PhotoHeadlight'}            # the photo's own lamps, lit by the game
+    for n in names: pm['lamp_'+n] = Mesh(LAMPMAT.get(n, 'Photo')+'s')
+    for m in pm.values(): m.UV = []; m.N = []
+    for src in (body, gh, mir):
+        V = np.array(src.P); NV = normals(V.astype('<f4'), src.prims)
+        chase = NV@np.array([0, .5, -.866])                           # how square-on the game's chase camera sees it
+        S_ = {}
+        for name, ph in PHOTOS.items():
+            W_, H_ = ph['size']; Vm, Nm = V.copy(), NV.copy()
+            if ph['mirror']: sg = np.where(V[:, 0] < 0, -1, 1); Vm[:, 0] *= sg; Nm[:, 0] *= sg   # the right side seen as the left
+            u, v, z = cam_proj(Vm, ph['camera'], ph['size']); iu, iv = np.clip(u, 0, W_-1).astype(int), np.clip(v, 0, H_-1).astype(int)
+            camp = np.array(ph['camera'][:3]); face = ((camp-Vm)/np.linalg.norm(camp-Vm, axis=1, keepdims=True)*Nm).sum(1)
+            seen = (z > .1)&(u >= 0)&(u < W_)&(v >= 0)&(v < H_)&ph['MASK'][iv, iu]&(face > .3)
+            seen &= np.maximum(chase, 0) < 3.5*face                    # not where the chase camera would see the photo stretched >3.5x
+            seen &= z <= ph['ZB'][np.clip(iv//4, 0, H_//4), np.clip(iu//4, 0, W_//4)]+.06
+            S_[name] = (u, v, face, seen, iu, iv)
+        maps = {}
+        for I in src.prims.values():
+            for t in np.array(I).reshape(-1, 3):
+                best = None
+                for name, ph in PHOTOS.items():
+                    u, v, face, seen, iu, iv = S_[name]
+                    if seen[t].all() and (best is None or face[t].min() > best[1]): best = (name, face[t].min())
+                if not best: continue
+                name = best[0]; ph = PHOTOS[name]; u, v, face, seen, iu, iv = S_[name]
+                lamp = bool(ph['lamps']) and ph['LMASK'][int(v[t].mean()), int(u[t].mean())]
+                if lamp and name == 'rear' and (chase[t] > 1.6*face[t]).any(): continue   # lamp glass belongs on upright faces only
+                key = 'lamp_'+name if lamp else name; dst = pm[key]; C_ = ph['crop']; ids = []
+                for vi in t:
+                    if (key, vi) not in maps:
+                        maps[(key, vi)] = dst.v(tuple(V[vi]+NV[vi]*.002)); dst.N.append(NV[vi])
+                        dst.UV.append(((u[vi]-C_[0])/(C_[2]-C_[0]), (v[vi]-C_[1])/(C_[3]-C_[1])))
+                    ids.append(maps[(key, vi)])
+                dst.tri(LAMPMAT[name] if lamp else 'Photo'+name.capitalize(), *ids)
+    pmeshes = [m for m in pm.values() if m.prims]
+    print('photo faces', {m.name: len(next(iter(m.prims.values())))//3 for m in pmeshes})
+for m in ((body, gh, *(() if 'front' in PHOTOS else (heads, hous)), trim, plate, mir, *pmeshes) if PHOTOS else (body, gh, heads, hous, tails, trim, plate, mir)):
+    if m.prims: put(m)
+if PHOTOS:
+    J['images'] = []; J['textures'] = []; J['samplers'] = [dict(magFilter=9729, minFilter=9987, wrapS=33071, wrapT=33071)]
+    for i, (name, ph) in enumerate(PHOTOS.items()):
+        while len(BIN) % 4: BIN.append(0)
+        jb = open(os.path.join(PDIR, ph['image']), 'rb').read()
+        off = len(BIN); BIN += jb; J['bufferViews'].append(dict(buffer=0, byteOffset=off, byteLength=len(jb)))
+        J['images'].append(dict(bufferView=len(J['bufferViews'])-1, mimeType='image/jpeg')); J['textures'].append(dict(source=i, sampler=0))
 for name, x, za in wheels:
     put(wheel_mesh(name, 1 if x > 0 else -1), translation=(x, TYRE_R, za))
 while len(BIN) % 4: BIN.append(0)
