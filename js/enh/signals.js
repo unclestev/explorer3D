@@ -7,7 +7,8 @@
    - Flash rate ~85 a minute (US rule: 60-120), lamp on half the time.
    - Sound: each car's own relay sound, synthesized (no recordings): a "tick" when the lamps come on and a "tock" when they
      go off, through the engine sound's cabin filter, so it's clear from the cockpit and quiet in the chase view:
-       Ford Explorer   Ford's crisp electronic tick-tock: a short bright click with a hollow ring, the tock a little lower
+       Ford Explorer   modelled on a 2022 Ford Bronco recording the owner sent (2026-11-21): a quick bright tick at
+                       ~2.4 kHz and a lower, slightly louder tock at ~2.1 kHz, ~79 a minute
        Lincoln         modelled on a 2025 Lincoln recording the owner sent (2026-11-21): a soft, short knock ringing at
                        ~1.6 kHz (with ~2.1 and ~1.4 kHz), gone in ~25 ms, tick and tock nearly alike, ~79 a minute
        Model Y         Tesla's quiet, round tick-tock
@@ -56,8 +57,11 @@ function synth(parts,len,seed){
   return out; }
 const RECIPES={
   // Ford: bright electronic relay click with a hollow plastic ring; the tock is darker and softer
-  ford:{tick:[{fc:3400,q:3,d:.0018,g:1},{f:2350,d:.007,g:.55},{f:4700,d:.003,g:.25},{f:190,d:.012,g:.35}],
-        tock:[{fc:2400,q:3,d:.0018,g:.8},{f:1700,d:.008,g:.5},{f:3500,d:.003,g:.2},{f:160,d:.012,g:.35}],len:.06,vol:.55},
+  // Ford: measured from a recording of a 2022 Ford Bronco's blinker the owner sent (re-synthesized, not the recording):
+  // two different clicks, each a quick bright burst (up in ~4 ms, down 20 dB in ~10-15 ms) with a little low body —
+  // the tick ringing at ~2.44, 3.96 and 5.58 kHz, the tock lower (~2.06, 3.49, 4.95 kHz) and ~15 % louder; 0.38 s apart
+  ford:{tick:[{fc:2600,q:4,d:.002,g:.5},{f:2440,d:.0042,g:.75,a:.0015},{f:3960,d:.0034,g:.75,a:.0012},{f:5580,d:.003,g:.85,a:.001},{f:985,d:.005,g:.45,a:.002},{f:730,d:.006,g:.4,a:.002}],
+        tock:[{fc:2200,q:4,d:.002,g:.5},{f:2060,d:.0045,g:.8,a:.0015},{f:3490,d:.0036,g:.85,a:.0012},{f:4950,d:.003,g:.8,a:.001},{f:1055,d:.005,g:.5,a:.002},{f:705,d:.006,g:.4,a:.002}],len:.05,vol:.6,tockVol:1.15},
   // Lincoln: a soft, rounded wooden knock (mallet on a wood block); low, warm, almost no click
   // Lincoln: measured from the owner's recording of a 2025 Lincoln's blinker (synthesized here, not the recording itself):
   // every click a soft knock whose ring is strongest near 1.58 kHz with 2.13 and 1.42 kHz beside it, a little low body,
@@ -83,7 +87,7 @@ function click(which){
   const style=STYLE(), R=RECIPES[style], inside=!!(window.COCKPIT&&COCKPIT.on);
   try{ const src=A.ctx.createBufferSource(); src.buffer=buf(A.ctx,style,which);
     if(style==='thermal') src.playbackRate.value=.97+Math.random()*.06;           // the old can isn't quite regular
-    const g=A.ctx.createGain(); g.gain.value=R.vol*(inside?1:.3); src.connect(g); g.connect(A.bus); src.start(); }catch(e){ console.warn('signal click',e); } }
+    const g=A.ctx.createGain(); g.gain.value=R.vol*(which==='tock'&&R.tockVol||1)*(inside?1:.3); src.connect(g); g.connect(A.bus); src.start(); }catch(e){ console.warn('signal click',e); } }
 
 /* ---------- timing, self-cancel ---------- */
 FRAME_HOOKS.push(function signals(dt){
@@ -93,7 +97,7 @@ FRAME_HOOKS.push(function signals(dt){
   if(SIG.dir&&!SIG.haz){ const st=(S.stIn||0)*SIG.dir;
     if(st>.22) SIG.armed=true; else if(SIG.armed&&st<.06){ SIG.dir=0; SIG.armed=false; sync(); } }
   if(STYLE()==='thermal'&&!SIG.jit) SIG.jit=1+(Math.random()-.5)*.12;
-  const sty=STYLE(), per=sty==='lincoln'?.76:PERIOD*(sty==='thermal'?1.12*(SIG.jit||1):1);   // the thermal can is a bit slower, and uneven; the Lincoln ~79 a minute
+  const sty=STYLE(), per=sty==='lincoln'||sty==='ford'?.76:PERIOD*(sty==='thermal'?1.12*(SIG.jit||1):1);   // the thermal can is a bit slower, and uneven; the Lincoln ~79 a minute
   SIG.t+=dt; let changed=false;
   while(SIG.t>=per/2){ SIG.t-=per/2; SIG.lit=!SIG.lit; changed=true; click(SIG.lit?'tick':'tock'); SIG.jit=0; }
   SIG.left=SIG.lit&&(SIG.haz||SIG.dir<0); SIG.right=SIG.lit&&(SIG.haz||SIG.dir>0);
