@@ -55,7 +55,8 @@ function build(){
   const L=(x,y)=>[roadGeo.lng+x/kx,roadGeo.lat+y/111320];
   // grids: road pieces (to keep clear of other roads) and building footprints (local metres)
   const C=25, SG=new Map(), put=(M,x,y,o)=>{ const k=Math.floor(x/C)+','+Math.floor(y/C); let a=M.get(k); if(!a) M.set(k,a=[]); a.push(o); };
-  const near=segs.filter(s=>Math.min(Math.hypot(s[0]-ox,s[1]-oy),Math.hypot(s[2]-ox,s[3]-oy))<R+60);
+  const segD=s=>{ const dx=s[2]-s[0], dy=s[3]-s[1], L2=dx*dx+dy*dy||1, t=Math.max(0,Math.min(1,((ox-s[0])*dx+(oy-s[1])*dy)/L2)); return Math.hypot(s[0]+t*dx-ox,s[1]+t*dy-oy); };
+  const near=segs.filter(s=>segD(s)<R+60);                        // by distance to the line itself: a long straight road passing by has both ends far away
   for(const s of near){ const n=Math.ceil(Math.hypot(s[2]-s[0],s[3]-s[1])/C)+1; const seen=new Set();
     for(let i=0;i<=n;i++){ const x=s[0]+(s[2]-s[0])*i/n, y=s[1]+(s[3]-s[1])*i/n, k=Math.floor(x/C)+','+Math.floor(y/C); if(!seen.has(k)){ seen.add(k); put(SG,x,y,s); } } }
   const BG=new Map(), cents=[];
@@ -68,9 +69,12 @@ function build(){
   const inRing=(x,y,r)=>{ let c=false; for(let i=0,j=r.length-1;i<r.length;j=i++){ const xi=r[i][0],yi=r[i][1],xj=r[j][0],yj=r[j][1]; if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi)) c=!c; } return c; };
   const inBuilding=(x,y,pad)=>{ for(const b of BG.get(Math.floor(x/C)+','+Math.floor(y/C))||[]){ if(x<b.bb[0]-pad||x>b.bb[2]+pad||y<b.bb[1]-pad||y>b.bb[3]+pad) continue; if(inRing(x,y,b.ring)) return true; if(pad>0&&x>b.bb[0]&&x<b.bb[2]&&y>b.bb[1]&&y<b.bb[3]) return true; } return false; };
   const town=(x,y)=>{ for(let i=-2;i<=2;i++) for(let j=-2;j<=2;j++) for(const b of BG.get((Math.floor(x/C)+i)+','+(Math.floor(y/C)+j))||[]) if(Math.hypot(b.cx-x,b.cy-y)<45) return true; return false; };
-  const onRoad=(x,y,self,m)=>{ for(const s of SG.get(Math.floor(x/C)+','+Math.floor(y/C))||[]){ if(s===self||s[8]===self[8]&&Math.abs(s[7]-self[7])<60) continue;
+  const onRoad=(x,y,self,m)=>{ for(const s of SG.get(Math.floor(x/C)+','+Math.floor(y/C))||[]){ if(s===self||s[6]==='path'||s[8]===self[8]&&Math.abs(s[7]-self[7])<60) continue;   // sidewalks / footpaths: fine to stand on
       const dx=s[2]-s[0], dy=s[3]-s[1], L2=dx*dx+dy*dy||1, t=Math.max(0,Math.min(1,((x-s[0])*dx+(y-s[1])*dy)/L2)); if(Math.hypot(s[0]+t*dx-x,s[1]+t*dy-y)<s[4]+m) return true; } return false; };
-  const ok=(x,y,self,m)=>Math.hypot(x-ox,y-oy)<R&&!onRoad(x,y,self,m)&&!inBuilding(x,y,1);
+  // owner 2026-11-21 (issue #4): "objects are showing in the middle of the road (hydrants, street signs, street lights)":
+  // last check against every drivable road's drawn edge (game.js roadClear), the same test trees and signs get
+  const clear=(x,y,g)=>{ if(typeof roadClear!=='function') return true; const q=L(x,y); return roadClear(q[0],q[1])>=g; };
+  const ok=(x,y,self,m,pad)=>Math.hypot(x-ox,y-oy)<R&&!onRoad(x,y,self,m)&&!inBuilding(x,y,pad==null?1:pad)&&clear(x,y,Math.min(m,.6));
 
   const out=[], poles=new Map(), mailFor=new Set();
   const QL0=Q3(0,1,2);
@@ -97,7 +101,7 @@ function build(){
     } else {
       // street lights: one side, arm out over the road, lamp lit after dark
       const big=/trunk|primary|secondary/.test(cls), stepL=big?38:52;
-      each(stepL,7,(px,py,d)=>{ const sd=big&&Math.floor(d/stepL)%2?-side:side, x=px+nx*sd*(half+1.1), y=py+ny*sd*(half+1.1); if(!ok(x,y,s,1.2)) return;
+      each(stepL,7,(px,py,d)=>{ const sd=big&&Math.floor(d/stepL)%2?-side:side, x=px+nx*sd*(half+1.1), y=py+ny*sd*(half+1.1); if(!ok(x,y,s,1.2,0)) return;
         out.push(F(rect(L,x,y,ux,uy,.22,.22),{k:'lpole',b:0,h:8.2,c:'#6d7278'}));
         const ax=x-nx*sd*1.1, ay=y-ny*sd*1.1; out.push(F(rect(L,ax,ay,nx,ny,2.2,.12),{k:'lpole',b:7.9,h:8.05,c:'#6d7278'}));
         out.push(F(rect(L,x-nx*sd*2.1,y-ny*sd*2.1,nx,ny,.7,.32),{k:'lamp',b:7.75,h:7.95,c:'#d7dade'})); });
@@ -105,7 +109,7 @@ function build(){
       for(const sd of [-1,1]){ const o=half+2.2, a=[x1+nx*sd*o,y1+ny*sd*o], b=[x2+nx*sd*o,y2+ny*sd*o];
         if(Math.hypot(a[0]-ox,a[1]-oy)<R+40) out.push(Line([L(a[0],a[1]),L(b[0],b[1])],{k:'walk'})); }
       // fire hydrants now and then
-      each(85,31,(px,py,d)=>{ const sd=hash(lid,Math.round(d))<.5?1:-1, x=px+nx*sd*(half+.9), y=py+ny*sd*(half+.9); if(!ok(x,y,s,.8)) return;
+      each(85,31,(px,py,d)=>{ const sd=hash(lid,Math.round(d))<.5?1:-1, x=px+nx*sd*(half+.9), y=py+ny*sd*(half+.9); if(!ok(x,y,s,.8,0)) return;
         out.push(F(octa(L,x,y,.17),{k:'hyd',b:0,h:.75,c:'#c62828'})); out.push(F(octa(L,x,y,.11),{k:'hyd',b:.75,h:.85,c:'#c62828'})); });
       // mailboxes at the curb in front of houses on residential streets
       if(/minor|tertiary/.test(cls)) for(const b of cents){ if(mailFor.has(b)||b.a>600) continue;

@@ -854,7 +854,8 @@ function roadCells(){ if(!roadGeo.segs||meters(roadGeo.lat,roadGeo.lng,S.lat,S.l
   return G; }
 function roadNear(lng,lat){ const G=roadCells(); if(!G||!roadGeo.segs) return null; const kx=111320*Math.cos(rad(roadGeo.lat)),
     x=(lng-roadGeo.lng)*kx, y=(lat-roadGeo.lat)*111320; let best=null, bc=1e9;
-  for(const s of G.get(Math.floor(x/RCG.C)+','+Math.floor(y/RCG.C))||[]){ const dx=s[2]-s[0], dy=s[3]-s[1], L2=dx*dx+dy*dy||1,
+  for(const s of G.get(Math.floor(x/RCG.C)+','+Math.floor(y/RCG.C))||[]){ if(s[6]==='path') continue;   // sidewalks / footpaths are where posts belong: keep clear of drivable roads only
+    const dx=s[2]-s[0], dy=s[3]-s[1], L2=dx*dx+dy*dy||1,
       t=Math.max(0,Math.min(1,((x-s[0])*dx+(y-s[1])*dy)/L2)), px=s[0]+t*dx, py=s[1]+t*dy, d=Math.hypot(x-px,y-py), c=d-(ROAD_DRAWN[s[6]]||4.7);
     if(c<bc){ bc=c; best={c,x,y,px,py,d,kx,seg:s}; } }
   return best; }
@@ -1107,16 +1108,26 @@ function rebuildLandCache(){
 function inAny(list,lng,lat){ for(const q of list){ const b=q.bb; if(lng<b[0]||lng>b[2]||lat<b[1]||lat>b[3]) continue; if(inPoly(lng,lat,q.pl)) return true; } return false; }
 
 /* ---------- WATER TOWERS (OpenStreetMap man_made=water_tower via Overpass, keyless) ---------- */
-let towers=[], towerAt=null, towerBusy=false, miniReady=false;
+let towers=[], towerAt=null, towerBusy=false, miniReady=false, towerRetry=0;
 const towerSeen=new Set();
-const OVERPASS=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
-function loadTowers(ep=0){
+// OpenStreetMap's Overpass servers (water towers, stop signs, lights, speed limits, town limits). On 2026-11-21 the main
+// one and kumi failed or timed out from the owner's connection while mail.ru answered (slowly), so: four mirrors, 40 s each,
+// starting with the one that answered last time (remembered).
+const OVERPASS=['https://overpass-api.de/api/interpreter','https://maps.mail.ru/osm/tools/overpass/api/interpreter','https://overpass.kumi.systems/api/interpreter','https://overpass.private.coffee/api/interpreter'];
+async function ovFetch(q){ let first=0; try{ first=Math.max(0,OVERPASS.indexOf(localStorage.getItem('ydOvp'))); }catch(e){}
+  for(let n=0;n<OVERPASS.length;n++){ const url=OVERPASS[(first+n)%OVERPASS.length], c=new AbortController(), to=setTimeout(()=>c.abort(),40000);
+    try{ const r=await fetch(url,{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'},signal:c.signal});
+      if(r.ok){ const j=await r.json(); try{ localStorage.setItem('ydOvp',url); }catch(e){} return j; } }catch(e){} finally{ clearTimeout(to); } }
+  throw new Error('no Overpass server answered'); }
+function loadTowers(){
   if(towerBusy) return; towerBusy=true;
   const cx=S.lng, cy=S.lat, dy=.3, dx=.4;                          // ~33 km x 33 km around the car
   const bb=`(${(cy-dy).toFixed(4)},${(cx-dx).toFixed(4)},${(cy+dy).toFixed(4)},${(cx+dx).toFixed(4)})`;
   const q=`[out:json][timeout:25];(node["man_made"="water_tower"]${bb};way["man_made"="water_tower"]${bb};relation["man_made"="water_tower"]${bb};);out center tags;`;
-  fetch(OVERPASS[ep],{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'}})
-    .then(r=>{ if(!r.ok) throw new Error('overpass '+r.status); return r.json(); })
+  // the last answer for this area is kept, so the towers still show when the servers are down
+  const ck='ydTw:'+cy.toFixed(1)+','+cx.toFixed(1);
+  ovFetch(q).then(j=>{ try{ localStorage.setItem(ck,JSON.stringify({elements:(j.elements||[]).map(e=>({type:e.type,id:e.id,lat:e.lat,lon:e.lon,center:e.center,tags:e.tags}))})); }catch(e){} return j; })
+    .catch(e=>{ let c=null; try{ c=JSON.parse(localStorage.getItem(ck)||'null'); }catch(_){} if(c){ towerRetry=Date.now()+120000; return c; } throw e; })
     .then(j=>{
       for(const el of j.elements||[]){
         const lat=el.lat??(el.center&&el.center.lat), lng=el.lon??(el.center&&el.center.lon);
@@ -1130,7 +1141,7 @@ function loadTowers(ep=0){
       }
       towerAt=[cx,cy]; drawTowers();
     })
-    .catch(e=>{ console.warn('towers',e); if(ep+1<OVERPASS.length){ towerBusy=false; loadTowers(ep+1); return; } towerAt=[cx,cy]; })
+    .catch(e=>{ console.warn('towers',e); towerAt=[cx,cy]; towerRetry=Date.now()+120000; })   // try again in 2 minutes, not only after driving 15 km
     .finally(()=>{ towerBusy=false; });
 }
 function towerFC(pointsOnly){
@@ -1441,7 +1452,7 @@ function step(now){
       if(txt!==step.surf){ step.surf=txt; surfEl.textContent=txt; }
     }
   }
-  if(every('towers',5) && !towerBusy && towerAt && meters(towerAt[1],towerAt[0],S.lat,S.lng)>15000) loadTowers();
+  if(every('towers',5) && !towerBusy && towerAt && (meters(towerAt[1],towerAt[0],S.lat,S.lng)>15000||towerRetry&&Date.now()>towerRetry)) { towerRetry=0; loadTowers(); }
   if(every('decor',.5)){
     if(styleReady && (!decorAt || meters(decorAt[1],decorAt[0],S.lat,S.lng)>250)) buildDecor();
     const nt=nearestPoi(); if(nt!==step.near){ step.near=nt; nearEl.textContent=nt; }

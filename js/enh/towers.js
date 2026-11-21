@@ -235,15 +235,14 @@ const haveLimits=()=>!!(LIMITS.osw||LIMITS.york||LIMITS.sg);
 function loadLimits(ep=0){
   if(LIMITS.busy||haveLimits()||typeof OVERPASS==='undefined') return; LIMITS.busy=true; LIMITS.tried=Date.now();
   const q='[out:json][timeout:25];rel["boundary"="administrative"]["admin_level"="8"]["name"~"^(Oswego|Yorkville|United City of Yorkville|Sugar Grove|Village of Sugar Grove)$"](41.45,-88.75,41.85,-88.1);out geom;';
-  fetch(OVERPASS[ep],{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'}})
-    .then(r=>{ if(!r.ok) throw new Error('overpass '+r.status); return r.json(); })
+  ovFetch(q)
     .then(j=>{ for(const el of j.elements||[]){ const nm=((el.tags||{}).name||'').toLowerCase(), key=/oswego/.test(nm)?'osw':/yorkville/.test(nm)?'york':/sugar grove/.test(nm)?'sg':null;
         if(!key) continue; const edges=[];
         for(const m of el.members||[]) if(m.type==='way'&&m.geometry&&(m.role==='outer'||m.role==='inner'||!m.role))
           for(let i=1;i<m.geometry.length;i++){ const a=m.geometry[i-1], b=m.geometry[i]; edges.push([a.lon,a.lat,b.lon,b.lat]); }
         if(edges.length>2) LIMITS[key]=edges; }
       cache.clear(); shown='-'; refresh(); })
-    .catch(e=>{ console.warn('town limits',e); if(ep+1<OVERPASS.length){ LIMITS.busy=false; loadLimits(ep+1); } })
+    .catch(e=>{ console.warn('town limits',e); })
     .finally(()=>{ LIMITS.busy=false; });
 }
 function inside(lng,lat,edges){ let c=false; for(const e of edges){ const [x1,y1,x2,y2]=e;

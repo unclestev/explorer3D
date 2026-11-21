@@ -183,7 +183,7 @@ function walkStep(dt,st,gas,now){
   // HUD + background jobs (same as driving)
   if(every('place',1)) updatePlace(); if(every('house',.25)) updateHouseFilter(false);
   if(every('compass',POWER?.12:.05)) updateCompass();
-  if(every('towers',5) && !towerBusy && towerAt && meters(towerAt[1],towerAt[0],S.lat,S.lng)>15000) loadTowers();
+  if(every('towers',5) && !towerBusy && towerAt && (meters(towerAt[1],towerAt[0],S.lat,S.lng)>15000||towerRetry&&Date.now()>towerRetry)) { towerRetry=0; loadTowers(); }
   if(every('decor',.5) && styleReady && (!decorAt || meters(decorAt[1],decorAt[0],S.lat,S.lng)>250)) buildDecor();
   if(every('walkhud',.3)){
     if(styleReady){ const p=map.project([S.lng,S.lat]), f=QGEO()?geoRoads(S.lng,S.lat,4):hitRoad(p.x,p.y,8);
