@@ -206,7 +206,7 @@ map.on('load',()=>{ try{ initMini();
     map.addSource('dem',dem); map.addSource('dem-hs',Object.assign({},dem));
     map.addLayer({id:'hillshade',type:'hillshade',source:'dem-hs',layout:{visibility:QL===2?'visible':'none'},
       paint:{'hillshade-exaggeration':.4,'hillshade-shadow-color':'#5a4f3f','hillshade-highlight-color':'#fffaf0'}},before);
-    if(!POWER){ map.setTerrain({source:'dem',exaggeration:TERRAIN_X}); terrainOn=true; }   // Medium and High
+    applyTerrain();                                              // Medium and High, per ⚙️ 3D terrain
   }catch(e){ console.warn('terrain',e); }
   try{
     const TW=16, D=new Uint8Array(TW*TW*4);                      // crop-row stripes for farmland
@@ -714,8 +714,7 @@ function applyQuality(lvl){
   try{ map.setPixelRatio(mapPR()); }catch(e){}
   renderer.setPixelRatio(carPR()); step.W=0;                     // forces canvas resize next frame
   if(styleReady){
-    try{ if(POWER){ map.setTerrain(null); terrainOn=false; }
-         else if(map.getSource('dem')&&!terrainOn&&!(window.COCKPIT&&COCKPIT.on)){ map.setTerrain({source:'dem',exaggeration:TERRAIN_X}); terrainOn=true; } }catch(e){ console.warn('terrain toggle',e); }   // no terrain in the cockpit (cockpit.js)
+    applyTerrain();
     try{ if(map.getLayer('hillshade')) map.setLayoutProperty('hillshade','visibility',QL===2?'visible':'none'); }catch(e){}   // hidden = its elevation tiles aren't downloaded
     decorAt=null;                                               // rebuild trees at the new density
   }
@@ -729,6 +728,17 @@ function setQuality(mode){
   const lvl=mode==='auto'?QAUTO.lvl:QNAMES.indexOf(mode); if(lvl!==QL) applyQuality(lvl);
 }
 // adaptive sharpness: scale the map's resolution (1 = the level's full resolution); quality.js decides when
+// ⚙️ 3D terrain (owner 2026-11-21: "add a setting to turn terrain on and off"): 'off' never; 'chase' (default) on Medium/High
+// in the chase view only — in the cockpit it made the game ~1 s a frame on the owner's laptop; 'all' also in the cockpit
+let TERRMODE=(()=>{ try{ const v=localStorage.getItem('ydTerrain'); return v==='off'||v==='all'?v:'chase'; }catch(e){ return 'chase'; } })();
+function terrWant(){ return !POWER&&TERRMODE!=='off'&&!(window.COCKPIT&&COCKPIT.on&&TERRMODE!=='all'); }
+function applyTerrain(){ try{ if(!map.getSource('dem')) return; const w=terrWant();
+  if(w&&!terrainOn){ map.setTerrain({source:'dem',exaggeration:TERRAIN_X}); terrainOn=true; }
+  else if(!w&&terrainOn){ map.setTerrain(null); terrainOn=false; S.sp=0; S.sr=0; } dirty=true; }catch(e){ console.warn('terrain toggle',e); } }
+function setTerrainMode(m){ TERRMODE=m; try{ localStorage.setItem('ydTerrain',m); }catch(e){} applyTerrain(); showTerr(); }
+function showTerr(){ const p=document.getElementById('terrPick'); if(p) for(const b of p.querySelectorAll('button')) b.classList.toggle('on',b.dataset.t===TERRMODE); }
+{ const p=document.getElementById('terrPick'); if(p){ p.addEventListener('click',e=>{ const b=e.target.closest('button[data-t]'); if(!b) return; e.stopPropagation(); setTerrainMode(b.dataset.t);
+    if(POWER&&b.dataset.t!=='off') toast('3D terrain shows on Medium or High graphics',2600); }); showTerr(); } }
 function setPRScale(k){ k=Math.max(.6,Math.min(1,k)); if(Math.abs(k-PRS)<.005) return; PRS=k; try{ map.setPixelRatio(mapPR()); }catch(e){} dirty=true; }
 zi.onclick=()=>{zoomOff=Math.min(zoomOff+.5,2); dirty=true;}; zo.onclick=()=>{zoomOff=Math.max(zoomOff-.5,-3); dirty=true;};
 

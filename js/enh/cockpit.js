@@ -879,10 +879,10 @@ function wrapTiles(){ const t=map.transform; if(!t||t.__ckWrapped) return; t.__c
 function enter(){ if(CK.on) return; CK.on=true; CK.exag=EXAG; EXAG=1; LOOK.yaw=0; LOOK.pitch=0; CK.look=0; wrapTiles(); refreshNear(); labels(false);
   // 3D terrain off while inside (owner's ?fps=1 on Medium 2026-11-21: map 700 ms, game 1375 ms a frame — with terrain on, every
   // map lookup reads depth back from the GPU, and from the seat the view runs far down the road); back on leaving
-  try{ if(terrainOn){ map.setTerrain(null); terrainOn=false; CK.terr=true; S.sp=0; S.sr=0; } }catch(e){}
+  applyTerrain();                                                  // per ⚙️ 3D terrain (game.js terrWant)
   document.body.classList.add('cockpit'); build(CARKEY); dirty=true; if(CK.real) setSpeedScale(1); try{ SOUND.cabin(true,mode==='tractor'); }catch(e){} }
 function leave(){ if(!CK.on) return; CK.on=false; EXAG=CK.exag; labels(true);
-  try{ if(CK.terr&&!POWER&&map.getSource('dem')){ map.setTerrain({source:'dem',exaggeration:TERRAIN_X}); terrainOn=true; } }catch(e){} CK.terr=false; setSpeedScale(3); glareEl.style.opacity='0'; CK.snd=null; try{ SOUND.cabin(false); }catch(e){} refreshNear(); try{ map.triggerRepaint(); }catch(e){}
+  applyTerrain(); setSpeedScale(3); glareEl.style.opacity='0'; CK.snd=null; try{ SOUND.cabin(false); }catch(e){} refreshNear(); try{ map.triggerRepaint(); }catch(e){}
   document.body.classList.remove('cockpit');
   try{ map.transform.fov=36.87; }catch(e){}
   camera.fov=36.87; camera.near=10; camera.far=50000; camera.updateProjectionMatrix();
