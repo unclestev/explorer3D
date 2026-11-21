@@ -43,7 +43,7 @@
 <div id="settings" role="dialog" aria-label="Settings">
   <div class="setHead"><b>Settings</b><button id="setX" aria-label="Close settings">✕</button></div>
   <div class="setRow carRow"><span>Car</span><div class="seg" id="carPick"><button data-car="explorer">Explorer</button><button data-car="javelin">Javelin</button><button data-car="javelin3d">Javelin 3D</button><button data-car="javelin3d2">Javelin 3D v2</button><button data-car="navigator">Navigator</button><button data-car="modely">Model Y</button><button data-car="tractor">Tractor</button><button data-car="boat">🚤 Boat</button></div></div>
-  <div class="setRow" id="startSndRow"><span>Start-up sound<small id="startSndStat">Built-in</small></span><div class="stepper"><button id="startSndBtn" style="width:auto;padding:0 10px;font-size:14px;font-weight:600">Choose file</button><button id="startSndReset" style="width:auto;padding:0 10px;font-size:14px;font-weight:600">Built-in</button></div><input type="file" id="startSndFile" accept="audio/*,video/*" hidden></div>
+  <div class="setRow" id="startSndRow"><span>Start-up sound<small id="startSndStat">None — just the engine</small></span><div class="stepper"><button id="startSndBtn" style="width:auto;padding:0 10px;font-size:14px;font-weight:600">Choose file</button><button id="startSndReset" style="width:auto;padding:0 10px;font-size:14px;font-weight:600">Remove</button></div><input type="file" id="startSndFile" accept="audio/*,video/*" hidden></div>
   <div class="setRow carRow" id="seatRow" style="display:none"><span>Model Y seats<small>Interior colour in the cockpit view</small></span><div class="seg" id="seatPick"><button data-s="white">White</button><button data-s="black">Black</button></div></div>
   <div class="setRow"><span>View<small>Chase camera, or from behind the wheel · C key</small></span><div class="seg" id="viewPick"><button data-view="chase">Chase</button><button data-view="cockpit">Cockpit</button></div></div>
   <div class="setRow" id="rsRow" style="display:none"><span>Real speed in cockpit<small>The world goes by at what the speedometer says (trips take 3× longer than in chase view)</small></span><button id="rsBtn" class="switch" aria-label="Real speed in cockpit"></button></div>
@@ -102,7 +102,7 @@
 <script src="js/enh/cockpit.js?v=23"></script>
 <script src="js/enh/roadside.js?v=3"></script>
 <script src="js/enh/signals.js?v=4"></script>
-<script src="js/enh/ignition.js?v=3"></script>
+<script src="js/enh/ignition.js?v=4"></script>
 <script src="js/enh/boot.js?v=4"></script>
 </body>
 </html>
