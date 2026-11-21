@@ -148,7 +148,8 @@ function frame(dt){
   T.group.visible=true;
   const px=S.lng*MLNG, py=S.lat*MLAT, ph=rad(S.hdg), pv=S.v*SPEEDUP, m=mpp(S.lat,S.zoom), b=rad(S.camB), sb=Math.sin(b), cb=Math.cos(b);
   // camera ground position and height (same geometry as the game's camera), for the building check
-  const H=innerHeight, dist=.5*H/Math.tan(rad(camera.fov)/2)*m, tp=rad(map.getPitch()), camX=px-sb*dist*Math.sin(tp), camY=py-cb*dist*Math.sin(tp), camH=dist*Math.cos(tp);
+  const H=innerHeight, dist=.5*H/Math.tan(rad(camera.fov)/2)*m, tp=rad(map.getPitch()), CE=window.COCKPIT&&COCKPIT.on&&COCKPIT.eyeWorld;   // cockpit: the camera is at the driver's eye
+  const camX=CE?CE.x:px-sb*dist*Math.sin(tp), camY=CE?CE.y:py-cb*dist*Math.sin(tp), camH=CE?CE.h:dist*Math.cos(tp);
   const now=performance.now(), doOcc=now-occT>(POWER?600:250); if(doOcc) occT=now;
   const sc=EXAG/m, night=tailOff.color.r>.7;
   T.parts.tail.color.setHex(night?0xd01c24:0x8a1216); T.parts.head.color.setHex(night?0xfffbe0:0xe8ecf2);

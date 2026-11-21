@@ -130,7 +130,8 @@ onTick(100,function xingTick(){
 });
 // speed limit for the road under the car (posted limit from OSM, else a default for that kind of road)
 const limEl=document.getElementById('lim'), limNum=limEl&&limEl.querySelector('b');
-function roadClassHere(){ try{ const p=map.project([S.lng,S.lat]); const f=(hitRoad(p.x,p.y,6)||[]).find(f=>f.properties&&EST[f.properties.class]); return f?f.properties.class:null; }catch(e){ return null; } }
+function roadClassHere(){ try{ const p=map.project([S.lng,S.lat]); const f=(hitRoad(p.x,p.y,6)||[]).find(f=>f.properties&&EST[f.properties.class]); if(f) return f.properties.class;
+  const g=typeof roadGeo==='object'&&roadGeo.hit; return g&&EST[g.cls]?g.cls:null; }catch(e){ return null; } }   // off screen (cockpit view): the road line under the car
 onTick(400,function speedTick(){
   if(!limEl) return;
   let lim=null, est=false;
@@ -183,9 +184,15 @@ function makeSign(b){
   st.forEach((o,i)=>{ const t=nameTex(o.name), L=BH*t.aspect;
     // box faces: +x, -x carry the name (each reads left-to-right from its own side), the rest plain green
     const m=new THREE.Mesh(BOX,[t.mat,t.mat,GREEN,GREEN,GREEN,GREEN]); m.scale.set(BT,BH,L);
-    m.position.y=TOPC-i*(BH+GAP); m.rotation.y=-o.hd; g.add(m); });
-  g.userData={b,names:st.map(o=>o.name),fade:0}; g.visible=false; G3.add(g); return g;
+    m.position.y=TOPC-i*(BH+GAP); m.rotation.y=-o.hd; m.userData.aspect=t.aspect; g.add(m); });
+  g.userData={b,names:st.map(o=>o.name),fade:0,fp:false}; g.visible=false; G3.add(g); return g;
 }
+// cockpit view (js/enh/cockpit.js): real-size post (~3 m) and blades only ~1.5x a real one (readable from the driver's seat);
+// the chase view keeps the ~10x signs it needs to be read from up there
+function layoutSign(g,fp){ const u=g.userData; u.fp=fp;
+  const top=fp?2.95:TOPC, bh=fp?.32:BH, gap=fp?.035:GAP, bt=fp?.035:BT, pr=fp?.45:1, low=top-(bh+gap)-bh/2, ch=g.children;
+  ch[0].scale.set(pr,low,pr); ch[0].position.y=low/2; ch[1].scale.set(1.3*pr,gap,1.3*pr); ch[1].position.y=top-bh/2-gap/2;
+  for(let i=2;i<ch.length;i++){ const m=ch[i]; m.scale.set(bt,bh,bh*(m.userData.aspect||4)); m.position.y=top-(i-2)*(bh+gap); } }
 function killSign(g){ G3.remove(g); for(const n of g.userData.names) dropTex(n); }
 function syncSigns(){
   SG.dirty=false; if(!G3) return;
@@ -209,7 +216,8 @@ FRAME_HOOKS.push(function streetSigns(dt){
   if(!signs3.size) return changed;
   G3.visible=true;
   const px=S.lng*MLNG, py=S.lat*MLAT, m=mpp(S.lat,S.zoom), b=rad(S.camB), sb=Math.sin(b), cb=Math.cos(b), sc=EXAG/m;
-  const H=innerHeight, dist=.5*H/Math.tan(rad(camera.fov)/2)*m, tp=rad(map.getPitch()), camX=px-sb*dist*Math.sin(tp), camY=py-cb*dist*Math.sin(tp), camH=dist*Math.cos(tp);
+  const H=innerHeight, dist=.5*H/Math.tan(rad(camera.fov)/2)*m, tp=rad(map.getPitch()), CE=window.COCKPIT&&COCKPIT.on&&COCKPIT.eyeWorld, FP=!!CE;
+  const camX=CE?CE.x:px-sb*dist*Math.sin(tp), camY=CE?CE.y:py-cb*dist*Math.sin(tp), camH=CE?CE.h:dist*Math.cos(tp);
   const now=performance.now(), doOcc=now-occT>(POWER?700:300), hid=window.TRAFFIC&&TRAFFIC.hidden; if(doOcc) occT=now;
   // a little dimmer after dark (they're reflective, so not much)
   const k=YD.AT?Math.round((YD.AT.k||0)*10)/10:0;
@@ -218,6 +226,7 @@ FRAME_HOOKS.push(function streetSigns(dt){
     if(doOcc&&hid) u.occ=hid({px:o.x,py:o.y},camX,camY,camH);
     if(u.occ){ if(g.visible){ g.visible=false; changed=true; } continue; }
     if(!g.visible){ g.visible=true; changed=true; }
+    if(u.fp!==FP){ layoutSign(g,FP); changed=true; }
     if(u.fade<1){ u.fade=Math.min(1,u.fade+dt*2.5); changed=true; }
     const f=dx*sb+dy*cb, r=dx*cb-dy*sb;                              // metres ahead / to the right of the camera's view
     g.position.set(r/m,0,-f/m); g.scale.setScalar(sc*u.fade); g.rotation.y=b; }

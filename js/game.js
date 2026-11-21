@@ -62,7 +62,7 @@ const START=(()=>{
 /* ---------- MAP ---------- */
 const map = new maplibregl.Map({ pixelRatio:mapPR(),
   container:'map', style:'https://tiles.openfreemap.org/styles/liberty',
-  center:[START.lng,START.lat], bearing:START.hdg, zoom:19.3, pitch:68, maxPitch:80, maxZoom:22,
+  center:[START.lng,START.lat], bearing:START.hdg, zoom:19.3, pitch:68, maxPitch:85, maxZoom:24,
   interactive:false, fadeDuration:0, attributionControl:false
 });
 let roadIds=[], blockIds=[], waterIds=[], bridgeIds=[], hideIds=[];
@@ -482,6 +482,7 @@ loadPhoto(CARKEY); loadFront(CARKEY);
 // called every frame after the car transform is set: face the camera, lean with the car's heading and body roll
 function placePhoto(braking){
   const walk=mode==='walk', show=mode==='car'||walk&&!!window.WALK&&WALK.parked()==='car';   // on foot: the parked car
+  if(window.COCKPIT&&COCKPIT.on&&mode==='car'){ if(PHOTO.mesh) PHOTO.mesh.visible=false; if(PHOTO.fm) PHOTO.fm.visible=false; body.visible=false; return; }   // you're inside it
   if(CARSPEC.model){ placeModel(braking,show); return; }
   if(!suv.visible){ suv.visible=true; for(const k in MODELS) MODELS[k].g.visible=false; }
   const m=PHOTO.mesh; if(!m) return;
@@ -690,7 +691,8 @@ function toast(msg,ms){ const el=document.getElementById('toast'); el.textConten
 const K={}; addEventListener('keydown',e=>{K[e.key.toLowerCase()]=1; if(e.key.startsWith('Arrow')||e.key===' ')e.preventDefault();}); addEventListener('keyup',e=>K[e.key.toLowerCase()]=0);
 let kS=0,kG=0; let zoomOff=0;
 let dirty=true;
-cp.onclick=()=>{EXAG=Math.min(EXAG*1.25,2.5); dirty=true;}; cm.onclick=()=>{EXAG=Math.max(EXAG/1.25,.25); dirty=true;};
+const CKX=()=>window.COCKPIT&&COCKPIT.on;   // cockpit view: the world is real size; the chase-view car size is kept for later
+cp.onclick=()=>{ if(CKX()){ COCKPIT.exag=Math.min(COCKPIT.exag*1.25,2.5); return; } EXAG=Math.min(EXAG*1.25,2.5); dirty=true;}; cm.onclick=()=>{ if(CKX()){ COCKPIT.exag=Math.max(COCKPIT.exag/1.25,.25); return; } EXAG=Math.max(EXAG/1.25,.25); dirty=true;};
 // switch the graphics level now (0 Low / 1 Medium / 2 High). Called by setQuality (the ⚙️ choice) and by quality.js in auto.
 function applyQuality(lvl){
   lvl=Math.max(0,Math.min(2,lvl|0)); QL=lvl; POWER=lvl===0; PRS=1;
@@ -784,19 +786,21 @@ function rebuildRoadGeo(){
     for(const L of lines) for(let i=1;i<L.length;i++){
       const x1=(L[i-1][0]-S.lng)*kx, y1=(L[i-1][1]-S.lat)*111320, x2=(L[i][0]-S.lng)*kx, y2=(L[i][1]-S.lat)*111320;
       if(Math.max(x1,x2)<-R||Math.min(x1,x2)>R||Math.max(y1,y2)<-R||Math.min(y1,y2)>R) continue;
-      segs.push([x1,y1,x2,y2,half]); } }
+      segs.push([x1,y1,x2,y2,half,pr.name||'',cl]); } }
   roadGeo.segs=segs;
 }
 function nearRoadGeo(){
   if(!roadGeo.segs||meters(roadGeo.lat,roadGeo.lng,S.lat,S.lng)>350||performance.now()-roadGeo.t>4000) rebuildRoadGeo();
   const segs=roadGeo.segs; if(!segs||!segs.length) return null;
   const kx=111320*Math.cos(rad(roadGeo.lat)), px=(S.lng-roadGeo.lng)*kx, py=(S.lat-roadGeo.lat)*111320, M=3.5;   // margin: lane offset, car width, map mismatch
-  let any=false;
-  for(const [x1,y1,x2,y2,half] of segs){
+  let any=false, best=null, bd=1e9;
+  for(const sg of segs){ const [x1,y1,x2,y2,half]=sg;
     const dx=x2-x1, dy=y2-y1, L2=dx*dx+dy*dy, t=L2?Math.max(0,Math.min(1,((px-x1)*dx+(py-y1)*dy)/L2)):0;
     const ex=x1+t*dx-px, ey=y1+t*dy-py, d=Math.hypot(ex,ey);
-    if(d<half+M) return true;
+    if(d<half+M&&d-half<bd){ bd=d-half; best=sg; }
     if(d<300) any=true; }
+  roadGeo.hit=best?{name:best[5],cls:best[6]}:null;               // nearest road under the car (name/class for the cockpit, speed limits)
+  if(best) return true;
   return any?false:null;                                          // nothing loaded within 300 m: data missing, not off-road
 }
 const hit=(x,y,r,ids)=>{ try{ return ids.length?map.queryRenderedFeatures([[x-r,y-r],[x+r,y+r]],{layers:ids}):[]; }catch(e){ return []; } };
@@ -1160,7 +1164,7 @@ function step(now){
   let st=Math.abs(tSteer)>.05?tSteer:wS, gas=Math.abs(tGas)>.05?tGas:wG; const hand=!!K[' '];
   // autopilot (js/enh/autopilot.js) drives until you touch the steering, gas or handbrake
   if(window.AUTO&&AUTO.on){ if(Math.abs(st)>.05||Math.abs(gas)>.05||hand) AUTO.takeover(); else { const c=AUTO.control(dt); st=c.st; gas=c.gas; } }
-  S.gas=gas;                                                      // pedal position for add-ons (engine sound)
+  S.gas=gas; S.stIn=st;                                            // pedal + steering input for add-ons (engine sound, cockpit wheel)
   if(mode==='glider'){ glideStep(dt,st,gas,now); return; }
   if(mode==='walk'&&window.WALK){ WALK.step(dt,st,gas,now); return; }   // on foot (js/enh/walk.js)
 
@@ -1206,7 +1210,7 @@ function step(now){
   // move, with collision against buildings & water
   const dm=S.v*dt*SPEEDUP, h=rad(S.hdg);
   const nLat=S.lat+Math.cos(h)*dm/111320, nLng=S.lng+Math.sin(h)*dm/(111320*Math.cos(rad(S.lat)));
-  let blocked=false, inBuilding=false;
+  let blocked=false, inBuilding=false; const CKP=!!(window.COCKPIT&&COCKPIT.on);   // cockpit view (js/enh/cockpit.js): the car is under the camera, off screen
   // realistic driving: buildings, trees and traffic are solid. The car is drawn larger than life (EXAG), so its nose is too.
   const SOLID=REAL&&(mode==='car'||mode==='tractor'), NOSE=2.4*(SOLID?Math.max(1,EXAG*.85):1);
   if(Math.abs(S.v)>(SOLID?.05:.5) && styleReady && blockIds.length){
@@ -1214,7 +1218,7 @@ function step(now){
     const p=map.project(ahead);
     // tall extrusions overlap the car on screen, so candidates are filtered by real footprint under the car's nose.
     // A small box is enough: fill-extrusion queries hit the whole projected prism, including its base footprint.
-    const bh=hit(p.x,p.y,6,blockIds).filter(f=>contains(f.geometry,ahead[0],ahead[1]));
+    const bh=(CKP?COCKPIT.blocksAt(ahead[0],ahead[1]):hit(p.x,p.y,6,blockIds)).filter(f=>contains(f.geometry,ahead[0],ahead[1]));   // cockpit: the nose can be off screen
     if(bh.length&&SOLID&&!bh.some(f=>contains(f.geometry,S.lng,S.lat))){ blocked=true; step.bid=null; }   // a wall stops you
     else if(bh.length){ inBuilding=true;                            // realistic driving off (or already inside one): you plow through
       const b0=bh[0], bid=b0.id!=null?b0.id:JSON.stringify(bboxOf(partsOf(b0.geometry)[0]?.[0]||[[0,0]]));
@@ -1243,20 +1247,21 @@ function step(now){
   if(every('compass',POWER?.12:.05)) updateCompass();
   const parked=Math.abs(S.v)<.05 && step.detOnce;
   if(!parked && styleReady && every('det',POWER?.25:.12)){ step.detOnce=true;
-    const p=map.project([S.lng,S.lat]); const f=hitRoad(p.x,p.y,48);
+    const p=map.project([S.lng,S.lat]); const f=CKP?[]:hitRoad(p.x,p.y,48);   // cockpit: the car's own spot is never on screen
     const el=roadEl;
     if(f===null){ onRoad=true; el.textContent='Driving'; el.className=''; }      // road data unavailable: never punish
     else if(f.length>0){ miss=0; onRoad=true; S.rcls=f.every(x=>{ const q=x.properties||{}; return q.surface==='unpaved'||/^(track|path)$/.test(String(q.class||'')); })?'gravel':'paved'; const nm=f.find(x=>x.properties&&x.properties.name); roadName=nm?nm.properties.name:''; el.textContent=roadName||'On road'; el.className=''; }
     else {                                                         // screen query missed: check the real road lines
       const g=nearRoadGeo();
-      if(g!==false){ miss=0; S.rcls='paved'; if(!onRoad||el.className){ onRoad=true; el.textContent=roadName||'On road'; el.className=''; } }
+      if(g!==false){ miss=0; S.rcls='paved'; if(roadGeo.hit&&roadGeo.hit.name&&roadGeo.hit.name!==roadName){ roadName=roadGeo.hit.name; el.textContent=roadName; } if(!onRoad||el.className){ onRoad=true; el.textContent=roadName||'On road'; el.className=''; } }
       else if(++miss>=8){ onRoad=false; el.textContent='Off road'; el.className='off'; } }   // ~1s of sustained misses
     // ---- which vehicle? Decided from the map's real water/farmland polygons (point-in-polygon on
     //      lng/lat), not from what happens to be drawn under a screen pixel, then debounced by time.
     if(!landCache.at || every('landcache',3) || meters(landCache.at[1],landCache.at[0],S.lat,S.lng)>400) rebuildLandCache();
-    const water=inAny(landCache.water,S.lng,S.lat) && !hit(p.x,p.y,5,bridgeIds).length;
+    const onGeoRoad=CKP&&nearRoadGeo()===true;                      // cockpit: the car's own spot is off screen, so bridges/roads come from the road lines
+    const water=inAny(landCache.water,S.lng,S.lat) && !(CKP?onGeoRoad:hit(p.x,p.y,5,bridgeIds).length);
     const farm=!water && inAny(landCache.farm,S.lng,S.lat);
-    const realRoad=farm && (hitRoad(p.x,p.y,4)||[]).some(f=>!/^(track|path)$/.test(String(f.properties&&f.properties.class||'')));
+    const realRoad=farm && (CKP?onGeoRoad:(hitRoad(p.x,p.y,4)||[]).some(f=>!/^(track|path)$/.test(String(f.properties&&f.properties.class||''))));
     const want=water?'boat':(farm&&!realRoad)?'tractor':'car';
     const tNow=last/1000, gap=Math.min(.5,tNow-(step.detT||tNow)); step.detT=tNow;
     if(want===mode){ candMode=null; candT=0; }
@@ -1270,8 +1275,8 @@ function step(now){
     else {
       if(mode==='tractor'){ onRoad=true; el.textContent='In the field'; el.className=''; }
     }
-    if(every('surf',.4)){
-      const lt=boat?'Water':landHere(p);
+    if(every('surf',.4)&&!(CKP&&Math.abs(LOOK.yaw)>60)){            // cockpit: only while looking roughly ahead (the probe must be on screen)
+      const lt=boat?'Water':landHere(CKP?map.project([S.lng+Math.sin(rad(S.hdg))*7/(111320*Math.cos(rad(S.lat))),S.lat+Math.cos(rad(S.hdg))*7/111320]):p);   // cockpit: just ahead of the car (on screen)
       const txt=lt+(mode==='tractor'?' · Tractor':mode==='boat'?' · Bass boat':'');
       if(txt!==step.surf){ step.surf=txt; surfEl.textContent=txt; }
     }
@@ -1299,9 +1304,12 @@ function step(now){
   // camera: lagged chase, zooms out with speed
   const dB=((S.hdg+LOOK.yaw-S.camB+540)%360)-180; S.camB+=dB*(1-Math.exp(-dt*7));
   const tz=19.3+zoomOff-Math.min(Math.abs(S.v)/MAXV,1)*2.0; S.zoom+=(tz-S.zoom)*Math.min(1,dt*3);
+  let camMoved=true;
+  if(window.COCKPIT&&COCKPIT.active()) COCKPIT.view(dt);          // from behind the wheel (js/enh/cockpit.js)
+  else{
   const W=innerWidth,H=innerHeight,padTop=H*.34, PIT=viewPitch(68);
   const cm0=step.cam||{};
-  const camMoved=dirty||W!==cm0.W||H!==cm0.H||PIT!==cm0.p||Math.abs(S.lng-cm0.lng)>1e-8||Math.abs(S.lat-cm0.lat)>1e-8||Math.abs(S.camB-cm0.b)>.005||Math.abs(S.zoom-cm0.z)>.0003;
+  camMoved=dirty||W!==cm0.W||H!==cm0.H||PIT!==cm0.p||Math.abs(S.lng-cm0.lng)>1e-8||Math.abs(S.lat-cm0.lat)>1e-8||Math.abs(S.camB-cm0.b)>.005||Math.abs(S.zoom-cm0.z)>.0003;
   if(camMoved){ step.cam={lng:S.lng,lat:S.lat,b:S.camB,z:S.zoom,W,H,p:PIT};
     map.jumpTo({center:[S.lng,S.lat],bearing:S.camB,zoom:S.zoom,pitch:PIT,padding:{top:padTop,bottom:0,left:0,right:0}}); }
 
@@ -1310,6 +1318,7 @@ function step(now){
     renderer.setSize(W,H,false); camera.aspect=W/H;
     camera.setViewOffset(W,H,0,-padTop/2,W,H);
     aimCam3D(H,PIT); placeGlider(); }
+  }
   const sc=EXAG/mpp(S.lat,S.zoom); car.scale.setScalar(sc); debris.scale.setScalar(sc);
   car.rotation.y=-rad(S.hdg-S.camB);
   const tRoll=S.steer*Math.min(Math.abs(S.v)/12,1.2)*.35, pk=REAL&&mode==='car'?1.8:1, tPitch=Math.max(-.05*pk,Math.min(.05*pk,a*.004*pk));   // realistic: the nose dives and the tail squats more
@@ -1332,7 +1341,7 @@ function step(now){
   const settling=Math.abs(tRoll-S.roll)>1e-3||Math.abs(tPitch-S.pitch)>1e-3||Math.abs(S.steer-(step.pst||0))>1e-4||braking!==step.pbr||Math.abs(S.sp)>1e-3&&!terrainOn;
   step.pst=S.steer; step.pbr=braking;
   const bob=boat&&(!POWER||frame%2===0);                         // parked boat still bobs, at half rate in saver
-  if(camMoved||settling||live>0||shake>0||bob||trafficMoving||(S.bj||0)>.02){ renderer.render(scene,camera); }
+  if(camMoved||settling||live>0||shake>0||bob||trafficMoving||(S.bj||0)>.02){ renderer.render(scene,camera); if(window.COCKPIT&&COCKPIT.on) COCKPIT.render(dt); }
   dirty=false;
 
   const mph=Math.round(Math.abs(S.v)*2.237); if(mph!==step.mph){ step.mph=mph; mphEl.textContent=mph; }

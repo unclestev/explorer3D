@@ -13,8 +13,9 @@ const BASE_EXAG=1.6, ZMIN=-3, ZMAX=2;
 try{ const e=parseFloat(localStorage.getItem('ydCarSize')); if(e>=.25&&e<=2.5) EXAG=e;
      const z=parseFloat(localStorage.getItem('ydZoom')); if(z>=ZMIN&&z<=ZMAX) zoomOff=z; }catch(e){}
 
-function show(){ sizeEl.textContent=Math.round(EXAG/BASE_EXAG*100)+'%'; zoomEl.textContent=Math.pow(2,zoomOff).toFixed(1)+'×'; }
-function save(){ try{ localStorage.setItem('ydCarSize',String(EXAG)); localStorage.setItem('ydZoom',String(zoomOff)); }catch(e){} }
+const EXu=()=>window.COCKPIT&&COCKPIT.on?COCKPIT.exag:EXAG;    // the cockpit view draws everything real size; this is the chase-view car size
+function show(){ sizeEl.textContent=Math.round(EXu()/BASE_EXAG*100)+'%'; zoomEl.textContent=Math.pow(2,zoomOff).toFixed(1)+'×'; }
+function save(){ try{ localStorage.setItem('ydCarSize',String(EXu())); localStorage.setItem('ydZoom',String(zoomOff)); }catch(e){} }
 // game.js's own click handlers run first (they were attached earlier); then show and save the new values
 for(const id of ['cp','cm','zi','zo']) document.getElementById(id).addEventListener('click',e=>{ e.stopPropagation(); show(); save(); });
 

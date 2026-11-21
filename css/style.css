@@ -212,3 +212,7 @@ button{font-family:inherit;cursor:pointer}
 .findHead{display:flex;align-items:center;justify-content:space-between;padding:10px 8px 4px;font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#94a3b8}
 .findHead:not(:first-child){border-top:1px solid var(--line);margin-top:4px}
 .findHead button{border:0;background:rgba(255,255,255,.12);color:#e2e8f0;font:700 12px system-ui,sans-serif;text-transform:none;letter-spacing:0;padding:5px 10px;border-radius:8px}
+
+/* cockpit view (js/enh/cockpit.js): the dashboard shows speed and street, so the speed HUD steps aside; rain streaks only through the glass */
+body.cockpit #hud{display:none}
+body.cockpit #wx{-webkit-mask-image:linear-gradient(#000 40%,transparent 58%);mask-image:linear-gradient(#000 40%,transparent 58%)}

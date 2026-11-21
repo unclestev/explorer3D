@@ -116,7 +116,8 @@ function getOut(){
   if(window.AUTO&&AUTO.on) AUTO.takeover();
   Object.assign(PK,{mode,lat:S.lat,lng:S.lng,hdg:S.hdg});
   // step out of the driver's door (left); the other side, behind or in front if a building is in the way
-  const h=rad(S.hdg), half=(mode==='tractor'?1.15:((CARSPEC&&CARSPEC.W)||2.35)/2)*EXAG, side=half+.55*EXAG, end=3.4*EXAG;
+  const EX=window.COCKPIT&&COCKPIT.on?COCKPIT.exag:EXAG;           // cockpit view draws the world real size; the parked car will be drawn at the chase size
+  const h=rad(S.hdg), half=(mode==='tractor'?1.15:((CARSPEC&&CARSPEC.W)||2.35)/2)*EX, side=half+.55*EX, end=3.4*EX;
   const spots=[[-side,0],[side,0],[0,-end],[0,end]];
   let at=offsetPt(S.lat,S.lng,h,spots[0][0],spots[0][1]);
   for(const [r,f] of spots){ const p=offsetPt(S.lat,S.lng,h,r,f); if(!safe('walk spot',()=>inBuilding(p[0],p[1])||inWater(p[0],p[1]))){ at=p; break; } }

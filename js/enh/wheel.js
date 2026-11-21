@@ -11,7 +11,7 @@
   let cfg={}; try{ cfg=JSON.parse(localStorage.getItem('ydWheel')||'{}')||{}; }catch(e){ cfg={}; }
   const save=()=>{ try{ localStorage.setItem('ydWheel',JSON.stringify(cfg)); }catch(e){} };
   const say=(m,ms)=>{ if(typeof toast==='function') toast(m,ms||3200); };
-  let pad=null, live={}, cal=null, seen=false;
+  let pad=null, live={}, cal=null, seen=false, learn=false, prevB=[];
 
   const isWheel=g=>g&&g.axes&&g.axes.length>=3&&g.mapping!=='standard'||/wheel|g29|g920|g923|g27|g25|driving force|racing|logitech/i.test(g&&g.id||'');
   function find(){ const ps=navigator.getGamepads(); let best=null;
@@ -38,7 +38,7 @@
     c.out[c.step]={i:c.ax, rest:v, full:c.full};
     if(Math.abs(c.full-v)<.5){ c.ax=-1; return; }   // too small a travel: wait for a real press
     if(c.step==='gas'){ cal={step:'brake', base:g.axes.slice(), ax:-1, full:0, still:0, t:0, out:c.out, skip:c.ax}; say('Now press the BRAKE pedal all the way, then let go',6000); return; }
-    cfg[g.id]={gas:c.out.gas, brake:c.out.brake}; save(); cal=null; live={}; live[c.out.gas.i]=live[c.out.brake.i]=1;
+    cfg[g.id]=Object.assign(cfg[g.id]||{},{gas:c.out.gas, brake:c.out.brake}); save(); cal=null; live={}; live[c.out.gas.i]=live[c.out.brake.i]=1;
     showRow(); say('🏁 Wheel ready — steer, gas and brake (brake at a stop = reverse)',3600); }
 
   let last=performance.now();
@@ -46,11 +46,16 @@
     read(){ const now=performance.now(), dt=Math.min(.1,(now-last)/1000); last=now;
       const g=find(); if(!g){ if(pad){ pad=null; showRow(); say('Wheel disconnected'); } return null; }
       if(!pad||pad!==g.id){ pad=g.id; live={}; showRow();
-        if(cfg[g.id]) say('🏁 Wheel connected'); else if(!cal){ say('🏁 Wheel connected — set up the pedals in ⚙️ (Wheel)',5000); } }
+        if(cfg[g.id]&&cfg[g.id].gas) say('🏁 Wheel connected'); else if(!cal){ say('🏁 Wheel connected — set up the pedals in ⚙️ (Wheel)',5000); } }
+      // a learned button switches chase / cockpit view (js/enh/cockpit.js); learning = the next button pressed
+      const bs=g.buttons||[], down=i=>!!(bs[i]&&(bs[i].pressed||bs[i].value>.5));
+      if(learn){ for(let i=0;i<bs.length;i++) if(down(i)&&!prevB[i]){ cfg[g.id]=Object.assign(cfg[g.id]||{},{view:i}); save(); learn=false; showRow(); say('🎥 Wheel button '+(i+1)+' now switches chase / cockpit view',3600); break; } }
+      else if(cfg[g.id]&&cfg[g.id].view!=null){ const v=cfg[g.id].view; if(down(v)&&!prevB[v]&&window.COCKPIT) COCKPIT.toggle(); }
+      prevB=bs.map((b,i)=>down(i));
       if(cal){ runCal(g,dt); return {st:0,gas:0,cal:true}; }
       let st=g.axes[ST]||0; st=Math.abs(st)<DEAD?0:(st-Math.sign(st)*DEAD)/(1-DEAD);
-      const c=cfg[g.id]; const gas=c?pedal(g,c.gas)-pedal(g,c.brake):0;
-      return {st:Math.max(-1,Math.min(1,st)), gas, ok:!!c};
+      const c=cfg[g.id]; const gas=c&&c.gas?pedal(g,c.gas)-pedal(g,c.brake):0;
+      return {st:Math.max(-1,Math.min(1,st)), gas, ok:!!(c&&c.gas)};
     },
     setup:startCal, connected:()=>!!find()
   };
@@ -58,8 +63,9 @@
   // ⚙️ row, only shown once a wheel has been seen (keeps the phone panel unchanged)
   function showRow(){ const row=document.getElementById('wheelRow'); if(!row) return; const g=find();
     if(g) seen=true; row.style.display=seen?'':'none';
-    const s=document.getElementById('wheelStat'); if(s) s.textContent=!g?'Not connected':cal?'Setting up…':cfg[g.id]?'Ready':'Pedals not set up'; }
+    const s=document.getElementById('wheelStat'); if(s) s.textContent=!g?'Not connected':cal?'Setting up…':learn?'Press the wheel button you want for the view':cfg[g.id]&&cfg[g.id].gas?'Ready'+(cfg[g.id].view!=null?' · view button '+(cfg[g.id].view+1):''):'Pedals not set up'; }
   addEventListener('gamepadconnected',showRow); addEventListener('gamepaddisconnected',showRow);
   const btn=document.getElementById('wheelBtn'); if(btn) btn.addEventListener('click',e=>{ e.stopPropagation(); startCal(); });
+  const vb=document.getElementById('wheelViewBtn'); if(vb) vb.addEventListener('click',e=>{ e.stopPropagation(); if(!find()){ say('Turn the wheel or press a pedal so the browser sees it, then try again'); return; } learn=true; prevB=[]; showRow(); say('Press the button on the wheel you want to switch the view',5000); });
   showRow();
 })();

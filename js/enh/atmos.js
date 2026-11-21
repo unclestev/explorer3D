@@ -114,7 +114,7 @@ function applyAtmos(){
   const gold=alt>-4&&alt<10?1-Math.abs(alt-3)/7:0;                 // warm light around sunrise and sunset
   const wet=W.type?W.int:0, cl=Math.max(AT.cloud,W.fog*.8,wet*.8);
   const key=[k.toFixed(2),gold.toFixed(2),cl.toFixed(2),W.fog.toFixed(2),W.code,POWER?1:0].join();
-  AT.k=k; hudLine();
+  AT.k=k; AT.sun=sp; hudLine();
   if(key===AT.lastKey) return; AT.lastKey=key;
   // map darkness and colour
   const br=1-.47*k-.13*cl*(1-k), sat=1-.3*k-.3*cl, sep=.25*gold*(1-cl);
