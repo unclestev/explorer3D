@@ -742,8 +742,12 @@ function aimCam3D(H,pitchDeg){ const dist=.5*H/Math.tan(rad(camera.fov)/2), p=ra
 const S={lng:START.lng,lat:START.lat,hdg:START.hdg,v:0,steer:0,camB:START.hdg,zoom:19.3,roll:0,pitch:0,wheel:0,dist:0,sp:0,sr:0};
 let boat=false, waterC=0, landC=0, mode='car', farmC=0, offFarmC=0, terrainOn=false, landIds=[];
 const TERRAIN_X=1.5, TRACTOR=0.75;   // tractor runs at 75% of car speed
-const BOATMAX=48, WB=3.05, MAXV=60, REVMAX=28, SPEEDUP=3; let EXAG=1.6;   // two steps below the largest size (2.5)   // SPEEDUP: world distance per game metre
+const BOATMAX=48, WB=3.05, MAXV=60, REVMAX=28; let SPEEDUP=3, EXAG=1.6;   // two steps below the largest size (2.5)   // SPEEDUP: world distance per game metre
 let last=0,frame=0,onRoad=true,roadName='';
+// world speed per speedometer metre: 3 everywhere, except the cockpit with ⚙️ Real speed (1 — the world goes past at what the
+// speedometer says; owner 2026-11-20). Everything that moves scales with it; traffic's planned road speeds are rescaled.
+function setSpeedScale(k){ if(!(k>0)||k===SPEEDUP) return; const r=k/SPEEDUP; SPEEDUP=k; S.yr=(S.yr||0)*r;
+  try{ if(window.TRAFFIC&&TRAFFIC.rescale) TRAFFIC.rescale(r); }catch(e){} try{ const c=YD.POLICE&&YD.POLICE.state&&YD.POLICE.state.chase; if(c) c.v*=r; }catch(e){} dirty=true; }
 // steering lock: 40 degrees when crawling (about a 6 m turning circle), easing off with speed so the highway stays calm.
 // 25 mph turns on roughly an 18 m radius, 15 mph about 12 m. Autopilot uses the same curve.
 const STEER_MAX=40*Math.PI/180;
@@ -1215,15 +1219,20 @@ function step(now){
     if(k!==step.gripK){ if(k>(step.gripK||0)) toast(k===1?'🌧️ Wet road — brake earlier':'❄️ Slick road — brake much earlier, turn gently',3500); step.gripK=k; } }
 
   // steering (bicycle model, less lock at speed)
-  const lock=boat?rad(30)/(1+Math.abs(S.v)/12):steerLock(S.v);
-  S.steer+=(st*lock-S.steer)*Math.min(1,dt*9);
+  // a racing wheel steers like a real car: fixed ratio (900° wheel → ±29° at the road wheels, ~15.5:1), no speed-dependent
+  // shrinking; keys / touch / autopilot keep the assisted lock that eases off with speed
+  const wheelIn=!!(WH&&WH.ok)&&Math.abs(kS)<.05&&Math.abs(tSteer)<=.05&&!(window.AUTO&&AUTO.on)&&!boat;
+  const lock=boat?rad(30)/(1+Math.abs(S.v)/12):wheelIn?rad(450/15.5):steerLock(S.v);
+  S.steer+=(st*lock-S.steer)*Math.min(1,dt*(wheelIn?24:9));
   let skid=0;
   if(REAL&&mode==='car'&&!boat){ const av=Math.abs(S.v), latA=av*av*Math.abs(Math.tan(S.steer))/WB;   // cornering force, speedometer units
     skid=Math.max(0,Math.min(1,(latA-9.5*mu)/4));                      // beyond ~1 g x grip the tyres let go
     if(braking&&av>5&&(hand||-gas>.85*Math.min(1,mu+.15))) skid=Math.max(skid,Math.min(1,av/15));   // stamping on the brake
     if(skid>0) S.v*=1-.5*skid*dt; }
   S.skid=skid;
-  S.hdg+=(boat?S.v/7:S.v*SPEEDUP/WB)*Math.tan(S.steer)*dt*180/Math.PI*(1-.35*skid);   // turn at the speed the world actually moves
+  const yrT=(boat?S.v/7:S.v*SPEEDUP/WB)*Math.tan(S.steer)*(1-.35*skid);   // turn at the speed the world actually moves
+  S.yr=REAL&&!boat?(S.yr||0)+(yrT-(S.yr||0))*Math.min(1,dt/.13):yrT;  // realistic: the turn builds over ~0.1 s (tyres, weight), not instantly
+  S.hdg+=S.yr*dt*180/Math.PI;
 
   // move, with collision against buildings & water
   const dm=S.v*dt*SPEEDUP, h=rad(S.hdg);

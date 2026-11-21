@@ -16,7 +16,7 @@ const T={on:true,nodes:null,grid:null,segs:[],builtAt:null,builtT:0,tilesDirty:t
 try{ T.on=localStorage.getItem('ydTraffic')!=='0'; }catch(e){}
 const MAXCARS=()=>POWER?5:12;
 const mph2w=m=>m/2.237*SPEEDUP;                                   // mph on the speedo -> world metres per second
-const B=6*SPEEDUP, ACC=2.6*SPEEDUP;                               // planning braking / acceleration, world m/s^2
+const BB=()=>6*SPEEDUP, ACCF=()=>2.6*SPEEDUP;                     // planning braking / acceleration, world m/s^2 (SPEEDUP can change: cockpit real speed)
 
 /* ---------- road graph from the vector tiles ---------- */
 // vertices shared by two roads (intersections) or two tiles (tile seams) are merged when within 0.9 m
@@ -93,7 +93,7 @@ function nextSeg(seg){
 }
 function turnCap(s1,s2){ const c=s1.ux*s2.ux+s1.uy*s2.uy; return c>.95?1e9:c>.7?mph2w(22):c>.2?mph2w(15):mph2w(10); }
 
-function drive(a,dt,px,py,pv,ph){
+function drive(a,dt,px,py,pv,ph){ const B=BB(), ACC=ACCF();
   // plan the road ahead far enough to brake for anything on it
   const LA=Math.max(60,a.v*a.v/(2*B)+40);
   let ahead=a.path[0].len-a.s; for(let i=1;i<a.path.length;i++) ahead+=a.path[i].len;
@@ -189,5 +189,5 @@ function setOn(on){ T.on=on; try{ localStorage.setItem('ydTraffic',on?'1':'0'); 
   const b=document.getElementById('trafficBtn'); if(b) b.classList.toggle('on',on); dirty=true; }
 const btn=document.getElementById('trafficBtn');
 if(btn){ btn.classList.toggle('on',T.on); btn.addEventListener('click',e=>{ e.stopPropagation(); setOn(!T.on); }); }
-window.TRAFFIC={hidden:(o,x,y,h)=>{ try{ return hiddenByBuilding(o,x,y,h); }catch(e){ return false; } }, frame:(dt)=>{ try{ return frame(dt); }catch(e){ console.warn('traffic',e); return false; } }, state:T, setOn};
+window.TRAFFIC={rescale:(r)=>{ for(const sg of T.segs||[]) sg.v*=r; for(const a of T.agents||[]) a.v*=r; },hidden:(o,x,y,h)=>{ try{ return hiddenByBuilding(o,x,y,h); }catch(e){ return false; } }, frame:(dt)=>{ try{ return frame(dt); }catch(e){ console.warn('traffic',e); return false; } }, state:T, setOn};
 })();

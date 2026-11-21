@@ -29,7 +29,7 @@ const LSg=(k,d)=>{ try{ const v=localStorage.getItem(k); return v==null?d:v; }ca
 const LSs=(k,v)=>{ try{ localStorage.setItem(k,v); }catch(e){} };
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), lerp=(a,b,t)=>a+(b-a)*t, sstep=(a,b,x)=>{ const t=clamp((x-a)/(b-a),0,1); return t*t*(3-2*t); };
 
-const CK={hud:LSg('ydHud','1')!=='0', want:LSg('ydView','chase')==='cockpit', fov:clamp(+LSg('ydCkFov',60)||60,45,60), on:false, exag:EXAG,
+const CK={real:LSg('ydRealSpd','1')!=='0', hud:LSg('ydHud','1')!=='0', want:LSg('ydView','chase')==='cockpit', fov:clamp(+LSg('ydCkFov',60)||60,45,60), on:false, exag:EXAG,
   cab:null, built:null, pad:.07, look:0, W:0, H:0, eyeWorld:null};
 window.COCKPIT=CK;
 
@@ -859,6 +859,12 @@ CK.blocksAt=function(lng,lat){
    the horizon would be within a pixel of where they stop anyway. Near the car: trees and windows get denser instead. ---------- */
 const VIEW=()=>Q3(1500,2500,3500);
 function wrapTiles(){ const t=map.transform; if(!t||t.__ckWrapped) return; t.__ckWrapped=true; const orig=t.coveringTiles;
+  // MapLibre's far plane stops at 85% of the way to the horizon on screen. From 1.4 m up at 85° that is the ground only
+  // ~100 m ahead (everything beyond was clipped: "the horizon always seems right in front of you"). In the cockpit the cut
+  // sits where the ground is VIEW() metres away instead; the tile limit above keeps what that loads in check.
+  const oh=t.getHorizon;
+  t.getHorizon=function(){ if(!CK.on) return oh.call(this);
+    const a=Math.PI/2-this._pitch, cut=Math.atan((CK.eyeH||1.4)/VIEW()); return Math.tan(Math.max(a*.5,a-cut))*this.cameraToCenterDistance; };
   t.coveringTiles=function(o){ const r=orig.call(this,o); if(!CK.on||!r||!r.length) return r;
     const lat=S.lat*DEG, e=CK.eyeLL||[S.lng,S.lat], mx=(e[0]+180)/360, my=(1-Math.log(Math.tan(e[1]*DEG)+1/Math.cos(e[1]*DEG))/Math.PI)/2;
     const M=40075016.7*Math.cos(lat), lim=VIEW()/M, out=[];
@@ -870,8 +876,8 @@ function wrapTiles(){ const t=map.transform; if(!t||t.__ckWrapped) return; t.__c
 
 /* ---------- camera ---------- */
 function enter(){ if(CK.on) return; CK.on=true; CK.exag=EXAG; EXAG=1; LOOK.yaw=0; LOOK.pitch=0; CK.look=0; wrapTiles(); refreshNear();
-  document.body.classList.add('cockpit'); build(CARKEY); dirty=true; try{ SOUND.cabin(true,mode==='tractor'); }catch(e){} }
-function leave(){ if(!CK.on) return; CK.on=false; EXAG=CK.exag; glareEl.style.opacity='0'; CK.snd=null; try{ SOUND.cabin(false); }catch(e){} refreshNear(); try{ map.triggerRepaint(); }catch(e){}
+  document.body.classList.add('cockpit'); build(CARKEY); dirty=true; if(CK.real) setSpeedScale(1); try{ SOUND.cabin(true,mode==='tractor'); }catch(e){} }
+function leave(){ if(!CK.on) return; CK.on=false; EXAG=CK.exag; setSpeedScale(3); glareEl.style.opacity='0'; CK.snd=null; try{ SOUND.cabin(false); }catch(e){} refreshNear(); try{ map.triggerRepaint(); }catch(e){}
   document.body.classList.remove('cockpit');
   try{ map.transform.fov=36.87; }catch(e){}
   camera.fov=36.87; camera.near=10; camera.far=50000; camera.updateProjectionMatrix();
@@ -906,7 +912,7 @@ CK.view=function(dt){
   const cE=eE+F*Math.sin(b), cN=eN+F*Math.cos(b);
   const pad=Math.round(H*CK.pad);
   map.jumpTo({center:[S.lng+cE/(111320*Math.cos(S.lat*DEG)),S.lat+cN/111320],bearing:S.camB,zoom:z,pitch,padding:{top:0,bottom:pad,left:0,right:0}});
-  CK.eyeWorld={x:S.lng*MLNG+eE,y:S.lat*MLAT+eN,h:camH}; CK.eyeLL=[S.lng+eE/(111320*Math.cos(S.lat*DEG)),S.lat+eN/111320];
+  CK.eyeH=eh; CK.eyeWorld={x:S.lng*MLNG+eE,y:S.lat*MLAT+eN,h:camH}; CK.eyeLL=[S.lng+eE/(111320*Math.cos(S.lat*DEG)),S.lat+eN/111320];
   CK.eyeLocal={f:eE*Math.sin(b)+eN*Math.cos(b),r:eE*Math.cos(b)-eN*Math.sin(b),h:camH,mm};
   // the car layer's camera: same place and direction, in pixels at this zoom (car centre = origin)
   const f=eE*Math.sin(b)+eN*Math.cos(b), r=eE*Math.cos(b)-eN*Math.sin(b);
@@ -928,10 +934,11 @@ CK.toggle=function(v){ CK.want=v==null?!CK.want:!!v; LSs('ydView',CK.want?'cockp
 
 /* ---------- settings, keys, mode changes ---------- */
 function showPick(){ const p=document.getElementById('viewPick'); if(p) for(const b of p.querySelectorAll('button')) b.classList.toggle('on',(b.dataset.view==='cockpit')===CK.want);
-  const r=document.getElementById('fovRow'); if(r) r.style.display=CK.want?'':'none'; const hr=document.getElementById('hudRow'); if(hr) hr.style.display=CK.want?'':'none'; const hb=document.getElementById('hudBtn'); if(hb) hb.classList.toggle('on',CK.hud); const v=document.getElementById('fovVal'); if(v) v.textContent=Math.round(CK.fov)+'°'; }
+  const r=document.getElementById('fovRow'); if(r) r.style.display=CK.want?'':'none'; const hr=document.getElementById('hudRow'); if(hr) hr.style.display=CK.want?'':'none'; const hb=document.getElementById('hudBtn'); if(hb) hb.classList.toggle('on',CK.hud); const rr=document.getElementById('rsRow'); if(rr) rr.style.display=CK.want?'':'none'; const rb=document.getElementById('rsBtn'); if(rb) rb.classList.toggle('on',CK.real); const v=document.getElementById('fovVal'); if(v) v.textContent=Math.round(CK.fov)+'°'; }
 const pick=document.getElementById('viewPick');
 if(pick) pick.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; e.stopPropagation(); CK.toggle(b.dataset.view==='cockpit'); });
 for(const [id,d] of [['fovM',-5],['fovP',5]]){ const b=document.getElementById(id); if(b) b.addEventListener('click',e=>{ e.stopPropagation(); CK.fov=clamp(CK.fov+d,45,60); LSs('ydCkFov',String(CK.fov)); showPick(); dirty=true; }); }
+{ const rb=document.getElementById('rsBtn'); if(rb) rb.addEventListener('click',e=>{ e.stopPropagation(); CK.real=!CK.real; LSs('ydRealSpd',CK.real?'1':'0'); if(CK.on) setSpeedScale(CK.real?1:3); showPick(); }); }
 function setHud(v){ CK.hud=v; LSs('ydHud',v?'1':'0'); showPick(); dirty=true; }
 { const hb=document.getElementById('hudBtn'); if(hb) hb.addEventListener('click',e=>{ e.stopPropagation(); setHud(!CK.hud); }); }
 addEventListener('keydown',e=>{ if(e.repeat||(e.target&&e.target.tagName==='INPUT')) return; const k=e.key.toLowerCase(); if(k==='c') CK.toggle(); else if(k==='h'&&CK.on){ setHud(!CK.hud); toast(CK.hud?'Head-up display on':'Head-up display off',1400); } });
