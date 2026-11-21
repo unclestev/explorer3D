@@ -15,7 +15,7 @@ const IGN={state:'on',t:0};
 window.IGN=IGN;
 const say=(m,ms)=>{ if(typeof toast==='function') toast(m,ms||1600); };
 const kind=()=>mode==='tractor'?'diesel':(typeof CARKEY==='string'&&CARKEY==='modely')?'ev':/^javelin/.test(CARKEY||'')?'v8':CARKEY==='navigator'?'lux':'gas';
-const CRANK={gas:.8,v8:1.3,diesel:1.6,ev:0,lux:0};                // the Navigator: no starter sound, just the chime
+const CRANK={gas:.35,v8:1.3,diesel:1.6,ev:0,lux:0};                // the Navigator: no starter sound, just the chime
                                                                   // as the engine comes quietly to life (owner 2026-11-21)                       // seconds of cranking before it catches
 IGN.drive=()=>IGN.state==='on';
 IGN.button=function(){
@@ -35,10 +35,18 @@ IGN.rpm=function(idle){ const k=kind(), c=CRANK[k];
   if(IGN.state==='off') return 60;
   if(IGN.state==='stop') return Math.max(60,idle*(1-IGN.t/.7));            // winds down (the sound fades with it)
   if(IGN.state==='crank'){ if(IGN.t<c) return 200+60*Math.sin(IGN.t*2*Math.PI*(k==='diesel'?4:5));
-    const u=IGN.t-c; return idle*(1+(c?.7:.2)*Math.exp(-u*2.2)*Math.min(1,u*(c?8:3))); }
+    const u=IGN.t-c;
+    // Explorer (owner 2026-11-21, a video of a 2022 Explorer starting): a short, quiet crank, then it fires hard, flares to
+    // about twice idle within ~0.2 s and settles back over a second and a half to a slightly fast cold idle
+    if(k==='gas') return idle*(1.06+1.0*Math.exp(-u*1.5)*Math.min(1,u*5));
+    return idle*(1+(c?.7:.2)*Math.exp(-u*2.2)*Math.min(1,u*(c?8:3))); }
   return null; };
+// the throttle the engine sound should use while starting: a little while cranking; the Explorer fires hard (as loud as
+// a good push on the gas) and quietens as it settles, the way it does in the owner's video
+IGN.load=function(){ if(IGN.state!=='crank') return 0; const k=kind(), c=CRANK[k];
+  if(IGN.t<c) return .15; if(k!=='gas') return 0; const u=IGN.t-c; return .6*Math.exp(-u*1.5)*Math.min(1,u*5); };
 FRAME_HOOKS.push(function ignition(dt){
-  if(IGN.state==='crank'){ IGN.t+=dt; if(IGN.t>CRANK[kind()]+1.2){ IGN.state='on'; show(); } }
+  if(IGN.state==='crank'){ IGN.t+=dt; if(IGN.t>CRANK[kind()]+(kind()==='gas'?2.4:1.2)){ IGN.state='on'; show(); } }
   else if(IGN.state==='stop'){ IGN.t+=dt; if(IGN.t>.8){ IGN.state='off'; show(); } }
   return false;
 });
@@ -56,7 +64,7 @@ function starter(len,k){
       const pulse=.75+.25*Math.sin(2*Math.PI*t*(k==='diesel'?4:5));                   // the compression strokes load it
       const env=Math.min(1,t/.03)*Math.min(1,(len+.05-t)/.05);
       d[i]=(Math.sin(ph)*.5+Math.sin(ph*2)*.25+Math.sin(ph2)*.12+lp*.6)*pulse*env*.5; }
-    const src=A.ctx.createBufferSource(); src.buffer=b; const g=A.ctx.createGain(); g.gain.value=window.COCKPIT&&COCKPIT.on?.8:.45;
+    const src=A.ctx.createBufferSource(); src.buffer=b; const g=A.ctx.createGain(); g.gain.value=(window.COCKPIT&&COCKPIT.on?.8:.45)*(k==='gas'?.5:1);   // the Explorer's starter is barely heard
     src.connect(g); g.connect(A.bus); src.start(); }catch(e){ console.warn('starter',e); } }
 
 /* Lincoln Navigator: the start-up chime (owner 2026-11-21, a recording of starting a 2025 Navigator). Transcribed from it
