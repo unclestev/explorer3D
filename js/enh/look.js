@@ -23,7 +23,7 @@ mapEl.addEventListener('pointermove',e=>{
   const dYaw=dx*300/Math.max(innerWidth,320);                     // a swipe across the screen turns ~300 degrees
   LOOK.yaw=((LOOK.yaw+dYaw)%360+540)%360-180;
   S.camB=((S.camB+dYaw)%360+360)%360;                             // move right away (the follow lag would feel sluggish)
-  const hi=window.COCKPIT&&COCKPIT.on?30:12;                      // from the driver's seat you can look up above the horizon too
+  const hi=window.COCKPIT&&COCKPIT.on?80:12;                      // from the driver's seat you can look up above the horizon too
   LOOK.pitch=Math.max(-55,Math.min(hi,LOOK.pitch-dy*.25));         // finger up = look up toward the horizon
   dirty=true; show();
 });

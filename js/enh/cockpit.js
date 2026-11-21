@@ -238,7 +238,9 @@ function shell(G,P,mats){
   for(const s of [-1,1]){ const bx=s*(ws.hwB+.012), tx=s*(ws.hwT+.012);
     mesh(bar([[bx,ws.yB-.02,ws.zB-.005],[lerp(bx,tx,.5),lerp(ws.yB,ws.yT,.5),lerp(ws.zB,ws.zT,.5)+.012],[tx,ws.yT+.01,ws.zT+.02]],[pil.w*1.1,pil.w],pil.t,[-s*.6,0,1]),P.style==='classic'?hardTrim:trimM,G); }
   mesh(bar([[-ws.hwT-.01,ws.yT+.015,ws.zT+.03],[0,ws.yT+.03,ws.zT+.04],[ws.hwT+.01,ws.yT+.015,ws.zT+.03]],.09,.05,[0,-1,.4]),trimM,G);
-  { const R=P.roof, rf=(u,v)=>{ const s=u*2-1, z=lerp(ws.zT+.03,R.zR,v); return [s*R.hw,R.y-.025*s*s-(v>.85?.06*Math.pow((v-.85)/.15,2):0),z]; };
+  // backing between the glass's top edge and the headliner (looking up you saw a sliver of sky there)
+  mesh(grid(16,2,(u,v)=>{ const s=u*2-1; return [s*(ws.hwT+.02),lerp(ws.yT-.012,P.roof.y+.01,v),lerp(ws.zT-.012,ws.zT+.05,v)]; }),M({color:0x0a0a0b,roughness:.9}),G,false);
+  { const R=P.roof, rf=(u,v)=>{ const s=u*2-1, z=lerp(ws.zT-.02,R.zR,v); return [s*R.hw,R.y-.025*s*s-(v>.85?.06*Math.pow((v-.85)/.15,2):0),z]; };
     if(!P.glassRoof) mesh(grid(16,16,rf),trimM,G);
     else { // the Model Y's glass roof: tinted glass from the windshield header to the hatch (you see the sky), a black frit
       // border, and the black cross-member over the B pillars; it doesn't shade the cabin like a headliner would
@@ -251,6 +253,8 @@ function shell(G,P,mats){
     for(const s of [-1,1]) mesh(bar([[s*(ws.hwT+.01),ws.yT+.005,ws.zT+.03],[s*(R.hw+.01),P.winTop+.04,ws.zT+.5],[s*(R.hw+.015),P.winTop+.04,R.zR-.1]],.07,.06,[-s,-.3,0]),trimM,G); }
   // sun visors folded up against the headliner
   for(const s of [-1,1]){ const v=mesh(rbox(.36,.18,.024,.01,.03),trimM,G); v.position.set(s<0?eyeX:-eyeX,P.roof.y-.035,ws.zT+.14); v.rotation.x=-Math.PI/2+.08; }
+  // Explorer overhead console (owner 2026-11-21, a photo of the real one: "put this at the top by the mirror")
+  if(P.ex) overheadEx(G,P,ws);
   // rear-view mirror
   { const hm=M({color:0x111112,roughness:.5}), mir=M({color:0xffffff,metalness:1,roughness:.04,out:true,env:1.15});
     const cx=0, cy=ws.yT-(P.style==='classic'?.085:.125), vg=(cy+.05-ws.yB)/(ws.yT-ws.yB), zg=lerp(ws.zB,ws.zT,vg)-ws.bow*Math.sin(Math.PI*(.3+.7*vg)), cz=zg+.075;
@@ -450,6 +454,40 @@ function tractorCab(G,P,parts){
 }
 
 /* ---------- steering wheels ---------- */
+// the overhead console: a black rounded-square pod on the headliner just behind the mirror. The half toward the windshield is
+// the sunglasses-bin lid (a soft line across it); the half toward you has a strip with the two clear map-light lenses, the
+// light / sunroof / VENT keys between them, then the PASSENGER AIRBAG OFF / ON lamp with a speaker grille each side.
+function overheadEx(G,P,ws){
+  const W=.25, D=.25, zf=ws.zT+.075, cz=zf+D/2, y0=P.roof.y-.006, th=.032;
+  const g=new THREE.Group(); g.position.set(0,y0-th,cz); g.rotation.x=.10; G.add(g);    // face tipped a little toward the driver
+  const blk=M({color:0x151517,roughness:.62,normalMap:rep(textures().grain,3,3),normalScale:new THREE.Vector2(.35,.35)});
+  const pod=mesh(rbox(W,D,th,.03,.06),blk,g); pod.rotation.x=-Math.PI/2; pod.position.y=th/2;
+  // the face, drawn: 1024 px across the 25 cm pod (y down the picture = toward the driver)
+  const T=canvasTex(1024,1024), x=T.x, R=(X,Y,w,h,r)=>{ x.beginPath(); x.moveTo(X+r,Y); x.arcTo(X+w,Y,X+w,Y+h,r); x.arcTo(X+w,Y+h,X,Y+h,r); x.arcTo(X,Y+h,X,Y,r); x.arcTo(X,Y,X+w,Y,r); x.closePath(); };
+  x.fillStyle='#17181a'; x.fillRect(0,0,1024,1024);
+  x.strokeStyle='#060606'; x.lineWidth=7; R(70,70,884,420,28); x.stroke();                       // lid seam
+  x.fillStyle='#1c1d20'; R(74,74,876,412,26); x.fill(); x.strokeStyle='#0b0b0c'; x.lineWidth=5; x.beginPath(); x.moveTo(330,150); x.lineTo(700,150); x.stroke();   // the soft line on the lid
+  x.strokeStyle='#0a0a0b'; x.lineWidth=4; x.beginPath(); x.moveTo(70,490); x.lineTo(954,490); x.stroke();
+  x.fillStyle='#0e0e10'; R(120,580,784,220,22); x.fill(); x.strokeStyle='#26272a'; x.lineWidth=4; R(120,580,784,220,22); x.stroke();   // the key strip
+  for(const X of [150,742]){ x.fillStyle='#050505'; R(X,615,132,150,10); x.fill(); const gr=x.createLinearGradient(X+30,0,X+102,0); gr.addColorStop(0,'#8d9196'); gr.addColorStop(.5,'#f2f4f6'); gr.addColorStop(1,'#8d9196');
+    x.fillStyle=gr; R(X+34,650,64,80,10); x.fill(); x.strokeStyle='#5b5f64'; x.lineWidth=5; R(X+22,636,88,108,8); x.stroke(); }          // clear map-light lenses
+  const key=(X,Y,w,h,t)=>{ x.fillStyle='#1b1c1f'; R(X,Y,w,h,8); x.fill(); x.strokeStyle='#050505'; x.lineWidth=3; R(X,Y,w,h,8); x.stroke(); if(t){ x.fillStyle='#c7cbd0'; x.font='600 '+(t.length>2?22:30)+'px system-ui,Arial'; x.textAlign='center'; x.textBaseline='middle'; t.split('\n').forEach((l,i,a)=>x.fillText(l,X+w/2,Y+h/2+(i-(a.length-1)/2)*24)); } };
+  key(330,612,68,64,'☼'); key(330,676,68,56,''); key(330,732,68,64,'☼');
+  key(420,612,88,84,'△'); key(420,700,88,96,'VENT\n▽'); key(516,612,88,84,'▭'); key(516,700,88,96,'▭');
+  key(626,612,68,64,'☼'); key(626,676,68,56,''); key(626,732,68,64,'☼');
+  // airbag lamp strip and the two speaker grilles
+  x.fillStyle='#121315'; x.beginPath(); x.moveTo(250,830); x.lineTo(774,830); x.lineTo(740,880); x.lineTo(284,880); x.closePath(); x.fill();
+  x.fillStyle='#3d4045'; x.font='500 22px system-ui,Arial'; x.textAlign='left'; x.textBaseline='middle'; x.fillText('PASSENGER AIRBAG',300,856); x.fillText('OFF',520,856); x.fillText('ON',640,856);
+  x.strokeStyle='#3d4045'; x.lineWidth=2; x.strokeRect(632,842,38,28);
+  x.fillStyle='#050506'; for(const [a,b] of [[70,240],[784,954]]) for(let k=0;k<9;k++) for(let j=0;j<4;j++){ x.save(); x.translate(a+12+k*18,836+j*11); x.rotate(-.55); x.fillRect(0,0,12,3); x.restore(); }
+  x.fillStyle='#09090a'; R(470,960,84,24,6); x.fill();                                           // the little sensor slot at the front edge
+  T.t.anisotropy=8; T.t.needsUpdate=true;
+  const face=mesh(new THREE.PlaneGeometry(W-.004,D-.004),M({map:T.t,roughness:.6,normalMap:rep(textures().grain,3,3),normalScale:new THREE.Vector2(.25,.25)}),g,false,false);
+  face.rotation.x=Math.PI/2; face.position.y=-.0006;                                             // faces down into the cabin
+  // a little relief: the lid stands proud, the key strip and lenses sit in
+  const lid=mesh(rbox(W*.86,D*.40,.004,.008,.012),M({color:0x1c1d20,roughness:.6,transparent:true,opacity:0}),g,false,false); lid.visible=false;
+  const lit=new THREE.MeshBasicMaterial({color:0xfff4dc,transparent:true,opacity:0}); for(const s of [-1,1]){ const l=mesh(new THREE.PlaneGeometry(.016,.02),lit,g,false,false); l.rotation.x=Math.PI/2; l.position.set(s*.083,-.001,.0); }
+}
 function steeringWheel(G,P){
   const W=P.wheel, grp=new THREE.Group(); grp.position.set(...W.c); grp.rotation.x=-W.tilt*DEG; G.add(grp);
   const spin=new THREE.Group(); grp.add(spin);
@@ -1185,7 +1223,7 @@ function enter(){ if(CK.on) return; CK.on=true; CK.exag=EXAG; EXAG=1; LOOK.yaw=0
   // map lookup reads depth back from the GPU, and from the seat the view runs far down the road); back on leaving
   applyTerrain();                                                  // per ⚙️ 3D terrain (game.js terrWant)
   document.body.classList.add('cockpit'); build(CARKEY); dirty=true; if(CK.real) setSpeedScale(1); try{ SOUND.cabin(true,mode==='tractor'); }catch(e){} }
-function leave(){ if(!CK.on) return; CK.on=false; EXAG=CK.exag; renderer.shadowMap.autoUpdate=true; labels(true);
+function leave(){ if(!CK.on) return; CK.on=false; if(CK.drop){ CK.drop=0; mapEl.style.transform=''; } EXAG=CK.exag; renderer.shadowMap.autoUpdate=true; labels(true);
   applyTerrain(); setSpeedScale(3); glareEl.style.opacity='0'; CK.snd=null; try{ SOUND.cabin(false); }catch(e){} refreshNear(); try{ map.triggerRepaint(); }catch(e){}
   document.body.classList.remove('cockpit');
   try{ map.transform.fov=36.87; }catch(e){}
@@ -1225,6 +1263,10 @@ CK.view=function(dt){
   // the map can't tilt past 85°, so looking higher than that (owner 2026-11-21: "move my screen so I can look higher")
   // slides the whole picture down instead, like raising your eyes: map, cars and cabin all shift together
   const lift=Math.round(.5*H/Math.tan(fov*DEG/2)*Math.tan(clamp(want-85,0,14)*DEG));
+  // further still (up at the roof and the overhead console): the cabin and car cameras really tilt up, and the map
+  // picture (its own canvas, under ours) slides down to match; past the windshield's top edge only the sky shows anyway
+  const tilt=clamp(want-99,0,30), drop=Math.round(.5*H/Math.tan(fov*DEG/2)*Math.tan(tilt*DEG));
+  if(drop!==(CK.drop||0)){ CK.drop=drop; mapEl.style.transform=drop?'translateY('+drop+'px)':''; }
   try{ if(Math.abs(map.transform.fov-fov)>.01) map.transform.fov=fov; }catch(e){}
   // the eye turns about the neck (10 cm behind the eyes); bumps lift the head a little
   // your head moves with the car: sways out in corners, pitches forward braking / back accelerating (a damped spring)
@@ -1248,10 +1290,10 @@ CK.view=function(dt){
   const f=eE*Math.sin(b)+eN*Math.cos(b), r=eE*Math.cos(b)-eN*Math.sin(b);
   camera.fov=fov; camera.aspect=W/H; camera.near=Math.max(1,.05/mm); camera.far=(VIEW()+60)/mm; camera.setViewOffset(W,H,0,offY,W,H);   // far: no cars past where the ground stops
   camera.position.set(r/mm,camH/mm,-f/mm); camera.up.set(0,1,0);
-  camera.lookAt(r/mm,camH/mm-Math.cos(pr)*100,-f/mm-Math.sin(pr)*100); camera.updateProjectionMatrix();
+  camera.lookAt(r/mm,camH/mm-Math.cos(pr)*100,-f/mm-Math.sin(pr)*100); if(tilt) camera.rotateX(tilt*DEG); camera.updateProjectionMatrix();
   // cabin camera: in the car's own frame
   const cc=CK.cab.cam; cc.fov=fov; cc.aspect=W/H; cc.setViewOffset(W,H,0,offY,W,H);
-  cc.position.set(ex-P.eye[0],eh-P.eye[1],ez-P.eye[2]); cc.rotation.set(-(90-pitch)*DEG,-yr,0); cc.updateProjectionMatrix();
+  cc.position.set(ex-P.eye[0],eh-P.eye[1],ez-P.eye[2]); cc.rotation.set(-(90-pitch-tilt)*DEG,-yr,0); cc.updateProjectionMatrix();
   if(typeof shadow==='object') shadow.visible=false;
   if(typeof tractorG==='object') tractorG.visible=false;
 };
