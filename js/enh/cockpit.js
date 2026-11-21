@@ -629,9 +629,10 @@ function build(key){
   if(P.style==='classic') dashClassic(G,P,parts); else if(P.style!=='tractor') dashModern(G,P,parts);
   parts.wheel=steeringWheel(G,P);
   wipers(G,P,sh.wsP,parts);
-  // head-up display (owner 2026-11-20: "I can't see the gauges in cockpit view"): a projected image floating ~2.3 m ahead, just
+  // head-up display (owner 2026-11-20: "I can't see the gauges in cockpit view"; not in the Navigator — its panoramic dash screen
+  // already shows it, owner's request): a projected image floating ~2.3 m ahead, just
   // above the hood in the driver's line of sight — speed, limit, gear, revs, next turn. ⚙️ Head-up display / H key.
-  { const T=canvasTex(768,320), mt=new THREE.MeshBasicMaterial({map:T.t,transparent:true,depthTest:false,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false});
+  if(P.style!=='lux'){ const T=canvasTex(768,320), mt=new THREE.MeshBasicMaterial({map:T.t,transparent:true,depthTest:false,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false});
     const g=new THREE.Group(); g.position.set(P.eye[0],P.eye[1]-(P.style==='tractor'?.34:.2),P.eye[2]-2.3); G.add(g); g.lookAt(new V3(...P.eye));
     const m=mesh(new THREE.PlaneGeometry(.84,.35),mt,g,false,false); m.renderOrder=20; parts.hud={T,m:mt,g}; }
   G.position.set(-P.eye[0],-P.eye[1],-P.eye[2]);                   // built in car coordinates; the eye sits at the origin
