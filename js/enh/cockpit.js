@@ -41,7 +41,7 @@ const SPECS={
     dash:[[1.062,-1.045],[1.086,-.84],[1.086,-.68],[1.064,-.615],[.99,-.595],[.87,-.605],[.75,-.55],[.62,-.43]],
     wheel:{c:[-.38,.935,-.37],r:.188,tilt:24,rim:.0175,flat:true},
     cluster:{c:[-.38,1.003,-.672],w:.31,h:.118},
-    screen:{c:[.0,1.005,-.578],w:.255,h:.148,tilt:12},
+    screen:{c:[.0,1.06,-.585],w:.25,h:.15,tilt:12},
     col:{dash:0x232427,top:0x1e1f22,trim:0x2a2b2f,lower:0x202124,seat:0x232325,head:0x3a3a3d,stitch:0xc8102e,accent:'alu',carpet:0x111112},
     eng:'ecoboost30', vmaxG:160, red:6.25, tachMax:8},
   navigator:{style:'lux', eye:[-.42,1.565,.12], pitch:85,
@@ -375,7 +375,7 @@ function steeringWheel(G,P){
   const curve=new THREE.CatmullRomCurve3(pts,true,'centripetal');
   const rim=mesh(new THREE.TubeGeometry(curve,160,W.rim,14,true),rimM,spin); rim.scale.z=1.25;
   if(P.style==='classic'){ for(let i=0;i<24;i++){ const a=i/24*Math.PI*2+.13, b=mesh(new THREE.SphereGeometry(W.rim*.6,8,6),rimM,spin); b.position.set(Math.cos(a)*(W.r-W.rim*.85),Math.sin(a)*(W.r-W.rim*.85),0); } }   // finger grips
-  if(P.col.stitch&&P.style==='sport'){ const st=M({color:0x8e0c1e,roughness:.7}); for(const s of [-1,1]){ const sp=[]; for(let i=0;i<=40;i++){ const a=(s>0?-.55:Math.PI-.55)+i/40*1.1; sp.push(new V3(Math.cos(a)*(W.r),Math.sin(a)*(W.r),W.rim*1.21)); }
+  if(P.col.stitch&&P.style==='sport'){ const st=M({color:0x5a0a14,roughness:.8}); for(const s of [-1,1]){ const sp=[]; for(let i=0;i<=40;i++){ const a=(s>0?-.55:Math.PI-.55)+i/40*1.1; sp.push(new V3(Math.cos(a)*(W.r),Math.sin(a)*(W.r),W.rim*1.21)); }
       mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(sp),60,.0016,5,false),st,spin,false); } }
   if(classic){
     const al=P.style==='tractor'?M({color:0x161718,roughness:.5}):M({map:rep(textures().alu,1,1),color:0xffffff,metalness:.85,roughness:.32}), cap=M({color:0x0e0e0e,roughness:.4});
@@ -389,9 +389,12 @@ function steeringWheel(G,P){
     const pad=mesh(rbox(.13,.10,.055,.02,.035),hubM,spin); pad.position.set(0,-.006,-.012);
     for(const s of [-1,1]){ const sp=mesh(rbox(.085,.05,.022,.008,.02),hubM,spin); sp.position.set(s*(W.r*.62),-.008,-.02); sp.rotation.z=s*-.08;
       const sw=mesh(rbox(.05,.036,.008,.002,.008),M({color:0x0b0b0c,roughness:.25,metalness:.1}),spin); sw.position.set(s*W.r*.6,-.006,-.007);
-      for(let k=0;k<4;k++){ const b=mesh(new THREE.CircleGeometry(.0042,10),M({color:0x3a3d42,roughness:.35}),spin,false); b.position.set(s*W.r*.6+(k%2?.01:-.01),-.006+(k<2?.008:-.008),-.0028); b.userData.btn=1; }
+      for(let k=0;k<4;k++){ const b=mesh(new THREE.CircleGeometry(.0042,10),M({color:0x1c1e21,roughness:.6,env:.15}),spin,false); b.position.set(s*W.r*.6+(k%2?.01:-.01),-.006+(k<2?.008:-.008),-.0028); b.userData.btn=1; }
       const tr=mesh(new THREE.BoxGeometry(.06,.004,.004),trimM,spin); tr.position.set(s*(W.r*.62),-.035,-.008); }
-    const low=mesh(rbox(.03,.08,.02,.006,.012),hubM,spin); low.position.set(0,-W.r*.58,-.018);
+    if(P.style==='sport'){ const sat=M({color:0xc9ced4,metalness:.9,roughness:.3,env:1.4}), y0=-.045, yb=-W.r*.86;
+      mesh(bar([[-.03,y0,-.016],[-.045,(y0+yb)/2,-.014],[-.035,yb+.02,-.01],[0,yb,-.008],[.035,yb+.02,-.01],[.045,(y0+yb)/2,-.014],[.03,y0,-.016]],.016,.01,[0,0,1],40,8),sat,spin);
+      mesh(bar([[-.03,y0,-.02],[0,y0-.012,-.02],[.03,y0,-.02]],.03,.012,[0,0,1],8,8),hubM,spin); }   // satin U-spoke under the hub
+    else { const low=mesh(rbox(.03,.08,.02,.006,.012),hubM,spin); low.position.set(0,-W.r*.58,-.018); }
     if(W.flat){ const t=mesh(new THREE.BoxGeometry(.05,.008,.006),trimM,spin); t.position.set(0,-W.r*.80+.002,.012); }
   }
   // column shroud and stalks (stay put while the wheel turns)
@@ -462,11 +465,15 @@ function dashModern(G,P,parts){
   // vents: two in the middle beside the screen, one at each end
   const vent=(cx,cy,cz,w,h,rot)=>{ const g=new THREE.Group(); g.position.set(cx,cy,cz); g.rotation.set(rot[0]||0,rot[1]||0,0); G.add(g);
     mesh(rbox(w+.016,h+.016,.02,.004,.008),M({color:lux?0xb9b2a5:0x0d0d0e,metalness:lux?.9:.2,roughness:lux?.25:.4}),g);
+    if(!lux){ const ch=M({color:0xd5dade,metalness:1,roughness:.2,env:1.5});
+      for(const yy of [-1,1]) mesh(new THREE.BoxGeometry(w+.01,.003,.004),ch,g,false).position.set(0,yy*(h/2+.006),.011);
+      for(const xx of [-1,1]) mesh(new THREE.BoxGeometry(.003,h+.012,.004),ch,g,false).position.set(xx*(w/2+.006),0,.011);
+      const lb=mesh(rbox(w*.9,.008,.008,.002,.003),ch,g); lb.position.set(0,0,.016); }
     const bk=mesh(new THREE.PlaneGeometry(w,h),M({color:0x020202,roughness:1}),g,false); bk.position.z=.006;
     for(let k=0;k<5;k++){ const s=mesh(new THREE.BoxGeometry(w-.006,.0035,.014),M({color:0x1a1a1b,roughness:.5,metalness:.3}),g); s.position.set(0,-h/2+(k+.5)*h/5,.008); s.rotation.x=-.25; } };
   const fz=(y)=>{ let best=P.dash[4][1]; for(let i=0;i<P.dash.length-1;i++){ const A=P.dash[i],B=P.dash[i+1]; if((A[0]-y)*(B[0]-y)<=0&&A[0]!==B[0]) best=lerp(A[1],B[1],(y-A[0])/(B[0]-A[0])); } return best; };
-  const vy=P.dash[4][0]-.06; vent(-xd+.13,vy,fz(vy)+.13,.12,.055,[0,.55]); vent(xd-.13,vy,fz(vy)+.13,.12,.055,[0,-.55]);
-  if(!lux){ for(const s of [-1,1]) vent(P.screen.c[0]+s*.19,vy-.06,fz(vy-.06)+.02,.06,.075,[0,0]); }
+  const vy=P.dash[4][0]-.06; vent(-xd+.13,vy,fz(vy)+.13,lux?.12:.14,lux?.055:.05,[0,.55]); vent(xd-.13,vy,fz(vy)+.13,lux?.12:.14,lux?.055:.05,[0,-.55]);
+  if(!lux){ for(const s of [-1,1]) vent(P.screen.c[0]+s*.23,vy-.035,fz(vy-.035)+.02,.15,.05,[0,0]); }
   else { for(const s of [-1,1]) vent(P.screen.c[0]+s*.24,vy-.02,fz(vy-.02)+.015,.11,.03,[0,0]); }
   // driver's cluster brow (sport) — Navigator's panoramic screen has its own hood
   if(!lux){ const C=P.cluster, bw=.21;
@@ -487,6 +494,8 @@ function dashModern(G,P,parts){
   // climate / hazard buttons row under the screen
   { const by=P.screen.c[1]-P.screen.h/2-.05, bz=fz(by)+.012, row=new THREE.Group(); row.position.set(P.screen.c[0],by,bz); row.rotation.x=-.5; G.add(row);
     const plate=mesh(rbox(.30,.05,.012,.003,.008),M({color:lux?0x1a1715:0x0a0a0b,roughness:.18,metalness:.25}),row);
+    if(!lux) for(const sx of [-1,1]){ const kn=mesh(new THREE.CylinderGeometry(.017,.018,.018,32),M({color:0xc3c8ce,metalness:1,roughness:.22,out:true}),row); kn.rotation.x=Math.PI/2; kn.position.set(sx*.175,0,.012); kn.material.userData.out=false; kn.material.envMap=ENV.inn; kn.material.envMapIntensity=1.5;
+      const kc=mesh(new THREE.CylinderGeometry(.013,.013,.004,24),M({color:0x101112,roughness:.4}),row); kc.rotation.x=Math.PI/2; kc.position.set(sx*.175,0,.022); }
     const T3=canvasTex(512,96), x=T3.x; x.fillStyle=lux?'#1a1715':'#0a0a0b'; x.fillRect(0,0,512,96); x.fillStyle='#c9ced4'; x.font='600 26px system-ui,Arial'; x.textAlign='center'; x.textBaseline='middle';
     ['❄','A/C','▲','◢◣','✱','AUTO','≋'].forEach((t,i)=>x.fillText(t,40+i*72,48)); if(!lux){ x.fillStyle='#d01c24'; x.beginPath(); x.moveTo(256,22); x.lineTo(278,70); x.lineTo(234,70); x.closePath(); x.lineWidth=5; x.strokeStyle='#d01c24'; x.stroke(); }
     const lab=mesh(new THREE.PlaneGeometry(.29,.045),new THREE.MeshBasicMaterial({map:T3.t}),row,false,false); lab.position.z=.0065; parts.btns=lab.material; }
@@ -635,31 +644,37 @@ function limitTxt(){ const e=document.querySelector('#lim b'); const v=e?e.textC
 function street(){ const r=(typeof roadName==='string'&&roadName)||''; return r; }
 
 /* ---------- instruments: drawing ---------- */
-function drawSport(cl,d){ const x=cl.T.x, W=cl.w, H=cl.h; x.fillStyle='#000'; x.fillRect(0,0,W,H);
-  const bg=x.createRadialGradient(W/2,H*.45,10,W/2,H*.5,W*.6); bg.addColorStop(0,'#0e1420'); bg.addColorStop(1,'#000'); x.fillStyle=bg; x.fillRect(0,0,W,H);
-  const ring=(cx,val,max,lab,step,red,unit)=>{ const R=H*.40, a0=140*DEG, a1=400*DEG, cy=H*.5;
-    x.lineWidth=10; x.strokeStyle='#1d2330'; x.beginPath(); x.arc(cx,cy,R,a0,a1); x.stroke();
-    if(red){ x.strokeStyle='#b3121f'; x.beginPath(); x.arc(cx,cy,R,a0+(a1-a0)*red/max,a1); x.stroke(); }
-    const f=clamp(val/max,0,1), gr=x.createLinearGradient(cx-R,0,cx+R,0); gr.addColorStop(0,'#3b4a66'); gr.addColorStop(1,'#d8e2f2');
-    x.strokeStyle=gr; x.lineWidth=10; x.beginPath(); x.arc(cx,cy,R,a0,a0+(a1-a0)*f); x.stroke();
-    x.fillStyle='#9aa6ba'; x.font='500 20px system-ui,Arial'; x.textAlign='center'; x.textBaseline='middle';
-    for(let v=0;v<=max+1e-6;v+=step){ const a=a0+(a1-a0)*v/max; x.fillText(lab(v),cx+Math.cos(a)*(R-30),cy+Math.sin(a)*(R-30)); x.fillRect(cx+Math.cos(a)*(R+8)-1,cy+Math.sin(a)*(R+8)-1,3,3); }
-    const a=a0+(a1-a0)*f; x.strokeStyle='#ff3b30'; x.lineWidth=4; x.beginPath(); x.moveTo(cx+Math.cos(a)*(R-46),cy+Math.sin(a)*(R-46)); x.lineTo(cx+Math.cos(a)*(R+6),cy+Math.sin(a)*(R+6)); x.stroke();
-    x.fillStyle='#e8eef8'; x.font='600 54px system-ui,Arial'; x.fillText(unit[0],cx,cy-4); x.fillStyle='#7f8aa0'; x.font='500 18px system-ui,Arial'; x.fillText(unit[1],cx,cy+34); };
-  ring(H*.52,d.rpm/1000,d.tach,v=>String(v),1,d.red,[ (d.rpm/1000).toFixed(1), 'x1000 RPM' ]);
-  ring(W-H*.52,d.mph,d.vmax,v=>String(v),20,0,[ String(d.mph), 'MPH' ]);
-  // centre: gear, street, nav, limit
-  x.textAlign='center'; x.fillStyle='#ffffff'; x.font='700 64px system-ui,Arial'; x.fillText(d.gearL==='D'&&d.gear!=null?'D':d.gearL,W/2,H*.30);
-  if(d.gearL==='D'&&d.gear!=null){ x.fillStyle='#7f8aa0'; x.font='600 22px system-ui'; x.fillText(String(d.gear+1),W/2+34,H*.33); }
-  x.fillStyle='#c9d3e3'; x.font='500 22px system-ui,Arial'; x.fillText(d.street.slice(0,28),W/2,H*.50);
-  if(d.nav){ x.fillStyle='#3d8bff'; x.font='700 44px system-ui'; x.fillText(d.navArrow||'↑',W/2-70,H*.66); x.fillStyle='#e8eef8'; x.font='600 26px system-ui'; x.textAlign='left'; x.fillText(d.navDist,W/2-36,H*.66); x.textAlign='center'; }
-  if(d.limit){ x.fillStyle='#fff'; x.fillRect(W/2-28,H*.74,56,62); x.fillStyle='#000'; x.font='700 12px Arial'; x.fillText('SPEED',W/2,H*.74+12); x.fillText('LIMIT',W/2,H*.74+25); x.font='800 26px Arial'; x.fillText(d.limit,W/2,H*.74+46); }
-  // bottom bar
-  x.fillStyle='#7f8aa0'; x.font='500 20px system-ui'; x.textAlign='left'; x.fillText(d.time,24,H-24); x.textAlign='right'; x.fillText(d.temp,W-24,H-24);
-  x.textAlign='center'; x.fillText('TRIP '+d.trip+' mi',W/2,H-24);
-  // fuel / temp bars
-  x.fillStyle='#1d2330'; x.fillRect(W*.30,H*.88,W*.12,6); x.fillRect(W*.58,H*.88,W*.12,6); x.fillStyle='#d8e2f2'; x.fillRect(W*.30,H*.88,W*.12*.72,6); x.fillRect(W*.58,H*.88,W*.12*.5,6);
-  x.font='500 14px system-ui'; x.fillStyle='#7f8aa0'; x.fillText('FUEL',W*.36,H*.86); x.fillText('ENGINE',W*.64,H*.86);
+function drawSport(cl,d){ const x=cl.T.x, W=cl.w, H=cl.h;
+  // a digital cluster drawn as two round dials (rev counter left, speedometer right) with the trip computer between them
+  x.fillStyle='#020306'; x.fillRect(0,0,W,H);
+  const R=H*.43, cy=H*.5, L=H*.5+6, Rt=W-H*.5-6;
+  const dial=(cx,val,max,step,minor,fmt,red,unitTop,unitBot)=>{
+    const a0=135*DEG, a1=405*DEG, A=v=>a0+(a1-a0)*clamp(v/max,0,1);
+    const bg=x.createRadialGradient(cx,cy,R*.2,cx,cy,R*1.05); bg.addColorStop(0,'#0a0f18'); bg.addColorStop(1,'#04060a'); x.fillStyle=bg; x.beginPath(); x.arc(cx,cy,R*1.04,0,7); x.fill();
+    x.strokeStyle='#2a3240'; x.lineWidth=3; x.beginPath(); x.arc(cx,cy,R*1.03,0,7); x.stroke();
+    if(red){ x.strokeStyle='#c4232e'; x.lineWidth=9; x.beginPath(); x.arc(cx,cy,R*.93,A(red),a1); x.stroke(); }
+    for(let v=0;v<=max+1e-6;v+=minor){ const a=A(v), mj=Math.abs(v/step-Math.round(v/step))<1e-6, r1=R*.98, r2=R*(mj?.84:.91);
+      x.strokeStyle=red&&v>=red?'#e04050':'#dfe6f0'; x.lineWidth=mj?4:2; x.beginPath(); x.moveTo(cx+Math.cos(a)*r1,cy+Math.sin(a)*r1); x.lineTo(cx+Math.cos(a)*r2,cy+Math.sin(a)*r2); x.stroke();
+      if(mj){ x.fillStyle='#e8eef7'; x.font=`500 ${Math.round(R*.15)}px "Helvetica Neue",system-ui,Arial`; x.textAlign='center'; x.textBaseline='middle'; x.fillText(fmt(v),cx+Math.cos(a)*R*.68,cy+Math.sin(a)*R*.68); } }
+    // needle with a soft blue sweep behind it
+    const a=A(val); const sw=x.createLinearGradient(cx,cy,cx+Math.cos(a)*R,cy+Math.sin(a)*R); sw.addColorStop(0,'rgba(60,140,255,0)'); sw.addColorStop(1,'rgba(60,140,255,.35)');
+    x.fillStyle=sw; x.beginPath(); x.moveTo(cx,cy); x.arc(cx,cy,R*.9,Math.max(a0,a-.5),a); x.closePath(); x.fill();
+    x.strokeStyle='#f4f8ff'; x.lineWidth=5; x.lineCap='round'; x.beginPath(); x.moveTo(cx+Math.cos(a)*R*.25,cy+Math.sin(a)*R*.25); x.lineTo(cx+Math.cos(a)*R*.95,cy+Math.sin(a)*R*.95); x.stroke();
+    x.fillStyle='#0b0f16'; x.beginPath(); x.arc(cx,cy,R*.22,0,7); x.fill(); x.strokeStyle='#3a4352'; x.lineWidth=2; x.stroke();
+    x.fillStyle='#9fb0c8'; x.font=`500 ${Math.round(R*.09)}px system-ui,Arial`; x.textAlign='center'; x.fillText(unitTop,cx,cy+R*.42); x.fillText(unitBot,cx,cy+R*.54); };
+  dial(L,d.rpm/1000,d.tach,1,.5,v=>String(v),d.red,'RPM','x1000');
+  dial(Rt,d.mph,d.vmax,20,10,v=>String(v),0,'MPH','');
+  // middle: digital speed, gear selector, trip, street / next turn
+  const mx=W/2; x.textAlign='center'; x.textBaseline='middle';
+  const mid=x.createLinearGradient(0,0,0,H); mid.addColorStop(0,'#06101f'); mid.addColorStop(1,'#020306'); x.fillStyle=mid; x.fillRect(L+R*1.08,H*.08,Rt-L-R*2.16,H*.84);
+  x.fillStyle='#7fb2ff'; x.fillRect(L+R*1.12,H*.12,Rt-L-R*2.24,2);
+  x.fillStyle='#ffffff'; x.font=`600 ${Math.round(H*.2)}px "Helvetica Neue",system-ui,Arial`; x.fillText(String(d.mph),mx,H*.34);
+  x.fillStyle='#9fb0c8'; x.font=`500 ${Math.round(H*.06)}px system-ui`; x.fillText('MPH',mx,H*.46);
+  if(d.nav){ x.fillStyle='#5aa0ff'; x.font=`700 ${Math.round(H*.11)}px system-ui`; x.fillText(d.navArrow||'↑',mx-H*.16,H*.62); x.fillStyle='#e8eef8'; x.font=`600 ${Math.round(H*.07)}px system-ui`; x.textAlign='left'; x.fillText(d.navDist,mx-H*.06,H*.62); x.textAlign='center'; }
+  else { x.fillStyle='#c9d3e3'; x.font=`500 ${Math.round(H*.06)}px system-ui`; x.fillText(d.street.slice(0,22),mx,H*.62); }
+  if(d.limit){ const bx=mx+H*.3; x.fillStyle='#fff'; x.fillRect(bx-H*.06,H*.52,H*.12,H*.16); x.fillStyle='#000'; x.font=`800 ${Math.round(H*.07)}px Arial`; x.fillText(d.limit,bx,H*.62); }
+  x.fillStyle='#7f8aa0'; x.font=`500 ${Math.round(H*.05)}px system-ui`; x.fillText('TRIP '+d.trip+' mi  ·  '+d.temp,mx,H*.76);
+  const G=['P','R','N','D','L']; G.forEach((g,i)=>{ x.fillStyle=g===d.gearL?'#ff5a3c':'#6c7588'; x.font=`${g===d.gearL?700:500} ${Math.round(H*.075)}px system-ui`; x.fillText(g,mx+(i-2)*H*.09,H*.88); });
   cl.T.t.needsUpdate=true; }
 function drawPano(pn,d){ const x=pn.T.x, W=pn.w, H=pn.h; x.fillStyle='#03050a'; x.fillRect(0,0,W,H);
   const g=x.createLinearGradient(0,0,W,0); g.addColorStop(0,'#0b1220'); g.addColorStop(.45,'#05070c'); g.addColorStop(1,'#0b1018'); x.fillStyle=g; x.fillRect(0,0,W,H);
