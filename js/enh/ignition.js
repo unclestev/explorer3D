@@ -67,7 +67,8 @@ const NOTE=n=>440*Math.pow(2,(n-69)/12);                            // MIDI note
 let CHIME=null;
 function chimeBuf(ctx){ if(CHIME&&CHIME.sampleRate===ctx.sampleRate) return CHIME;
   const sr=ctx.sampleRate, len=7, n=Math.round(sr*len), b=ctx.createBuffer(2,n,sr), L=b.getChannelData(0), R=b.getChannelData(1);
-  const add=(t0,m,g,pan,parts,atk)=>{ const f=NOTE(m), i0=Math.round(t0*sr);
+  const DOWN=-5;                                                  // owner: "a little deeper" — the whole tune down a fourth (F# -> C# major)
+  const add=(t0,m,g,pan,parts,atk)=>{ const f=NOTE(m+DOWN), i0=Math.round(t0*sr);
     for(const [r,a,d] of parts){ const w=2*Math.PI*f*r/sr, dec=Math.exp(-1/(d*sr)); let e=a*g;
       for(let i=i0;i<n&&e>1e-5;i++){ const k=i-i0, at=Math.min(1,k/(sr*atk)), v=Math.sin(w*k)*e*at; L[i]+=v*(1-pan*.5); R[i]+=v*(1+pan*.5); e*=dec; } } };
   const bell=(t,m,g,p)=>add(t,m,g,p,[[1,1,1.1],[2.0,.3,.5],[2.76,.18,.3],[5.4,.06,.12]],.002);     // high glassy bell
