@@ -58,22 +58,31 @@ function starter(len,k){
     const src=A.ctx.createBufferSource(); src.buffer=b; const g=A.ctx.createGain(); g.gain.value=window.COCKPIT&&COCKPIT.on?.8:.45;
     src.connect(g); g.connect(A.bus); src.start(); }catch(e){ console.warn('starter',e); } }
 
-/* Lincoln Navigator: the start-up chime (owner 2026-11-21, a recording of starting a 2025 Navigator). Measured from it
-   and re-synthesized, not the recording: about two seconds of soft bells over a warm pad, in F-sharp major — a high
-   A#6 bell with F#5 over an F#3/F#4/C#5 chord, moving to G#4/A#4/C#5 with an A#5 bell, a C#6 bell on top, and a brief
-   E5/A4 colour at the end before it fades. Bells: a few inharmonic partials with long soft decays; the pad swells in. */
+/* Lincoln Navigator: the start-up chime (owner 2026-11-21, a recording of starting a 2025 Navigator). Transcribed from it
+   note by note and played on our own synthesized instruments (not the recording; the exact recording can be loaded in
+   ⚙️ → Start-up sound): one 1.77 s phrase in F-sharp major — a high A#6 bell over F#5, a soft F#3 string swell, marimba
+   notes G#5 · C#4 · F#4+F#5 (with the bell again) · G#4 · a held C#5 with A#5 on top · A#4 to close. */
 const NOTE=n=>440*Math.pow(2,(n-69)/12);                            // MIDI note -> Hz
 let CHIME=null;
 function chimeBuf(ctx){ if(CHIME&&CHIME.sampleRate===ctx.sampleRate) return CHIME;
-  const sr=ctx.sampleRate, len=2.6, n=Math.round(sr*len), b=ctx.createBuffer(2,n,sr), L=b.getChannelData(0), R=b.getChannelData(1);
-  const bell=(t0,m,g,pan)=>{ const f=NOTE(m), parts=[[1,1,1.4],[2.01,.45,.7],[2.76,.22,.45],[5.4,.1,.2]], i0=Math.round(t0*sr);
+  const sr=ctx.sampleRate, len=2.4, n=Math.round(sr*len), b=ctx.createBuffer(2,n,sr), L=b.getChannelData(0), R=b.getChannelData(1);
+  const add=(t0,m,g,pan,parts,atk)=>{ const f=NOTE(m), i0=Math.round(t0*sr);
     for(const [r,a,d] of parts){ const w=2*Math.PI*f*r/sr, dec=Math.exp(-1/(d*sr)); let e=a*g;
-      for(let i=i0;i<n;i++){ const k=i-i0, at=Math.min(1,k/(sr*.004)), v=Math.sin(w*k)*e*at; L[i]+=v*(1-pan*.4); R[i]+=v*(1+pan*.4); e*=dec; } } };
-  const pad=(t0,t1,ms,g)=>{ for(const m of ms){ const f=NOTE(m); for(const det of [-.003,.003]){ const w=2*Math.PI*f*(1+det)/sr;
-      for(let i=Math.round(t0*sr);i<Math.min(n,Math.round((t1+.6)*sr));i++){ const t=i/sr, up=Math.min(1,(t-t0)/.35), down=t>t1?Math.max(0,1-(t-t1)/.6):1;
-        const v=(Math.sin(w*i)+.25*Math.sin(2*w*i))*g*up*up*down; L[i]+=v*(det<0?1.1:.9); R[i]+=v*(det<0?.9:1.1); } } } };
-  pad(0,.8,[54,66,73],.05); pad(.8,1.45,[68,70,73],.045); pad(1.45,1.75,[69,76],.035); pad(1.75,2.0,[54,66,73],.035);   // F#3 F#4 C#5 / G#4 A#4 C#5 / A4 E5 / F#
-  bell(.02,94,.22,.3); bell(.06,78,.3,-.2); bell(.14,73,.22,.1); bell(.82,82,.24,-.3); bell(1.04,70,.2,.2); bell(1.28,85,.2,.35); bell(1.5,76,.14,-.1); bell(1.78,78,.18,0);
+      for(let i=i0;i<n&&e>1e-5;i++){ const k=i-i0, at=Math.min(1,k/(sr*atk)), v=Math.sin(w*k)*e*at; L[i]+=v*(1-pan*.5); R[i]+=v*(1+pan*.5); e*=dec; } } };
+  const bell=(t,m,g,p)=>add(t,m,g,p,[[1,1,1.1],[2.0,.3,.5],[2.76,.18,.3],[5.4,.06,.12]],.002);     // high glassy bell
+  const mar=(t,m,g,p)=>add(t,m,g,p,[[1,1,.55],[3.93,.28,.06],[9.2,.06,.02]],.0015);                 // marimba bar
+  const str=(t0,t1,m,g)=>{ const f=NOTE(m); for(const det of [-.004,0,.004]){ const w=2*Math.PI*f*(1+det)/sr;   // bowed string swell
+      for(let i=Math.round(t0*sr);i<Math.min(n,Math.round((t1+.4)*sr));i++){ const t=i/sr, up=Math.min(1,(t-t0)/.18), dn=t>t1?Math.max(0,1-(t-t1)/.4):1, vib=1+.004*Math.sin(2*Math.PI*5.2*t);
+        const v=(Math.sin(w*i*vib)+.45*Math.sin(2*w*i*vib)+.2*Math.sin(3*w*i*vib))*g*up*dn/3; L[i]+=v; R[i]+=v; } } };
+  bell(.12,94,.5,.3); mar(.16,78,.35,-.2);                 // A#6 bell over F#5
+  str(.3,.62,54,.5);                                       // F#3 string swell
+  mar(.38,80,.22,.2); mar(.66,80,.26,.2);                  // G#5
+  mar(.74,61,.42,-.3);                                     // C#4
+  mar(.82,66,.5,-.1); mar(.82,78,.32,.1); bell(.8,94,.3,.3);   // F#4 + F#5, the bell again
+  mar(.94,68,.5,0);                                        // G#4
+  str(1.02,1.34,73,.42); mar(1.02,73,.4,0);                 // C#5, held
+  mar(1.15,82,.38,.25); bell(1.15,94,.18,.3);              // A#5 on top
+  mar(1.48,70,.36,-.15);                                   // A#4 to close
   let pk=0; for(let i=0;i<n;i++) pk=Math.max(pk,Math.abs(L[i]),Math.abs(R[i]));
   for(let i=0;i<n;i++){ const f=Math.min(1,(n-i)/(sr*.3)); L[i]=L[i]/pk*.8*f; R[i]=R[i]/pk*.8*f; }
   return CHIME=b; }
