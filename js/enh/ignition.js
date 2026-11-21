@@ -77,13 +77,13 @@ function chimeBuf(ctx){ if(CHIME&&CHIME.sampleRate===ctx.sampleRate) return CHIM
         const v=(Math.sin(w*i*vib)+.45*Math.sin(2*w*i*vib)+.2*Math.sin(3*w*i*vib))*g*up*dn/3; L[i]+=v; R[i]+=v; } } };
   // owner 2026-11-21: "get rid of the first part dinging and make it seven seconds long" — the opening A#6 bell / F#5 is
   // gone, and the phrase repeats as in the video (every 1.77 s) to fill seven seconds, fading out at the end
-  for(let k=0;k<4;k++){ const o=k*1.77-.28;
-    str(o+.3,o+.62,54,.5);                                     // F#3 string swell
+  // (the low string swells under the notes, which sounded like background noise, are gone too)
+  for(let k=0;k<4;k++){ const o=k*1.77-.36;
     mar(o+.38,80,.22,.2); mar(o+.66,80,.26,.2);                // G#5
     mar(o+.74,61,.42,-.3);                                     // C#4
     mar(o+.82,66,.5,-.1); mar(o+.82,78,.32,.1); bell(o+.8,94,.3,.3);   // F#4 + F#5 with the bell
     mar(o+.94,68,.5,0);                                        // G#4
-    str(o+1.02,o+1.34,73,.42); mar(o+1.02,73,.4,0);            // C#5, held
+    mar(o+1.02,73,.4,0);                                       // C#5
     mar(o+1.15,82,.38,.25); bell(o+1.15,94,.18,.3);            // A#5 on top
     mar(o+1.48,70,.36,-.15); }                                 // A#4 to close
   let pk=0; for(let i=0;i<n;i++) pk=Math.max(pk,Math.abs(L[i]),Math.abs(R[i]));
