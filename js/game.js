@@ -164,13 +164,18 @@ map.on('load',()=>{ try{ initMini();
   if(!map.getLayer('building-3d') && map.getSource(src)){
     map.addLayer({id:'building-3d',source:src,'source-layer':'building',type:'fill-extrusion',minzoom:14,
       paint:{'fill-extrusion-color':'#d6dbe2','fill-extrusion-height':['coalesce',['get','render_height'],['get','height'],6],
-      'fill-extrusion-base':['coalesce',['get','render_min_height'],['get','min_height'],0],'fill-extrusion-opacity':.95}});
+      'fill-extrusion-base':['coalesce',['get','render_min_height'],['get','min_height'],0],'fill-extrusion-opacity':1}});
   }
   const all = map.getStyle().layers;
   roadIds  = all.filter(l=>l['source-layer']==='transportation' && (l.type==='line'||l.type==='fill')).map(l=>l.id);
   bridgeIds= roadIds.filter(id=>!/tunnel|ferry|rail|aeroway/i.test(id));   // tunnels/ferry lines over water don't make it land
   waterIds = all.filter(l=>l['source-layer']==='water' && l.type==='fill').map(l=>l.id);
   blockIds = all.filter(l=>l['source-layer']==='building' && (l.type==='fill-extrusion')).map(l=>l.id);
+  // solid buildings (owner 2026-11-21: "the buildings are kind of like windows… everything is visible through them"): the
+  // OpenFreeMap style draws them at 80% opacity, so a fifth of the ground and landscape behind showed through, and a
+  // translucent extrusion layer costs MapLibre an extra depth pass. The car is drawn on its own canvas on top, so nothing
+  // needs to show through a building.
+  for(const id of blockIds) try{ map.setPaintProperty(id,'fill-extrusion-opacity',1); }catch(e){}
   try{
     const fl=all.find(l=>l.layout&&l.layout['text-font']);
     const hs=(all.find(l=>l['source-layer']==='housenumber')||{}).source||src;
@@ -191,7 +196,7 @@ map.on('load',()=>{ try{ initMini();
     map.addSource('rebuilt',{type:'geojson',data:rebuilt});
     map.addLayer({id:'rebuilt-3d',type:'fill-extrusion',source:'rebuilt',
       paint:{'fill-extrusion-color':col||'hsl(35,8%,85%)','fill-extrusion-height':['get','h'],'fill-extrusion-base':['get','b'],
-        'fill-extrusion-opacity':(typeof op==='number')?op:.8}}, map.getLayer('hn-big')?'hn-big':undefined);
+        'fill-extrusion-opacity':(typeof op==='number')?op:1}}, map.getLayer('hn-big')?'hn-big':undefined);
     blockIds.push('rebuilt-3d');
     // tiles that stream in later may contain more of a hidden group: redraw those survivors too
     map.on('sourcedata',e=>{ if(e.sourceId!==bSrc||!e.tile||!destroyed.length) return;
