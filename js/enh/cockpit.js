@@ -29,7 +29,7 @@ const LSg=(k,d)=>{ try{ const v=localStorage.getItem(k); return v==null?d:v; }ca
 const LSs=(k,v)=>{ try{ localStorage.setItem(k,v); }catch(e){} };
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), lerp=(a,b,t)=>a+(b-a)*t, sstep=(a,b,x)=>{ const t=clamp((x-a)/(b-a),0,1); return t*t*(3-2*t); };
 
-const CK={want:LSg('ydView','chase')==='cockpit', fov:clamp(+LSg('ydCkFov',60)||60,45,60), on:false, exag:EXAG,
+const CK={hud:LSg('ydHud','1')!=='0', want:LSg('ydView','chase')==='cockpit', fov:clamp(+LSg('ydCkFov',60)||60,45,60), on:false, exag:EXAG,
   cab:null, built:null, pad:.07, look:0, W:0, H:0, eyeWorld:null};
 window.COCKPIT=CK;
 
@@ -629,6 +629,11 @@ function build(key){
   if(P.style==='classic') dashClassic(G,P,parts); else if(P.style!=='tractor') dashModern(G,P,parts);
   parts.wheel=steeringWheel(G,P);
   wipers(G,P,sh.wsP,parts);
+  // head-up display (owner 2026-11-20: "I can't see the gauges in cockpit view"): a projected image floating ~2.3 m ahead, just
+  // above the hood in the driver's line of sight — speed, limit, gear, revs, next turn. ⚙️ Head-up display / H key.
+  { const T=canvasTex(768,320), mt=new THREE.MeshBasicMaterial({map:T.t,transparent:true,depthTest:false,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false});
+    const g=new THREE.Group(); g.position.set(P.eye[0],P.eye[1]-(P.style==='tractor'?.34:.2),P.eye[2]-2.3); G.add(g); g.lookAt(new V3(...P.eye));
+    const m=mesh(new THREE.PlaneGeometry(.84,.35),mt,g,false,false); m.renderOrder=20; parts.hud={T,m:mt,g}; }
   G.position.set(-P.eye[0],-P.eye[1],-P.eye[2]);                   // built in car coordinates; the eye sits at the origin
   CK.cab={scene:sc,root,G,cam,hemi,sunL,amb,glow,P,parts,key,lastDraw:0,rpm:700,gear:0,trip:S.dist||0};
   CK.built=key+'|'+(CARSPEC.paint||0);
@@ -692,6 +697,22 @@ function drawSport(cl,d){ const x=cl.T.x, W=cl.w, H=cl.h;
   x.fillStyle='#7f8aa0'; x.font=`500 ${Math.round(H*.05)}px system-ui`; x.fillText('TRIP '+d.trip+' mi  ·  '+d.temp,mx,H*.76);
   const G=['P','R','N','D','L']; G.forEach((g,i)=>{ x.fillStyle=g===d.gearL?'#ff5a3c':'#6c7588'; x.font=`${g===d.gearL?700:500} ${Math.round(H*.075)}px system-ui`; x.fillText(g,mx+(i-2)*H*.09,H*.88); });
   cl.T.t.needsUpdate=true; }
+function drawHud(h,d){ const x=h.T.x, W=h.T.c.width, H=h.T.c.height; x.clearRect(0,0,W,H);
+  const col='#a8ffd8', dim='rgba(168,255,216,.55)'; x.textAlign='center'; x.textBaseline='middle'; x.shadowColor='rgba(120,255,200,.6)'; x.shadowBlur=8;
+  // speed in the middle, MPH under it
+  x.fillStyle=col; x.font='600 132px "Helvetica Neue",system-ui,Arial'; x.fillText(String(d.mph),W/2,H*.40);
+  x.fillStyle=dim; x.font='600 30px system-ui,Arial'; x.fillText('MPH',W/2,H*.73);
+  // rev bar along the bottom (red-line ticks in red)
+  const bw=W*.52, bx=W/2-bw/2, by=H*.88, f=clamp(d.rpm/(d.tach*1000),0,1), rl=d.red/d.tach;
+  x.fillStyle='rgba(168,255,216,.18)'; x.fillRect(bx,by,bw,8); x.fillStyle=f>rl?'#ff7a6a':col; x.fillRect(bx,by,bw*f,8);
+  x.fillStyle='#ff7a6a'; x.fillRect(bx+bw*rl,by-6,3,20);
+  // gear on the left, speed limit on the right (red ring if you're over it)
+  x.fillStyle=col; x.font='700 64px system-ui,Arial'; x.fillText(d.gearL,W*.14,H*.42); x.fillStyle=dim; x.font='600 22px system-ui'; x.fillText('GEAR',W*.14,H*.66);
+  if(d.limit){ const lx=W*.86, ly=H*.42, over=d.mph>+d.limit+4; x.lineWidth=7; x.strokeStyle=over?'#ff6a5a':col; x.beginPath(); x.arc(lx,ly,52,0,7); x.stroke();
+    x.fillStyle=over?'#ff8a7a':col; x.font='700 48px system-ui,Arial'; x.fillText(d.limit,lx,ly+2); }
+  // next turn across the top while a route is set
+  if(d.nav){ x.fillStyle=col; x.font='700 46px system-ui'; x.textAlign='right'; x.fillText(d.navArrow||'↑',W/2-12,H*.08+18); x.textAlign='left'; x.font='600 34px system-ui'; x.fillText(d.navDist,W/2+4,H*.08+20); }
+  x.shadowBlur=0; h.T.t.needsUpdate=true; }
 function drawPano(pn,d){ const x=pn.T.x, W=pn.w, H=pn.h; x.fillStyle='#03050a'; x.fillRect(0,0,W,H);
   const g=x.createLinearGradient(0,0,W,0); g.addColorStop(0,'#0b1220'); g.addColorStop(.45,'#05070c'); g.addColorStop(1,'#0b1018'); x.fillStyle=g; x.fillRect(0,0,W,H);
   const k=H/100, s=v=>Math.round(v*k);
@@ -778,7 +799,8 @@ function update(dt){
     const now=new Date(), hh=(now.getHours()%12)+now.getMinutes()/60; cg.needle.rotation.z=-(hh/12*360)*DEG; if(cg.needle.userData.min) cg.needle.userData.min.rotation.z=-(now.getMinutes()/60*360)*DEG;
   }
   const now=performance.now();
-  if(now-c.lastDraw>66){ c.lastDraw=now;
+  if(p.hud){ p.hud.g.visible=CK.hud; if(CK.hud) p.hud.m.opacity=1-.45*k; }
+  if(now-c.lastDraw>66){ c.lastDraw=now; if(p.hud&&CK.hud) drawHud(p.hud,d);
     if(p.cluster) drawSport(p.cluster,d); if(p.pano) drawPano(p.pano,d); if(p.screen&&now-(c.lastMap||0)>130){ c.lastMap=now; drawScreen(p.screen,d,P.style==='lux'); }
     if(p.prnd&&p.prnd.cur!==d.gearL){ const pr=p.prnd, x=pr.T.x, L=pr.classic?['P','R','N','D','2','1']:['P','R','N','D','S'], W=pr.T.c.width, step=pr.classic?42:pr.lux?102:50, o=pr.classic?22:pr.lux?52:28;
       x.fillStyle=pr.lux?'#16130f':pr.classic?'#0c0c0c':'#0a0a0b'; x.fillRect(0,0,W,64); x.font=pr.lux?'600 30px system-ui':pr.classic?'700 30px Arial':'700 34px system-ui'; x.textAlign='center'; x.textBaseline='middle';
@@ -905,11 +927,13 @@ CK.toggle=function(v){ CK.want=v==null?!CK.want:!!v; LSs('ydView',CK.want?'cockp
 
 /* ---------- settings, keys, mode changes ---------- */
 function showPick(){ const p=document.getElementById('viewPick'); if(p) for(const b of p.querySelectorAll('button')) b.classList.toggle('on',(b.dataset.view==='cockpit')===CK.want);
-  const r=document.getElementById('fovRow'); if(r) r.style.display=CK.want?'':'none'; const v=document.getElementById('fovVal'); if(v) v.textContent=Math.round(CK.fov)+'°'; }
+  const r=document.getElementById('fovRow'); if(r) r.style.display=CK.want?'':'none'; const hr=document.getElementById('hudRow'); if(hr) hr.style.display=CK.want?'':'none'; const hb=document.getElementById('hudBtn'); if(hb) hb.classList.toggle('on',CK.hud); const v=document.getElementById('fovVal'); if(v) v.textContent=Math.round(CK.fov)+'°'; }
 const pick=document.getElementById('viewPick');
 if(pick) pick.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; e.stopPropagation(); CK.toggle(b.dataset.view==='cockpit'); });
 for(const [id,d] of [['fovM',-5],['fovP',5]]){ const b=document.getElementById(id); if(b) b.addEventListener('click',e=>{ e.stopPropagation(); CK.fov=clamp(CK.fov+d,45,60); LSs('ydCkFov',String(CK.fov)); showPick(); dirty=true; }); }
-addEventListener('keydown',e=>{ if(e.repeat||(e.target&&e.target.tagName==='INPUT')) return; if(e.key.toLowerCase()==='c') CK.toggle(); });
+function setHud(v){ CK.hud=v; LSs('ydHud',v?'1':'0'); showPick(); dirty=true; }
+{ const hb=document.getElementById('hudBtn'); if(hb) hb.addEventListener('click',e=>{ e.stopPropagation(); setHud(!CK.hud); }); }
+addEventListener('keydown',e=>{ if(e.repeat||(e.target&&e.target.tagName==='INPUT')) return; const k=e.key.toLowerCase(); if(k==='c') CK.toggle(); else if(k==='h'&&CK.on){ setHud(!CK.hud); toast(CK.hud?'Head-up display on':'Head-up display off',1400); } });
 const prevMode=window.onModeChange;
 window.onModeChange=(m,was)=>{ if(prevMode) prevMode(m,was); if(CK.on&&m!=='car'&&m!=='tractor') leave(); else if(CK.on&&m!==was){ dispose(); } };
 const prevCar=window.onCarChange;

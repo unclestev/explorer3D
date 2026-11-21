@@ -44,6 +44,7 @@
   <div class="setHead"><b>Settings</b><button id="setX" aria-label="Close settings">✕</button></div>
   <div class="setRow carRow"><span>Car</span><div class="seg" id="carPick"><button data-car="explorer">Explorer</button><button data-car="javelin">Javelin</button><button data-car="javelin3d">Javelin 3D</button><button data-car="javelin3d2">Javelin 3D v2</button><button data-car="navigator">Navigator</button><button data-car="tractor">Tractor</button><button data-car="boat">🚤 Boat</button></div></div>
   <div class="setRow"><span>View<small>Chase camera, or from behind the wheel · C key</small></span><div class="seg" id="viewPick"><button data-view="chase">Chase</button><button data-view="cockpit">Cockpit</button></div></div>
+  <div class="setRow" id="hudRow" style="display:none"><span>Head-up display<small>Speed, limit, gear and next turn on the windshield · H key</small></span><button id="hudBtn" class="switch" aria-label="Head-up display"></button></div>
   <div class="setRow" id="fovRow" style="display:none"><span>Cockpit view angle<small>Wider shows more of the dash · drag to look around, hold Q / E to glance</small></span><div class="stepper"><button id="fovM" aria-label="Narrower">−</button><b id="fovVal">60°</b><button id="fovP" aria-label="Wider">+</button></div></div>
   <div class="setRow carRow"><span>Graphics<small id="qualStat">Auto picks what this device runs smoothly</small></span><div class="seg" id="qualPick"><button data-q="auto">Auto</button><button data-q="low">Low</button><button data-q="med">Medium</button><button data-q="high">High</button></div></div>
   <div class="setRow"><span>Realistic driving<small>Real acceleration and top speed · grip and bumps by surface and weather · solid buildings, trees and traffic</small></span><button id="realBtn" class="switch" aria-label="Realistic driving"></button></div>
@@ -92,7 +93,7 @@
 <script src="js/enh/savepos.js?v=2"></script>
 <script src="js/enh/quality.js?v=1"></script>
 <script src="js/enh/feel.js?v=2"></script>
-<script src="js/enh/cockpit.js?v=6"></script>
+<script src="js/enh/cockpit.js?v=7"></script>
 <script src="js/enh/boot.js?v=4"></script>
 </body>
 </html>
