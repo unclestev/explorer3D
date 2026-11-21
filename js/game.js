@@ -791,6 +791,7 @@ const hitRoad=(x,y,r)=>{ try{ if(!roadIds.length) return null; return map.queryR
 const ROAD_HALF={motorway:9,trunk:8,primary:7.5,secondary:7,tertiary:6.5,minor:5.5,service:4.5,track:3.5,path:2.5,raceway:6,busway:5};
 const ROAD_SKIP=/^(rail|transit|ferry|aerialway|cable_car|pier)$/;
 const roadGeo={segs:null,lat:0,lng:0,t:0,src:null};
+rebuildRoadGeo.n=0;
 function rebuildRoadGeo(){
   roadGeo.lat=S.lat; roadGeo.lng=S.lng; roadGeo.t=performance.now(); roadGeo.segs=null;
   if(!roadGeo.src){ const l=roadIds.length&&map.getLayer(roadIds[0]); roadGeo.src=l?l.source:null; }
@@ -802,10 +803,11 @@ function rebuildRoadGeo(){
     const lines=g.type==='LineString'?[g.coordinates]:g.type==='MultiLineString'?g.coordinates:null;
     if(!lines) continue;
     const half=ROAD_HALF[cl]||5;
-    for(const L of lines) for(let i=1;i<L.length;i++){
-      const x1=(L[i-1][0]-S.lng)*kx, y1=(L[i-1][1]-S.lat)*111320, x2=(L[i][0]-S.lng)*kx, y2=(L[i][1]-S.lat)*111320;
-      if(Math.max(x1,x2)<-R||Math.min(x1,x2)>R||Math.max(y1,y2)<-R||Math.min(y1,y2)>R) continue;
-      segs.push([x1,y1,x2,y2,half,pr.name||'',cl]); } }
+    for(const L of lines){ let along=0; const lid=++rebuildRoadGeo.n;      // along: metres from the line's own start (stable: lines are cut at tile edges)
+      for(let i=1;i<L.length;i++){
+      const x1=(L[i-1][0]-S.lng)*kx, y1=(L[i-1][1]-S.lat)*111320, x2=(L[i][0]-S.lng)*kx, y2=(L[i][1]-S.lat)*111320, len=Math.hypot(x2-x1,y2-y1);
+      if(Math.max(x1,x2)<-R||Math.min(x1,x2)>R||Math.max(y1,y2)<-R||Math.min(y1,y2)>R){ along+=len; continue; }
+      segs.push([x1,y1,x2,y2,half,pr.name||'',cl,along,lid]); along+=len; } } }
   roadGeo.segs=segs;
 }
 function nearRoadGeo(){
