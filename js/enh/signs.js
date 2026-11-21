@@ -135,7 +135,7 @@ onTick(100,function xingTick(){
 });
 // speed limit for the road under the car (posted limit from OSM, else a default for that kind of road)
 const limEl=document.getElementById('lim'), limNum=limEl&&limEl.querySelector('b');
-function roadClassHere(){ try{ const p=map.project([S.lng,S.lat]); const f=(hitRoad(p.x,p.y,6)||[]).find(f=>f.properties&&EST[f.properties.class]); if(f) return f.properties.class;
+function roadClassHere(){ try{ const p=map.project([S.lng,S.lat]); const f=(QGEO()?[]:hitRoad(p.x,p.y,6)||[]).find(f=>f.properties&&EST[f.properties.class]); if(f) return f.properties.class;
   const g=typeof roadGeo==='object'&&roadGeo.hit; return g&&EST[g.cls]?g.cls:null; }catch(e){ return null; } }   // off screen (cockpit view): the road line under the car
 onTick(400,function speedTick(){
   if(!limEl) return;

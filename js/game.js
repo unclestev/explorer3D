@@ -818,7 +818,7 @@ function rebuildRoadGeo(){
       for(let i=1;i<L.length;i++){
       const x1=(L[i-1][0]-S.lng)*kx, y1=(L[i-1][1]-S.lat)*111320, x2=(L[i][0]-S.lng)*kx, y2=(L[i][1]-S.lat)*111320, len=Math.hypot(x2-x1,y2-y1);
       if(Math.max(x1,x2)<-R||Math.min(x1,x2)>R||Math.max(y1,y2)<-R||Math.min(y1,y2)>R){ along+=len; continue; }
-      segs.push([x1,y1,x2,y2,half,pr.name||'',cl,along,lid]); along+=len; } } }
+      segs.push([x1,y1,x2,y2,half,pr.name||'',cl,along,lid,pr.brunnel||'']); along+=len; } } }
   roadGeo.segs=segs;
 }
 function nearRoadGeo(){
@@ -852,6 +852,20 @@ function roadNear(lng,lat){ const G=roadCells(); if(!G||!roadGeo.segs) return nu
   for(const s of G.get(Math.floor(x/RCG.C)+','+Math.floor(y/RCG.C))||[]){ const dx=s[2]-s[0], dy=s[3]-s[1], L2=dx*dx+dy*dy||1,
       t=Math.max(0,Math.min(1,((x-s[0])*dx+(y-s[1])*dy)/L2)), px=s[0]+t*dx, py=s[1]+t*dy, d=Math.hypot(x-px,y-py), c=d-(ROAD_DRAWN[s[6]]||4.7);
     if(c<bc){ bc=c; best={c,x,y,px,py,d,kx,seg:s}; } }
+  return best; }
+/* "What's here?" from the map data, never from the screen (owner 2026-11-21: Medium/High "still unplayable" in chase,
+   walking and gliding). With 3D terrain on, every queryRenderedFeatures call makes MapLibre read a pixel back from the
+   graphics card and wait for it — the game asked several times a frame (road under the car, wall ahead, land, bridge,
+   each traffic car, sign and tower), which is what made Medium ~700 ms a frame. QGEO(): use these instead (terrain on,
+   or the cockpit, where the car's own spot is off screen). */
+const QGEO=()=>terrainOn||!!(window.COCKPIT&&COCKPIT.on);
+function geoBlocks(lng,lat){ try{ return window.COCKPIT&&COCKPIT.blocksAt?COCKPIT.blocksAt(lng,lat):[]; }catch(e){ return []; } }
+function geoRoads(lng,lat,r){ const G=roadCells(); if(!G) return null; const kx=111320*Math.cos(rad(roadGeo.lat)), x=(lng-roadGeo.lng)*kx, y=(lat-roadGeo.lat)*111320, out=[];
+  for(const s of G.get(Math.floor(x/RCG.C)+','+Math.floor(y/RCG.C))||[]){ const dx=s[2]-s[0], dy=s[3]-s[1], L2=dx*dx+dy*dy||1, t=Math.max(0,Math.min(1,((x-s[0])*dx+(y-s[1])*dy)/L2));
+    if(Math.hypot(s[0]+t*dx-x,s[1]+t*dy-y)<(ROAD_DRAWN[s[6]]||4.7)+(r||0)) out.push({properties:{class:s[6],name:s[5],brunnel:s[9]}}); }
+  return out; }
+function geoLand(lng,lat){ const L=landCache.land||[]; let best=null;
+  for(const o of L){ if(lng<o.bb[0]||lng>o.bb[2]||lat<o.bb[1]||lat>o.bb[3]||!inPoly(lng,lat,o.pl)) continue; if(!best||o.rank<best.rank) best=o; }
   return best; }
 function roadClear(lng,lat){ const r=roadNear(lng,lat); return r?r.c:99; }
 function offRoad(lng,lat,gap){ for(let it=0;it<5;it++){ const r=roadNear(lng,lat); if(!r||r.c>=gap) return [lng,lat];
@@ -1042,8 +1056,10 @@ const LAND={wood:'Forest',grass:'Grassland',farmland:'Farmland',wetland:'Wetland
   cemetery:'Cemetery',hospital:'Hospital',pitch:'Sports field',track:'Track',farmyard:'Farmyard',railway:'Rail yard',
   quarry:'Quarry',military:'Military',university:'Campus',college:'Campus',stadium:'Stadium',zoo:'Zoo',playground:'Playground'};
 const surfEl=document.getElementById('surf'), nearEl=document.getElementById('near');
-function landHere(p){
+function landHere(p,ll){
   S.land='';
+  if(ll&&QGEO()){ const o=geoLand(ll[0],ll[1]); if(!o) return ''; if(o.rank===2){ S.land='park'; return o.name||'Park'; } const c=o.cls; if(!c) return ''; S.land=c;
+    return LAND[c]||(c.charAt(0).toUpperCase()+c.slice(1).replace(/_/g,' ')); }
   if(!landIds.length) return '';
   const fs=hit(p.x,p.y,1,landIds);
   const pick=id=>fs.find(f=>f.layer&&f.layer.id===id);
@@ -1069,6 +1085,11 @@ function rebuildLandCache(){
       if(bb[2]<w[0]||bb[0]>w[2]||bb[3]<w[1]||bb[1]>w[3]) continue; out.push({bb,pl}); } return out; };
     const farm=pick(map.querySourceFeatures(bSrc,{sourceLayer:'landcover',filter:['==',['get','class'],'farmland']}));
     const water=pick(map.querySourceFeatures(bSrc,{sourceLayer:'water'}));
+    // land under the car for the HUD, from the data (geoLand): land cover first, then land use, then parks — the same order the screen check used
+    const land=[], R2=600, w2=[cx-R2/MLNG,cy-R2/MLAT,cx+R2/MLNG,cy+R2/MLAT];
+    for(const [sl,rank] of [['landcover',0],['landuse',1],['park',2]]) for(const f of map.querySourceFeatures(bSrc,{sourceLayer:sl})){ const pr=f.properties||{};
+      for(const pl of partsOf(f.geometry)){ const bb=bboxOf(pl[0]); if(bb[2]<w2[0]||bb[0]>w2[2]||bb[3]<w2[1]||bb[1]>w2[3]) continue; land.push({bb,pl,rank,cls:pr.class,name:pr.name}); } }
+    if(land.length||!landCache.at) landCache.land=land;
     // keep the old lists if tiles are mid-reload and returned nothing
     if(farm.length||!landCache.at) landCache.farm=farm;
     if(water.length||!landCache.at) landCache.water=water;
@@ -1329,7 +1350,7 @@ function step(now){
   // move, with collision against buildings & water
   const dm=S.v*dt*SPEEDUP, h=rad(S.hdg);
   const nLat=S.lat+Math.cos(h)*dm/111320, nLng=S.lng+Math.sin(h)*dm/(111320*Math.cos(rad(S.lat)));
-  let blocked=false, inBuilding=false; const CKP=!!(window.COCKPIT&&COCKPIT.on);   // cockpit view (js/enh/cockpit.js): the car is under the camera, off screen
+  let blocked=false, inBuilding=false; const CKP=!!(window.COCKPIT&&COCKPIT.on), QG=QGEO();   // QG: answer from the map data, not the screen   // cockpit view (js/enh/cockpit.js): the car is under the camera, off screen
   // realistic driving: buildings, trees and traffic are solid. The car is drawn larger than life (EXAG), so its nose is too.
   const SOLID=REAL&&(mode==='car'||mode==='tractor'), NOSE=2.4*(SOLID?Math.max(1,EXAG*.85):1);
   if(Math.abs(S.v)>(SOLID?.05:.5) && styleReady && blockIds.length){
@@ -1337,7 +1358,7 @@ function step(now){
     const p=map.project(ahead);
     // tall extrusions overlap the car on screen, so candidates are filtered by real footprint under the car's nose.
     // A small box is enough: fill-extrusion queries hit the whole projected prism, including its base footprint.
-    const bh=(CKP?COCKPIT.blocksAt(ahead[0],ahead[1]):hit(p.x,p.y,6,blockIds)).filter(f=>contains(f.geometry,ahead[0],ahead[1]));   // cockpit: the nose can be off screen
+    const bh=(QG?geoBlocks(ahead[0],ahead[1]):hit(p.x,p.y,6,blockIds)).filter(f=>contains(f.geometry,ahead[0],ahead[1]));   // cockpit: the nose can be off screen
     if(bh.length&&SOLID&&!bh.some(f=>contains(f.geometry,S.lng,S.lat))){ blocked=true; step.bid=null; }   // a wall stops you
     else if(bh.length){ inBuilding=true;                            // realistic driving off (or already inside one): you plow through
       const b0=bh[0], bid=b0.id!=null?b0.id:JSON.stringify(bboxOf(partsOf(b0.geometry)[0]?.[0]||[[0,0]]));
@@ -1370,21 +1391,21 @@ function step(now){
   if(every('compass',POWER?.12:.05)) updateCompass();
   const parked=Math.abs(S.v)<.05 && step.detOnce;
   if(!parked && styleReady && every('det',POWER?.25:.12)){ step.detOnce=true;
-    const p=map.project([S.lng,S.lat]); const f=CKP?[]:hitRoad(p.x,p.y,48);   // cockpit: the car's own spot is never on screen
+    const p=map.project([S.lng,S.lat]); const f=QG?[]:hitRoad(p.x,p.y,48);   // cockpit: the car's own spot is never on screen
     const el=roadEl;
     if(f===null){ onRoad=true; el.textContent='Driving'; el.className=''; }      // road data unavailable: never punish
     else if(f.length>0){ miss=0; onRoad=true; S.rcls=f.every(x=>{ const q=x.properties||{}; return q.surface==='unpaved'||/^(track|path)$/.test(String(q.class||'')); })?'gravel':'paved'; const nm=f.find(x=>x.properties&&x.properties.name); roadName=nm?nm.properties.name:''; el.textContent=roadName||'On road'; el.className=''; }
     else {                                                         // screen query missed: check the real road lines
       const g=nearRoadGeo();
-      if(g!==false){ miss=0; S.rcls='paved'; if(roadGeo.hit&&roadGeo.hit.name&&roadGeo.hit.name!==roadName){ roadName=roadGeo.hit.name; el.textContent=roadName; } if(!onRoad||el.className){ onRoad=true; el.textContent=roadName||'On road'; el.className=''; } }
+      if(g!==false){ miss=0; S.rcls=roadGeo.hit&&/^(track|path)$/.test(roadGeo.hit.cls||'')?'gravel':'paved'; if(roadGeo.hit&&roadGeo.hit.name&&roadGeo.hit.name!==roadName){ roadName=roadGeo.hit.name; el.textContent=roadName; } if(!onRoad||el.className){ onRoad=true; el.textContent=roadName||'On road'; el.className=''; } }
       else if(++miss>=8){ onRoad=false; el.textContent='Off road'; el.className='off'; } }   // ~1s of sustained misses
     // ---- which vehicle? Decided from the map's real water/farmland polygons (point-in-polygon on
     //      lng/lat), not from what happens to be drawn under a screen pixel, then debounced by time.
     if(!landCache.at || every('landcache',3) || meters(landCache.at[1],landCache.at[0],S.lat,S.lng)>400) rebuildLandCache();
-    const onGeoRoad=CKP&&nearRoadGeo()===true;                      // cockpit: the car's own spot is off screen, so bridges/roads come from the road lines
-    const water=inAny(landCache.water,S.lng,S.lat) && !(CKP?onGeoRoad:hit(p.x,p.y,5,bridgeIds).length);
+    const onGeoRoad=QG&&nearRoadGeo()===true;                      // cockpit: the car's own spot is off screen, so bridges/roads come from the road lines
+    const water=inAny(landCache.water,S.lng,S.lat) && !(QG?onGeoRoad:hit(p.x,p.y,5,bridgeIds).length);
     const farm=!water && inAny(landCache.farm,S.lng,S.lat);
-    const realRoad=farm && (CKP?onGeoRoad:(hitRoad(p.x,p.y,4)||[]).some(f=>!/^(track|path)$/.test(String(f.properties&&f.properties.class||''))));
+    const realRoad=farm && (QG?onGeoRoad:(hitRoad(p.x,p.y,4)||[]).some(f=>!/^(track|path)$/.test(String(f.properties&&f.properties.class||''))));
     if(water&&!S.inWater&&!boat&&(mode==='car'||mode==='tractor')) toast('🌊 You\'re in the water: pick 🚤 Boat in ⚙️ Car to go boating, or wade back out',3800);
     S.inWater=water;
     const want=BOATPICK?'boat':CARSPEC.tractor?'tractor':'car';    // what's picked in ⚙️ Car — neither fields nor water swap vehicles any more
@@ -1401,7 +1422,7 @@ function step(now){
       if(mode==='tractor'&&farm&&!realRoad){ onRoad=true; el.textContent='In the field'; el.className=''; }
     }
     if(every('surf',.4)&&!(CKP&&Math.abs(LOOK.yaw)>60)){            // cockpit: only while looking roughly ahead (the probe must be on screen)
-      const lt=boat?'Water':landHere(CKP?map.project([S.lng+Math.sin(rad(S.hdg))*7/(111320*Math.cos(rad(S.lat))),S.lat+Math.cos(rad(S.hdg))*7/111320]):p);   // cockpit: just ahead of the car (on screen)
+      const lt=boat?'Water':landHere(QG?null:p,[S.lng,S.lat]);   // from the map data when terrain is on or in the cockpit
       const txt=lt+(mode==='tractor'?' · Tractor':mode==='boat'?' · Bass boat':'');
       if(txt!==step.surf){ step.surf=txt; surfEl.textContent=txt; }
     }

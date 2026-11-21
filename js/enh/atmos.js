@@ -89,10 +89,18 @@ function windowImage(){
     for(let r=0;r<4;r++) for(let c=0;c<4;c++){ const on=hash(r*5+1,c*3+2)<.55;
       x.fillStyle=on?(hash(c,r+9)<.3?'#fff3c4':'#ffc95c'):'#394154'; x.fillRect(4+c*16,4+r*16,8,9); } }));
 }
+// houses after dark (owner 2026-11-21: "windows on houses… like a skyscraper… all windows"): the grid of lit windows is only
+// for buildings over 12 m; houses get dark lap siding instead, and the nearest ones show their own real windows
+// (js/enh/buildings.js facades), some lit
+function houseImage(){
+  addImg('enh-house',img(64,64,(x,w,h)=>{ x.fillStyle='#2c3038'; x.fillRect(0,0,w,h);
+    for(let y=0;y<h;y+=8){ x.fillStyle='#363b44'; x.fillRect(0,y,w,5); x.fillStyle='#22262d'; x.fillRect(0,y+5,w,1); } }));
+}
 function setWindows(on){
-  if(on===AT.windows) return; AT.windows=on;
+  if(on===AT.windows) return; AT.windows=on; if(on) houseImage();
+  const H=['coalesce',['get','render_height'],['get','height'],['get','h'],6];
   for(const id of blockIds) safe('windows',()=>{ if(!map.getLayer(id)) return;
-    map.setPaintProperty(id,'fill-extrusion-pattern',on?'enh-win':undefined); });
+    map.setPaintProperty(id,'fill-extrusion-pattern',on?['case',['>',H,12],'enh-win','enh-house']:undefined); });
 }
 // headlight beams on the ground ahead of the SUV / tractor
 // Sized to the Explorer photo: lamps ~1.4 m apart, each beam spreading to ~1.1 m, so the pair lights a strip about

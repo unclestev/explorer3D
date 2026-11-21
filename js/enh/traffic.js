@@ -128,6 +128,7 @@ function drive(a,dt,px,py,pv,ph){ const B=BB(), ACC=ACCF();
 
 /* ---------- is a building between this car and the camera? ---------- */
 function hiddenByBuilding(a,camX,camY,camH){
+  if(typeof terrainOn!=='undefined'&&terrainOn) return hiddenGeo(a,camX,camY,camH);   // terrain on: screen queries stall the GPU
   let p; try{ p=map.project([a.px/MLNG,a.py/MLAT]); }catch(e){ return false; }
   if(p.x<-50||p.y<-50||p.x>innerWidth+50||p.y>innerHeight+50) return true;
   const ids=blockIds.filter(id=>map.getLayer(id)); if(!ids.length) return false;
@@ -189,5 +190,11 @@ function setOn(on){ T.on=on; try{ localStorage.setItem('ydTraffic',on?'1':'0'); 
   const b=document.getElementById('trafficBtn'); if(b) b.classList.toggle('on',on); dirty=true; }
 const btn=document.getElementById('trafficBtn');
 if(btn){ btn.classList.toggle('on',T.on); btn.addEventListener('click',e=>{ e.stopPropagation(); setOn(!T.on); }); }
+// the same test from the map data: walk from the car toward the camera; a building footprint on the way that is taller
+// than the line of sight there hides it
+function hiddenGeo(a,camX,camY,camH){ const dx=camX-a.px, dy=camY-a.py, D=Math.hypot(dx,dy)||1, ux=dx/D, uy=dy/D;
+  for(let s=4;s<Math.min(D,320);s+=5){ const qx=a.px+ux*s, qy=a.py+uy*s, lng=qx/MLNG, lat=qy/MLAT, line=1+(camH-1)*s/D;
+    for(const f of geoBlocks(lng,lat)){ const pr=f.properties||{}, h=+(pr.render_height??pr.height??6)||6; if(h>line&&contains(f.geometry,lng,lat)) return true; } }
+  return false; }
 window.TRAFFIC={rescale:(r)=>{ for(const sg of T.segs||[]) sg.v*=r; for(const a of T.agents||[]) a.v*=r; },hidden:(o,x,y,h)=>{ try{ return hiddenByBuilding(o,x,y,h); }catch(e){ return false; } }, frame:(dt)=>{ try{ return frame(dt); }catch(e){ console.warn('traffic',e); return false; } }, state:T, setOn};
 })();

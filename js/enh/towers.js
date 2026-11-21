@@ -328,7 +328,8 @@ function placeBeacons(){
   for(const b of B.list){
     let p=null; try{ p=screenPt(b); }catch(e){}
     if(!p||p[0]<-20||p[0]>W+20||p[1]<-20||p[1]>H+20){ if(b.el.style.display!=='none') b.el.style.display='none'; continue; }
-    if(occ&&layers.length){ try{ b.occ=map.queryRenderedFeatures([p[0],p[1]+2],{layers}).length>0; }catch(e){ b.occ=false; } }
+    if(occ&&layers.length&&!(typeof terrainOn!=='undefined'&&terrainOn)){ try{   // terrain on: skip (each query stalls the GPU)
+       b.occ=map.queryRenderedFeatures([p[0],p[1]+2],{layers}).length>0; }catch(e){ b.occ=false; } }
     if(b.occ){ if(b.el.style.display!=='none') b.el.style.display='none'; continue; }
     const d=meters(b.t.lat,b.t.lng,S.lat,S.lng), sc=Math.max(.45,Math.min(1.3,700/Math.max(d,1)));   // a bit smaller with distance
     if(b.el.style.display==='none') b.el.style.display='';

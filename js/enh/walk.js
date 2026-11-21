@@ -80,9 +80,11 @@ function offsetPt(lat,lng,h,r,f){ const e=Math.sin(h)*f+Math.cos(h)*r, n=Math.co
   return [lat+n/111320, lng+e/(111320*Math.cos(rad(lat)))]; }
 function inBuilding(lat,lng){
   if(!styleReady||!blockIds.length) return false;
+  if(QGEO()) return geoBlocks(lng,lat).some(f=>contains(f.geometry,lng,lat));   // terrain on: from the data (no GPU read-back)
   const p=map.project([lng,lat]); return hit(p.x,p.y,6,blockIds).some(f=>contains(f.geometry,lng,lat)); }
 function inWater(lat,lng){
   if(!inAny(landCache.water,lng,lat)) return false;
+  if(QGEO()){ const r=geoRoads(lng,lat,0); return !(r&&r.some(f=>f.properties.brunnel==='bridge')); }
   const p=map.project([lng,lat]); return !hit(p.x,p.y,5,bridgeIds).length; }
 const vehName=()=>PK.mode==='tractor'?'tractor':PK.mode==='boat'?'boat':(CARSPEC&&CARSPEC.name?CARSPEC.name.replace(/^\S+\s/,''):'car');
 const reach=()=>4.2*EXAG;                                          // close enough to get in (world metres, car drawn EXAG x)
@@ -184,7 +186,7 @@ function walkStep(dt,st,gas,now){
   if(every('towers',5) && !towerBusy && towerAt && meters(towerAt[1],towerAt[0],S.lat,S.lng)>15000) loadTowers();
   if(every('decor',.5) && styleReady && (!decorAt || meters(decorAt[1],decorAt[0],S.lat,S.lng)>250)) buildDecor();
   if(every('walkhud',.3)){
-    if(styleReady){ const p=map.project([S.lng,S.lat]), f=hitRoad(p.x,p.y,8);
+    if(styleReady){ const p=map.project([S.lng,S.lat]), f=QGEO()?geoRoads(S.lng,S.lat,4):hitRoad(p.x,p.y,8);
       const nm=f&&f.find(x=>x.properties&&x.properties.name); roadName=nm?nm.properties.name:'';
       roadEl.textContent=nm?'On foot · '+roadName:'On foot'; roadEl.className=''; }
     const st2=Math.abs(W.v)<.05?'Standing':W.v<0?'Stepping back':W.run>.6?'Running':W.run>.15?'Jogging':'Walking';
