@@ -20,7 +20,7 @@
 <link href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/3.6.2/maplibre-gl.css" rel="stylesheet">
 <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>window.THREE||document.write('<script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"><\/script>')</script>
-<link href="css/style.css?v=31" rel="stylesheet">
+<link href="css/style.css?v=32" rel="stylesheet">
 </head>
 <body>
 <div id="load">Loading map…</div>
@@ -61,7 +61,7 @@
   <div class="setRow"><span>Camera zoom<small>Or pinch the map with two fingers</small></span><div class="stepper"><button id="zo" aria-label="Zoom out">−</button><b id="zoomVal">1.0×</b><button id="zi" aria-label="Zoom in">+</button></div></div>
   <div class="setRow"><span>Start at<small>When you open the game</small></span><div class="seg" id="startPick"><button data-start="last">Last spot</button><button data-start="random">Random place</button></div></div>
   <div class="setRow"><span>Go to now<small>Leaves where you are</small></span><div class="stepper"><button id="randomBtn" style="width:auto;padding:0 10px;font-size:14px;font-weight:600">Random</button><button id="homeBtn" style="width:auto;padding:0 10px;font-size:14px;font-weight:600">Raging Waves</button></div></div>
-  <div class="setRow" id="wheelRow" style="display:none"><span>Wheel<small id="wheelStat">Not connected</small></span><div class="stepper"><button id="wheelBtn" style="width:auto;padding:0 10px;font-size:14px;font-weight:600">Set up pedals</button><button id="wheelViewBtn" style="width:auto;padding:0 10px;font-size:14px;font-weight:600">View button</button><button id="wheelShiftBtn" style="width:auto;padding:0 10px;font-size:14px;font-weight:600">Shifter</button></div></div>
+  <div class="setRow" id="wheelRow" style="display:none"><span>Wheel<small id="wheelStat">Not connected</small></span><div class="stepper"><button id="wheelBtn" style="width:auto;padding:0 10px;font-size:14px;font-weight:600">Set up pedals</button><button id="wheelViewBtn" style="width:auto;padding:0 10px;font-size:14px;font-weight:600">View button</button><button id="wheelStartBtn" style="width:auto;padding:0 10px;font-size:14px;font-weight:600">Start button</button><button id="wheelShiftBtn" style="width:auto;padding:0 10px;font-size:14px;font-weight:600">Shifter</button></div></div>
 </div>
 <div id="ctl">
   <div class="track" id="st"><div class="knob" id="stk"></div></div>
@@ -72,7 +72,7 @@
 </div>
 <script src="js/errors.js?v=3"></script>
 <script src="js/update.js?v=4"></script>
-<script src="js/game.js?v=60"></script>
+<script src="js/game.js?v=61"></script>
 <script src="js/enh/core.js?v=4"></script>
 <script src="js/enh/roads.js?v=10"></script>
 <script src="js/enh/signs.js?v=16"></script>
@@ -90,17 +90,18 @@
 <script src="js/enh/satellite.js?v=1"></script>
 <script src="js/enh/credits.js?v=1"></script>
 <script src="js/enh/towers.js?v=10"></script>
-<script src="js/enh/sound.js?v=6"></script>
+<script src="js/enh/sound.js?v=7"></script>
 <script src="js/enh/walk.js?v=7"></script>
 <script src="js/enh/look.js?v=1"></script>
-<script src="js/enh/wheel.js?v=5"></script>
+<script src="js/enh/wheel.js?v=6"></script>
 <script src="js/enh/buildings.js?v=8"></script>
 <script src="js/enh/savepos.js?v=2"></script>
 <script src="js/enh/quality.js?v=1"></script>
 <script src="js/enh/feel.js?v=2"></script>
-<script src="js/enh/cockpit.js?v=22"></script>
+<script src="js/enh/cockpit.js?v=23"></script>
 <script src="js/enh/roadside.js?v=3"></script>
 <script src="js/enh/signals.js?v=4"></script>
+<script src="js/enh/ignition.js?v=1"></script>
 <script src="js/enh/boot.js?v=4"></script>
 </body>
 </html>

@@ -227,3 +227,5 @@ body.wheel #ctl{display:none}
 #sigBtns button.on{background:#15803d;box-shadow:0 0 0 2px #86efac inset;animation:sigBlink .7s steps(1) infinite}
 #sigBtns #sigH.on{background:#b45309;box-shadow:0 0 0 2px #fcd34d inset}
 @keyframes sigBlink{50%{filter:brightness(.55)}}
+/* engine start / stop (js/enh/ignition.js): ⏻ beside the turn-signal buttons; red ring while the engine is off */
+#sigBtns #ignBtn.off{background:#7f1d1d;box-shadow:0 0 0 2px #fca5a5 inset}

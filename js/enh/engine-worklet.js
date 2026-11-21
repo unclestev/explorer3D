@@ -36,7 +36,7 @@ const silence=(L,R,n)=>{ for(let i=0;i<n;i++){ L[i]=0; if(R!==L) R[i]=0; } };
    engine speed wander at low rpm). Left bank plays left, right bank right. Overrun crackle when lifting at high revs. */
 class AMC401 extends AudioWorkletProcessor{
   static get parameterDescriptors(){ return [
-    {name:'rpm',defaultValue:700,minValue:300,maxValue:6500,automationRate:'k-rate'},
+    {name:'rpm',defaultValue:700,minValue:60,maxValue:6500,automationRate:'k-rate'},
     {name:'load',defaultValue:0,minValue:0,maxValue:1,automationRate:'k-rate'},
     {name:'gain',defaultValue:0,minValue:0,maxValue:1,automationRate:'k-rate'}]; }
   constructor(){ super(); this.ph=0; this.idx=0; this.order=[0,1,1,0,1,0,0,1];
@@ -46,7 +46,7 @@ class AMC401 extends AudioWorkletProcessor{
     const out=outputs[0], L=out[0], R=out[1]||out[0], n=L.length, sr=sampleRate;
     const rpm0=P.rpm[0], load=P.load[0], gain=P.gain[0];
     if(gain<=1e-4){ silence(L,R,n); return true; }
-    const idle=Math.max(0,1-(rpm0-650)/1400);
+    const idle=Math.max(0,Math.min(1,1-(rpm0-650)/1400));   // (cranking: below idle, js/enh/ignition.js)
     const c=coefs(sr,{atkMs:1.1, decMs:5.5+6*idle, periodMs:15000/rpm0, fc:Math.min(760,150+rpm0*.045+load*190), q:.72, lowMix:1.8, bandMix:.16+.3*idle,
       drive:.75+load*.8+1.1*idle, lpHz:Math.min(1900,430+load*650+rpm0*.15), bodyHz:170, bodyGain:1.3});
     const lvl=.62+.4*load+.12*Math.min(1,rpm0/3500);
@@ -77,7 +77,7 @@ registerProcessor('amc401',AMC401);
    3.5 L uses this voice through its own drivetrain.) */
 class EcoBoost30 extends AudioWorkletProcessor{
   static get parameterDescriptors(){ return [
-    {name:'rpm',defaultValue:650,minValue:300,maxValue:7000,automationRate:'k-rate'},
+    {name:'rpm',defaultValue:650,minValue:60,maxValue:7000,automationRate:'k-rate'},
     {name:'load',defaultValue:0,minValue:0,maxValue:1,automationRate:'k-rate'},
     {name:'boost',defaultValue:0,minValue:0,maxValue:1,automationRate:'k-rate'},
     {name:'gain',defaultValue:0,minValue:0,maxValue:1,automationRate:'k-rate'}]; }
@@ -123,7 +123,7 @@ registerProcessor('ecoboost30',EcoBoost30);
    engine speed (sound.js sets rpm from the throttle, not road speed — the IVT transmission does the rest). */
 class JD68 extends AudioWorkletProcessor{
   static get parameterDescriptors(){ return [
-    {name:'rpm',defaultValue:850,minValue:300,maxValue:2600,automationRate:'k-rate'},
+    {name:'rpm',defaultValue:850,minValue:60,maxValue:2600,automationRate:'k-rate'},
     {name:'load',defaultValue:0,minValue:0,maxValue:1,automationRate:'k-rate'},
     {name:'boost',defaultValue:0,minValue:0,maxValue:1,automationRate:'k-rate'},
     {name:'gain',defaultValue:0,minValue:0,maxValue:1,automationRate:'k-rate'}]; }

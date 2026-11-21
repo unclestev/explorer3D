@@ -34,7 +34,7 @@ const ENG={
 };
 const A={ctx:null,nodes:{},ready:false,failed:false,rpm:700,gear:0,shiftT:0,boost:0,gainNow:{},key:null};
 const engKey=()=>mode==='tractor'?'jd68':typeof CARSPEC!=='undefined'?CARSPEC.sound:null;
-function wanted(){ return on&&!document.hidden&&!!ENG[engKey()]&&(mode==='car'||mode==='tractor'); }
+function wanted(){ return on&&!document.hidden&&!!ENG[engKey()]&&(mode==='car'||mode==='tractor')&&!(window.IGN&&IGN.state==='off'); }   // js/enh/ignition.js: engine switched off
 
 // iPhone only lets sound start inside a tap, so the context is created and resumed right in the tap handler;
 // the engines (an AudioWorklet module) load a moment later.
@@ -49,7 +49,7 @@ function start(){
   A.bus=A.ctx.createBiquadFilter(); A.bus.type='lowpass'; A.bus.frequency.value=20000; A.bus.Q.value=.5;
   A.boom=A.ctx.createBiquadFilter(); A.boom.type='peaking'; A.boom.frequency.value=110; A.boom.Q.value=.9; A.boom.gain.value=0;
   A.bus.connect(A.boom); A.boom.connect(A.ctx.destination);
-  A.ctx.audioWorklet.addModule('js/enh/engine-worklet.js?v=4').then(()=>{
+  A.ctx.audioWorklet.addModule('js/enh/engine-worklet.js?v=5').then(()=>{
     for(const k of Object.keys(ENG)){
       const n=new AudioWorkletNode(A.ctx,ENG[k].proc||k,{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2]});
       n.connect(A.bus); A.nodes[k]=n; A.gainNow[k]=0; }
@@ -114,6 +114,8 @@ FRAME_HOOKS.push(function engineSound(dt){
   const want=wanted(), key=engKey(), t=A.ctx.currentTime;
   if(key!==A.key){ A.key=key; const E=ENG[key]; A.rpm=E?(E.idle||0):700; A.gear=0; A.boost=0; A.load=0; }
   const e=ENG[key]?engine(ENG[key],dt||.016):null;
+  // starting / stopping the engine (js/enh/ignition.js): cranking, catching and winding down override the revs
+  if(e&&window.IGN&&!ENG[key].ev){ const r=IGN.rpm(ENG[key].idle||700); if(r!==null){ A.rpm=e.rpm=r; e.load=IGN.state==='crank'?.15:0; e.boost=0; A.boost=0; } }
   for(const k of Object.keys(A.nodes)){
     const P=A.nodes[k].parameters, g=(want&&k===key)?ENG[k].gain:0;
     if(g>0&&e){ P.get('rpm').setTargetAtTime(e.rpm,t,.03); P.get('load').setTargetAtTime(e.load,t,.05);

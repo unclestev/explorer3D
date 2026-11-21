@@ -62,8 +62,12 @@
           if(shLearn.step==='d'){ shLearn.step='r'; say('Now move the shifter to 2nd (that will be Reverse)',6000); }
           else { cfg[g.id]=Object.assign(cfg[g.id]||{},{shift:{d:shLearn.d,r:shLearn.r}}); save(); shLearn=null; shUsed=true; showRow(); say('⚙️ Shifter ready: 1st = Drive · 2nd = Reverse · middle = Neutral',4200); }
           break; } }
-      else if(learn){ for(let i=0;i<bs.length;i++) if(down(i)&&!prevB[i]){ cfg[g.id]=Object.assign(cfg[g.id]||{},{view:i}); save(); learn=false; showRow(); say('🎥 Wheel button '+(i+1)+' now switches chase / cockpit view',3600); break; } }
-      else if(cfg[g.id]&&cfg[g.id].view!=null){ const v=cfg[g.id].view; if(down(v)&&!prevB[v]&&window.COCKPIT) COCKPIT.toggle(); }
+      else if(learn){ for(let i=0;i<bs.length;i++) if(down(i)&&!prevB[i]){ const o={}; o[learn]=i; cfg[g.id]=Object.assign(cfg[g.id]||{},o); save();
+          say(learn==='start'?'🔑 Wheel button '+(i+1)+' now starts and stops the engine':'🎥 Wheel button '+(i+1)+' now switches chase / cockpit view',3600); learn=false; showRow(); break; } }
+      else { if(cfg[g.id]&&cfg[g.id].view!=null){ const v=cfg[g.id].view; if(down(v)&&!prevB[v]&&window.COCKPIT) COCKPIT.toggle(); }
+        // engine start / stop (owner 2026-11-21): the Enter button in the middle of the G29's red dial — button 24 counting
+        // from 1 on the G29's usual numbering — or whichever button was set in ⚙️ (Start button). js/enh/ignition.js
+        const sb=cfg[g.id]&&cfg[g.id].start!=null?cfg[g.id].start:23; if(down(sb)&&!prevB[sb]&&window.IGN) IGN.button(); }
       // gear selector: the shifter when it's been used (otherwise D, or R after both paddles together)
       if(!shLearn&&!learn){ const sh=(cfg[g.id]&&cfg[g.id].shift)||{d:12,r:13};
         if(down(sh.d)||down(sh.r)) shUsed=true;
@@ -90,10 +94,11 @@
   function showRow(){ const g0=find(); document.body.classList.toggle('wheel',!!g0);
     const row=document.getElementById('wheelRow'); if(!row) return; const g=g0;
     if(g) seen=true; row.style.display=seen?'':'none';
-    const s=document.getElementById('wheelStat'); if(s) s.textContent=!g?'Not connected':cal?'Setting up…':shLearn?'Move the shifter to '+(shLearn.step==='d'?'1st (Drive)':'2nd (Reverse)'):learn?'Press the wheel button you want for the view':cfg[g.id]&&cfg[g.id].gas?'Ready · gear '+sel+(cfg[g.id].shift?' · shifter set':'')+(cfg[g.id].view!=null?' · view button '+(cfg[g.id].view+1):''):'Pedals not set up'; }
+    const s=document.getElementById('wheelStat'); if(s) s.textContent=!g?'Not connected':cal?'Setting up…':shLearn?'Move the shifter to '+(shLearn.step==='d'?'1st (Drive)':'2nd (Reverse)'):learn?(learn==='start'?'Press the wheel button you want to start / stop the engine':'Press the wheel button you want for the view'):cfg[g.id]&&cfg[g.id].gas?'Ready · gear '+sel+(cfg[g.id].shift?' · shifter set':'')+(cfg[g.id].view!=null?' · view button '+(cfg[g.id].view+1):'')+' · start button '+((cfg[g.id].start!=null?cfg[g.id].start:23)+1):'Pedals not set up'; }
   addEventListener('gamepadconnected',showRow); addEventListener('gamepaddisconnected',showRow);
   const btn=document.getElementById('wheelBtn'); if(btn) btn.addEventListener('click',e=>{ e.stopPropagation(); startCal(); });
-  const vb=document.getElementById('wheelViewBtn'); if(vb) vb.addEventListener('click',e=>{ e.stopPropagation(); if(!find()){ say('Turn the wheel or press a pedal so the browser sees it, then try again'); return; } learn=true; prevB=[]; showRow(); say('Press the button on the wheel you want to switch the view',5000); });
+  const vb=document.getElementById('wheelViewBtn'); if(vb) vb.addEventListener('click',e=>{ e.stopPropagation(); if(!find()){ say('Turn the wheel or press a pedal so the browser sees it, then try again'); return; } learn='view'; prevB=[]; showRow(); say('Press the button on the wheel you want to switch the view',5000); });
+  const stb=document.getElementById('wheelStartBtn'); if(stb) stb.addEventListener('click',e=>{ e.stopPropagation(); if(!find()){ say('Turn the wheel or press a pedal so the browser sees it, then try again'); return; } learn='start'; prevB=[]; showRow(); say('Press the button on the wheel you want to start and stop the engine',5000); });
   const sb=document.getElementById('wheelShiftBtn'); if(sb) sb.addEventListener('click',e=>{ e.stopPropagation(); if(!find()){ say('Turn the wheel or press a pedal so the browser sees it, then try again'); return; }
     learn=false; shLearn={step:'d'}; prevB=[]; showRow(); say('Shifter setup: move the shifter to 1st (that will be Drive)',6000); });
   showRow();

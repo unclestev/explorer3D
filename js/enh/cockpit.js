@@ -766,6 +766,7 @@ function applyShadows(){ const c=CK.cab; if(!c) return; const want=(typeof QL===
 
 /* ---------- instruments: data ---------- */
 function engineState(c,dt){ const A=window.SOUND&&SOUND.state;
+  if(window.IGN&&IGN.state==='off') return {rpm:0,gear:0};                   // engine switched off (js/enh/ignition.js)
   if(A&&A.ready&&A.key===c.P.eng&&mode==='car') return {rpm:A.rpm,gear:A.gear};
   const E=window.SOUND&&SOUND.ENG&&SOUND.ENG[c.P.eng]; const v=Math.abs(S.v||0), gas=Math.max(0,S.gas||0);
   if(!E||!E.gears) return {rpm:700+v*45,gear:0};
