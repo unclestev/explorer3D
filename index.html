@@ -20,10 +20,12 @@
 <link href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/3.6.2/maplibre-gl.css" rel="stylesheet">
 <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>window.THREE||document.write('<script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"><\/script>')</script>
-<link href="css/style.css?v=36" rel="stylesheet">
+<link href="css/style.css?v=37" rel="stylesheet">
 </head>
 <body>
 <div id="load">Loading map…</div>
+<script>/* ⚡ arriving from a teleport: the loading screen already looks like the warp (js/enh/teleport.js takes over) */
+try{ if(localStorage.getItem('ydStartOnce')==='tp'){ const l=document.getElementById('load'); l.textContent='⚡ Teleporting…'; l.style.background='#06091c'; } }catch(e){}</script>
 <div id="toast"></div>
 <div id="map"></div>
 <div id="tint"></div><div id="fog"></div>
@@ -96,10 +98,10 @@
 <script src="js/enh/atmos.js?v=22"></script>
 <script src="js/enh/textures.js?v=7"></script>
 <script src="js/enh/search.js?v=17"></script>
-<script src="js/enh/teleport.js?v=2"></script>
+<script src="js/enh/teleport.js?v=3"></script>
 <script src="js/enh/autopilot.js?v=15"></script>
 <script src="js/enh/vehicles.js?v=17"></script>
-<script src="js/enh/traffic.js?v=27"></script>
+<script src="js/enh/traffic.js?v=28"></script>
 <script src="js/enh/settings.js?v=22"></script>
 <script src="js/enh/progress.js?v=18"></script>
 <script src="js/enh/challenges.js?v=17"></script>

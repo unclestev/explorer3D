@@ -11,20 +11,26 @@
 const fx=document.createElement('div'); fx.id='tpFx'; const cv=document.createElement('canvas'); fx.appendChild(cv);
 const msg=document.createElement('div'); msg.className='tpMsg'; fx.appendChild(msg); document.body.appendChild(fx);
 let anim=null;
-// the warp: streaks from the middle, faster and longer as k rises 0 → 1, with a white bloom that covers the screen at the end
-function warp(dur,out,done){ const W=cv.width=innerWidth*Math.min(2,devicePixelRatio||1), H=cv.height=innerHeight*Math.min(2,devicePixelRatio||1), x=cv.getContext('2d');
-  const N=180, st=[...Array(N)].map(()=>({a:Math.random()*Math.PI*2,r:Math.random(),w:.6+Math.random()*1.8,h:190+Math.random()*80}));
-  fx.classList.add('on'); const t0=performance.now(); cancelAnimationFrame(anim);
-  const step=now=>{ let k=Math.min(1,(now-t0)/dur); const e=out?k*k:1-(1-k)*(1-k), q=out?e:1-e;   // q: how far into the warp (1 = all white)
-    x.clearRect(0,0,W,H); const cx=W/2, cy=H/2, R=Math.hypot(cx,cy);
-    x.fillStyle=`rgba(8,10,30,${Math.min(.85,q*1.4)})`; x.fillRect(0,0,W,H);
-    for(const s of st){ const r0=R*(s.r*(1-q*.85)+q*.15)*(.15+.85*s.r), len=R*(.04+q*.9)*(.4+s.r);
+/* the warp (owner 2026-11-22: "keep the teleporting visual until we are ready ... no bright white screen ... toned down"):
+   light streaks rushing out of the middle over a deep blue-black, with a soft blue glow. Q runs 0 → 1 into the warp and
+   back out; it holds at 1 for as long as the trip takes (the whole reload included), so there's never a blank screen */
+const W={Q:0,Qt:0,rate:1,t0:0,st:null,onPeak:null,onOut:null};
+function warpRun(){ if(anim) return; fx.classList.add('on'); W.t0=W.t0||performance.now(); let last=performance.now();
+  if(!W.st) W.st=[...Array(170)].map(()=>({a:Math.random()*Math.PI*2,p:Math.random(),v:.25+Math.random()*.6,w:.6+Math.random()*1.6,h:195+Math.random()*70}));
+  const step=now=>{ const dt=Math.min(.05,(now-last)/1000); last=now;
+    W.Q+=Math.sign(W.Qt-W.Q)*Math.min(Math.abs(W.Qt-W.Q),dt*W.rate);
+    const D=Math.min(2,devicePixelRatio||1), w=Math.round(innerWidth*D), h=Math.round(innerHeight*D); if(cv.width!==w||cv.height!==h){ cv.width=w; cv.height=h; }
+    const x=cv.getContext('2d'), q=W.Q*W.Q*(3-2*W.Q), cx=w/2, cy=h/2, R=Math.hypot(cx,cy), sp=.15+q*1.6;
+    x.clearRect(0,0,w,h); x.fillStyle=`rgba(6,9,28,${.9*q})`; x.fillRect(0,0,w,h);
+    for(const s of W.st){ s.p=(s.p+dt*s.v*sp)%1; const r0=R*(.03+s.p*s.p*1.05), len=R*(.02+q*.28)*(.3+s.p);
       const c=Math.cos(s.a), si=Math.sin(s.a), g=x.createLinearGradient(cx+c*r0,cy+si*r0,cx+c*(r0+len),cy+si*(r0+len));
-      g.addColorStop(0,`hsla(${s.h},100%,80%,0)`); g.addColorStop(1,`hsla(${s.h},100%,${70+q*25}%,${.25+.75*q})`);
-      x.strokeStyle=g; x.lineWidth=s.w*(1+q*3)*(W/1000); x.beginPath(); x.moveTo(cx+c*r0,cy+si*r0); x.lineTo(cx+c*(r0+len),cy+si*(r0+len)); x.stroke(); }
-    const b=x.createRadialGradient(cx,cy,0,cx,cy,R*(.1+q*1.1)); b.addColorStop(0,`rgba(255,255,255,${Math.min(1,q*1.2)})`); b.addColorStop(.6,`rgba(190,220,255,${q*.8})`); b.addColorStop(1,'rgba(150,190,255,0)');
-    x.fillStyle=b; x.fillRect(0,0,W,H); if(q>.92){ x.fillStyle=`rgba(255,255,255,${(q-.92)/.08})`; x.fillRect(0,0,W,H); }
-    if(k<1) anim=requestAnimationFrame(step); else if(done) done(); };
+      g.addColorStop(0,`hsla(${s.h},90%,70%,0)`); g.addColorStop(1,`hsla(${s.h},90%,68%,${(.15+.55*q)*Math.min(1,s.p*3)})`);
+      x.strokeStyle=g; x.lineWidth=s.w*(1+q*1.8)*D; x.beginPath(); x.moveTo(cx+c*r0,cy+si*r0); x.lineTo(cx+c*(r0+len),cy+si*(r0+len)); x.stroke(); }
+    const b=x.createRadialGradient(cx,cy,0,cx,cy,R*(.12+q*.45)); b.addColorStop(0,`rgba(170,200,255,${.32*q})`); b.addColorStop(.5,`rgba(90,120,230,${.14*q})`); b.addColorStop(1,'rgba(40,60,160,0)');
+    x.fillStyle=b; x.fillRect(0,0,w,h);
+    if(W.Q>=.999&&W.Qt===1&&W.onPeak){ const f=W.onPeak; W.onPeak=null; f(); }
+    if(W.Q<=.001&&W.Qt===0){ anim=null; fx.classList.remove('on','dim','msg'); x.clearRect(0,0,w,h); if(W.onOut){ const f=W.onOut; W.onOut=null; f(); } return; }
+    anim=requestAnimationFrame(step); };
   anim=requestAnimationFrame(step); }
 function whoosh(up){ const A=window.SOUND&&SOUND.state; if(!A||!A.ctx||!SOUND.on||A.ctx.state!=='running') return;
   try{ const c=A.ctx, t=c.currentTime, n=c.sampleRate*1.6|0, b=c.createBuffer(1,n,c.sampleRate), d=b.getChannelData(0); for(let i=0;i<n;i++) d[i]=Math.random()*2-1;
@@ -73,12 +79,12 @@ async function teleport(p){
   fx.classList.remove('msg'); whoosh(true);
   try{ if(window.SAVEPOS) SAVEPOS.save(true); localStorage.setItem('ydTp',JSON.stringify(to)); localStorage.setItem('ydStartOnce','tp'); }catch(e){}
   if(window.SAVEPOS&&SAVEPOS.stop) SAVEPOS.stop();                  // don't let the old spot be saved over the trip
-  warp(1300,true,()=>setTimeout(()=>location.reload(),120)); }
+  W.Qt=1; W.rate=1/1.2; W.onPeak=()=>location.reload(); warpRun(); }
 YD.teleport=teleport;
 
-// arriving: start in the white flash and come out of it once the map is drawn there and the car is on its road
-if(typeof START!=='undefined'&&START.tp){ fx.classList.add('on'); const x=cv.getContext('2d'); cv.width=innerWidth; cv.height=innerHeight; x.fillStyle='#fff'; x.fillRect(0,0,cv.width,cv.height);
+// arriving: already deep in the warp (picking up where the departure left off), and out of it once the map is drawn here
+if(typeof START!=='undefined'&&START.tp){ W.Q=W.Qt=1; fx.classList.add('on'); warpRun();
   const t0=Date.now(), wait=()=>{ const ready=typeof styleReady!=='undefined'&&styleReady&&map.loaded&&map.loaded();
-    if((ready&&Date.now()-t0>1200)||Date.now()-t0>8000){ whoosh(false); warp(1600,false,()=>fx.classList.remove('on','dim')); } else setTimeout(wait,200); };
+    if((ready&&Date.now()-t0>900)||Date.now()-t0>9000){ whoosh(false); W.rate=1/1.5; W.Qt=0; } else setTimeout(wait,200); };
   setTimeout(wait,300); }
 })();

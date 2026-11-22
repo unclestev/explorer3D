@@ -141,6 +141,11 @@ function drive(a,dt,px,py,pv,ph){ const B=BB(), ACC=ACCF();
 
 /* ---------- is a building between this car and the camera? ---------- */
 function hiddenByBuilding(a,camX,camY,camH){
+  // the buildings are already drawn depth-only in the car layer (OCC below), which hides any part of a car or sign behind
+  // one exactly: no need to walk the sight line here (owner 2026-11-22: freezes downtown LA — these checks, for every
+  // car and every street sign, were ~30 ms a frame among the tall buildings). Still used when the blockers are off
+  // (traffic switched off) or the thing is past their reach.
+  if(OCC.mesh&&OCC.mesh.visible&&OCC.at&&Math.hypot(a.px-OCC.at[0]*MLNG,a.py-OCC.at[1]*MLAT)<640) return false;
   if(typeof QGEO==='function'&&QGEO()) return hiddenGeo(a,camX,camY,camH);   // terrain on (screen queries stall the GPU) or cockpit (each screen query ~10 ms there: the pitched view covers km of buildings)
   let p; try{ p=map.project([a.px/MLNG,a.py/MLAT]); }catch(e){ return false; }
   if(p.x<-50||p.y<-50||p.x>innerWidth+50||p.y>innerHeight+50) return true;
