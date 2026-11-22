@@ -637,12 +637,19 @@ function stalksEx(grp,colM){
   const face=(w,h,draw)=>{ const T=canvasTex(512,Math.round(512*h/w)), x=T.x; x.fillStyle='#121214'; x.fillRect(0,0,512,T.c.height);
     x.strokeStyle=x.fillStyle='#c9cdd2'; x.lineWidth=7; x.lineCap=x.lineJoin='round'; draw(x,512,T.c.height); return new THREE.MeshBasicMaterial({map:T.t}); };
   for(const s of [-1,1]){
-    const piv=new THREE.Group(); piv.position.set(s*.05,.062,-.10); grp.add(piv);   // high on the column: you see them through the wheel's upper openings
-    mesh(bar([[0,0,0],[s*.035,-.002,.01],[s*.07,-.005,.02]],[.013,.016],.013,[0,1,0],6,10),armM,piv);   // short: the whole stalk stays inside the rim (owner: "they stick out too far")   // the arm, out and a little back toward you
-    const L=.072, hx=s*(.07+L/2-.006), hd=new THREE.Group(); hd.position.set(hx,-.006,.026); hd.rotation.z=-s*.06; piv.add(hd);   // its end stops just inside the rim, as in the photo
-    const HH=.036, D=.026;
-    mesh(rbox(L,HH,D,.005,.007),head,hd);                                                              // the end: a squared-off block, flat at the tip
-    const FW=L*.9, FH=HH*.86, fz=D/2+.0008;                                                            // the symbol face, just proud of the block (it used to sit inside it)
+    const piv=new THREE.Group(); piv.position.set(s*.05,.018,-.10); grp.add(piv);   // the pivot inside the column shroud (the lever swings on it)
+    // owner 2026-11-21: "the arm comes up from the steering column at ~50 degree angle and seamlessly grows larger into the
+    // button portion ... round the button area a little": one lofted piece — it leaves the column rising at about 50°, bends
+    // out level and swells smoothly into a rounded head, closed off in a round tip
+    const C=new THREE.CatmullRomCurve3([[0,0,0],[s*.022,.026,.004],[s*.05,.045,.012],[s*.09,.052,.02],[s*.15,.054,.024]].map(p=>new V3(...p)),false,'centripetal');
+    const sq=(c,k)=>Math.sign(c)*Math.pow(Math.abs(c),k), Z=new V3(0,0,1);
+    const sz=v=>{ const t=v<.38?0:v>.72?1:(()=>{ const u=(v-.38)/.34; return u*u*(3-2*u); })(), cap=v>.93?Math.sqrt(Math.max(0,1-Math.pow((v-.93)/.07,2))):1;
+      return [lerp(.012,.036,t)*cap,lerp(.012,.027,t)*cap]; };
+    mesh(grid(24,40,(u,v)=>{ const p=C.getPoint(v), T=C.getTangent(v), N=new V3().crossVectors(Z,T).normalize(), B=new V3().crossVectors(T,N).normalize(), [h,d]=sz(v), a=u*Math.PI*2;
+      const q=p.clone().addScaledVector(N,sq(Math.sin(a),.6)*h/2).addScaledVector(B,sq(Math.cos(a),.6)*d/2); return [q.x,q.y,q.z]; }),head,piv);
+    const hc=C.getPoint(.8), L=.058, hd=new THREE.Group(); hd.position.set(hc.x,hc.y,hc.z); piv.add(hd);    // the head's middle: the symbol face sits on it
+    const HH=.036, D=.027;
+    const FW=L*.86, FH=HH*.62, fz=D/2+.0006;   // the symbol face on the head's rounded front, a little in from its edges                                                            // the symbol face, just proud of the block (it used to sit inside it)
     if(s<0){ // turn signals / lights (photos): auto high beam and the headlamp on the left, the ⇦ ⇨ arrows on the right
       const m=face(FW,FH,(x,W,H)=>{ x.lineWidth=8;
         const lamp=(cx,cy,r,a)=>{ x.beginPath(); x.arc(cx,cy,r,-Math.PI/2,Math.PI/2); x.closePath(); x.stroke();
@@ -651,7 +658,7 @@ function stalksEx(grp,colM){
         lamp(120,H*.3,34,true); lamp(120,H*.72,34,false);                                              // auto high beam over the headlamp
         const ar=(cx,cy,dir)=>{ x.beginPath(); x.moveTo(cx+dir*38,cy); x.lineTo(cx,cy-30); x.lineTo(cx,cy-13); x.lineTo(cx-dir*32,cy-13); x.lineTo(cx-dir*32,cy+13); x.lineTo(cx,cy+13); x.lineTo(cx,cy+30); x.closePath(); x.stroke(); };
         ar(300,H/2,-1); ar(410,H/2,1); });
-      const f=mesh(new THREE.PlaneGeometry(FW,FH),m,hd,false,false); f.position.z=fz;
+      const f=mesh(rrGeo(FW,FH,FH*.45),m,hd,false,false); f.position.z=fz;
       sigStalk={piv,k:0}; }
     else { // wipers (photo): the ridged thumbwheel set in the face by the column, the speed marks beside it, then the wiper / washer symbols in a 2 × 2 block
       const m=face(FW,FH,(x,W,H)=>{ x.lineWidth=7;
@@ -660,13 +667,18 @@ function stalksEx(grp,colM){
         const wip=(cx,cy,rear,spray)=>{ x.beginPath(); x.arc(cx,cy+24,30,Math.PI*1.12,Math.PI*1.88); x.stroke(); x.beginPath(); x.moveTo(cx,cy+24); x.lineTo(cx+16,cy-2); x.stroke();
           if(rear) x.strokeRect(cx-34,cy-20,68,50); if(spray) for(const d of [-12,0,12]){ x.beginPath(); x.moveTo(cx+d*.6,cy+28); x.lineTo(cx+d*1.4,cy+40); x.stroke(); } };
         wip(260,H*.26,false,false); wip(380,H*.26,false,true); wip(260,H*.68,true,false); wip(380,H*.68,true,true); });
-      const f=mesh(new THREE.PlaneGeometry(FW,FH),m,hd,false,false); f.position.z=fz;
+      const f=mesh(rrGeo(FW,FH,FH*.45),m,hd,false,false); f.position.z=fz;
       const RT=canvasTex(128,32), r=RT.x; r.fillStyle='#0c0c0d'; r.fillRect(0,0,128,32); r.fillStyle='#4a4b50'; for(let i=0;i<128;i+=10) r.fillRect(i,0,4,32);   // ridges along the wheel's axis
       RT.t.wrapS=RT.t.wrapT=THREE.RepeatWrapping; RT.t.repeat.set(3,1);
       const roll=mesh(new THREE.CylinderGeometry(.009,.009,.019,28,1),M({map:RT.t,roughness:.45,metalness:.25}),hd);   // axis across the stalk: you roll it with your thumb, ridges run across it
       roll.rotation.z=Math.PI/2; roll.position.set(-s*(FW/2-.0105)*-1*-1,0,fz-.003); roll.position.x=-(FW/2)+.0105; } } }
+// the compass beside the location panel in the cockpit (see css #compass): follows the panel's width as its text changes
+(window.YD&&YD.onTick?YD.onTick:(ms,f)=>setInterval(f,ms))(250,function compassSpot(){ if(!CK.on) return; const h=document.getElementById('hud'), r=h&&h.offsetParent&&!document.body.classList.contains('noinfo')?h.getBoundingClientRect():null;
+  const v=r&&r.width?Math.round(r.right+8)+'px':''; if(document.body.style.getPropertyValue('--cx')!==v){ if(v) document.body.style.setProperty('--cx',v); else document.body.style.removeProperty('--cx'); } });
+function rrGeo(w,h,r){ const s=new THREE.Shape(), x=w/2, y=h/2; s.moveTo(-x+r,-y); s.lineTo(x-r,-y); s.quadraticCurveTo(x,-y,x,-y+r); s.lineTo(x,y-r); s.quadraticCurveTo(x,y,x-r,y);
+  s.lineTo(-x+r,y); s.quadraticCurveTo(-x,y,-x,y-r); s.lineTo(-x,-y+r); s.quadraticCurveTo(-x,-y,-x+r,-y); const g=new THREE.ShapeGeometry(s,8); uvFit(g); return g; }
 function stalkStep(dt){ const st=sigStalk; if(!st) return; const d=window.SIG?SIG.dir:0;
-  st.k+=(d-st.k)*Math.min(1,dt*14); st.piv.rotation.z=-.12*st.k; }   // right signal: the end goes up; left: down
+  st.k+=(d-st.k)*Math.min(1,dt*14); st.piv.rotation.z=-.2*st.k; }   // right signal: the lever swings up; left: down (owner: "show the lever shift up or down")
 // Explorer ST wheel (owner 2026-11-21, a photo of the real one): thick round rim in perforated leather; a big airbag pad,
 // wider at the top, with the blue oval; a button panel on each side spoke framed in silver; a silver lower spoke round an
 // open trapezoid, with the red ST badge at the bottom

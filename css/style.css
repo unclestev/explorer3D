@@ -238,3 +238,6 @@ body.wheel #ctl{display:none}
 /* the car picker as a list, one car per line (owner) */
 #carPick{flex-direction:column;flex-wrap:nowrap;gap:2px}
 #carPick button{flex:0 0 auto;width:100%;text-align:left;padding:9px 12px}
+/* cockpit view: the compass sits at the top, just right of the location panel, at half size (owner 2026-11-21); the
+   chase view keeps it bottom centre. --cx is set from the panel's right edge (js/enh/cockpit.js) */
+body.cockpit #compass{left:var(--cx,var(--sl));top:var(--st);bottom:auto;transform:scale(.5);transform-origin:0 0}
