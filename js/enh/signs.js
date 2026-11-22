@@ -243,6 +243,7 @@ FRAME_HOOKS.push(function streetSigns(dt){
    Stop: 0.76 m octagon, 2.1 m up. Signal: post-mounted head 1.05 m tall, top at 4.4 m, lamps follow the same cycle as
    the icons. Crossbuck: two 1.22 m boards, centre 2.7 m up. ---------- */
 const PTS=[], CS={g:null,map:new Map(),dirty:false,occT:0,vis:null,mats:null};
+window.SIGN_PTS=PTS;   // stop signs, signals, crossbucks (m): the parking sensors look for them too
 function csMats(){ if(CS.mats) return CS.mats;
   const tex=(w,h,draw)=>{ const c=document.createElement('canvas'); c.width=w; c.height=h; draw(c.getContext('2d'),w,h); const t=new THREE.CanvasTexture(c); t.anisotropy=4; return t; };
   const stop=tex(128,128,(x)=>{ octa(x,64,64,63); x.fillStyle='#fff'; x.fill(); octa(x,64,64,56); x.fillStyle='#c8102e'; x.fill();

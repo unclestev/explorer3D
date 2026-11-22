@@ -76,7 +76,7 @@ function build(){
   const clear=(x,y,g)=>{ if(typeof roadClear!=='function') return true; const q=L(x,y); return roadClear(q[0],q[1])>=g; };
   const ok=(x,y,self,m,pad)=>Math.hypot(x-ox,y-oy)<R&&!onRoad(x,y,self,m)&&!inBuilding(x,y,pad==null?1:pad)&&clear(x,y,Math.min(m,.6));
 
-  const out=[], poles=new Map(), mailFor=new Set();
+  const out=[], obs=[], poles=new Map(), mailFor=new Set();
   const QL0=Q3(0,1,2);
   for(const s of near){ const [x1,y1,x2,y2,half,name,cls,along,lid]=s; if(/motorway|track|path|service/.test(cls)) continue;
     const len=Math.hypot(x2-x1,y2-y1); if(len<.5) continue; const ux=(x2-x1)/len, uy=(y2-y1)/len, nx=uy, ny=-ux;   // n = right of travel
@@ -102,7 +102,7 @@ function build(){
       // street lights: one side, arm out over the road, lamp lit after dark
       const big=/trunk|primary|secondary/.test(cls), stepL=big?38:52;
       each(stepL,7,(px,py,d)=>{ const sd=big&&Math.floor(d/stepL)%2?-side:side, x=px+nx*sd*(half+1.1), y=py+ny*sd*(half+1.1); if(!ok(x,y,s,1.2,0)) return;
-        out.push(F(rect(L,x,y,ux,uy,.22,.22),{k:'lpole',b:0,h:8.2,c:'#6d7278'}));
+        out.push(F(rect(L,x,y,ux,uy,.22,.22),{k:'lpole',b:0,h:8.2,c:'#6d7278'})); obs.push([x,y,.16]);
         const ax=x-nx*sd*1.1, ay=y-ny*sd*1.1; out.push(F(rect(L,ax,ay,nx,ny,2.2,.12),{k:'lpole',b:7.9,h:8.05,c:'#6d7278'}));
         out.push(F(rect(L,x-nx*sd*2.1,y-ny*sd*2.1,nx,ny,.7,.32),{k:'lamp',b:7.75,h:7.95,c:'#d7dade'})); });
       // sidewalks both sides (a concrete strip a little back from the curb), drawn under the roads so crossings stay clear
@@ -110,15 +110,15 @@ function build(){
         if(Math.hypot(a[0]-ox,a[1]-oy)<R+40) out.push(Line([L(a[0],a[1]),L(b[0],b[1])],{k:'walk'})); }
       // fire hydrants now and then
       each(85,31,(px,py,d)=>{ const sd=hash(lid,Math.round(d))<.5?1:-1, x=px+nx*sd*(half+.9), y=py+ny*sd*(half+.9); if(!ok(x,y,s,.8,0)) return;
-        out.push(F(octa(L,x,y,.17),{k:'hyd',b:0,h:.75,c:'#c62828'})); out.push(F(octa(L,x,y,.11),{k:'hyd',b:.75,h:.85,c:'#c62828'})); });
+        out.push(F(octa(L,x,y,.17),{k:'hyd',b:0,h:.75,c:'#c62828'})); obs.push([x,y,.2]); out.push(F(octa(L,x,y,.11),{k:'hyd',b:.75,h:.85,c:'#c62828'})); });
       // mailboxes at the curb in front of houses on residential streets
       if(/minor|tertiary/.test(cls)) for(const b of cents){ if(mailFor.has(b)||b.a>600) continue;
         const t=(b.cx-x1)*ux+(b.cy-y1)*uy; if(t<0||t>len) continue; const dn=(b.cx-x1)*nx+(b.cy-y1)*ny; if(Math.abs(dn)>half+35||Math.abs(dn)<half+3) continue;
         const sd=Math.sign(dn), x=x1+ux*t+nx*sd*(half+.7), y=y1+uy*t+ny*sd*(half+.7); if(!ok(x,y,s,.6)) continue; mailFor.add(b);
-        out.push(F(rect(L,x,y,ux,uy,.1,.1),{k:'mail',b:0,h:1.02,c:'#3a2f26'}));
+        out.push(F(rect(L,x,y,ux,uy,.1,.1),{k:'mail',b:0,h:1.02,c:'#3a2f26'})); obs.push([x,y,.25]);
         out.push(F(rect(L,x,y,nx,ny,.48,.2),{k:'mail',b:1.0,h:1.22,c:['#202326','#2b3a55','#5a5d61','#7a2321'][Math.floor(hash(b.cx|0,b.cy|0)*4)]})); }
     } }
-  RS.n=out.length;
+  RS.n=out.length; RS.obs=obs.map(([x,y,r])=>{ const q=L(x,y); return [q[0]*MLNG,q[1]*MLAT,r]; });   // street lights, hydrants and mailboxes, for the parking sensors (m)
   const src=map.getSource('roadside'); if(src) src.setData({type:'FeatureCollection',features:out});
   RS.at=[S.lng,S.lat]; RS.geoT=roadGeo.t; dirty=true;
 }

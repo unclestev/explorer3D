@@ -442,8 +442,13 @@ function rearLen(){ const L=LAMPS[specKey(CARKEY)]||LAMPS.explorer; return (L.fr
 // distance (m) from the rear bumper to the nearest building or car behind, out to 2.4 m; null if clear
 function rearGap(){ const h=S.hdg*DEG, fx=Math.sin(h), fy=Math.cos(h), rx=Math.cos(h), ry=-Math.sin(h), px=S.lng*MLNG, py=S.lat*MLAT, Lr=rearLen();
   const T=window.TRAFFIC&&TRAFFIC.state, cars=(T&&T.on&&T.agents||[]).filter(a=>a.path&&a.mesh&&a.mesh.visible&&Math.hypot(a.px-px,a.py-py)<12);
+  // posts: street lights, hydrants, mailboxes (js/enh/roadside.js) and sign / signal posts (js/enh/signs.js), [x, y, radius] in m
+  const near=(x,y)=>Math.hypot(x-px,y-py)<10, posts=[];
+  for(const o of (window.ROADSIDE&&ROADSIDE.state&&ROADSIDE.state.obs)||[]) if(near(o[0],o[1])) posts.push(o);
+  for(const o of window.SIGN_PTS||[]) if(near(o.x,o.y)) posts.push([o.x,o.y,o.k==='sig'?.2:.1]);
   for(let d=0;d<=2.4;d+=.1) for(const l of [-.95,-.5,0,.5,.95]){ const x=px-fx*(Lr+d)+rx*l, y=py-fy*(Lr+d)+ry*l;
     for(const f of (typeof geoBlocks==='function'?geoBlocks(x/MLNG,y/MLAT):[])) if(typeof contains==='function'&&contains(f.geometry,x/MLNG,y/MLAT)) return d;
+    for(const o of posts) if(Math.hypot(x-o[0],y-o[1])<o[2]+.05) return d;
     for(const a of cars){ const sh=Math.sin(a.hd), ch=Math.cos(a.hd), dx=x-a.px, dy=y-a.py, al=dx*sh+dy*ch, ac=dx*ch-dy*sh; if(Math.abs(al)<2.4&&Math.abs(ac)<1.0) return d; } }
   return null; }
 function beep(len){ const A=window.SOUND&&SOUND.state; if(!A||!A.ctx||!SOUND.on||A.ctx.state!=='running') return;
