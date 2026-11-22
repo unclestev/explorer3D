@@ -675,10 +675,10 @@ function steeringWheel(G,P){
                     :M({color:P.style==='lux'?0x2a2420:0x141416,roughness:.5,normalMap:rep(textures().leather,24,1),normalScale:new THREE.Vector2(.8,.8)});
   // rim: round or flat-bottomed, slightly oval section
   const pts=[]; for(let i=0;i<64;i++){ const a=i/64*Math.PI*2; let x=Math.cos(a)*W.r, y=Math.sin(a)*W.r;
-    if(P.xp){ const c=Math.cos(a), s2=Math.sin(a); x=Math.sign(c)*Math.pow(Math.abs(c),2/2.7)*W.r*1.0; y=Math.sign(s2)*Math.pow(Math.abs(s2),2/2.7)*W.r*.88; }   /* squared-off (photo) */ if(W.flat&&y<-W.r*.80){ y=-W.r*.80-.006*(1-Math.abs(x)/W.r); } pts.push(new V3(x,y,0)); }
+    if(P.xp){ const c=Math.cos(a), s2=Math.sin(a); x=Math.sign(c)*Math.pow(Math.abs(c),2/3.3)*W.r*1.02; y=Math.sign(s2)*Math.pow(Math.abs(s2),2/3.3)*W.r*.84+(s2>0?-.012*Math.pow(Math.abs(c),.5):0); }   /* squared-off (photo) */ if(W.flat&&y<-W.r*.80){ y=-W.r*.80-.006*(1-Math.abs(x)/W.r); } pts.push(new V3(x,y,0)); }
   const curve=new THREE.CatmullRomCurve3(pts,true,'centripetal');
   const rim=mesh(new THREE.TubeGeometry(curve,160,W.rim,14,true),P.ex?perfLeather():rimM,spin); rim.scale.z=1.25;
-  if(P.xp){ const lo=[]; for(let i=0;i<=40;i++){ const t=lerp(.60,.90,i/40); lo.push(curve.getPoint(t)); }     // the lower rim in light grey leather (two-tone, photo)
+  if(P.xp){ const lo=[]; for(let i=0;i<=48;i++){ const t=lerp(.56,.94,i/48); lo.push(curve.getPoint(t)); }     // the lower rim in light grey leather (two-tone, photo)
     const lr=mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(lo),60,W.rim*1.03,14,false),M({color:0xa7a9a8,roughness:.6,normalMap:rep(textures().leather,10,1),normalScale:new THREE.Vector2(.5,.5)}),spin); lr.scale.z=1.25; }
   if(P.style==='classic'){ for(let i=0;i<24;i++){ const a=i/24*Math.PI*2+.13, b=mesh(new THREE.SphereGeometry(W.rim*.6,8,6),rimM,spin); b.position.set(Math.cos(a)*(W.r-W.rim*.85),Math.sin(a)*(W.r-W.rim*.85),0); } }   // finger grips
   if(P.col.stitch&&P.style==='sport'){ const st=M({color:0x5a0a14,roughness:.8}); for(const s of [-1,1]){ const sp=[]; for(let i=0;i<=40;i++){ const a=(s>0?-.55:Math.PI-.55)+i/40*1.1; sp.push(new V3(Math.cos(a)*(W.r),Math.sin(a)*(W.r),W.rim*1.21)); }
@@ -699,6 +699,7 @@ function steeringWheel(G,P){
       const sw=mesh(new THREE.CylinderGeometry(.0105,.0105,.014,20),M({color:0x2a2b2e,roughness:.45,metalness:.5,normalMap:rep(textures().grain,1,4)}),spin);
       sw.rotation.z=Math.PI/2; sw.position.set(s*.086,-.012,-.0035); }                                       // the scroll wheel (axis across)
   } else if(P.ex){ stWheel(spin,W);
+  } else if(P.xp){ xpWheel(spin,W);
   } else {
     const hubM=M({color:P.style==='lux'?0x2a2420:0x161618,roughness:.55,normalMap:rep(textures().leather,P.ex?8:3,P.ex?8:3),normalScale:new THREE.Vector2(P.ex?.15:.5,P.ex?.15:.5)});
     if(P.ex||P.xp){ const bT=canvasTex(256,128), x=bT.x, g=x.createLinearGradient(0,0,0,128); g.addColorStop(0,'#3d6fc4'); g.addColorStop(.5,'#123a8a'); g.addColorStop(1,'#0a2560'); // plain blue oval badge (no lettering)
@@ -781,6 +782,30 @@ function stalkStep(dt){ const st=sigStalk; if(!st) return; const d=window.SIG?SI
 // Explorer ST wheel (owner 2026-11-21, a photo of the real one): thick round rim in perforated leather; a big airbag pad,
 // wider at the top, with the blue oval; a button panel on each side spoke framed in silver; a silver lower spoke round an
 // open trapezoid, with the red ST badge at the bottom
+// Expedition wheel (owner's photo of the 2025 cabin): a big rounded-square pad with the plain oval, wide dark side spokes
+// each carrying a glossy black touch panel with a small lit icon, and light grey leather lower spokes that curve down and
+// out into the grey lower rim
+function xpWheel(spin,W){
+  const dk=M({color:0x1a1b1d,roughness:.55,normalMap:rep(textures().leather,8,8),normalScale:new THREE.Vector2(.18,.18)});
+  const gr=M({color:0xa7a9a8,roughness:.6,normalMap:rep(textures().leather,6,6),normalScale:new THREE.Vector2(.4,.4)});
+  const gloss=M({color:0x070708,roughness:.12,metalness:.3,env:.8});
+  { const sh=new THREE.Shape(), tw=.074, bw=.066, ty=.052, by=-.05, r=.03;         // pad: rounded square, a touch wider at the top
+    sh.moveTo(-tw+r,ty); sh.lineTo(tw-r,ty); sh.quadraticCurveTo(tw,ty,tw,ty-r); sh.lineTo(bw,by+r); sh.quadraticCurveTo(bw,by,bw-r,by);
+    sh.lineTo(-bw+r,by); sh.quadraticCurveTo(-bw,by,-bw,by+r); sh.lineTo(-tw,ty-r); sh.quadraticCurveTo(-tw,ty,-tw+r,ty);
+    const g=new THREE.ExtrudeGeometry(sh,{depth:.022,bevelEnabled:true,bevelThickness:.012,bevelSize:.01,bevelSegments:5,curveSegments:10}); g.translate(0,0,-.036); mesh(g,dk,spin);
+    const bT=canvasTex(256,128), x=bT.x, gg=x.createLinearGradient(0,0,0,128); gg.addColorStop(0,'#3d6fc4'); gg.addColorStop(.5,'#123a8a'); gg.addColorStop(1,'#0a2560');
+    x.clearRect(0,0,256,128); x.fillStyle='#d9dde2'; x.beginPath(); x.ellipse(128,64,124,60,0,0,7); x.fill(); x.fillStyle=gg; x.beginPath(); x.ellipse(128,64,112,50,0,0,7); x.fill();
+    const b=mesh(new THREE.PlaneGeometry(.052,.026),new THREE.MeshBasicMaterial({map:bT.t,transparent:true}),spin,false,false); b.position.set(0,.008,.0012); }
+  for(const s of [-1,1]){
+    const len=W.r*1.02-.07, sp=mesh(rbox(len,.05,.022,.01,.02),dk,spin); sp.position.set(s*(.07+len/2-.01),.004,-.022);   // side spoke out to the rim
+    const pb=mesh(rbox(.044,.04,.006,.002,.008),gloss,spin); pb.position.set(s*.105,.004,-.01);                         // touch panel
+    const T=canvasTex(128,128), x=T.x; x.clearRect(0,0,128,128); x.strokeStyle='#8fb8e8'; x.lineWidth=7; x.beginPath(); x.roundRect?x.roundRect(40,44,48,40,10):x.rect(40,44,48,40); x.stroke();
+    x.fillStyle='#8fb8e8'; x.beginPath(); x.arc(s<0?30:98,28,7,0,7); x.fill();
+    const ic=mesh(new THREE.PlaneGeometry(.036,.036),new THREE.MeshBasicMaterial({map:T.t,transparent:true}),spin,false,false); ic.position.set(s*.105,.004,-.0065); }
+  // lower spokes: light grey, from under the pad curving down and out into the lower rim
+  for(const s of [-1,1]) mesh(bar([[s*.04,-.048,-.022],[s*.065,-.085,-.018],[s*.10,-.115,-.012],[s*.13,-W.r*.80+.01,-.006]],[.032,.024],.014,[0,0,1],24,8),gr,spin);
+  mesh(bar([[-.045,-.05,-.024],[0,-.058,-.024],[.045,-.05,-.024]],.03,.014,[0,0,1],12,8),gr,spin);                   // the band joining them under the pad
+}
 function perfLeather(){ const T=canvasTex(256,256), x=T.x; x.fillStyle='#808080'; x.fillRect(0,0,256,256);
   x.fillStyle='#3a3a3a'; for(let i=0;i<16;i++) for(let j=0;j<16;j++){ x.beginPath(); x.arc(8+i*16+(j%2)*8,8+j*16,3.2,0,7); x.fill(); }   // the little holes
   T.t.wrapS=T.t.wrapT=THREE.RepeatWrapping; T.t.repeat.set(60,3);
