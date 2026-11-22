@@ -50,13 +50,43 @@
     cfg[g.id]=Object.assign(cfg[g.id]||{},{gas:c.out.gas, brake:c.out.brake}); save(); cal=null; live={}; live[c.out.gas.i]=live[c.out.brake.i]=1;
     showRow(); say('🏁 Wheel ready — gas and brake; shifter 1st = Drive, 2nd = Reverse; paddles = turn signals',4200); }
 
+  /* ---------- Xbox (or any standard) controller (owner 2026-11-22: "add support for playing with an Xbox controller
+     connected to a pc ... the same preferred settings as the g29 ... hiding the onscreen steering and accelerator and brake").
+     Used when no wheel is plugged in. Left stick steers (a soft centre for fine control); RT = gas, LT = brake (it only
+     brakes, like the wheel); Y = Drive / Reverse; X = engine start / stop; LB / RB = left / right signal, both = hazards;
+     View (⧉) = chase / cockpit; D-pad or right stick = look around. Standard Gamepad layout, so no setup. */
+  const isPad=g=>g&&g.connected&&g.mapping==='standard'&&!isWheel(g)&&g.axes&&g.axes.length>=4;
+  function findPad(){ for(const g of navigator.getGamepads()) if(isPad(g)) return g; return null; }
+  let padId=null, prevP=[], psel='D', bumpT=null;
+  function readPad(g,dt){
+    if(padId!==g.id){ padId=g.id; prevP=[]; showRow(); say('🎮 Controller connected — RT gas · LT brake · left stick steers · Y Drive / Reverse · LB / RB signals · View = cockpit',5200); }
+    const bs=g.buttons||[], val=i=>bs[i]?(+bs[i].value||(bs[i].pressed?1:0)):0, down=i=>val(i)>.5, hit=i=>down(i)&&!prevP[i];
+    if(hit(3)){ psel=psel==='R'?'D':'R'; say(psel==='R'?'⏪ Reverse':'⏩ Drive',1400); if(window.SOUND&&SOUND.click) try{ SOUND.click(); }catch(e){} }
+    if(hit(2)&&window.IGN) IGN.button();
+    if(hit(8)&&window.COCKPIT) COCKPIT.toggle();
+    const now=performance.now();
+    for(const [b,d] of [[4,-1],[5,1]]) if(hit(b)){
+      if(bumpT&&now-bumpT.t<250&&bumpT.d!==d){ if(window.SIG){ SIG.press(bumpT.d); SIG.hazard(); } bumpT=null; }   // both bumpers: hazards (undo the first one's signal)
+      else { bumpT={t:now,d}; if(window.SIG) SIG.press(d); } }
+    // look around: D-pad (held) or the right stick
+    let hx=(down(15)?1:0)-(down(14)?1:0), hy=(down(12)?1:0)-(down(13)?1:0);
+    const rx=g.axes[2]||0, ry=g.axes[3]||0; if(Math.abs(rx)>.2) hx+=rx*1.2; if(Math.abs(ry)>.2) hy-=ry;
+    if((hx||hy)&&typeof LOOK!=='undefined'){ const ck=window.COCKPIT&&COCKPIT.on, dY=hx*90*dt;
+      LOOK.yaw=((LOOK.yaw+dY)%360+540)%360-180; S.camB=((S.camB+dY)%360+360)%360;
+      LOOK.pitch=Math.max(-55,Math.min(ck?135:12,LOOK.pitch+hy*(ck?70:45)*dt)); dirty=true;
+      const c=document.getElementById('compass'); if(c) c.classList.add('look'); }
+    prevP=bs.map((b,i)=>down(i));
+    let st=g.axes[0]||0; const D=.12; st=Math.abs(st)<D?0:Math.sign(st)*Math.pow((Math.abs(st)-D)/(1-D),1.5);
+    const gp=val(7), bp=val(6), G=gp<.04?0:gp, B=bp<.04?0:bp;
+    return {st:Math.max(-1,Math.min(1,st)), gas:G-B, pedal:G, brake:B, sel:psel, ok:true, pad:true}; }
   // which axis is the hat: the one sitting outside -1..1 when nothing's pressed (G29 ~1.29); remembered per wheel
   const hats={};
   function hatAxis(g){ if(hats[g.id]!=null) return hats[g.id]; const i=g.axes.findIndex(v=>Math.abs(v)>1.05); if(i>=0) hats[g.id]=i; return i; }
   let last=performance.now();
   window.WHEEL={
     read(){ const now=performance.now(), dt=Math.min(.1,(now-last)/1000); last=now;
-      const g=find(); if(!g){ if(pad){ pad=null; showRow(); say('Wheel disconnected'); } return null; }
+      const g=find(); if(!g){ if(pad){ pad=null; showRow(); say('Wheel disconnected'); }
+        const p=findPad(); if(p) return readPad(p,dt); if(padId){ padId=null; showRow(); say('🎮 Controller disconnected'); } return null; }
       if(!pad||pad!==g.id){ pad=g.id; live={}; showRow();
         if(cfg[g.id]&&cfg[g.id].gas) say('🏁 Wheel connected'); else if(!cal){ say('🏁 Wheel connected — set up the pedals in ⚙️ (Wheel)',5000); } }
       // a learned button switches chase / cockpit view (js/enh/cockpit.js); learning = the next button pressed
@@ -99,15 +129,16 @@
       const c=cfg[g.id], gp=c&&c.gas?pedal(g,c.gas):0, bp=c&&c.brake?pedal(g,c.brake):0;
       return {st:Math.max(-1,Math.min(1,st)), gas:gp-bp, pedal:gp, brake:bp, sel, ok:!!(c&&c.gas)};
     },
-    setup:startCal, connected:()=>!!find(), gear:()=>find()&&cfg[pad]&&cfg[pad].gas?sel:null
+    setup:startCal, connected:()=>!!(find()||findPad()), gear:()=>find()&&cfg[pad]&&cfg[pad].gas?sel:(!find()&&findPad()?psel:null)
   };
 
   // ⚙️ row, only shown once a wheel has been seen (keeps the phone panel unchanged)
   // the on-screen steering slider and pedals step aside while a wheel is plugged in (owner 2026-11-20), and come back if it's unplugged
-  function showRow(){ const g0=find(); document.body.classList.toggle('wheel',!!g0);
+  function showRow(){ const g0=find(); document.body.classList.toggle('wheel',!!(g0||findPad()));   // a controller hides the on-screen controls too
     const row=document.getElementById('wheelRow'); if(!row) return; const g=g0;
     if(g) seen=true; row.style.display=seen?'':'none';
-    const s=document.getElementById('wheelStat'); if(s) s.textContent=!g?'Not connected':cal?'Setting up…':shLearn?'Move the shifter to '+(shLearn.step==='d'?'1st (Drive)':'2nd (Reverse)'):learn?(learn==='start'?'Press the wheel button you want to start / stop the engine':'Press the wheel button you want for the view'):cfg[g.id]&&cfg[g.id].gas?'Ready · gear '+sel+(cfg[g.id].shift?' · shifter set':'')+(cfg[g.id].view!=null?' · view button '+(cfg[g.id].view+1):'')+' · start button '+((cfg[g.id].start!=null?cfg[g.id].start:23)+1):'Pedals not set up'; }
+    const s=document.getElementById('wheelStat'); if(s) s.textContent=!g?'Not connected':cal?'Setting up…':shLearn?'Move the shifter to '+(shLearn.step==='d'?'1st (Drive)':'2nd (Reverse)'):learn?(learn==='start'?'Press the wheel button you want to start / stop the engine':'Press the wheel button you want for the view'):cfg[g.id]&&cfg[g.id].gas?'Ready · gear '+sel+(cfg[g.id].shift?' · shifter set':'')+(cfg[g.id].view!=null?' · view button '+(cfg[g.id].view+1):'')+' · start button '+((cfg[g.id].start!=null?cfg[g.id].start:23)+1):'Pedals not set up';
+    if(!g0){ const p=findPad(); if(p){ row.style.display=''; if(s) s.textContent='🎮 Controller · RT gas · LT brake · Y Drive / Reverse · X engine · LB / RB signals · View = cockpit'; } } }
   addEventListener('gamepadconnected',showRow); addEventListener('gamepaddisconnected',showRow);
   const btn=document.getElementById('wheelBtn'); if(btn) btn.addEventListener('click',e=>{ e.stopPropagation(); startCal(); });
   const vb=document.getElementById('wheelViewBtn'); if(vb) vb.addEventListener('click',e=>{ e.stopPropagation(); if(!find()){ say('Turn the wheel or press a pedal so the browser sees it, then try again'); return; } learn='view'; prevB=[]; showRow(); say('Press the button on the wheel you want to switch the view',5000); });
