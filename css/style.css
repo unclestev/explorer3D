@@ -241,3 +241,13 @@ body.wheel #ctl{display:none}
 /* cockpit view: the compass sits at the top, just right of the location panel, at half size (owner 2026-11-21); the
    chase view keeps it bottom centre. --cx is set from the panel's right edge (js/enh/cockpit.js) */
 body.cockpit #compass{left:var(--cx,var(--sl));top:var(--st);bottom:auto;transform:scale(.5);transform-origin:0 0}
+/* ⚡ teleport button in the search results, and the warp overlay (js/enh/teleport.js) */
+.findHit{grid-template-columns:1fr auto auto auto}
+.findHit .tp{grid-row:1/3;grid-column:3;align-self:center;border:0;background:rgba(125,211,252,.12);color:#7dd3fc;border-radius:8px;font-size:16px;line-height:1;padding:6px 8px;margin-left:6px;cursor:pointer}
+.findHit .star{grid-column:4}
+#tpFx{position:fixed;inset:0;z-index:90;display:none;pointer-events:none}
+#tpFx.on{display:block;pointer-events:auto}
+#tpFx canvas{position:absolute;inset:0;width:100%;height:100%}
+#tpFx.dim{background:rgba(8,10,30,.4)}
+#tpFx .tpMsg{position:absolute;left:50%;top:45%;transform:translate(-50%,-50%);display:none;color:#e0f2fe;font:600 17px system-ui,sans-serif;text-align:center;padding:12px 18px;border-radius:12px;background:rgba(8,10,30,.7);max-width:80vw}
+#tpFx.msg .tpMsg{display:block}

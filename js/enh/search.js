@@ -37,7 +37,8 @@ function saveHere(){
 // one result row: name, address line, distance from the car, and a star to save it
 function placeRow(o,onGo){
   const d=meters(S.lat,S.lng,o.lat,o.lng);
-  const el=row(`<b>${esc(o.name)}</b><span>${esc(o.sub||'')}</span><i>${esc(YD.fmtDist(d))}</i><button class="star" aria-label="Favorite">${isFav(o)?'★':'☆'}</button>`,'findHit');
+  const el=row(`<b>${esc(o.name)}</b><span>${esc(o.sub||'')}</span><i>${esc(YD.fmtDist(d))}</i><button class="tp" aria-label="Teleport there" title="Teleport there">⚡</button><button class="star" aria-label="Favorite">${isFav(o)?'★':'☆'}</button>`,'findHit');
+  el.querySelector('.tp').addEventListener('click',e=>{ e.stopPropagation(); close(); addRecent(o); if(YD.teleport) YD.teleport(o); });   // ⚡ teleport (js/enh/teleport.js)
   el.addEventListener('click',e=>{ e.stopPropagation(); onGo(); });
   const st=el.querySelector('.star');
   st.addEventListener('click',e=>{ e.stopPropagation(); toggleFav(o); st.textContent=isFav(o)?'★':'☆'; st.classList.toggle('on',isFav(o)); if(!input.value.trim()) showSaved(); });
@@ -83,7 +84,10 @@ async function search(q){
     const res=(await r.json()).map(x=>({x,lng:+x.lon,lat:+x.lat,d:meters(lat,lng,+x.lat,+x.lon)})).filter(o=>isFinite(o.lng)&&isFinite(o.lat)).sort((a,b)=>a.d-b.d);
     list.innerHTML='';
     if(!res.length){ row('Nothing found. Try adding the town, e.g. “Main St, Yorkville”'); return; }
-    for(const o of res){ const {name,sub}=label(o.x), p={name,sub,lat:o.lat,lng:o.lng};
+    for(const o of res){ const {name,sub}=label(o.x), x=o.x, p={name,sub,lat:o.lat,lng:o.lng};
+      // a town, county, state, country…: ⚡ lands somewhere interesting inside it rather than at its middle (js/enh/teleport.js)
+      const rank=+x.place_rank||30, bb=(x.boundingbox||[]).map(Number);
+      if(rank<=20&&/^(boundary|place)$/.test(x.category||x.class||'')&&bb.length===4&&bb.every(isFinite)) Object.defineProperties(p,{area:{value:true},bbox:{value:bb}});   // not saved with recents
       placeRow(p,()=>go(p,name)); }
   }catch(e){ list.innerHTML=''; row('Search isn’t reachable right now. Check your connection and try again'); console.warn('search',e); }
   finally{ clearTimeout(to); F.busy=false; }

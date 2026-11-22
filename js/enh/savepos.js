@@ -63,7 +63,7 @@ function snapToRoad(P){
   const A=xy(i-1), B=xy(i), ul=Math.hypot(B[0]-A[0],B[1]-A[1]); let ux=(B[0]-A[0])/ul, uy=(B[1]-A[1])/ul, dir=1;
   if(ux*(-best.qx)+uy*(-best.qy)<-1e-6){ ux=-ux; uy=-uy; dir=-1; }
   // start 40 m back along the road (against the travel direction), following its bends
-  let px=best.qx, py=best.qy, left=40, k=dir>0?i-1:i;
+  let px=best.qx, py=best.qy, left=P.back!=null?P.back:40, k=dir>0?i-1:i;   // (a teleport to an address: right in front of it)
   while(left>0&&k>=0&&k<L.length){ const Q=xy(k), seg=Math.hypot(Q[0]-px,Q[1]-py);
     if(seg>=left){ px+=(Q[0]-px)*left/seg; py+=(Q[1]-py)*left/seg; break; }
     left-=seg; px=Q[0]; py=Q[1]; k-=dir; }
@@ -80,5 +80,5 @@ if(typeof START!=='undefined'&&START.place){
   };
   setTimeout(tryIt,800);
 }
-window.SAVEPOS={save,where,snapToRoad};
+window.SAVEPOS={save,where,snapToRoad,stop:()=>{ off=true; }};
 })();

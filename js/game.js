@@ -50,6 +50,8 @@ const START=(()=>{
   let how='last'; try{ how=localStorage.getItem('ydStart')||'last';
     const once=localStorage.getItem('ydStartOnce'); if(once){ how=once; localStorage.removeItem('ydStartOnce'); } }catch(e){}   // ⚙️ Go to now (random / home)
   if(how==='home') return HOME;
+  if(how==='tp'){ try{ const t=JSON.parse(localStorage.getItem('ydTp')||'null'); localStorage.removeItem('ydTp');   // ⚡ teleport (js/enh/teleport.js)
+    if(t&&isFinite(t.lat)&&isFinite(t.lng)) return {lng:t.lng,lat:t.lat,hdg:0,tp:true,place:{name:String(t.name||'Teleported').slice(0,140),lng:t.lng,lat:t.lat,back:+t.back||0}}; }catch(e){} }
   if(how==='random'){
     let lastI=-1; try{ lastI=+localStorage.getItem('ydStartLast'); }catch(e){}
     let i=Math.floor(Math.random()*START_PLACES.length); if(i===lastI) i=(i+1+Math.floor(Math.random()*(START_PLACES.length-1)))%START_PLACES.length;
@@ -907,6 +909,14 @@ const roadEl=document.getElementById('road'), mphEl=document.getElementById('mph
 const mapEl=document.getElementById('map');
 
 
+/* ---------- DRIVING SIDE (owner 2026-11-21: "adhere to the side of the road driving per country, but lets add a setting
+   to specify preferred driving side"): Auto follows the country you're in (from the town lookup below); ⚙️ Driving side
+   can pin it to Right or Left. +1 = keep right, -1 = keep left; traffic and the autopilot use it ---------- */
+const LEFT_CC=new Set(('gb ie im je gg mt cy jp au nz za in pk bd lk np bt th my sg id bn tl hk mo ke ug tz zm zw mw mz bw na sz ls mu sc '+
+  'jm tt bb bs gy sr ag dm gd kn lc vc ky vg vi bm tc ai ms fk sh pn fj pg sb to ws ki tv nr ck nu nf mv').split(' '));
+let COUNTRY='';
+function driveSide(){ let p='auto'; try{ p=localStorage.getItem('ydSide')||'auto'; }catch(e){}
+  if(p==='right') return 1; if(p==='left') return -1; return LEFT_CC.has(COUNTRY)?-1:1; }
 /* ---------- TOWN / COUNTY ---------- */
 let gLat=null,gLng=null,gBusy=false,gTime=0;
 function meters(a,b,c,d){ const dy=(c-a)*111320, dx=(d-b)*111320*Math.cos(rad(a)); return Math.hypot(dx,dy); }
@@ -918,7 +928,7 @@ function updatePlace(){
   const ctl=new AbortController(); const to=setTimeout(()=>ctl.abort(),6000);
   fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&addressdetails=1&accept-language=en&lat='+qLat+'&lon='+qLng,{signal:ctl.signal})
     .then(r=>r.json()).then(j=>{
-      const a=j.address||{};
+      const a=j.address||{}; if(a.country_code) COUNTRY=String(a.country_code).toLowerCase();
       const town=a.city||a.town||a.village||a.hamlet||a.municipality||a.suburb||'Unincorporated';
       const county=a.county||a.state_district||'';
       const st=a.state||'';

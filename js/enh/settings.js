@@ -53,6 +53,13 @@ mapEl.addEventListener('pointerup',lift); mapEl.addEventListener('pointercancel'
   const b=document.getElementById('infoBtn'), show=()=>{ document.body.classList.toggle('noinfo',!on); if(b) b.classList.toggle('on',on); };
   if(b) b.addEventListener('click',e=>{ e.stopPropagation(); on=!on; try{ localStorage.setItem('ydInfo',on?'on':'off'); }catch(e){} show(); });
   show(); }
+// ⚙️ Driving side: Auto (by country), Right or Left (game.js driveSide)
+{ const pk=document.getElementById('sidePick'), st=document.getElementById('sideStat');
+  const show=()=>{ let v='auto'; try{ v=localStorage.getItem('ydSide')||'auto'; }catch(e){}
+    if(pk) for(const b of pk.querySelectorAll('button')) b.classList.toggle('on',b.dataset.side===v);
+    if(st) st.textContent=v==='auto'?'Auto follows the country you\'re in · now '+(typeof driveSide==='function'&&driveSide()<0?'left':'right'):'Traffic keeps '+v+' everywhere'; };
+  if(pk) pk.addEventListener('click',e=>{ e.stopPropagation(); const b=e.target.closest('button[data-side]'); if(!b) return; try{ localStorage.setItem('ydSide',b.dataset.side); }catch(_){} show(); });
+  show(); setInterval(show,5000); }
 // ⚙️ tabs: one group of settings at a time; the last tab you picked is remembered on this device
 { const bar=document.getElementById('setTabs'), grps=[...panel.querySelectorAll('.setGrp')]; let cur='';
   try{ cur=localStorage.getItem('ydSetTab')||''; }catch(e){} if(!grps.some(g=>g.dataset.tab===cur)) cur=grps[0]?grps[0].dataset.tab:'';

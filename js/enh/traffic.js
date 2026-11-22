@@ -82,7 +82,7 @@ function makeParts(){ return YD.VEH.mats(); }
 function carMesh(){ const g=YD.VEH.build(shadow.material); g.visible=false; T.group.add(g); return g; }
 function place(a,seg,s){ a.hold=0; a.path=[seg]; a.s=s; a.v=seg.v; a.stopDone=null; a.waitT=0;
   const p=pos(a); a.px=p[0]; a.py=p[1]; a.hd=Math.atan2(seg.ux,seg.uy); a.fade=0; }
-function pos(a){ const s=a.path[0], cx=s.a.x+s.ux*a.s, cy=s.a.y+s.uy*a.s; return [cx+s.uy*s.off, cy-s.ux*s.off]; }   // right-hand side: normal (uy,-ux)
+function pos(a){ const s=a.path[0], cx=s.a.x+s.ux*a.s, cy=s.a.y+s.uy*a.s, o=s.off*(typeof driveSide==='function'?driveSide():1); return [cx+s.uy*o, cy-s.ux*o]; }   // its lane: the right-hand half (normal (uy,-ux)), or the left where they drive on the left
 function spawn(a,minD,maxD){
   const px=S.lng*MLNG, py=S.lat*MLAT;
   for(let tries=0;tries<40;tries++){

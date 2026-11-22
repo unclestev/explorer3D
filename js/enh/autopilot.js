@@ -18,10 +18,11 @@ const A={on:false,i:0,route:null,oxAt:null,stops:[],passed:new Set(),waitT:0,las
 function traffic(dt,x,y,along,limit,cap){
   const T=window.TRAFFIC&&TRAFFIC.state; const out={target:1e9};
   if(!T||!T.on||!T.agents) { A.pass=0; A.passCar=null; return out; }
-  const h=rad(S.hdg), fx=Math.sin(h), fy=Math.cos(h), L=A.lane, me=A.off;   // me: where we are across the road (+ = right of centre)
+  const sd=typeof driveSide==='function'?driveSide():1;               // keep-left countries: everything across the road is mirrored
+  const h=rad(S.hdg), fx=Math.sin(h), fy=Math.cos(h), L=A.lane, me=A.off*sd;   // me: where we are across the road (+ = our own side of centre)
   let lead=null, ld=1e9, oncomingNear=1e9, leftBusy=false, rightBusyNear=false;
   for(const a of T.agents){ if(!a.path||!(a.fade>.3)) continue;
-    const dx=a.px-x, dy=a.py-y, f=dx*fx+dy*fy, r=dx*fy-dy*fx, dir=Math.sin(a.hd)*fx+Math.cos(a.hd)*fy;
+    const dx=a.px-x, dy=a.py-y, f=dx*fx+dy*fy, r=(dx*fy-dy*fx)*sd, dir=Math.sin(a.hd)*fx+Math.cos(a.hd)*fy;
     if(f<-40||f>220||Math.abs(r)>12) continue;
     const at=me+r;                                                   // its place across the road
     if(dir<-.5){ if(at<.3&&f>-5&&f<200) oncomingNear=Math.min(oncomingNear,f);              // coming the other way in the left half
@@ -88,10 +89,10 @@ function control(dt){
   A.i=bi; const along=N.cum[bi]+bt*(N.cum[bi+1]-N.cum[bi]), v=S.v, vw=Math.abs(v)*SPEEDUP;
   // our lane: the middle of the right-hand half of the road (half its width from the centre line); left lane to pass
   A.laneT-=dt; if(A.laneT<=0){ A.laneT=.5; try{ if(typeof nearRoadGeo==='function'){ nearRoadGeo(); const g=roadGeo.hit, hw=g&&ROAD_HALF[g.cls]; if(hw) A.lane=Math.max(.9,Math.min(3.6,hw/2)); } }catch(e){} }
-  const offT=A.pass?-A.lane:A.lane; A.off+=(offT-A.off)*Math.min(1,dt*(A.pass?3:.8));
+  const SD=typeof driveSide==='function'?driveSide():1, offT=(A.pass?-A.lane:A.lane)*SD; A.off+=(offT-A.off)*Math.min(1,dt*(A.pass?3:.8));
 
   // steering: aim at a point a little way ahead on the route
-  const changing=Math.abs(A.off-(A.pass?-A.lane:A.lane))>.4||(A.pass&&vw<8);
+  const changing=Math.abs(A.off-(A.pass?-A.lane:A.lane)*SD)>.4||(A.pass&&vw<8);
   const Ld=changing?Math.max(4.5,Math.min(45,3.5+vw*.3)):Math.max(10,Math.min(45,8+vw*.35)),   // tighter aim while changing lanes
         tp0=pointAt(along+Ld,bi), tq=pointAt(along+Ld+3,bi), ux=tq[0]-tp0[0], uy=tq[1]-tp0[1], ul=Math.hypot(ux,uy)||1;
   const tp=[tp0[0]+uy/ul*A.off,tp0[1]-ux/ul*A.off,tp0[2]];           // aim at our lane, not the centre line
