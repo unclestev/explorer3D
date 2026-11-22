@@ -862,59 +862,60 @@ function stalkStep(dt){ const st=sigStalk; if(!st) return; const d=window.SIG?SI
 // Explorer ST wheel (owner 2026-11-21, a photo of the real one): thick round rim in perforated leather; a big airbag pad,
 // wider at the top, with the blue oval; a button panel on each side spoke framed in silver; a silver lower spoke round an
 // open trapezoid, with the red ST badge at the bottom
-// Expedition wheel (owner 2026-11-22, a photo from the driver's seat, traced over a grid; photo px -> metres with the
-// wheel's centre at (610,530), k across, KY up — KY a touch bigger to undo the photo's look-down squash).
-// Two-tone: dark leather on the rim and pad; tan leather on the shoulder above each touch panel, the wedge under it, and
-// the inner half of the lower rim all the way round the bottom.
+// Expedition wheel (owner 2026-11-22, a photo from the driver's seat). Measured, not guessed: the rim's outline was fitted
+// by rendering it from the driver's eye and matching the photo's outline (within 1%), and every spoke
+// outline below is the photo's, projected from the eye onto the wheel at that part's depth (metres, left side; the right
+// mirrors it). Two-tone as in the photo: dark leather on the rim and pad; tan on a small wing off the hub's top corner,
+// the wedge under each touch panel, and the whole face of the lower rim, so the tan runs unbroken from under one panel
+// round the bottom to the other.
 const XPC={dark:0x1f1c1a,tan:0x46332a};
-// rim: the traced outer edge (normalised, left half top -> bottom; the right is its mirror) — nearly flat across the
-// top, the sides near straight, the bottom flatter still with squarer corners
 function xpRim(spin,W){
-  const L=[[0,1],[-.2,.99],[-.43,.955],[-.65,.855],[-.82,.68],[-.925,.43],[-.98,.17],[-.99,-.2],[-.945,-.58],[-.845,-.82],[-.63,-.952],[-.33,-.993],[0,-1]];
+  // the traced outline, fitted from the driver's eye to within 1%: an oval, a little rounder over the top (superellipse
+  // n 2.5) and squarer across the bottom (n 3.2)
+  const L=[]; for(let i=0;i<=24;i++){ const t=Math.PI/2+i/24*Math.PI, c=Math.cos(t), s=Math.sin(t), n=s>0?2.5:3.2, b=s>0?.97:1;
+    L.push([Math.abs(c)<1e-9?0:Math.sign(c)*Math.pow(Math.abs(c),2/n),Math.sign(s)*Math.pow(Math.abs(s),2/n)*b]); }
   const loop=[...L,...L.slice(1,-1).reverse().map(([x,y])=>[-x,y])], hw=.19-W.rim, hh=.1785-W.rim;
   const curve=new THREE.CatmullRomCurve3(loop.map(([x,y])=>new V3(x*hw,y*hh,0)),true,'centripetal');
-  const g=new THREE.TubeGeometry(curve,220,W.rim,18,true), p=g.attributes.position, n=g.attributes.normal, col=new Float32Array(p.count*3);
+  const g=new THREE.TubeGeometry(curve,240,W.rim,18,true), p=g.attributes.position, n=g.attributes.normal, col=new Float32Array(p.count*3);
   const D=new THREE.Color(XPC.dark), T=new THREE.Color(XPC.tan);
-  for(let i=0;i<p.count;i++){ const x=p.getX(i), y=p.getY(i), l=Math.hypot(x,y)||1, inw=-(n.getX(i)*x+n.getY(i)*y)/l;   // how much this side faces the middle
-    const t=sstep(.05,.35,inw)*sstep(-.065,-.085,y), c=D.clone().lerp(T,t); col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b; }
+  for(let i=0;i<p.count;i++){ const x=p.getX(i), y=p.getY(i), l=Math.hypot(x,y)||1, inw=-(n.getX(i)*x+n.getY(i)*y)/l;   // -1 facing out, +1 facing the middle
+    const t=sstep(-.62,-.3,inw)*sstep(-0.055,-0.069,y), c=D.clone().lerp(T,t); col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b; }   // tan face below the spokes, a thin dark outer edge
   g.setAttribute('color',new THREE.BufferAttribute(col,3));
-  const rim=mesh(g,M({color:0xffffff,vertexColors:true,roughness:.55,normalMap:rep(textures().leather,28,1),normalScale:new THREE.Vector2(.7,.7)}),spin); rim.scale.z=1.25; return rim; }
+  const rim=mesh(g,M({color:0xffffff,vertexColors:true,roughness:.55,normalMap:rep(textures().leather,28,1),normalScale:new THREE.Vector2(.7,.7)}),spin);
+  rim.scale.z=1.9; return rim; }   // deep front to back: from the seat you see the top of the rim as well as its face (photo)
 function xpWheel(spin,W){
-  const k=.19/542, KY=k*1.05, px=(x,y)=>[(x-610)*k,(530-y)*KY];
   const leaf=c=>M({color:c,roughness:.55,normalMap:rep(textures().leather,8,8),normalScale:new THREE.Vector2(.2,.2)});
   const dk=leaf(XPC.dark), tan=leaf(XPC.tan), gloss=M({color:0x060607,roughness:.1,metalness:.3,env:.9}), chrome=M({color:0xdfe3e7,metalness:.9,roughness:.18,env:1.8});
   const ext=(sh,d,bv)=>new THREE.ExtrudeGeometry(sh,{depth:d,bevelEnabled:bv>0,bevelThickness:bv,bevelSize:bv,bevelSegments:3,curveSegments:10});
-  // a closed outline from photo points, corners rounded by r (each point [x,y,r]); s mirrors it to the right side
-  const poly=(P,s)=>{ const Q=P.map(([x,y,r])=>{ const [a,b]=px(x,y); return [s*a,b,r||0]; }), sh=new THREE.Shape(), N=Q.length;
-    for(let i=0;i<N;i++){ const [x,y,r]=Q[i], A=Q[(i+N-1)%N], B=Q[(i+1)%N];
-      const da=Math.hypot(A[0]-x,A[1]-y), db=Math.hypot(B[0]-x,B[1]-y), ra=Math.min(r,da/2)/da, rb=Math.min(r,db/2)/db;
-      const p0=[x+(A[0]-x)*ra,y+(A[1]-y)*ra], p1=[x+(B[0]-x)*rb,y+(B[1]-y)*rb];
+  // closed outline through [x,y] points (s mirrors x), each corner rounded by r (one number, or one per point)
+  const poly=(Q,s,r)=>{ const P=Q.map(([x,y])=>[s*x,y]), N=P.length, sh=new THREE.Shape();
+    for(let i=0;i<N;i++){ const [x,y]=P[i], A=P[(i+N-1)%N], B=P[(i+1)%N], R=Array.isArray(r)?r[i]:r;
+      const da=Math.hypot(A[0]-x,A[1]-y), db=Math.hypot(B[0]-x,B[1]-y), ra=Math.min(R,da/2)/da, rb=Math.min(R,db/2)/db, p0=[x+(A[0]-x)*ra,y+(A[1]-y)*ra], p1=[x+(B[0]-x)*rb,y+(B[1]-y)*rb];
       i?sh.lineTo(...p0):sh.moveTo(...p0); sh.quadraticCurveTo(x,y,...p1); } sh.closePath(); return sh; };
-  const R=.008;
+  const part=(sh,z,d,bv,m)=>{ const g=ext(sh,d,bv); g.translate(0,0,z-d-bv); return mesh(g,m,spin); };   // front face at z
   // the hub housing behind the pad (dark), joining the spokes
-  { const g=ext(poly([[375,405,R],[845,405,R],[845,720,R*3],[375,720,R*3]],1),.014,.003); g.translate(0,0,-.042); mesh(g,dk,spin); }
+  part(poly([[-.0838,.0500],[.0829,.0500],[.0882,-.0977],[-.0892,-.0977]],1,.02),-.027,.012,.003,dk);
   for(const s of [-1,1]){
-    // tan shoulder: from the hub's top corner out under the rim, its top edge sweeping up into the rim
-    { const sh=poly([[372,402,R],[300,398,0],[240,393,0],[195,384,0],[150,326,R],[115,330,0],[112,478,0],[372,478,0]],s);
-      const g=ext(sh,.012,.003); g.translate(0,0,-.032); mesh(g,tan,spin); }
-    // dark spoke body behind the panel: short at the hub, taller toward the rim
-    { const g=ext(poly([[380,470,0],[95,470,0],[95,690,0],[380,632,0]],s),.012,.002); g.translate(0,0,-.034); mesh(g,dk,spin); }
-    // chrome frame and the black touch panel inside it (bottom edge slanting down toward the rim)
-    { const out=[[372,478,R],[86,478,R],[86,684,R],[372,626,R*1.6]], inn=[[361,489,R*.7],[98,489,R*.7],[98,668,R*.7],[361,614,R*1.3]];
-      const f=poly(out,s); f.holes.push(poly(inn,s)); const g=ext(f,.003,.0012); g.translate(0,0,-.0205); mesh(g,chrome,spin);
-      const pg=ext(poly(inn,s),.002,0); pg.translate(0,0,-.0200); mesh(pg,gloss,spin); }
-    // icon toward the hub (rounded square) with the small dot beside it
+    // tan wing off the hub's top corner, tapering out to a point well short of the rim
+    part(poly([[-.0806,.0527],[-.1020,.0480],[-.1236,.0418],[-.1435,.0353],[-.1491,.0316],[-.1439,.0286],[-.1135,.0294],[-.0814,.0294]],s,[.004,.01,.01,.008,.004,.004,.01,.002]),-.017,.010,.003,tan);
+    // the spoke behind the panel (dark): short at the hub, deeper toward the rim
+    part(poly([[-.0811,.0313],[-.1867,.0283],[-.1978,-.0626],[-.0836,-.0388]],s,.006),-.021,.010,.002,dk);
+    // chrome frame round the black touch panel, its bottom edge slanting down toward the rim
+    { const f=poly([[-.0878,.0248],[-.1883,.0248],[-.1939,-.0436],[-.1744,-.0531],[-.0899,-.0304]],s,[.008,.006,.008,.004,.012]);
+      f.holes.push(poly([[-.0919,.0211],[-.1847,.0211],[-.1897,-.0417],[-.1723,-.0487],[-.0938,-.0262]],s,[.006,.004,.006,.003,.01]));
+      part(f,-.0145,.002,.0012,chrome);
+      part(poly([[-.0919,.0211],[-.1847,.0211],[-.1897,-.0417],[-.1723,-.0487],[-.0938,-.0262]],s,[.006,.004,.006,.003,.01]),-.0165,.002,0,gloss); }
     { const T=canvasTex(128,128), x=T.x; x.clearRect(0,0,128,128); x.strokeStyle=x.fillStyle='#53c4ec'; x.lineWidth=9; x.beginPath(); x.roundRect?x.roundRect(24,40,72,48,12):x.rect(24,40,72,48); x.stroke();
-      x.beginPath(); x.arc(s<0?112:12,16,9,0,7); x.fill();
-      const ic=mesh(new THREE.PlaneGeometry(.026,.026),new THREE.MeshBasicMaterial({map:T.t,transparent:true}),spin,false,false); const [a,b]=px(300,562); ic.position.set(s*a,b,-.0172); }
-    // tan wedge under the panel: thin at the hub, deep at the rim, running into the tan of the lower rim
-    { const g=ext(poly([[372,630,R],[86,688,0],[80,760,0],[150,775,R*2],[250,742,0],[360,700,R]],s),.012,.003); g.translate(0,0,-.032); mesh(g,tan,spin); }
+      const ic=mesh(new THREE.PlaneGeometry(.022,.022),new THREE.MeshBasicMaterial({map:T.t,transparent:true}),spin,false,false); ic.position.set(s*-0.1148,-0.0056,-.0162);
+      const dot=mesh(new THREE.CircleGeometry(.0028,16),new THREE.MeshBasicMaterial({color:0x53c4ec}),spin,false,false); dot.position.set(s*-0.1022,0.0094,-.0162); }
+    // tan wedge under the panel, running down into the tan face of the lower rim
+    part(poly([[-.0904,-.0330],[-.1734,-.0550],[-.1939,-.0606],[-.1926,-.1011],[-.1644,-.1143],[-.1493,-.0970],[-.1330,-.0746],[-.1098,-.0566],[-.0908,-.0455]],s,[.004,.002,0,.01,.012,.02,.02,.012,.004]),-.0175,.010,.003,tan);
   }
-  { // pad: tall rounded square, wide flat top, the sides drawing in a little toward the rounded bottom
-    const g=ext(poly([[410,416,.016],[806,416,.016],[792,770,.032],[424,770,.032]],1),.024,.008); g.translate(.0008,0,-.036); mesh(g,dk,spin);
-    const bT=canvasTex(256,128), x=bT.x, gg=x.createLinearGradient(0,0,0,128); gg.addColorStop(0,'#3d6fc4'); gg.addColorStop(.5,'#123a8a'); gg.addColorStop(1,'#0a2560');
-    x.clearRect(0,0,256,128); x.fillStyle='#d9dde2'; x.beginPath(); x.ellipse(128,64,124,60,0,0,7); x.fill(); x.fillStyle=gg; x.beginPath(); x.ellipse(128,64,112,50,0,0,7); x.fill();
-    const b=mesh(new THREE.PlaneGeometry(.064,.026),new THREE.MeshBasicMaterial({map:bT.t,transparent:true}),spin,false,false); const [lx,ly]=px(597,570); b.position.set(lx,ly,-.0035); }
+  // pad: wide flat top, the sides drawing in a little to a rounded bottom; the oval low on it
+  part(poly([[-.0671,.0449],[.0662,.0449],[.0655,-.0769],[-.0664,-.0769]],1,[.02,.02,.034,.034]),-.004,.022,.007,dk);
+  const bT=canvasTex(256,128), x=bT.x, gg=x.createLinearGradient(0,0,0,128); gg.addColorStop(0,'#3d6fc4'); gg.addColorStop(.5,'#123a8a'); gg.addColorStop(1,'#0a2560');
+  x.clearRect(0,0,256,128); x.fillStyle='#d9dde2'; x.beginPath(); x.ellipse(128,64,124,60,0,0,7); x.fill(); x.fillStyle=gg; x.beginPath(); x.ellipse(128,64,112,50,0,0,7); x.fill();
+  const b=mesh(new THREE.PlaneGeometry(.064,.026),new THREE.MeshBasicMaterial({map:bT.t,transparent:true}),spin,false,false); b.position.set(0,-0.0051,-.0028);
 }
 function perfLeather(){ const T=canvasTex(256,256), x=T.x; x.fillStyle='#808080'; x.fillRect(0,0,256,256);
   x.fillStyle='#3a3a3a'; for(let i=0;i<16;i++) for(let j=0;j<16;j++){ x.beginPath(); x.arc(8+i*16+(j%2)*8,8+j*16,3.2,0,7); x.fill(); }   // the little holes
