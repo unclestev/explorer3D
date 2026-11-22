@@ -789,7 +789,7 @@ function stalkXp(grp,colM,P){
   const inkM=t=>M({map:t,transparent:true,roughness:.55,metalness:0,env:.5,polygonOffset:true,polygonOffsetFactor:-2});
   // mounted at the top left of the column and turned up so the barrel shows in the gap above the left spoke (owner's photo
   // from the driver's seat); piv inside it tips with the signal
-  const mnt=new THREE.Group(); mnt.position.set(-.042,.028,-.075); mnt.rotation.set(0,.12,-.42); grp.add(mnt);
+  const mnt=new THREE.Group(); mnt.position.set(-.042,.034,-.100); mnt.rotation.set(0,.12,-.42);   /* on the column behind the wheel: the spokes pass in front of it */ grp.add(mnt);
   const piv=new THREE.Group(); mnt.add(piv);
   const k=.00021, ph=(X,Y)=>[-.029-(585-X)*k,-.013+(372-Y)*k], tr=t=>t*k/2*.97;
   // centre line [x,y] and radius: out of the column, then the photo's outline (X, centre Y, thickness, in photo px)
@@ -905,7 +905,7 @@ function xpWheel(spin,W){
   deep(poly([[-.0838,.0500],[.0829,.0500],[.0830,-.0560],[-.0840,-.0560]],1,.02),-.024,.06,.06,.003,dk);
   for(const s of [-1,1]){
     // the spoke itself (tan): short at the hub, deeper toward the rim; deep back to the column by the hub, shallow at the rim
-    deep(poly([[-.0811,.0313],[-.1867,.0283],[-.1978,-.0626],[-.0836,-.0388]],s,.006),-.019,.10,.012,.002,tan,.009);
+    deep(poly([[-.0811,.0313],[-.1867,.0283],[-.1978,-.0626],[-.0836,-.0388]],s,.006),-.019,.06,.012,.002,tan,.012);
     // chrome frame round the black touch panel, its bottom edge slanting down toward the rim
     { const f=poly([[-.0878,.0248],[-.1883,.0248],[-.1939,-.0436],[-.1744,-.0531],[-.0899,-.0304]],s,[.008,.006,.008,.004,.012]);
       f.holes.push(poly([[-.0919,.0211],[-.1847,.0211],[-.1897,-.0417],[-.1723,-.0487],[-.0938,-.0262]],s,[.006,.004,.006,.003,.01]));
