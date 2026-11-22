@@ -1134,7 +1134,7 @@ function wsVec(wsP,u,v){ const p=wsP(clamp(u,0,1),clamp(v,0,1)); return new V3(p
 // wiper switch (owner 2026-11-22: the G29's R2 button turns the wipers on and off). Starts automatic (on while it rains);
 // a press switches them off if they're going, or on if they're parked; they finish the stroke before parking.
 CK.wipe=null;
-CK.wiper=function(){ const R=CK.cab&&CK.cab.parts.rain, W=YD.AT&&YD.AT.wx||{}, going=CK.wipe===true||(CK.wipe!==false&&!!W.type)||(R&&R.ang>.01&&R.dir>0);
+CK.wiper=function(){ if(!powered()) return; const R=CK.cab&&CK.cab.parts.rain, W=YD.AT&&YD.AT.wx||{}, going=CK.wipe===true||(CK.wipe!==false&&!!W.type)||(R&&R.ang>.01&&R.dir>0);
   CK.wipe=!going; toast(CK.wipe?'Wipers on':'Wipers off',1100); };
 function updateRain(R,dt,P){
   const W=YD.AT&&YD.AT.wx||{}, wet=W.type?(W.int||.5):0, x=R.T.x, w=512, h=256, v=Math.abs(S.v||0);
@@ -1146,7 +1146,7 @@ function updateRain(R,dt,P){
     if(v>12&&W.type!=='snow'){ x.globalCompositeOperation='destination-out'; x.fillStyle='rgba(0,0,0,.05)'; x.fillRect(0,0,w,h); x.globalCompositeOperation='source-over'; }   // the wind blows the drops up and off at speed
     changed=true; }
   // automatic wipers while it's wet; finish the stroke and park when it stops
-  const on=CK.wipe===true||(CK.wipe!==false&&wet>0), per=wet>.6?.9:1.5;   // CK.wipe: true = switched on, false = switched off, null = automatic
+  const on=powered()&&(CK.wipe===true||(CK.wipe!==false&&wet>0)), per=wet>.6?.9:1.5;   // CK.wipe: true = switched on, false = switched off, null = automatic
   if(on||R.ang>.01){ const prev=R.ang; R.ang+=R.dir*dt*(SWEEP*2/per);
     if(R.ang>=SWEEP){ R.ang=SWEEP; R.dir=-1; } if(R.ang<=0){ R.ang=0; R.dir=on?1:0; if(!on) R.dir=1; }
     // erase the swept wedge on the glass
