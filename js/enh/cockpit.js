@@ -39,7 +39,7 @@ window.COCKPIT=CK;
 
 /* ---------- per-car cabins (car frame: metres, x right, y up from the ground, z toward the back; car centre = 0) ---------- */
 const SPECS={
-  explorer:{style:'sport', ex:true, sunroof:{hw:.40,z0:.03,z1:.68}, eye:[-.38,1.37,.08], pitch:81,
+  explorer:{style:'sport', ex:true, wiperK:[1.25,1.1], sunroof:{hw:.40,z0:.03,z1:.68}, eye:[-.38,1.37,.08], pitch:81,
     ws:{zB:-1.04,yB:1.09,hwB:.75,zT:-.33,yT:1.63,hwT:.67,bow:.05}, roof:{y:1.655,hw:.71,zR:1.75}, belt:1.16, winTop:1.58, door:.80, zBp:.52, zC:1.48,
     hood:{zr:-1.03,zf:-2.40,yr:1.085,yf:.985,hw:.99,crown:.03,gap:.80,nose:.07,crease:{x:.40,h:.016}},
     dash:[[1.062,-1.045],[1.086,-.84],[1.086,-.68],[1.064,-.615],[.99,-.595],[.87,-.605],[.75,-.55],[.62,-.43]],
@@ -1098,16 +1098,16 @@ function wipers(G,P,wsP,parts){
   const T=canvasTex(512,256,true), m=new THREE.MeshBasicMaterial({map:T.t,transparent:true,depthWrite:false,side:THREE.DoubleSide});
   const g=mesh(grid(24,12,(u,v)=>{ const p=wsP(u,v); return [p[0],p[1],p[2]+.004]; }),m,G,false,false); g.renderOrder=7;
   const arms=[], am=M({color:0x0a0a0b,roughness:.6,metalness:.3});
-  for(const pu of (P.wipers||[.12,.55])){
-    if(P.ex){ arms.push({o:wiperEx(G,wsP,pu),pu,ex:true}); continue; }
-    const a=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),am); a.castShadow=true; G.add(a); arms.push({o:a,pu}); }
+  (P.wipers||[.12,.55]).forEach((pu,i)=>{ const k=(P.wiperK&&P.wiperK[i])||1;                    // k: this blade's length vs the usual
+    if(P.ex){ arms.push({o:wiperEx(G,wsP,pu,k),pu,k,ex:true}); return; }
+    const a=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),am); a.castShadow=true; G.add(a); arms.push({o:a,pu,k}); });
   parts.rain={T,arms,ang:0,dir:1,on:false,t:0,wsP};
 }
 // Explorer ST wiper (owner 2026-11-22, a photo of the real one; "get rid of the green line": all black). Built along +z
 // from the pivot, +y = out from the glass: a capped pivot, a tapered arm standing off the glass, the S-bend down to the
 // J-hook clip at the blade's middle, and a flat one-piece beam blade with end caps lying on the glass.
-function wiperEx(G,wsP,pu){
-  const a=wsVec(wsP,pu,.015), b=wsVec(wsP,pu+Math.cos(.04)*LU,.015+Math.sin(.04)*LV), L=a.distanceTo(b);
+function wiperEx(G,wsP,pu,k){
+  const a=wsVec(wsP,pu,.015), b=wsVec(wsP,pu+Math.cos(.04)*LU*k,.015+Math.sin(.04)*LV*k), L=a.distanceTo(b);
   const g=new THREE.Group(); G.add(g);
   const blk=M({color:0x0b0b0c,roughness:.45,metalness:.25,env:.6}), rub=M({color:0x050505,roughness:.9});
   const box=(w,h,l,y,z,m,rx)=>{ const o=mesh(new THREE.BoxGeometry(w,h,l),m||blk,g); o.position.set(0,y,z); if(rx) o.rotation.x=rx; return o; };
@@ -1151,13 +1151,13 @@ function updateRain(R,dt,P){
     if(R.ang>=SWEEP){ R.ang=SWEEP; R.dir=-1; } if(R.ang<=0){ R.ang=0; R.dir=on?1:0; if(!on) R.dir=1; }
     // erase the swept wedge on the glass
     x.globalCompositeOperation='destination-out'; x.fillStyle='rgba(0,0,0,1)';
-    for(const a of R.arms){ const cx=a.pu*w, cy=h, tip=t=>[cx+Math.cos(t)*LU*w*1.06,cy-Math.sin(t)*LV*h*1.06], t0=Math.min(prev,R.ang)-.05, t1=Math.max(prev,R.ang)+.05;
+    for(const a of R.arms){ const cx=a.pu*w, cy=h, tip=t=>[cx+Math.cos(t)*LU*a.k*w*1.06,cy-Math.sin(t)*LV*a.k*h*1.06], t0=Math.min(prev,R.ang)-.05, t1=Math.max(prev,R.ang)+.05;
       x.beginPath(); x.moveTo(cx,cy); for(let q=0;q<=6;q++){ const p=tip(lerp(t0,t1,q/6)); x.lineTo(p[0],p[1]); } x.closePath(); x.fill(); }
     x.globalCompositeOperation='source-over'; changed=true; }
   if(!on&&!R.ang&&R.cleared!==true){ x.clearRect(0,0,w,h); R.cleared=true; changed=true; } if(on) R.cleared=false;
   if(changed) R.T.t.needsUpdate=true;
   // blade positions on the glass
-  for(const a of R.arms){ const base=wsVec(R.wsP,a.pu,.015), ang=R.ang+.04, tip=wsVec(R.wsP,a.pu+Math.cos(ang)*LU,.015+Math.sin(ang)*LV);
+  for(const a of R.arms){ const base=wsVec(R.wsP,a.pu,.015), ang=R.ang+.04, tip=wsVec(R.wsP,a.pu+Math.cos(ang)*LU*a.k,.015+Math.sin(ang)*LV*a.k);
     if(a.ex){ const zA=tip.clone().sub(base).normalize(), du=wsVec(R.wsP,a.pu+.01,.1).sub(wsVec(R.wsP,a.pu-.01,.1)), dv=wsVec(R.wsP,a.pu,.11).sub(wsVec(R.wsP,a.pu,.09));
       const n=du.cross(dv).normalize(); if(n.z>0) n.negate();                                       // out from the glass, away from the driver
       const xA=n.clone().cross(zA).normalize(), yA=zA.clone().cross(xA).normalize();
