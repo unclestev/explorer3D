@@ -53,6 +53,12 @@ mapEl.addEventListener('pointerup',lift); mapEl.addEventListener('pointercancel'
   const b=document.getElementById('infoBtn'), show=()=>{ document.body.classList.toggle('noinfo',!on); if(b) b.classList.toggle('on',on); };
   if(b) b.addEventListener('click',e=>{ e.stopPropagation(); on=!on; try{ localStorage.setItem('ydInfo',on?'on':'off'); }catch(e){} show(); });
   show(); }
+// ⚙️ groups: tap a heading to fold it away; remembered on this device
+{ let shut=[]; try{ shut=JSON.parse(localStorage.getItem('ydSetShut')||'[]'); }catch(e){}
+  for(const g of panel.querySelectorAll('.setGrp')){ const h=g.querySelector('.setSec'), k=h.textContent.trim();
+    const show=()=>{ const s=shut.includes(k); g.classList.toggle('shut',s); h.setAttribute('aria-expanded',s?'false':'true'); };
+    h.addEventListener('click',e=>{ e.stopPropagation(); shut=shut.includes(k)?shut.filter(x=>x!==k):shut.concat(k); try{ localStorage.setItem('ydSetShut',JSON.stringify(shut)); }catch(e){} show(); });
+    show(); } }
 // iPhone Safari: stop its own page-zoom gesture from fighting ours
 for(const t of ['gesturestart','gesturechange']) document.addEventListener(t,e=>e.preventDefault(),{passive:false});
 })();

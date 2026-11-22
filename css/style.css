@@ -229,3 +229,10 @@ body.wheel #ctl{display:none}
 @keyframes sigBlink{50%{filter:brightness(.55)}}
 /* engine start / stop (js/enh/ignition.js): ⏻ beside the turn-signal buttons; red ring while the engine is off */
 #sigBtns #ignBtn.off{background:#7f1d1d;box-shadow:0 0 0 2px #fca5a5 inset}
+/* ⚙️ settings in groups (owner 2026-11-21: "create groupings in the settings"): tap a heading to fold its group away */
+.setGrp{margin-top:4px}
+.setSec{display:flex;align-items:center;justify-content:space-between;width:100%;background:none;border:0;border-top:1px solid var(--line);padding:12px 0 6px;margin:0;font:inherit;font-size:11px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:var(--muted);cursor:pointer;text-align:left}
+.setSec::after{content:'▾';font-size:13px;letter-spacing:0;transition:transform .15s}
+.setGrp.shut .setSec::after{transform:rotate(-90deg)}
+.setGrp.shut .setRow{display:none!important}
+.setGrp .setRow:first-of-type{border-top:0}
