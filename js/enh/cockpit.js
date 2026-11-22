@@ -1098,9 +1098,29 @@ function wipers(G,P,wsP,parts){
   const T=canvasTex(512,256,true), m=new THREE.MeshBasicMaterial({map:T.t,transparent:true,depthWrite:false,side:THREE.DoubleSide});
   const g=mesh(grid(24,12,(u,v)=>{ const p=wsP(u,v); return [p[0],p[1],p[2]+.004]; }),m,G,false,false); g.renderOrder=7;
   const arms=[], am=M({color:0x0a0a0b,roughness:.6,metalness:.3});
-  for(const pu of (P.wipers||[.12,.55])){ const a=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),am); a.castShadow=true; G.add(a); arms.push({o:a,pu}); }
+  for(const pu of (P.wipers||[.12,.55])){
+    if(P.ex){ arms.push({o:wiperEx(G,wsP,pu),pu,ex:true}); continue; }
+    const a=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),am); a.castShadow=true; G.add(a); arms.push({o:a,pu}); }
   parts.rain={T,arms,ang:0,dir:1,on:false,t:0,wsP};
 }
+// Explorer ST wiper (owner 2026-11-22, a photo of the real one; "get rid of the green line": all black). Built along +z
+// from the pivot, +y = out from the glass: a capped pivot, a tapered arm standing off the glass, the S-bend down to the
+// J-hook clip at the blade's middle, and a flat one-piece beam blade with end caps lying on the glass.
+function wiperEx(G,wsP,pu){
+  const a=wsVec(wsP,pu,.015), b=wsVec(wsP,pu+Math.cos(.04)*LU,.015+Math.sin(.04)*LV), L=a.distanceTo(b);
+  const g=new THREE.Group(); G.add(g);
+  const blk=M({color:0x0b0b0c,roughness:.45,metalness:.25,env:.6}), rub=M({color:0x050505,roughness:.9});
+  const box=(w,h,l,y,z,m,rx)=>{ const o=mesh(new THREE.BoxGeometry(w,h,l),m||blk,g); o.position.set(0,y,z); if(rx) o.rotation.x=rx; return o; };
+  const cap=mesh(new THREE.CylinderGeometry(.017,.02,.03,20),blk,g); cap.position.set(0,.016,0);              // pivot cap
+  { const ag=new THREE.BoxGeometry(1,1,1); ag.translate(0,0,.5); const P=ag.attributes.position;                // tapered arm: 2.2 cm wide at the pivot, 1.4 cm at the bend
+    for(let i=0;i<P.count;i++){ const t=P.getZ(i); P.setX(i,P.getX(i)*lerp(.022,.014,t)); P.setY(i,P.getY(i)*lerp(.012,.009,t)); P.setZ(i,t*L*.51); }
+    ag.computeVertexNormals(); const arm=mesh(ag,blk,g); arm.position.set(0,.026,0); }
+  const bz0=L*.51, bz1=L*.6, dz=bz1-bz0, dy=.026-.013; box(.013,.006,Math.hypot(dz,dy),(.026+.013)/2,(bz0+bz1)/2,blk,Math.atan2(dy,dz));   // the S-bend down
+  box(.026,.016,.055,.012,L*.62);                                                                              // J-hook clip
+  box(.02,.004,L*.86,.006,L*.57); box(.012,.003,L*.86,.002,L*.57,rub);                                       // flat beam blade, rubber under it
+  for(const z of [L*.14,L]) box(.024,.008,.02,.006,z);                                                         // end caps
+  g.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
+  return g; }
 const LU=.40, LV=.66, SWEEP=1.9;                                   // blade reach across / up the glass (uv), stroke (rad)
 function wsVec(wsP,u,v){ const p=wsP(clamp(u,0,1),clamp(v,0,1)); return new V3(p[0],p[1],p[2]); }
 function updateRain(R,dt,P){
@@ -1125,6 +1145,10 @@ function updateRain(R,dt,P){
   if(changed) R.T.t.needsUpdate=true;
   // blade positions on the glass
   for(const a of R.arms){ const base=wsVec(R.wsP,a.pu,.015), ang=R.ang+.04, tip=wsVec(R.wsP,a.pu+Math.cos(ang)*LU,.015+Math.sin(ang)*LV);
+    if(a.ex){ const zA=tip.clone().sub(base).normalize(), du=wsVec(R.wsP,a.pu+.01,.1).sub(wsVec(R.wsP,a.pu-.01,.1)), dv=wsVec(R.wsP,a.pu,.11).sub(wsVec(R.wsP,a.pu,.09));
+      const n=du.cross(dv).normalize(); if(n.z>0) n.negate();                                       // out from the glass, away from the driver
+      const xA=n.clone().cross(zA).normalize(), yA=zA.clone().cross(xA).normalize();
+      a.o.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xA,yA,zA)); a.o.position.copy(base).addScaledVector(yA,.002); continue; }
     const d=tip.clone().sub(base), len=d.length(); a.o.position.copy(base).add(tip).multiplyScalar(.5); a.o.position.z-=.012; a.o.scale.set(.012,.012,len);
     a.o.parent.updateMatrixWorld(); a.o.lookAt(a.o.parent.localToWorld(new V3(tip.x,tip.y,tip.z-.012))); }
 }
