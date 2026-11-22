@@ -1669,6 +1669,13 @@ function drawMap(x,R,th){
   // the car arrow
   x.fillStyle=th.arrow; x.strokeStyle=th.arrowEdge; x.lineWidth=4; x.beginPath(); x.moveTo(cx,cy-20); x.lineTo(cx+14,cy+14); x.lineTo(cx,cy+6); x.lineTo(cx-14,cy+14); x.closePath(); x.fill(); x.stroke();
   x.restore(); }
+// what's playing, along the bottom of the centre screen (music.js)
+function musicBar(sc){ const n=window.MUSIC&&MUSIC.info&&MUSIC.info(); if(!n) return; const x=sc.T.x, W=sc.w, H=sc.h, bh=Math.round(H*.13), y=H-bh;
+  x.fillStyle='rgba(8,10,14,.92)'; x.fillRect(0,y,W,bh); x.fillStyle='#2b3340'; x.fillRect(0,y,W,3);
+  if(n.dur) { x.fillStyle='#4f8ef7'; x.fillRect(0,y,W*Math.min(1,n.pos/n.dur),3); }
+  const f=Math.round(bh*.36); x.textBaseline='middle'; x.textAlign='left'; x.fillStyle='#e8edf4'; x.font=`600 ${f}px system-ui,Arial`;
+  const t=(n.playing?'♪  ':'⏸  ')+n.title, a=n.artist?'  —  '+n.artist:''; let line=t+a; while(x.measureText(line).width>W*.94&&line.length>4) line=line.slice(0,-2);
+  x.fillText(line===t+a?line:line+'…',W*.03,y+bh/2+2); sc.T.t.needsUpdate=true; }
 function drawScreen(sc,d,lux){ const x=sc.T.x, W=sc.w, H=sc.h; const bg=lux?'#0e0d0b':'#0c0f14'; x.fillStyle=bg; x.fillRect(0,0,W,H);
   drawMap(x,{x:0,y:56,w:W,h:H-56,cx:W*.5,cy:H*.66,s:(H*.55)/220},                       // ~220 m from the car to the top
     {land:lux?'#171512':'#121820',edge:lux?'#2a2722':'#212a36',road:lux?'#5b554b':'#4a5566',route:'#3d8bff',arrow:'#ffffff',arrowEdge:lux?'#c9b79c':'#3d8bff'});
@@ -1803,7 +1810,7 @@ function update(dt){
   if(p.hud){ p.hud.g.visible=CK.hud&&pw>.02; if(CK.hud) p.hud.m.opacity=(1-.45*k)*pw; }
   const ik=[d.mph,Math.round(d.rpm/60),d.gear,d.gearL,d.street,d.limit,d.time,d.temp,d.wx,d.trip,d.nav,d.navArrow,d.navDist,d.navStreet,d.eta,d.compass,CK.hud,d.bl,d.br].join('|');
   if(now-c.lastDraw>66){ c.lastDraw=now; if(ik!==c.ik){ c.ik=ik; if(p.hud&&CK.hud) drawHud(p.hud,d);   // only when a number on them changed (each redraw is a texture upload)
-    if(p.cluster) drawSport(p.cluster,d); if(p.pano) (P.xp?drawPanoXp:drawPano)(p.pano,d); } if(p.screen&&now-(c.lastMap||0)>130){ c.lastMap=now; if(P.style==='ev') drawEV(p.screen,d); else if(P.xp) drawScreenXp(p.screen,d); else drawScreen(p.screen,d,P.style==='lux'); }
+    if(p.cluster) drawSport(p.cluster,d); if(p.pano) (P.xp?drawPanoXp:drawPano)(p.pano,d); } if(p.screen&&now-(c.lastMap||0)>130){ c.lastMap=now; if(P.style==='ev') drawEV(p.screen,d); else if(P.xp) drawScreenXp(p.screen,d); else drawScreen(p.screen,d,P.style==='lux'); musicBar(p.screen); }
     if(p.prnd&&p.prnd.cur!==d.gearL){ const pr=p.prnd, x=pr.T.x, L=pr.classic?['P','R','N','D','2','1']:['P','R','N','D','S'], W=pr.T.c.width, step=pr.classic?42:pr.lux?102:50, o=pr.classic?22:pr.lux?52:28;
       x.fillStyle=pr.lux?'#16130f':pr.classic?'#0c0c0c':'#0a0a0b'; x.fillRect(0,0,W,64); x.font=pr.lux?'600 30px system-ui':pr.classic?'700 30px Arial':'700 34px system-ui'; x.textAlign='center'; x.textBaseline='middle';
       L.forEach((t,i)=>{ x.fillStyle=t===d.gearL?(pr.classic?'#ff7a2a':'#ffffff'):(pr.lux?'#a09c94':'#70757c'); x.fillText(t,o+i*step,32); }); pr.T.t.needsUpdate=true; pr.cur=d.gearL; } }
@@ -2005,8 +2012,11 @@ function setHud(v){ CK.hud=v; LSs('ydHud',v?'1':'0'); showPick(); dirty=true; }
 // tap the overhead console's sunroof keys: look.js asks on every tap (one that isn't a drag-to-look); a key tap is used up here
 // and doesn't count toward its double-tap "look straight ahead" (tapping VENT twice used to throw your view forward)
 { const ray=new THREE.Raycaster(), v=new V3();
-  CK.tapKey=function(e){ if(!CK.on||!CK.cab||!CK.roofKeys||!CK.roofKeys.length) return null; const c=CK.cab;
+  CK.tapKey=function(e){ if(!CK.on||!CK.cab) return null; const c=CK.cab;
     c.scene.updateMatrixWorld(); c.cam.updateMatrixWorld(); ray.setFromCamera({x:(e.clientX/innerWidth)*2-1,y:-(e.clientY/innerHeight)*2+1},c.cam);
+    // a tap on the centre screen opens Music (owner 2026-11-22: "type a song on the lower screen and play it from the car")
+    const scr=c.parts.screen&&c.parts.screen.grp; if(scr&&window.MUSIC&&ray.intersectObject(scr.children[0],false).length){ MUSIC.open(); return 'music'; }
+    if(!CK.roofKeys||!CK.roofKeys.length) return null;
     const hit=ray.intersectObjects(CK.roofKeys.filter(o=>c.scene.getObjectById(o.id)),false)[0]; if(!hit) return null;
     const g=hit.object.parent, inv=new THREE.Matrix4().copy(g.matrixWorld).invert(), o=ray.ray.origin.clone().applyMatrix4(inv), d=ray.ray.direction.clone().transformDirection(inv);
     if(Math.abs(d.y)<1e-4) return null; const q=o.addScaledVector(d,(-.0012-o.y)/d.y);   // where the tap meets the console's face, not the target box's underside
