@@ -1131,7 +1131,7 @@ const ROOF={vent:false,slide:false,cover:false};
 CK.roof=function(k){ let t;
   if(k==='vent'||k==='close'){ if(ROOF.slide||ROOF.vent){ ROOF.slide=ROOF.vent=false; t='Sunroof: closing'; } else { ROOF.slide=true; ROOF.cover=true; t='Sunroof: opening'; } }
   else if(k==='open'){ ROOF.cover=true; t='Sunroof cover: open'; }
-  else if(k==='shut'){ if(ROOF.slide||ROOF.vent){ ROOF.slide=ROOF.vent=false; ROOF.cover=false; t='Sunroof and cover: closing'; } else { ROOF.cover=false; t='Sunroof cover: closed'; } }
+  else if(k==='shut'){ ROOF.cover=false; t='Sunroof cover: closed'; }   // the cover keys only ever move the cover (owner 2026-11-21)
   toast(t,1300); };
 function roofStep(c,dt){ for(const s of CK.roofSpots||[]) if(s.flash.material.opacity>0) s.flash.material.opacity=Math.max(0,s.flash.material.opacity-dt*2.5);
   const r=c.parts.sunroof; if(!r) return; r.slide=r.slide||0;
