@@ -169,9 +169,12 @@ const OCC={mesh:null,at:null,t:0,o:null,dirty:true,ter:null};
 function occFeatures(){ const out=[]; const add=(src,sl,hk,bk)=>{ let fs=[]; try{ fs=map.getSource(src)?map.querySourceFeatures(src,sl?{sourceLayer:sl}:{}):[]; }catch(e){} for(const f of fs) out.push([f,hk,bk]); };
   add(bSrc,'building','b','b'); add('rebuilt',null,'h','b'); add('roofs',null,'h','b');            // footprints, redrawn buildings, and the houses' pitched roofs (stacked slices)
   return out; }
-function buildOcc(){ OCC.t=performance.now(); OCC.at=[S.lng,S.lat]; OCC.dirty=false; OCC.ter=terrainOn;
-  const ox=S.lng*MLNG, oy=S.lat*MLAT, R=700, pos=[], idx=[], seen=new Set(), e0=terrainOn?(map.transform.elevation||0):0;
-  for(const [f,hk] of occFeatures()){ const g=f.geometry; if(!g) continue; const polys=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
+// built a slice at a time, ~4 ms a frame (owner 2026-11-22: downtown LA froze for ~150 ms each time it rebuilt in one go);
+// the old blockers stay up until the new set is finished
+function buildOcc(){ OCC.t=performance.now(); OCC.at=[S.lng,S.lat]; OCC.dirty=false; OCC.ter=terrainOn; OCC.job=occJob(); }
+function* occJob(){
+  const ox=S.lng*MLNG, oy=S.lat*MLAT, R=700, pos=[], idx=[], seen=new Set(), e0=terrainOn?(map.transform.elevation||0):0; let n=0;
+  for(const [f,hk] of occFeatures()){ if(++n%40===0) yield; const g=f.geometry; if(!g) continue; const polys=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
     const pr=f.properties||{}; let h,h0;
     if(hk==='b'){ h=+(pr.render_height??pr.height??6)||6; h0=+(pr.render_min_height??pr.min_height??0)||0; } else { h=+pr.h||0; h0=+pr.b||0; }
     if(h<=h0) continue;
@@ -191,9 +194,10 @@ function buildOcc(){ OCC.t=performance.now(); OCC.at=[S.lng,S.lat]; OCC.dirty=fa
   else { OCC.mesh.geometry.dispose(); OCC.mesh.geometry=geo; }
   OCC.o=[ox,oy]; }
 function placeOcc(px,py,m,b){
+  if(OCC.job){ const t=performance.now(); try{ while(performance.now()-t<4){ if(OCC.job.next().done){ OCC.job=null; break; } } }catch(e){ console.warn('building blockers',e); OCC.job=null; } }
   if(!(T.on&&mode!=='glider')){ if(OCC.mesh) OCC.mesh.visible=false; return; }
   const moved=OCC.at?meters(OCC.at[1],OCC.at[0],S.lat,S.lng):1e9, age=performance.now()-OCC.t;
-  if(moved>180||OCC.ter!==terrainOn||(OCC.dirty&&age>(POWER?6000:3000))||(!OCC.mesh&&age>1500)) safe('building blockers',buildOcc);
+  if(!OCC.job&&(moved>180||OCC.ter!==terrainOn||(OCC.dirty&&age>(POWER?6000:3000))||(!OCC.mesh&&age>1500))) safe('building blockers',buildOcc);
   const M=OCC.mesh; if(!M||!OCC.o) return; M.visible=true;
   const dx=OCC.o[0]-px, dy=OCC.o[1]-py, sb=Math.sin(b), cb=Math.cos(b), e=terrainOn?(map.transform.elevation||0):0;
   M.position.set((dx*cb-dy*sb)/m,-e/m,-(dx*sb+dy*cb)/m); M.rotation.set(0,b,0); M.scale.setScalar(1/m); }
