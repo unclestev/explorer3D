@@ -61,7 +61,7 @@ const SPECS={
   // same platform and size as the Navigator, its own dash — a 24-inch panoramic display along the top of the dash in
   // front of the driver, a 13.2-inch touchscreen in a silver frame with tall chrome vents either side, a satin band
   // sweeping across the dash and down round the centre stack, a squared-off two-tone wheel, light grey seats
-  expedition:{style:'sport', xp:true, eye:[-.42,1.565,.12], pitch:81,
+  expedition:{style:'sport', xp:true, sunroof:{hw:.42,z0:.07,z1:.76}, eye:[-.42,1.565,.12], pitch:81,
     ws:{zB:-1.10,yB:1.30,hwB:.81,zT:-.30,yT:1.855,hwT:.73,bow:.05}, roof:{y:1.88,hw:.77,zR:1.95}, belt:1.36, winTop:1.79, door:.86, zBp:.58, zC:1.62,
     hood:{zr:-1.15,zf:-2.62,yr:1.288,yf:1.205,hw:1.05,crown:.03,gap:.86,nose:.08,crease:{x:.40,h:.014}},
     dash:[[1.262,-1.115],[1.282,-.94],[1.28,-.77],[1.258,-.70],[1.18,-.675],[1.05,-.69],[.93,-.635],[.79,-.50]],
@@ -271,7 +271,7 @@ function shell(G,P,mats){
   // sun visors folded up against the headliner
   for(const s of [-1,1]){ const v=mesh(rbox(.36,.18,.024,.01,.03),trimM,G); v.position.set(s<0?eyeX:-eyeX,P.roof.y-.035,ws.zT+.14); v.rotation.x=-Math.PI/2+.08; }
   // Explorer overhead console (owner 2026-11-21, a photo of the real one: "put this at the top by the mirror")
-  if(P.ex) overheadEx(G,P,ws);
+  if(P.ex||P.xp) overheadEx(G,P,ws);
   // rear-view mirror
   { const hm=M({color:0x111112,roughness:.5}), mir=M({color:0xffffff,metalness:1,roughness:.04,out:true,env:1.15});
     const cx=0, cy=ws.yT-(P.style==='classic'?.085:.125), vg=(cy+.05-ws.yB)/(ws.yT-ws.yB), zg=lerp(ws.zB,ws.zT,vg)-ws.bow*Math.sin(Math.PI*(.3+.7*vg)), cz=zg+.075;
@@ -628,7 +628,7 @@ function overheadEx(G,P,ws){
   // headliner so its face sits ~1 cm below it, inside a soft trim ring, level with the roof (no longer hanging down)
   const W=.25, D=.25, zf=ws.zT+.075, cz=zf+D/2, th=.03;
   const g=new THREE.Group(); g.position.set(0,P.roof.y-.009,cz); G.add(g);
-  const blk=M({color:0x151517,roughness:.62,normalMap:rep(textures().grain,3,3),normalScale:new THREE.Vector2(.35,.35)});
+  const white=!!P.xp, blk=M({color:white?0xf6f6f3:0x151517,emissive:white?0x2a2a28:0,roughness:.62,normalMap:rep(textures().grain,3,3),normalScale:new THREE.Vector2(.35,.35)});
   const pod=mesh(rbox(W,D,th,.03,.06),blk,g); pod.rotation.x=-Math.PI/2; pod.position.y=th/2;
   const ring=mesh(rbox(W+.026,D+.026,.006,.04,.008),M({color:new THREE.Color(P.col.head).multiplyScalar(.75),roughness:.9,normalMap:rep(textures().fabric,6,6),normalScale:new THREE.Vector2(.4,.4)}),g);
   ring.rotation.x=-Math.PI/2; ring.position.y=.006;                                        // the headliner's edge rolled in round it
@@ -654,8 +654,12 @@ function overheadEx(G,P,ws){
   x.strokeStyle='#3d4045'; x.lineWidth=2; x.strokeRect(632,842,38,28);
   x.fillStyle='#050506'; for(const [a,b] of [[70,240],[784,954]]) for(let k=0;k<9;k++) for(let j=0;j<4;j++){ x.save(); x.translate(a+12+k*18,836+j*11); x.rotate(-.55); x.fillRect(0,0,12,3); x.restore(); }
   x.fillStyle='#09090a'; R(470,960,84,24,6); x.fill();                                           // the little sensor slot at the front edge
+  if(white){ // the Expedition's console in white (owner 2026-11-22): flip the face light-for-dark (dark icons on white keys), then put the clear lenses back
+    const im=x.getImageData(0,0,1024,1024), d=im.data; for(let i=0;i<d.length;i+=4){ const l=255-(d[i]+d[i+1]+d[i+2])/3; d[i]=d[i+1]=d[i+2]=Math.round(Math.min(255,l*1.0+6)); } x.putImageData(im,0,0);
+    for(const X of [150,742]){ x.fillStyle='#b9bbbd'; R(X,615,132,150,10); x.fill(); const gr=x.createLinearGradient(X+30,0,X+102,0); gr.addColorStop(0,'#8d9196'); gr.addColorStop(.5,'#f2f4f6'); gr.addColorStop(1,'#8d9196');
+      x.fillStyle=gr; R(X+34,650,64,80,10); x.fill(); x.strokeStyle='#9a9ea3'; x.lineWidth=5; R(X+22,636,88,108,8); x.stroke(); } }
   T.t.anisotropy=8; T.t.needsUpdate=true;
-  const face=mesh(new THREE.PlaneGeometry(W-.004,D-.004),M({map:T.t,roughness:.6,normalMap:rep(textures().grain,3,3),normalScale:new THREE.Vector2(.25,.25)}),g,false,false);
+  const face=mesh(new THREE.PlaneGeometry(W-.004,D-.004),M({map:T.t,roughness:.6,emissive:white?0xffffff:0,emissiveMap:white?T.t:null,emissiveIntensity:white?.22:0,normalMap:rep(textures().grain,3,3),normalScale:new THREE.Vector2(.25,.25)}),g,false,false);
   face.rotation.x=Math.PI/2; face.position.y=-.0006;                                             // faces down into the cabin
   // a little relief: the lid stands proud, the key strip and lenses sit in
   const lid=mesh(rbox(W*.86,D*.40,.004,.008,.012),M({color:0x1c1d20,roughness:.6,transparent:true,opacity:0}),g,false,false); lid.visible=false;
