@@ -789,7 +789,10 @@ function rrGeo(w,h,r){ const s=new THREE.Shape(), x=w/2, y=h/2; s.moveTo(-x+r,-y
 function stalkXp(grp,colM,P){
   const blk=M({color:0x1d1e21,roughness:.5,metalness:.08,env:.8,normalMap:rep(textures().grain,3,1),normalScale:new THREE.Vector2(.1,.1)});
   const inkM=t=>M({map:t,transparent:true,roughness:.55,metalness:0,env:.5,polygonOffset:true,polygonOffsetFactor:-2});
-  const piv=new THREE.Group(); piv.position.set(-.045,.004,-.08); piv.rotation.y=.12; grp.add(piv);   // inside the shroud's left side; the tip aims a touch back toward you
+  // mounted at the top left of the column and turned up so the barrel shows in the gap above the left spoke (owner's photo
+  // from the driver's seat); piv inside it tips with the signal
+  const mnt=new THREE.Group(); mnt.position.set(-.042,.028,-.075); mnt.rotation.set(0,.12,-.42); grp.add(mnt);
+  const piv=new THREE.Group(); mnt.add(piv);
   const k=.00021, ph=(X,Y)=>[-.029-(585-X)*k,-.013+(372-Y)*k], tr=t=>t*k/2*.97;
   // centre line [x,y] and radius: out of the column, then the photo's outline (X, centre Y, thickness, in photo px)
   const pts=[[[0,.006],.0090],[[-.008,.0035],.0084],[[-.0165,-.0025],.0078],[[-.0235,-.0105],.0074],
@@ -800,7 +803,7 @@ function stalkXp(grp,colM,P){
   const T1=CL.getTangent(1), bar0=new THREE.Group(); bar0.position.copy(CL.getPoint(1)); bar0.rotation.z=Math.atan2(-T1.y,-T1.x); piv.add(bar0);
   // TF: how far the printing turns up from facing straight back, so it faces the driver's eye
   let TF=.6; if(P&&P.eye){ grp.updateMatrix(); piv.updateMatrix(); bar0.updateMatrix();
-    const e=new V3(...P.eye).applyMatrix4(grp.matrix.clone().invert()).applyMatrix4(piv.matrix.clone().invert()).applyMatrix4(bar0.matrix.clone().invert()); TF=clamp(Math.atan2(e.y,e.z),0,1.3); }
+    mnt.updateMatrix(); const e=new V3(...P.eye).applyMatrix4(grp.matrix.clone().invert()).applyMatrix4(mnt.matrix.clone().invert()).applyMatrix4(piv.matrix.clone().invert()).applyMatrix4(bar0.matrix.clone().invert()); TF=clamp(Math.atan2(e.y,e.z),0,1.3); }
   // a: angle round the stalk from facing back (+z) toward up
   const loft=(a0,a1,s0,s1,dr,nu,nv)=>grid(nu,nv,(u,v)=>{ const s=lerp(s0,s1,v), p=CL.getPoint(s), T=CL.getTangent(s), N=new V3().crossVectors(Z,T).normalize(), B=new V3().crossVectors(T,N).normalize(),
       a=lerp(a0,a1,u), r=RC.getPoint(s).x+dr; p.addScaledVector(B,Math.cos(a)*r).addScaledVector(N,-Math.sin(a)*r); return [p.x,p.y,p.z]; });
