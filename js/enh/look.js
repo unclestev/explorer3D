@@ -30,7 +30,8 @@ mapEl.addEventListener('pointermove',e=>{
 const lift=e=>{
   if(!pts.delete(e.pointerId)) return;
   if(drag&&drag.id===e.pointerId){
-    if(!drag.on){ const t=performance.now(); if(t-lastTap<320){ reset(); lastTap=0; } else lastTap=t; }   // double tap
+    if(!drag.on){ if(window.COCKPIT&&COCKPIT.tapKey&&COCKPIT.tapKey(e)) lastTap=0;   // a tap on a cockpit key (the sunroof's), not the map
+      else { const t=performance.now(); if(t-lastTap<320){ reset(); lastTap=0; } else lastTap=t; } }   // double tap
     drag=null; }
 };
 mapEl.addEventListener('pointerup',lift); mapEl.addEventListener('pointercancel',lift);
