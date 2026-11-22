@@ -723,6 +723,7 @@ function steeringWheel(G,P){
   const sh=mesh(rbox(.11,.10,.26,.03,.04),colM,grp); sh.position.set(0,-.01,-.17);
   sigStalk=null;
   if(P.ex) stalksEx(grp,colM);
+  else if(P.xp) stalkXp(grp);
   else for(const s of [-1,1]){ const st=mesh(bar([[s*.04,0,-.09],[s*.12,-.005,-.07],[s*.16,-.012,-.06]],.012,.012,[0,1,0],6,8),colM,grp); }
   return spin;
 }
@@ -777,6 +778,18 @@ function stalksEx(grp,colM){
   const v=r&&r.width?Math.round(r.right+8)+'px':''; if(document.body.style.getPropertyValue('--cx')!==v){ if(v) document.body.style.setProperty('--cx',v); else document.body.style.removeProperty('--cx'); } });
 function rrGeo(w,h,r){ const s=new THREE.Shape(), x=w/2, y=h/2; s.moveTo(-x+r,-y); s.lineTo(x-r,-y); s.quadraticCurveTo(x,-y,x,-y+r); s.lineTo(x,y-r); s.quadraticCurveTo(x,y,x-r,y);
   s.lineTo(-x+r,y); s.quadraticCurveTo(-x,y,-x,y-r); s.lineTo(-x,-y+r); s.quadraticCurveTo(-x,-y,-x+r,-y); const g=new THREE.ShapeGeometry(s,8); uvFit(g); return g; }
+// Expedition (owner's photo): one chunky stalk on the left of the column — signals, lights and wipers in one — a thick
+// black arm with a ridged roller near its end and a flat end cap; it tips with the turn signal
+function stalkXp(grp){
+  const blk=M({color:0x1a1b1e,roughness:.4,metalness:.1,env:.8});
+  const piv=new THREE.Group(); piv.position.set(-.05,.03,-.10); grp.add(piv);   // low enough to come out past the rim beside the upper spoke (photo)
+  mesh(bar([[0,0,0],[-.07,-.003,.012],[-.14,-.007,.022],[-.19,-.010,.028]],[.017,.022],.017,[0,1,0],10,12),blk,piv);   // the arm, thickening outward
+  const RT=canvasTex(128,32), r=RT.x; r.fillStyle='#0c0c0d'; r.fillRect(0,0,128,32); r.fillStyle='#4a4b50'; for(let i=0;i<128;i+=10) r.fillRect(i,0,4,32);
+  RT.t.wrapS=RT.t.wrapT=THREE.RepeatWrapping; RT.t.repeat.set(3,1);
+  const roll=mesh(new THREE.CylinderGeometry(.0125,.0125,.016,28),M({map:RT.t,roughness:.45,metalness:.25}),piv); roll.rotation.z=Math.PI/2; roll.position.set(-.198,-.010,.029);   // ridged roller
+  const end=mesh(new THREE.CylinderGeometry(.0118,.0122,.026,28),blk,piv); end.rotation.z=Math.PI/2; end.position.set(-.219,-.011,.030);                 // end cap
+  const ring=mesh(new THREE.TorusGeometry(.0122,.0012,6,28),M({color:0x9a9ea4,metalness:.8,roughness:.3}),piv); ring.rotation.y=Math.PI/2; ring.position.set(-.2325,-.011,.030);
+  sigStalk={piv,k:0}; }
 function stalkStep(dt){ const st=sigStalk; if(!st) return; const d=window.SIG?SIG.dir:0;
   st.k+=(d-st.k)*Math.min(1,dt*14); st.piv.rotation.z=-.2*st.k; }   // right signal: the lever swings up; left: down (owner: "show the lever shift up or down")
 // Explorer ST wheel (owner 2026-11-21, a photo of the real one): thick round rim in perforated leather; a big airbag pad,
