@@ -9,7 +9,7 @@
 'use strict';
 const {safe,onReady,onTick}=YD;
 
-const CLASS_SPEED={motorway:65,trunk:55,primary:45,secondary:40,tertiary:35,minor:25};   // mph
+const CLASS_SPEED={motorway:65,trunk:55,primary:45,secondary:40,tertiary:35,minor:30};   // mph: the same typical limits the speed sign shows when a road has none posted (signs.js)
 const CLASS_WIDTH={motorway:14,trunk:12,primary:12,secondary:10,tertiary:10,minor:8};    // metres, same as roads.js
 const PAINT=[0xf1f3f5,0x1f2328,0xaab2bb,0x6b7280,0xb91c1c,0x1d4ed8,0x1e3a8a,0x14532d,0xd6c7a1,0x7c2d12,0x0f766e];
 const T={on:true,nodes:null,grid:null,segs:[],builtAt:null,builtT:0,tilesDirty:true,agents:[],group:null,parts:null,moved:false};
@@ -40,7 +40,7 @@ function build(){
           const key=prev.id<n.id?prev.id+'-'+n.id:n.id+'-'+prev.id;
           if(!seen.has(key)){ seen.add(key); prev.deg++; n.deg++;
             const add=(a,b)=>{ const dx=b.x-a.x, dy=b.y-a.y, L=Math.hypot(dx,dy); if(L<.3) return;
-              const s={a,b,len:L,ux:dx/L,uy:dy/L,off:ow?0:w/4,v:mph2w(mph),cls,stop:false,sig:null}; a.out.push(s); segs.push(s); };
+              const s={a,b,len:L,ux:dx/L,uy:dy/L,off:ow?0:w/4,v:mph2w(mph),mph,est:mph,cls,stop:false,sig:null}; a.out.push(s); segs.push(s); };
             if(ow>=0) add(prev,n); if(ow<=0) add(n,prev); } }
         prev=n; } } }
   T.nodes=nodes; T.grid=grid; T.segs=segs; T.builtAt=[S.lng,S.lat]; T.builtT=performance.now(); T.tilesDirty=false;
@@ -53,6 +53,7 @@ function nearNode(x,y,r){ if(!T.grid) return null; const cx=Math.floor(x), cy=Ma
 // on an approach road they apply only to traffic heading toward that intersection
 function markControls(){
   const OX=YD.OX; if(!OX||!T.segs.length) return;
+  postedLimits(OX);
   const put=(o,kind)=>{
     const ph=hash(Math.round(o.x/60),Math.round(o.y/60))<.5?0:1;          // same phase the sign icons use
     const n=nearNode(o.x,o.y,3.5);
@@ -66,13 +67,20 @@ function markControls(){
   for(const o of OX.sigs||[]) put(o,'sig');
   T.oxAt=OX.at;
 }
+// drive the posted limit (owner 2026-11-21: "make the traffic cars go the speed limit"): each road piece takes the
+// limit of the OpenStreetMap way it lies on (the one your speed sign reads), else the typical limit for its class
+function postedLimits(OX){ const W=OX.speeds||[];
+  const pd=(pts,x,y)=>{ let b=1e9; for(let i=1;i<pts.length;i++){ const ax=pts[i-1][0], ay=pts[i-1][1], dx=pts[i][0]-ax, dy=pts[i][1]-ay, L=dx*dx+dy*dy||1, t=Math.max(0,Math.min(1,((x-ax)*dx+(y-ay)*dy)/L)); b=Math.min(b,Math.hypot(x-ax-dx*t,y-ay-dy*t)); } return b; };
+  for(const s of T.segs){ const x=(s.a.x+s.b.x)/2, y=(s.a.y+s.b.y)/2; let best=9, mph=null;
+    for(const w of W){ if(x<w.bb[0]-10||x>w.bb[2]+10||y<w.bb[1]-10||y>w.bb[3]+10) continue; const d=pd(w.pts,x,y); if(d<best){ best=d; mph=w.mph; } }
+    const m=mph||s.est; if(m!==s.mph){ s.mph=m; s.v=mph2w(m); } } }
 function light(ph){ const t=(Date.now()/1000)%30, a=t<12?'g':t<15?'y':'r', b=t<15?'r':t<27?'g':'y'; return ph===0?a:b; }
 
 /* ---------- cars ---------- */
 // vehicle designs live in js/enh/vehicles.js
 function makeParts(){ return YD.VEH.mats(); }
 function carMesh(){ const g=YD.VEH.build(shadow.material); g.visible=false; T.group.add(g); return g; }
-function place(a,seg,s){ a.hold=0; a.path=[seg]; a.s=s; a.v=seg.v*.6; a.stopDone=null; a.waitT=0;
+function place(a,seg,s){ a.hold=0; a.path=[seg]; a.s=s; a.v=seg.v; a.stopDone=null; a.waitT=0;
   const p=pos(a); a.px=p[0]; a.py=p[1]; a.hd=Math.atan2(seg.ux,seg.uy); a.fade=0; }
 function pos(a){ const s=a.path[0], cx=s.a.x+s.ux*a.s, cy=s.a.y+s.uy*a.s; return [cx+s.uy*s.off, cy-s.ux*s.off]; }   // right-hand side: normal (uy,-ux)
 function spawn(a,minD,maxD){
@@ -81,16 +89,21 @@ function spawn(a,minD,maxD){
     const s=T.segs[Math.floor(Math.random()*T.segs.length)]; if(!s) return false;
     const d=Math.hypot((s.a.x+s.b.x)/2-px,(s.a.y+s.b.y)/2-py); if(d<minD||d>maxD) continue;
     if(T.agents.some(o=>o!==a&&o.path&&Math.hypot(o.px-s.a.x,o.py-s.a.y)<25)) continue;
-    place(a,s,Math.random()*s.len); a.f=.85+Math.random()*.2; return true; }
+    place(a,s,Math.random()*s.len); a.f=1; return true; }   // right on the limit
   return false;
 }
 function nextSeg(seg){
   let n=seg.b; if(n.out===undefined||!T.nodes||T.nodes[n.id]!==n){ n=nearNode(seg.b.x,seg.b.y,1.2); if(!n) return null; }   // graph was rebuilt
   let outs=n.out.filter(o=>Math.hypot(o.b.x-seg.a.x,o.b.y-seg.a.y)>.9);                          // no U-turns...
-  if(!outs.length) return null;                                                                   // ...a dead end ends the trip
+  if(!outs.length) outs=bridge(n,seg);                                                            // a tile seam the merge missed: carry on along the road just across it
+  if(!outs.length) return null;                                                                   // ...a real dead end / edge of the loaded map ends the trip
   const w=outs.map(o=>{ const c=o.ux*seg.ux+o.uy*seg.uy; return c>.87?5:c>-.2?1:.15; });         // mostly straight on
   let r=Math.random()*w.reduce((x,y)=>x+y,0); for(let i=0;i<outs.length;i++){ r-=w[i]; if(r<=0) return outs[i]; } return outs[0];
 }
+function bridge(n,seg){ const out=[], cx=Math.floor(n.x), cy=Math.floor(n.y);
+  for(let i=-4;i<=4;i++) for(let j=-4;j<=4;j++){ const a=T.grid&&T.grid.get((cx+i)+','+(cy+j)); if(a) for(const m of a){ if(m===n||Math.hypot(m.x-n.x,m.y-n.y)>4) continue;
+    for(const o of m.out) if(o.ux*seg.ux+o.uy*seg.uy>.7) out.push(o); } }
+  return out; }
 function turnCap(s1,s2){ const c=s1.ux*s2.ux+s1.uy*s2.uy; return c>.95?1e9:c>.7?mph2w(22):c>.2?mph2w(15):mph2w(10); }
 
 function drive(a,dt,px,py,pv,ph){ const B=BB(), ACC=ACCF();
@@ -98,12 +111,12 @@ function drive(a,dt,px,py,pv,ph){ const B=BB(), ACC=ACCF();
   const LA=Math.max(60,a.v*a.v/(2*B)+40);
   let ahead=a.path[0].len-a.s; for(let i=1;i<a.path.length;i++) ahead+=a.path[i].len;
   while(ahead<LA){ const n=nextSeg(a.path[a.path.length-1]); if(!n) break; a.path.push(n); ahead+=n.len; }
-  const seg=a.path[0]; let allow=seg.v*a.f;
+  const seg=a.path[0]; let allow=seg.v*a.f; a.endIn=1e9;
   let dist=seg.len-a.s;
   for(let i=0;i<a.path.length;i++){
     const s=a.path[i], nx=a.path[i+1], end=s.b;
     if(nx) allow=Math.min(allow,Math.sqrt(Math.pow(Math.min(turnCap(s,nx),nx.v*a.f),2)+2*B*Math.max(0,dist-3)));
-    else allow=Math.min(allow,Math.sqrt(2*B*Math.max(0,dist-2)));   // road ends (edge of loaded map): stop, then respawn
+    else a.endIn=dist;                                               // road ends (edge of the loaded map, dead end): no stopping in the lane (owner 2026-11-21) — it drives on and fades away, then turns up elsewhere
     const stopSign=(s.stop||end.stop)&&a.stopDone!==end, sg=s.sig||end.sig;
     if(stopSign){ allow=Math.min(allow,Math.sqrt(2*B*Math.max(0,dist-5)));
       if(i===0&&dist<9&&a.v<1){ a.waitT+=dt; if(a.waitT>1.3){ a.stopDone=end; a.waitT=0; } } }
@@ -163,8 +176,8 @@ function frame(dt){
     if(doOcc) a.occ=hiddenByBuilding(a,camX,camY,camH);
     const g=a.mesh; g.visible=!a.occ; if(a.occ) continue;
     const dx=a.px-px, dy=a.py-py, f=dx*sb+dy*cb, r=dx*cb-dy*sb;          // metres ahead / to the right of the camera's view
-    a.fade=Math.min(1,(a.fade||0)+dt*2.5);
-    g.position.set(r/m,0,-f/m); g.scale.setScalar(sc*a.fade); g.rotation.y=-(a.hd-b);
+    a.fade=Math.min(1,(a.fade||0)+dt*2.5); const out=Math.max(0,Math.min(1,(a.endIn-1)/14));   // fading out as its road runs out
+    g.position.set(r/m,0,-f/m); g.scale.setScalar(sc*a.fade*out); g.rotation.y=-(a.hd-b);
     // wheels roll with the distance driven; front wheels steer from how fast the car is turning (same bicycle model as yours)
     const u=g.userData, yaw=a.prevHd==null?0:Math.atan2(Math.sin(a.hd-a.prevHd),Math.cos(a.hd-a.prevHd))/Math.max(dt,1e-3); a.prevHd=a.hd;
     u.spin-=a.v/SPEEDUP*dt/u.r; const st=a.v>.5?Math.max(-.55,Math.min(.55,Math.atan(yaw*u.wb/a.v))):u.steer; u.steer+=(st-u.steer)*Math.min(1,dt*6);
