@@ -34,7 +34,8 @@ function whoosh(up){ const A=window.SOUND&&SOUND.state; if(!A||!A.ctx||!SOUND.on
     s.connect(f); f.connect(g); g.connect(c.destination); s.start(t); s.stop(t+1.6); }catch(e){} }
 
 /* where to land */
-const ov=q=>ovFetch('[out:json][timeout:25];'+q);
+// each Overpass question gets 18 s (the servers can be slow); past that we go with what we have
+const ov=q=>Promise.race([ovFetch('[out:json][timeout:18];'+q),new Promise((_,no)=>setTimeout(()=>no(new Error('slow')),18000))]);
 const bbStr=(s,w,n,e)=>`(${s.toFixed(4)},${w.toFixed(4)},${n.toFixed(4)},${e.toFixed(4)})`;
 const tagName=t=>t&&(t['name:en']||t.name)||'';
 async function interesting(lat,lng,r){   // something with a Wikipedia entry within r degrees, else any named attraction
@@ -48,7 +49,7 @@ async function interesting(lat,lng,r){   // something with a Wikipedia entry wit
 async function spotIn(p){ const [s,n,w,e]=p.bbox, span=Math.max(n-s,(e-w)*Math.cos(((s+n)/2)*Math.PI/180));
   let c={lat:p.lat,lng:p.lng,name:p.name}, r=Math.min(.12,Math.max(.02,span/2));
   if(span>.6){ say('Picking a city in '+p.name+'…');
-    try{ const j=await ov(`node["place"~"^(city|town)$"]${bbStr(s,w,n,e)};out 400;`);
+    try{ const B=bbStr(s,w,n,e), j=await ov(span>4?`node["place"="city"]${B};out 400;`:`(node["place"="city"]${B};node["place"="town"]${B};);out 400;`);   // exact tags: the fast index
       const C=(j.elements||[]).filter(x=>x.tags&&tagName(x.tags)).map(x=>({lat:x.lat,lng:x.lon,name:tagName(x.tags),wt:Math.sqrt(Math.max(5000,+String(x.tags.population||'').replace(/\D/g,'')||(x.tags.place==='city'?100000:10000)))}));
       if(C.length){ let t=Math.random()*C.reduce((a,b)=>a+b.wt,0); for(const x of C){ t-=x.wt; if(t<=0){ c=x; break; } } if(t>0) c=C[C.length-1]; r=.06; } }catch(e){ console.warn('teleport cities',e); } }
   say('Finding somewhere interesting in '+c.name+'…');
