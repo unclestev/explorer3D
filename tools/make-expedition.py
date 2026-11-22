@@ -111,9 +111,11 @@ gh = Mesh('Glasshouse')
 def gpt(z, u):
     S = section(z)
     x0 = GB*S['hw']; y0 = S['yw']+(S['yt']-S['yw'])*S['frac'] - .004
-    H = max(0., S['ytop']-y0); r = min(.055, .45*H); rw = max(x0-.17*(H-r), .55*x0)
+    # (roof pass, owner 2026-11-22: "the top of the sides where the windows are look boxy") side glass leaning in ~21
+    # degrees, a soft ~9 cm round-over at the roof edge, and a ~3.5 cm crown across the roof
+    CR = .035; H = max(0., S['ytop']-CR-y0); r = min(.09, .45*H); rw = max(x0-.22*(H-r), .55*x0)
     if u <= .5: q = u/.5; return [x0+(rw-x0)*q, y0+(H-r)*q, z]
-    a = (u-.5)/.5*math.pi/2; return [rw*math.cos(a)**(2/9.0), y0+(H-r)+r*math.sin(a)**(2/2.6), z]   # tight roof edge, flat top
+    a = (u-.5)/.5*math.pi/2; x = rw*math.cos(a)**(2/3.6); return [x, y0+(H-r)+r*math.sin(a)**(2/2.2)+CR*(1-(x/rw)**2)*min(1, max(0, (H-.12)/.2)), z]
 zz = np.linspace(-2.66, 1.7, 900)
 def has(z): S = section(float(z)); return float(top(z)) > S['yw']+(S['yt']-S['yw'])*S['frac']+.006
 hasH = [has(z) for z in zz]
@@ -136,13 +138,21 @@ ggrid(0, .5, zC0, zB1, 40, 14, 'Glass')            # rear door glass
 ggrid(0, .5, zB1, zB0, 3, 14, 'TrimGloss')         # B pillar
 ggrid(0, .5, zB0, zA, 40, 14, 'Glass')             # front door glass
 ggrid(0, .5, zA, lambda u: ZW, 6, 14, 'TrimGloss') # A pillar: thin, gloss black
-ggrid(0, .5, lambda u: ZW, cz1, 4, 14, 'Paint')    # ahead of the windshield: body
 ggrid(.5, .54, cz0, lambda u: ZW, 140, 1, 'Paint')          # roof edge
-ggrid(.5, .54, lambda u: ZW, cz1, 3, 1, 'Paint')
+gh_trim = Mesh('WindowTrim')
+def gtrim(u0, u1, z0f, z1f, nz, push):
+    G = []
+    for i in range(nz+1):
+        row = []
+        for u in (u0, u1):
+            z = z0f(u)+(z1f(u)-z0f(u))*i/nz; p = gpt(z, u); row.append([p[0]+push, p[1]+push*.3, p[2]])
+        G.append(row)
+    mirror_grid(gh_trim, G, lambda i, j: 'TrimGloss')
+gtrim(.475, .5, zD, zA, 120, .006)                 # black frame along the top of the side windows
+gtrim(0., .018, zD, zA, 120, .006)                 # black beltline moulding along their foot
 ggrid(.54, 1, cz0, lambda u: -2.43, 14, 12, 'Glass')         # tailgate glass, leaning forward ~20 degrees
 ggrid(.54, 1, lambda u: -2.43, lambda u: .64, 100, 12, 'Paint')   # flat painted roof
 ggrid(.54, 1, lambda u: .64, lambda u: ZW, 30, 12, 'Glass')  # windshield
-ggrid(.54, 1, lambda u: ZW, cz1, 4, 12, 'Paint')            # cowl / hood behind it
 
 def zfront(x, y, lo=2.40):
     hi = ZF+.01
@@ -362,7 +372,7 @@ def wheel_mesh(name, outward):
                 split = arm*.085*min(1, t/.4)**1.3                                   # one root at the hub, two arms toward the rim
                 a = a0+split+.07*t                                                    # a slight twist
                 wd = (.040-.012*min(1, t/.4))/rr                                      # arm ~2.8 cm wide at the rim, wider at the root
-                xo = w*.74+.050*(1-t)**.8                                             # concave: hub stands out
+                xo = w*.74+.010*(1-t)                                                 # flat across the face (the real wheel isn't dished)
                 pts = [(xo+.006*(j == 1), a+(j-1)*wd/2) for j in range(3)]
                 face = [m.v((outward*x_, rr*math.cos(a_), rr*math.sin(a_))) for x_, a_ in pts]
                 back = [m.v((outward*(xo-.032), rr*math.cos(a+(j-1)*wd/2), rr*math.sin(a+(j-1)*wd/2))) for j in (0, 2)]
@@ -371,11 +381,11 @@ def wheel_mesh(name, outward):
                 r0, r1 = rows[q], rows[q+1]
                 quad('Spoke', r0[0], r1[0], r0[1], r1[1]); quad('Spoke', r0[1], r1[1], r0[2], r1[2])     # face
                 quad('SpokeSide', r0[3], r1[3], r0[0], r1[0]); quad('SpokeSide', r0[2], r1[2], r0[4], r1[4])   # side walls
-    lathe('Spoke', [(w*.74+.050, .095), (w*.74+.056, .082), (w*.74+.058, .05)], 30)                  # hub face
-    lathe('Cap', [(w*.74+.0585, .05), (w*.74+.064, .044), (w*.74+.066, 0.)], 24)                    # plain centre cap
+    lathe('Spoke', [(w*.74+.010, .095), (w*.74+.013, .082), (w*.74+.014, .05)], 30)                  # hub face, nearly flush
+    lathe('Cap', [(w*.74+.0145, .05), (w*.74+.018, .044), (w*.74+.019, 0.)], 24)                    # plain centre cap, nearly flush
     for k in range(6):                                                                               # six lug nuts
         a = k/6*2*math.pi+.26; cy, cz = .068*math.cos(a), .068*math.sin(a)
-        prof = [(w*.74+.0585, .0105), (w*.74+.072, .0105), (w*.74+.074, .006), (w*.74+.0745, 0.)]
+        prof = [(w*.74+.0145, .0105), (w*.74+.024, .0105), (w*.74+.026, .006), (w*.74+.0265, 0.)]
         idx = []
         for i in range(7):
             b_ = i/6*2*math.pi; idx.append([m.v((outward*px, cy+pr*math.cos(b_), cz+pr*math.sin(b_))) for px, pr in prof])
@@ -450,7 +460,7 @@ def put(m, translation=None, parent=0, offset=(0, 0, 0)):
     node = dict(name=m.name, mesh=len(J['meshes'])-1)
     if translation: node['translation'] = list(translation)
     J['nodes'].append(node); J['nodes'][parent]['children'].append(len(J['nodes'])-1)
-for m in (body, gh, heads, tails, trim, plate, mir, brk):
+for m in (body, gh, gh_trim, heads, tails, trim, plate, mir, brk):
     if m.prims: put(m)
 for name, x, za in wheels:
     put(wheel_mesh(name, 1 if x > 0 else -1), translation=(x, TYRE_R, za))
