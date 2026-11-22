@@ -319,16 +319,35 @@ function screenPt(b){
   return [(M[0]*x+M[4]*y+M[8]*z+M[12])/w,(M[1]*x+M[5]*y+M[9]*z+M[13])/w];
 }
 const OCC=['building-3d','rebuilt-3d'];
+/* is a building between the camera and this light? (owner 2026-11-21: "the water tower red lights shine through the
+   buildings"). The old check asked the screen what was drawn at the dot — any building there, in front of the tower or
+   behind it — and with 3D terrain on it didn't check at all. Now: walk the sight line from the camera toward the light
+   through the buildings near you (the same map data the cockpit uses) and see whether one stands taller than the line. */
+function blocked(b){ const T=map.transform, cp=T.getCameraPosition?T.getCameraPosition():null; if(!cp||typeof geoBlocks!=='function') return false;
+  const ter=typeof terrainOn!=='undefined'&&terrainOn, ground=(lng,lat)=>{ if(!ter) return 0; try{ return (map.queryTerrainElevation([lng,lat])||0)+(T.elevation||0); }catch(e){ return 0; } };
+  const kx=111320*Math.cos(cp.lngLat.lat*Math.PI/180), dx=(b.t.lng-cp.lngLat.lng)*kx, dy=(b.t.lat-cp.lngLat.lat)*111320, D=Math.hypot(dx,dy)||1, ux=dx/D, uy=dy/D;
+  const top=ground(b.t.lng,b.t.lat)+b.h-2.5, a0=cp.altitude;   // -2.5 m: the glow is a few metres across, so its lower edge counts
+  for(let s=4;s<Math.min(D-15,420);s+=4){ const lng=cp.lngLat.lng+ux*s/kx, lat=cp.lngLat.lat+uy*s/111320, line=a0+(top-a0)*s/D;
+    for(const f of geoBlocks(lng,lat)){ const pr=f.properties||{}, h=(+(pr.render_height??pr.height??6)||6)+1.5;   // +1.5: the pitched roof on top
+      if(line<h+ground(lng,lat)&&contains(f.geometry,lng,lat)) return true; } }
+  return false; }
+/* and where reading the screen is cheap (flat map, chase view): is a building drawn at the dot that stands nearer than the
+   tower? That catches buildings at any distance, past the ones the sight-line walk looks at */
+function blockedScreen(b,p){ if(typeof QGEO==='function'&&QGEO()) return false; const T=map.transform, cp=T.getCameraPosition?T.getCameraPosition():null; if(!cp) return false;
+  const ids=OCC.filter(id=>map.getLayer(id)); if(!ids.length) return false;
+  let fs=[]; try{ fs=map.queryRenderedFeatures([[p[0]-2,p[1]-2],[p[0]+2,p[1]+2]],{layers:ids}); }catch(e){ return false; }
+  const kx=111320*Math.cos(cp.lngLat.lat*Math.PI/180), D=Math.hypot((b.t.lng-cp.lngLat.lng)*kx,(b.t.lat-cp.lngLat.lat)*111320);
+  for(const f of fs){ const g=f.geometry; if(!g) continue; const rings=g.type==='Polygon'?[g.coordinates[0]]:g.type==='MultiPolygon'?g.coordinates.map(c=>c[0]):[];
+    for(const r of rings) for(const q of r||[]) if(Math.hypot((q[0]-cp.lngLat.lng)*kx,(q[1]-cp.lngLat.lat)*111320)<D-30) return true; }
+  return false; }
 function placeBeacons(){
   if(!B.list.length) return;
   const W=innerWidth, H=innerHeight, now=performance.now(), occ=now-B.occT>(POWER?900:450);
   if(occ) B.occT=now;
-  const layers=occ?OCC.filter(id=>map.getLayer(id)):null;
   for(const b of B.list){
     let p=null; try{ p=screenPt(b); }catch(e){}
     if(!p||p[0]<-20||p[0]>W+20||p[1]<-20||p[1]>H+20){ if(b.el.style.display!=='none') b.el.style.display='none'; continue; }
-    if(occ&&layers.length&&!(typeof terrainOn!=='undefined'&&terrainOn)){ try{   // terrain on: skip (each query stalls the GPU)
-       b.occ=map.queryRenderedFeatures([p[0],p[1]+2],{layers}).length>0; }catch(e){ b.occ=false; } }
+    if(occ){ try{ b.occ=blocked(b)||blockedScreen(b,p); }catch(e){ b.occ=false; } }
     if(b.occ){ if(b.el.style.display!=='none') b.el.style.display='none'; continue; }
     const d=meters(b.t.lat,b.t.lng,S.lat,S.lng), sc=Math.max(.45,Math.min(1.3,700/Math.max(d,1)));   // a bit smaller with distance
     if(b.el.style.display==='none') b.el.style.display='';

@@ -331,9 +331,7 @@ function shell(G,P,mats){
     for(let k=0;k<pz.count;k++){ const z=pz.getZ(k); if(z<-.05){ const t=(-.05-z)/.065; pz.setX(k,pz.getX(k)*(1-(ex?.34:.22)*t)+(ex?-o*.03:o*.012)*t); pz.setY(k,pz.getY(k)*(1-(ex?.3:.18)*t)+(ex?.022*t:0)); } }   // the back of the shell tapers and leans outboard
     hg.computeVertexNormals(); mesh(hg,pm,g);
     const blk=M({color:0x0b0b0c,roughness:.7,normalMap:rep(textures().grain,2,2)});
-    if(ex){ const t=new THREE.Shape(); t.moveTo(0,0); t.lineTo(.2,0); t.quadraticCurveTo(.06,.07,0,.17); t.lineTo(0,0);   // the sail, as below
-      const sm=mesh(new THREE.ShapeGeometry(t,8),M({color:0x0a0a0b,roughness:.8,side:THREE.DoubleSide}),G,false);
-      sm.rotation.y=-Math.PI/2; sm.position.set(s*(P.door+.035),P.belt+.005,zA+.02); }
+    // (the Explorer has no sail triangle: owner 2026-11-21, "remove those triangles")
     // Explorer (owner 2026-11-21: "it should attach to the car with the proper housing instead of the arm"): no arm — the
     // housing itself runs inboard as a thick neck and widens onto its mount on the door at the window's front corner
     if(ex){ g.lookAt(new V3(...P.eye).add(new V3(s>0?-.4:.5,.05,1.6))); g.updateMatrix();

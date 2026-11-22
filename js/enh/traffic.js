@@ -154,13 +154,53 @@ function hiddenByBuilding(a,camX,camY,camH){
   return false;
 }
 
+/* ---------- buildings as depth-only blockers in the car layer (owner 2026-11-21: "sometimes cars very slightly are
+   seen through buildings"). The cars are drawn on their own canvas over the map, so the map's buildings can't hide them
+   pixel by pixel; the per-car check only hides a car once it's wholly behind one, a quarter-second at a time. These are
+   the nearby buildings' footprints and roofs drawn invisibly (depth only) in the car layer, so any part of a car behind
+   a building is cut off exactly where the building is. Rebuilt as you drive on; not with 3D terrain on (the car layer's
+   ground is flat there). ---------- */
+const OCC={mesh:null,at:null,t:0,o:null,dirty:true,ter:null};
+function occFeatures(){ const out=[]; const add=(src,sl,hk,bk)=>{ let fs=[]; try{ fs=map.getSource(src)?map.querySourceFeatures(src,sl?{sourceLayer:sl}:{}):[]; }catch(e){} for(const f of fs) out.push([f,hk,bk]); };
+  add(bSrc,'building','b','b'); add('rebuilt',null,'h','b'); add('roofs',null,'h','b');            // footprints, redrawn buildings, and the houses' pitched roofs (stacked slices)
+  return out; }
+function buildOcc(){ OCC.t=performance.now(); OCC.at=[S.lng,S.lat]; OCC.dirty=false; OCC.ter=terrainOn;
+  const ox=S.lng*MLNG, oy=S.lat*MLAT, R=700, pos=[], idx=[], seen=new Set(), e0=terrainOn?(map.transform.elevation||0):0;
+  for(const [f,hk] of occFeatures()){ const g=f.geometry; if(!g) continue; const polys=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
+    const pr=f.properties||{}; let h,h0;
+    if(hk==='b'){ h=+(pr.render_height??pr.height??6)||6; h0=+(pr.render_min_height??pr.min_height??0)||0; } else { h=+pr.h||0; h0=+pr.b||0; }
+    if(h<=h0) continue;
+    for(const pl of polys){ const ring=pl[0]; if(!ring||ring.length<4) continue;
+      const key=hk+ring.length+':'+ring[0][0].toFixed(6)+','+ring[0][1].toFixed(6)+':'+h0; if(seen.has(key)) continue; seen.add(key);   // the same piece from overlapping tiles
+      const P=[]; let near=false, cx=0, cy=0; for(let i=0;i<ring.length-1;i++){ const x=ring[i][0]*MLNG-ox, y=ring[i][1]*MLAT-oy; P.push(new THREE.Vector2(x,y)); cx+=ring[i][0]; cy+=ring[i][1]; if(Math.abs(x)<R&&Math.abs(y)<R) near=true; }
+      if(!near||P.length<3) continue;
+      // 3D terrain: stand it on the ground where the map does (the terrain height at its middle), kept absolute so it stays put as you drive
+      let el=0; if(terrainOn){ try{ el=(map.queryTerrainElevation([cx/P.length,cy/P.length])||0)+e0; }catch(e){} }
+      const base=pos.length/3;
+      for(const q of P){ pos.push(q.x,h0+el,-q.y, q.x,h+el,-q.y); }                              // a floor and a top point per corner
+      for(let i=0;i<P.length;i++){ const j=(i+1)%P.length, a=base+2*i, b=base+2*j; idx.push(a,b,a+1, b,b+1,a+1); }   // walls
+      let tri=[]; try{ tri=THREE.ShapeUtils.triangulateShape(P,[]); }catch(e){}
+      for(const t of tri) idx.push(base+2*t[0]+1,base+2*t[1]+1,base+2*t[2]+1); } }                       // top
+  const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); geo.setIndex(idx);
+  if(!OCC.mesh){ OCC.mesh=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({colorWrite:false,side:THREE.DoubleSide})); OCC.mesh.renderOrder=-10; OCC.mesh.frustumCulled=false; scene.add(OCC.mesh); }
+  else { OCC.mesh.geometry.dispose(); OCC.mesh.geometry=geo; }
+  OCC.o=[ox,oy]; }
+function placeOcc(px,py,m,b){
+  if(!(T.on&&mode!=='glider')){ if(OCC.mesh) OCC.mesh.visible=false; return; }
+  const moved=OCC.at?meters(OCC.at[1],OCC.at[0],S.lat,S.lng):1e9, age=performance.now()-OCC.t;
+  if(moved>180||OCC.ter!==terrainOn||(OCC.dirty&&age>(POWER?6000:3000))||(!OCC.mesh&&age>1500)) safe('building blockers',buildOcc);
+  const M=OCC.mesh; if(!M||!OCC.o) return; M.visible=true;
+  const dx=OCC.o[0]-px, dy=OCC.o[1]-py, sb=Math.sin(b), cb=Math.cos(b), e=terrainOn?(map.transform.elevation||0):0;
+  M.position.set((dx*cb-dy*sb)/m,-e/m,-(dx*sb+dy*cb)/m); M.rotation.set(0,b,0); M.scale.setScalar(1/m); }
+
 /* ---------- per-frame update + placement in the car layer (called from js/game.js) ---------- */
 let occT=0;
 function frame(dt){
   if(!T.group) return false;
-  if(!T.on||mode==='glider'||!T.segs.length){ if(T.group.visible){ T.group.visible=false; return true; } return false; }
+  if(!T.on||mode==='glider'||!T.segs.length){ if(OCC.mesh) OCC.mesh.visible=false; if(T.group.visible){ T.group.visible=false; return true; } return false; }
   T.group.visible=true;
   const px=S.lng*MLNG, py=S.lat*MLAT, ph=rad(S.hdg), pv=S.v*SPEEDUP, m=mpp(S.lat,S.zoom), b=rad(S.camB), sb=Math.sin(b), cb=Math.cos(b);
+  placeOcc(px,py,m,b);
   // camera ground position and height (same geometry as the game's camera), for the building check
   const H=innerHeight, dist=.5*H/Math.tan(rad(camera.fov)/2)*m, tp=rad(map.getPitch()), CE=window.COCKPIT&&COCKPIT.on&&COCKPIT.eyeWorld;   // cockpit: the camera is at the driver's eye
   const camX=CE?CE.x:px-sb*dist*Math.sin(tp), camY=CE?CE.y:py-cb*dist*Math.sin(tp), camH=CE?CE.h:dist*Math.cos(tp);
@@ -189,7 +229,7 @@ function frame(dt){
 
 onReady(function trafficInit(){
   T.parts=makeParts(); T.group=new THREE.Group(); scene.add(T.group);
-  map.on('sourcedata',e=>{ if(e.sourceId===bSrc&&e.tile) T.tilesDirty=true; });
+  map.on('sourcedata',e=>{ if(e.sourceId===bSrc&&e.tile){ T.tilesDirty=true; OCC.dirty=true; } else if(e.sourceId==='roofs'||e.sourceId==='rebuilt') OCC.dirty=true; });
 });
 // rebuild the road graph as you drive into new map tiles
 onTick(1500,function trafficGraph(){
