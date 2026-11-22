@@ -308,7 +308,7 @@ function shell(G,P,mats){
     // modern door mirror (owner 2026-11-21: "the mirrors on the explorer are just rectangles"): the glass is a rounded
     // trapezoid, short on the inboard edge and tall outboard with a big rounded lower-outer corner, in a black surround; the
     // body-colour housing wraps round it and swells out behind; a black foot on the door with the sail filling the window corner
-    const lux=P.style==='lux', ev=P.style==='ev', ex=!!P.ex, W=lux?.27:ex?.26:ev?.235:.245, H=lux?.185:ex?.175:ev?.15:.165, g=new THREE.Group(); g.position.set(s*(P.door+.235),P.belt+(ex?.085:.075),zA+.16); G.add(g);
+    const lux=P.style==='lux', ev=P.style==='ev', ex=!!P.ex, W=lux?.27:ex?.25:ev?.235:.245, H=lux?.185:ex?.19:ev?.15:.165, g=new THREE.Group(); g.position.set(s*(P.door+.235),P.belt+(ex?.085:.075),zA+.16); G.add(g);
     const o=-s;                                                     // the group faces the driver: +x is the driver's right, so outboard is -s
     const shp=(w,h,grow)=>(ev?mirShapeEV:ex?mirShapeEx:mirShape)(w+grow*2,h+grow*2,o);
     const glass=new THREE.ShapeGeometry(shp(W,H,0),12); uvFit(glass);
@@ -324,7 +324,7 @@ function shell(G,P,mats){
       x.fillRect(30,46,30,44); x.fillRect(36,34,18,14); x.clearRect(36,52,18,12);                 // a little car seen from behind
       for(const r of [20,34]){ x.beginPath(); x.arc(52,68,r+22,-.55,.55); x.stroke(); }          // and the waves beside it
       const bm=new THREE.MeshBasicMaterial({map:T.t,transparent:true,color:0x9a9ea4,opacity:.55,depthWrite:false,toneMapped:false});
-      const bi=mesh(new THREE.PlaneGeometry(.026,.026),bm,g,false,false); bi.position.set(ex?-o*(W/2-.07):-o*(W/2-.042),ex?H/2-.05:H/2-.055,.0052); if(o<0) bi.scale.x=-1;
+      const bi=mesh(new THREE.PlaneGeometry(.026,.026),bm,g,false,false); bi.position.set(ex?-o*(W/2-.04):-o*(W/2-.042),ex?H/2-.34*H:H/2-.055,.0052); if(o<0) bi.scale.x=-1;
       (mats.blis||(mats.blis={}))[s]=bm; }
     const hg=new THREE.ExtrudeGeometry(shp(W,H,ex?.02:.012),{depth:.045,bevelEnabled:true,bevelThickness:.035,bevelSize:.012,bevelSegments:5,curveSegments:12});
     hg.translate(0,0,-.045-.035); const pz=hg.attributes.position;
@@ -380,14 +380,15 @@ function mirShape(w,h,o){ const hw=w/2, hh=h/2, ti=hh*.78, bi=-hh*.70, to=hh, bo
 // Explorer door-mirror glass (owner's photo): a big sweeping curve at the outer top corner (the end away from the car),
 // straight top edge, small rounded corners by the car, straight sides and bottom
 function mirShapeEx(w,h,o){ const hw=w/2, hh=h/2, X=v=>v*o, s=new THREE.Shape();
-  // owner's photo (2026-11-21) of the real Explorer mirror: tall and squarish on the inboard end, the top running nearly
-  // straight out and dipping a little, then a big round nose on the outboard end, which is only ~60% as tall, and the
-  // bottom sweeping back up to it in a long curve (-hw is the outboard end)
-  const rt=.016, rb=.03, yT=hh-h*.09, ho=h*.6, yB=yT-ho, Rn=ho*.5;
-  s.moveTo(X(hw),-hh+rb); s.lineTo(X(hw*.985),hh-rt); s.quadraticCurveTo(X(hw*.98),hh,X(hw*.98-rt),hh);
-  s.lineTo(X(-hw+Rn*1.2),yT+h*.01); s.quadraticCurveTo(X(-hw),yT,X(-hw),yT-ho*.5);             // round over the top of the nose
-  s.bezierCurveTo(X(-hw),yB-h*.16,X(hw*.15),-hh-h*.01,X(hw-rb),-hh);                         // under it, one long convex sweep back to the inboard end
-  s.quadraticCurveTo(X(hw),-hh,X(hw),-hh+rb); return s; }
+  // traced from the owner's photo of the real Explorer mirror (2026-11-21), in that photo's pixels: the outboard end comes
+  // to a point like "<" about a third of the way down — a 45° edge up to the top, a steep edge down to the bottom — the top
+  // runs nearly level to a rounded corner, the inboard edge is almost upright, and the bottom rises gently toward the point
+  const P=[[77,198,8],[121,122,60],[213,62,45],[572,73,35],[560,442,30],[119,375,25],[89,287,90]], k=w/495;   // [x, y, corner radius]
+  const pt=([x,y])=>new THREE.Vector2(-hw+(x-77)/495*w,hh-(y-62)/380*h);
+  for(let i=0;i<P.length;i++){ const V=pt(P[i]), A=pt(P[(i+P.length-1)%P.length]), B=pt(P[(i+1)%P.length]), r=Math.min(P[i][2]*k,A.distanceTo(V)/2,B.distanceTo(V)/2);
+    const a=A.clone().sub(V).normalize().multiplyScalar(r).add(V), b=B.clone().sub(V).normalize().multiplyScalar(r).add(V);
+    if(i===0) s.moveTo(X(a.x),a.y); else s.lineTo(X(a.x),a.y); s.quadraticCurveTo(X(V.x),V.y,X(b.x),b.y); }
+  s.closePath(); return s; }
 // Tesla door-mirror glass: frameless and soft — an arched top rising outboard, a big round outboard end, a nearly straight
 // bottom edge that lifts toward the inboard end
 function mirShapeEV(w,h,o){ const hw=w/2, hh=h/2, X=v=>v*o, s=new THREE.Shape();
