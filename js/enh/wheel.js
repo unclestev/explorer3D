@@ -100,7 +100,9 @@
       else { if(cfg[g.id]&&cfg[g.id].view!=null){ const v=cfg[g.id].view; if(down(v)&&!prevB[v]&&window.COCKPIT) COCKPIT.toggle(); }
         // engine start / stop (owner 2026-11-21): the Enter button in the middle of the G29's red dial — button 24 counting
         // from 1 on the G29's usual numbering — or whichever button was set in ⚙️ (Start button). js/enh/ignition.js
-        const sb=cfg[g.id]&&cfg[g.id].start!=null?cfg[g.id].start:23; if(down(sb)&&!prevB[sb]&&window.IGN) IGN.button(); }
+        const sb=cfg[g.id]&&cfg[g.id].start!=null?cfg[g.id].start:23; if(down(sb)&&!prevB[sb]&&window.IGN) IGN.button();
+        // wipers on / off (owner 2026-11-22): the blue R2 button on the G29's right spoke — button 7 counting from 1
+        if(g.mapping!=='standard'&&down(6)&&!prevB[6]&&window.COCKPIT&&COCKPIT.wiper) COCKPIT.wiper(); }
       // gear selector: the shifter when it's been used (otherwise D, or R after both paddles together)
       if(!shLearn&&!learn){ const sh=(cfg[g.id]&&cfg[g.id].shift)||{d:12,r:13};
         if(down(sh.d)||down(sh.r)) shUsed=true;
