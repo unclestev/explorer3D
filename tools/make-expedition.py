@@ -16,13 +16,13 @@ HW = 1.012                                      # half the 2.024 m body width (n
 
 # ---------- side profile (z, y): a tall box — flat roof, upright tailgate, long flat hood, square nose ----------
 top = Pchip([ZR, -2.66, -2.645, -2.62, -2.56, -2.40, -1.0, .30, .62, .90, 1.20, 1.46, 1.60, 2.10, 2.50, 2.62, ZF],
-            [.56, 1.05,  1.50,  1.76,  1.86,  1.895, 1.905, 1.90, 1.875, 1.74, 1.56, 1.40, 1.375, 1.355, 1.32, 1.26, .70])
+            [.56, 1.05,  1.50,  1.76,  1.86,  1.895, 1.905, 1.90, 1.875, 1.74, 1.56, 1.40, 1.385, 1.375, 1.36, 1.335, .80])   # flat hood right to a blunt front edge
 belt = Pchip([-2.7, -2.2, -1.0, 0., 1.2, 1.40, 1.52, 2.7], [1.34, 1.34, 1.33, 1.325, 1.32, 1.33, 1.42, 1.42])   # up over the hood ahead of the windshield (the hood is body, not glass)
 bot = Pchip([ZR, -2.5, -2.2, -1.95, 1.95, 2.3, 2.55, ZF], [.55, .50, .46, .42, .42, .45, .48, .52])
 
 def hw(z):
     h = HW
-    if z > 2.50: u = min(1, (z-2.50)/(ZF-2.50)); h *= (1-u**3.2)**(1/3.2)      # square nose, rounded corners
+    if z > 2.56: u = min(1, (z-2.56)/(ZF-2.56)); h *= (1-u**4.5)**(1/4.5)      # square, upright nose with tight corners (photo)
     if z < -2.58: u = min(1, (-2.58-z)/(-2.58-ZR)); h *= (1-u**3.5)**(1/3.5)  # flat tailgate
     return max(h, 1e-4)
 def ease(a, b, t): t = min(1, max(0, t)); return a+(b-a)*t*t*(3-2*t)
@@ -38,6 +38,7 @@ def section(z):
 def sec_pt(S, phi):
     if phi >= 0:
         c, s = math.cos(phi), math.sin(phi); x = S['hw']*c**(2/S['nu']); y = S['yw']+(S['yt']-S['yw'])*s**(2/S['mu'])
+        x *= 1-.018*min(1, max(0, (y-1.13)/.05))                                  # shoulder line at 1.13 m: the side steps in above it (photo)
     else:
         c, s = math.cos(phi), -math.sin(phi); x = S['hw']*c**(2/7.); y = S['yw']-(S['yw']-S['yb'])*s**(2/6.)
         t = (S['yw']-y)/max(1e-6, S['yw']-S['yb']); x *= 1-.03*t*t
@@ -198,7 +199,6 @@ patch(trim, 'Trim', lambda u, v: ((.66-.06*(1-v))*u*W(.60+.17*v), .60+.17*v), 14
 patch(trim, 'Bar', lambda u, v: (.58*u*W(.64), .64+.09*v), 12, 2, push=.007)                                   # its mesh
 patch(trim, 'Trim', lambda u, v: (.80*u*W(.50+.08*v), .50+.08*v), 14, 1, push=.004)                           # black skid along the bottom
 patch(trim, 'Trim', lambda u, v: ((.82+.12*u)*W(.66+.12*v), .66+.12*v), 4, 2, push=.004)                       # corner vents                    # lower intake mesh
-patch(plate, 'Badge', lambda u, v: (.075*u*math.sqrt(max(0, 1-(u*.98)**2))*0+.075*u, 1.06+.03*v+0*u), 4, 2, push=.016)   # plain blue oval (no lettering)
 patch(trim, 'Trim', lambda u, v: (.90*u*W(1.30, 2.40), 1.285+.006*v), 16, 1, push=.003, zfn=lambda x, y: 2.40)   # hood seam above the grille (a line)
 
 # ---------- rear: a gloss black band across the tailgate, tall C-shaped tail lamps at the corners joined by a red line
@@ -211,7 +211,6 @@ patch(tails, 'Taillight', lambda u, v: ((.84+.155*u)*Wr(1.0+.46*v), 1.0+.46*v), 
 patch(tails, 'Taillight', lambda u, v: ((.60+.25*u)*Wr(1.38), 1.375+.03*v), 8, 1, push=.008, zfn=zrear, sgn=-1, shift=.035)      # inboard red line
 patch(plate, 'Plate', lambda u, v: (.16*u, 1.10+.15*v), 4, 2, push=.009, zfn=zrear, sgn=-1)
 patch(trim, 'Reflector', lambda u, v: ((.78+.14*u)*Wr(.60), .58+.03*v), 4, 1, push=.006, zfn=zrear, sgn=-1)
-patch(plate, 'Badge', lambda u, v: (.06*u, 1.47+.025*v), 3, 1, push=.008, zfn=zrear, sgn=-1)       # small oval up on the glass edge
 
 # ---------- sides: door seams, body-colour handles, black running boards, black roof rails ----------
 def vline(z0, z1, y0, y1, w=.006): return lambda u, v: (z0+(z1-z0)*u+(v-.5)*w, y0+(y1-y0)*u)
