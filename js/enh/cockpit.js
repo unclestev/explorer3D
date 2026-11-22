@@ -501,7 +501,10 @@ function overheadEx(G,P,ws){
     x.fillStyle=gr; R(X+34,650,64,80,10); x.fill(); x.strokeStyle='#5b5f64'; x.lineWidth=5; R(X+22,636,88,108,8); x.stroke(); }          // clear map-light lenses
   const key=(X,Y,w,h,t)=>{ x.fillStyle='#1b1c1f'; R(X,Y,w,h,8); x.fill(); x.strokeStyle='#050505'; x.lineWidth=3; R(X,Y,w,h,8); x.stroke(); if(t){ x.fillStyle='#c7cbd0'; x.font='600 '+(t.length>2?22:30)+'px system-ui,Arial'; x.textAlign='center'; x.textBaseline='middle'; t.split('\n').forEach((l,i,a)=>x.fillText(l,X+w/2,Y+h/2+(i-(a.length-1)/2)*24)); } };
   key(330,612,68,64,'☼'); key(330,676,68,56,''); key(330,732,68,64,'☼');
-  key(420,612,88,84,'△'); key(420,700,88,96,'VENT\n▽'); key(516,612,88,84,'▭'); key(516,700,88,96,'▭');
+  key(420,612,88,84,'△'); key(420,700,88,96,'VENT\n▽'); key(516,612,88,84,''); key(516,700,88,96,'');
+  { const cov=(cx,cy,dir)=>{ x.strokeStyle='#c7cbd0'; x.fillStyle='#c7cbd0'; x.lineWidth=3; x.strokeRect(cx-20,cy-14,40,28); x.fillRect(cx-20,cy-14,40,7);   // the cover in its frame
+      x.beginPath(); const ty=cy+dir*30; x.moveTo(cx,ty); x.lineTo(cx-9,ty-dir*11); x.lineTo(cx+9,ty-dir*11); x.closePath(); x.fill(); };
+    cov(560,662,-1); cov(560,742,1); }   // top key: cover slides back (open); bottom: forward (closed)
   key(626,612,68,64,'☼'); key(626,676,68,56,''); key(626,732,68,64,'☼');
   // airbag lamp strip and the two speaker grilles
   x.fillStyle='#121315'; x.beginPath(); x.moveTo(250,830); x.lineTo(774,830); x.lineTo(740,880); x.lineTo(284,880); x.closePath(); x.fill();
@@ -515,8 +518,11 @@ function overheadEx(G,P,ws){
   // a little relief: the lid stands proud, the key strip and lenses sit in
   const lid=mesh(rbox(W*.86,D*.40,.004,.008,.012),M({color:0x1c1d20,roughness:.6,transparent:true,opacity:0}),g,false,false); lid.visible=false;
   // the four sunroof keys: invisible targets you can tap (canvas px -> pod: x right, z toward the driver)
-  const Wf=W-.004, kp=(px,py)=>[(px/1024-.5)*Wf,(.5-py/1024)*Wf], hm=new THREE.MeshBasicMaterial({visible:false}); CK.roofKeys=[];
-  for(const [k,px,py] of [['close',464,654],['vent',464,748],['open',560,654],['shut',560,748]]){ const q=kp(px,py), b=mesh(new THREE.BoxGeometry(.022,.012,.022),hm,g,false,false); b.position.set(q[0],-.004,q[1]); b.userData.roofKey=k; CK.roofKeys.push(b); }
+  const Wf=W-.004, kp=(px,py)=>[(px/1024-.5)*Wf,(.5-py/1024)*Wf], hm=new THREE.MeshBasicMaterial({visible:false}); CK.roofKeys=[]; CK.roofSpots=[];
+  for(const [k,px,py,w,h] of [['close',464,654,88,84],['vent',464,748,88,96],['open',560,654,88,84],['shut',560,748,88,96]]){ const q=kp(px,py);
+    const f=mesh(new THREE.PlaneGeometry(w/1024*Wf,h/1024*Wf),new THREE.MeshBasicMaterial({color:0xffe2a8,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false}),g,false,false);
+    f.rotation.x=Math.PI/2; f.position.set(q[0],-.0012,q[1]); CK.roofSpots.push({k,x:q[0],z:q[1],flash:f}); }
+  { const a=kp(380,570), b=kp(644,840), t=mesh(new THREE.BoxGeometry(b[0]-a[0],.014,a[1]-b[1]),hm,g,false,false); t.position.set((a[0]+b[0])/2,-.006,(a[1]+b[1])/2); CK.roofKeys.push(t); }   // generous: a fat finger still gets the nearest key
   const lit=new THREE.MeshBasicMaterial({color:0xfff4dc,transparent:true,opacity:0}); for(const s of [-1,1]){ const l=mesh(new THREE.PlaneGeometry(.016,.02),lit,g,false,false); l.rotation.x=Math.PI/2; l.position.set(s*.083,-.001,.0); }
 }
 function steeringWheel(G,P){
@@ -1125,9 +1131,10 @@ const ROOF={vent:false,slide:false,cover:false};
 CK.roof=function(k){ let t;
   if(k==='vent'||k==='close'){ if(ROOF.slide||ROOF.vent){ ROOF.slide=ROOF.vent=false; t='Sunroof: closing'; } else { ROOF.slide=true; ROOF.cover=true; t='Sunroof: opening'; } }
   else if(k==='open'){ ROOF.cover=true; t='Sunroof cover: open'; }
-  else if(k==='shut'){ if(ROOF.slide){ t='Close the sunroof first (VENT)'; } else { ROOF.cover=false; t='Sunroof cover: closed'; } }
+  else if(k==='shut'){ if(ROOF.slide||ROOF.vent){ ROOF.slide=ROOF.vent=false; ROOF.cover=false; t='Sunroof and cover: closing'; } else { ROOF.cover=false; t='Sunroof cover: closed'; } }
   toast(t,1300); };
-function roofStep(c,dt){ const r=c.parts.sunroof; if(!r) return; r.slide=r.slide||0;
+function roofStep(c,dt){ for(const s of CK.roofSpots||[]) if(s.flash.material.opacity>0) s.flash.material.opacity=Math.max(0,s.flash.material.opacity-dt*2.5);
+  const r=c.parts.sunroof; if(!r) return; r.slide=r.slide||0;
   const wantV=ROOF.vent||(ROOF.slide&&r.slide<.98)?1:0;                    // to slide, the back edge first lifts a little, then the glass runs back over the roof
   const lift=ROOF.slide?.35:wantV;
   r.vent+=clamp(lift-r.vent,-dt/2,dt/2);
@@ -1370,14 +1377,16 @@ for(const [id,d] of [['fovM',-5],['fovP',5]]){ const b=document.getElementById(i
 { const rb=document.getElementById('rsBtn'); if(rb) rb.addEventListener('click',e=>{ e.stopPropagation(); CK.real=!CK.real; LSs('ydRealSpd',CK.real?'1':'0'); if(CK.on) setSpeedScale(CK.real?1:3); showPick(); }); }
 function setHud(v){ CK.hud=v; LSs('ydHud',v?'1':'0'); showPick(); dirty=true; }
 { const hb=document.getElementById('hudBtn'); if(hb) hb.addEventListener('click',e=>{ e.stopPropagation(); setHud(!CK.hud); }); }
-// tap the overhead console's sunroof keys (a tap, not a drag-to-look): VENT / △ tilt the glass, the two cover keys slide the cover
-{ let dn=null; const ray=new THREE.Raycaster();
-  mapEl.addEventListener('pointerdown',e=>{ dn={x:e.clientX,y:e.clientY}; });
-  mapEl.addEventListener('pointerup',e=>{ if(!dn||!CK.on||!CK.cab||!CK.roofKeys||Math.hypot(e.clientX-dn.x,e.clientY-dn.y)>8){ dn=null; return; } dn=null;
-    const c=CK.cab, r=mapEl.getBoundingClientRect(); c.scene.updateMatrixWorld(); c.cam.updateMatrixWorld();
-    ray.setFromCamera({x:(e.clientX/innerWidth)*2-1,y:-(e.clientY/innerHeight)*2+1},c.cam);
-    const hit=ray.intersectObjects(CK.roofKeys.filter(o=>o.parent&&c.scene.getObjectById(o.id)),false)[0];
-    if(hit) CK.roof(hit.object.userData.roofKey); }); }
+// tap the overhead console's sunroof keys: look.js asks on every tap (one that isn't a drag-to-look); a key tap is used up here
+// and doesn't count toward its double-tap "look straight ahead" (tapping VENT twice used to throw your view forward)
+{ const ray=new THREE.Raycaster(), v=new V3();
+  CK.tapKey=function(e){ if(!CK.on||!CK.cab||!CK.roofKeys||!CK.roofKeys.length) return null; const c=CK.cab;
+    c.scene.updateMatrixWorld(); c.cam.updateMatrixWorld(); ray.setFromCamera({x:(e.clientX/innerWidth)*2-1,y:-(e.clientY/innerHeight)*2+1},c.cam);
+    const hit=ray.intersectObjects(CK.roofKeys.filter(o=>c.scene.getObjectById(o.id)),false)[0]; if(!hit) return null;
+    const g=hit.object.parent, inv=new THREE.Matrix4().copy(g.matrixWorld).invert(), o=ray.ray.origin.clone().applyMatrix4(inv), d=ray.ray.direction.clone().transformDirection(inv);
+    if(Math.abs(d.y)<1e-4) return null; const q=o.addScaledVector(d,(-.0012-o.y)/d.y);   // where the tap meets the console's face, not the target box's underside
+    let best=null,bd=1e9; for(const s of CK.roofSpots){ const d=Math.hypot(q.x-s.x,q.z-s.z); if(d<bd){ bd=d; best=s; } }
+    if(!best) return null; best.flash.material.opacity=.55; CK.roof(best.k); return best.k; }; }
 addEventListener('keydown',e=>{ if(e.repeat||(e.target&&e.target.tagName==='INPUT')) return; const k=e.key.toLowerCase(); if(k==='c') CK.toggle(); else if(k==='h'&&CK.on){ setHud(!CK.hud); toast(CK.hud?'Head-up display on':'Head-up display off',1400); } });
 const prevMode=window.onModeChange;
 window.onModeChange=(m,was)=>{ if(prevMode) prevMode(m,was); if(CK.on&&m!=='car'&&m!=='tractor') leave(); else if(CK.on&&m!==was){ dispose(); } };
