@@ -53,12 +53,15 @@ mapEl.addEventListener('pointerup',lift); mapEl.addEventListener('pointercancel'
   const b=document.getElementById('infoBtn'), show=()=>{ document.body.classList.toggle('noinfo',!on); if(b) b.classList.toggle('on',on); };
   if(b) b.addEventListener('click',e=>{ e.stopPropagation(); on=!on; try{ localStorage.setItem('ydInfo',on?'on':'off'); }catch(e){} show(); });
   show(); }
-// ⚙️ groups: tap a heading to fold it away; remembered on this device
-{ let shut=[]; try{ shut=JSON.parse(localStorage.getItem('ydSetShut')||'[]'); }catch(e){}
-  for(const g of panel.querySelectorAll('.setGrp')){ const h=g.querySelector('.setSec'), k=h.textContent.trim();
-    const show=()=>{ const s=shut.includes(k); g.classList.toggle('shut',s); h.setAttribute('aria-expanded',s?'false':'true'); };
-    h.addEventListener('click',e=>{ e.stopPropagation(); shut=shut.includes(k)?shut.filter(x=>x!==k):shut.concat(k); try{ localStorage.setItem('ydSetShut',JSON.stringify(shut)); }catch(e){} show(); });
-    show(); } }
+// ⚙️ tabs: one group of settings at a time; the last tab you picked is remembered on this device
+{ const bar=document.getElementById('setTabs'), grps=[...panel.querySelectorAll('.setGrp')]; let cur='';
+  try{ cur=localStorage.getItem('ydSetTab')||''; }catch(e){} if(!grps.some(g=>g.dataset.tab===cur)) cur=grps[0]?grps[0].dataset.tab:'';
+  const pick=k=>{ cur=k; try{ localStorage.setItem('ydSetTab',k); }catch(e){}
+    for(const g of grps) g.classList.toggle('on',g.dataset.tab===k);
+    for(const b of bar.children){ const on=b.dataset.tab===k; b.classList.toggle('on',on); b.setAttribute('aria-selected',on?'true':'false'); } };
+  if(bar){ for(const g of grps){ const b=document.createElement('button'); b.textContent=g.dataset.tab; b.dataset.tab=g.dataset.tab; b.setAttribute('role','tab');
+      b.addEventListener('click',e=>{ e.stopPropagation(); pick(g.dataset.tab); }); bar.appendChild(b); }
+    pick(cur); } }
 // iPhone Safari: stop its own page-zoom gesture from fighting ours
 for(const t of ['gesturestart','gesturechange']) document.addEventListener(t,e=>e.preventDefault(),{passive:false});
 })();
