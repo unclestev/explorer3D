@@ -22,11 +22,11 @@ bot = Pchip([ZR, -2.5, -2.2, -1.95, 1.95, 2.3, 2.55, ZF], [.55, .50, .46, .42, .
 
 def hw(z):
     h = HW
-    if z > 2.56: u = min(1, (z-2.56)/(ZF-2.56)); h *= (1-u**4.5)**(1/4.5)      # square, upright nose with tight corners (photo)
-    if z < -2.58: u = min(1, (-2.58-z)/(-2.58-ZR)); h *= (1-u**3.5)**(1/3.5)  # flat tailgate
+    if z > 2.58: u = min(1, (z-2.58)/(ZF-2.58)); h *= (1-u**7)**(1/7)          # square, upright nose with tight corners (photo)
+    if z < -2.60: u = min(1, (-2.60-z)/(-2.60-ZR)); h *= (1-u**6)**(1/6)      # flat tailgate, tight corners
     return max(h, 1e-4)
 def ease(a, b, t): t = min(1, max(0, t)); return a+(b-a)*t*t*(3-2*t)
-def expo(z): return 7.0, 3.4                    # boxy section: slab sides, a shoulder radius at the belt
+def expo(z): return 11.0, 5.5                   # boxy section: flat slab sides, a tight shoulder radius at the belt (crisp edges)
 GB = .935                                        # glass base at 93.5% of the half width (little shoulder, upright glass)
 
 def section(z):
@@ -38,10 +38,10 @@ def section(z):
 def sec_pt(S, phi):
     if phi >= 0:
         c, s = math.cos(phi), math.sin(phi); x = S['hw']*c**(2/S['nu']); y = S['yw']+(S['yt']-S['yw'])*s**(2/S['mu'])
-        x *= 1-.018*min(1, max(0, (y-1.13)/.05))                                  # shoulder line at 1.13 m: the side steps in above it (photo)
+        x *= 1-.022*min(1, max(0, (y-1.13)/.018))                                 # shoulder line at 1.13 m: a crisp step in above it (photo)
     else:
-        c, s = math.cos(phi), -math.sin(phi); x = S['hw']*c**(2/7.); y = S['yw']-(S['yw']-S['yb'])*s**(2/6.)
-        t = (S['yw']-y)/max(1e-6, S['yw']-S['yb']); x *= 1-.03*t*t
+        c, s = math.cos(phi), -math.sin(phi); x = S['hw']*c**(2/10.); y = S['yw']-(S['yw']-S['yb'])*s**(2/9.)
+        t = (S['yw']-y)/max(1e-6, S['yw']-S['yb']); x *= 1-.035*t**3                  # flat to the sill, then tucked under
     return x, y
 def halfwidth(z, y):
     S = section(z)
@@ -106,9 +106,9 @@ gh = Mesh('Glasshouse')
 def gpt(z, u):
     S = section(z)
     x0 = GB*S['hw']; y0 = S['yw']+(S['yt']-S['yw'])*S['frac'] - .004
-    H = max(0., S['ytop']-y0); r = min(.09, .45*H); rw = max(x0-.17*(H-r), .55*x0)
+    H = max(0., S['ytop']-y0); r = min(.055, .45*H); rw = max(x0-.17*(H-r), .55*x0)
     if u <= .5: q = u/.5; return [x0+(rw-x0)*q, y0+(H-r)*q, z]
-    a = (u-.5)/.5*math.pi/2; return [rw*math.cos(a)**(2/5.0), y0+(H-r)+r*math.sin(a)**(2/2.4), z]
+    a = (u-.5)/.5*math.pi/2; return [rw*math.cos(a)**(2/9.0), y0+(H-r)+r*math.sin(a)**(2/2.6), z]   # tight roof edge, flat top
 zz = np.linspace(-2.66, 1.7, 900)
 def has(z): S = section(float(z)); return float(top(z)) > S['yw']+(S['yt']-S['yw'])*S['frac']+.006
 hasH = [has(z) for z in zz]
@@ -254,6 +254,16 @@ patch(trim, 'Trim', lambda u, v: (.86*u*W(.48+.10*v), .48+.10*v), 14, 2, push=.0
 fbox(trim, 'Bar', 0, .585, 2*.86*W(.585), .014, .03, out=.006)
 patch(trim, 'Trim', lambda u, v: (.90*u*W(1.30, 2.40), 1.285+.006*v), 16, 1, push=.003, zfn=lambda x, y: 2.40)   # hood seam above the grille (a line)
 
+def ytop_at(z, x):                                   # height of the top surface at (z, x)
+    lo, hi = section(z)['yw'], section(z)['yt']
+    for _ in range(40):
+        m = (lo+hi)/2
+        if halfwidth(z, m) > x: lo = m
+        else: hi = m
+    return lo
+for k in range(24):                                                                   # hood shut lines, along the fender tops
+    z0 = ZW+.04+(2.60-ZW-.04)*k/24; z1 = ZW+.04+(2.60-ZW-.04)*(k+1)/24; zc = (z0+z1)/2
+    box(trim, 'Trim', (.80, ytop_at(zc, .80)+.002, zc), (.006, .004, z1-z0+.002))
 # ---------- rear: a gloss black band across the tailgate, tall C-shaped tail lamps at the corners joined by a red line
 # along the top of the band, the plate in a recess, black lower bumper with red reflectors ----------
 tails = Mesh('Taillights')
@@ -312,8 +322,11 @@ box(mir, 'TrimGloss', (1.035, 1.39, 1.265), (.07, .06, .11))        # short arm 
 # ---------- red brake calipers, fixed to the body inside each wheel ----------
 brk = Mesh('Brakes')
 for za in (ZA_F, ZA_R):
-    for k in range(8):
-        a = math.radians(105+k*9); box(brk, 'Caliper', (TRACK/2-.11, TYRE_R+math.sin(a)*.20, za+math.cos(a)*.20), (.06, .045, .045))
+    for side in (1, -1):                                       # brake disc behind the spokes
+        c = brk.v((side*(TRACK/2+.002), TYRE_R, za)); ring = [brk.v((side*(TRACK/2+.002), TYRE_R+.205*math.sin(a), za+.205*math.cos(a))) for a in np.linspace(0, 2*math.pi, 33)]
+        for a_, b_ in zip(ring, ring[1:]): brk.tri('Rotor', c, a_, b_)
+    for k in range(9):                                         # big red caliper over the back of it
+        a = math.radians(100+k*10); box(brk, 'Caliper', (TRACK/2+.022, TYRE_R+math.sin(a)*.195, za+math.cos(a)*.195), (.05, .06, .05))
 
 # ---------- wheels: tyre and a 22" dark multi-spoke wheel (ten twisted twin spokes) ----------
 def wheel_mesh(name, outward):
@@ -331,20 +344,38 @@ def wheel_mesh(name, outward):
     lathe('Tyre', [(-w*.9, RIM), (-w, RIM+.03), (-w*.98, TYRE_R-.04), (-w*.85, TYRE_R-.007), (-w*.5, TYRE_R), (w*.5, TYRE_R), (w*.85, TYRE_R-.007), (w*.98, TYRE_R-.04), (w, RIM+.03), (w*.9, RIM)])
     lathe('Rim', [(w*.9, RIM), (w*.80, RIM-.008), (w*.74, RIM-.025), (w*.30, RIM-.025)])
     lathe('Well', [(w*.0, RIM-.03), (-w*.2, .19), (-w*.2, 0.)], 24)
-    for k in range(20):                                       # ten pairs: each pair splits from one root near the hub
-        a0 = (k//2)/10*2*math.pi+(1 if k % 2 else -1)*.035; tw = .16*(1 if k % 2 else .6); row = []
-        for q in range(9):
-            t = q/8; rr = .075+(RIM-.03-.075)*t; a = a0+tw*t+(1 if k % 2 else -1)*.09*t; wd = .075+.02*t
-            xo = w*.74+.04*(1-t)**.7
-            row.append([m.v((outward*xo, rr*math.cos(a+s_*wd/2), rr*math.sin(a+s_*wd/2))) for s_ in (-1, 0, 1)])
-            row[-1][1] = m.v((outward*(xo+.010), rr*math.cos(a), rr*math.sin(a)))
-        for q in range(8):
-            for j in range(2):
-                a_, b_, c_, d_ = row[q][j], row[q+1][j], row[q][j+1], row[q+1][j+1]
-                if outward > 0: m.tri('Spoke', a_, b_, c_); m.tri('Spoke', b_, d_, c_)
-                else: m.tri('Spoke', a_, c_, b_); m.tri('Spoke', b_, c_, d_)
-    lathe('Spoke', [(w*.74+.04, .085), (w*.74+.05, .07), (w*.74+.056, .04), (w*.74+.058, 0.)], 24)
-    lathe('Trim', [(w*.74+.0585, .035), (w*.74+.0590, 0.)], 16)
+    def quad(mat, a_, b_, c_, d_):
+        if outward > 0: m.tri(mat, a_, b_, c_); m.tri(mat, b_, d_, c_)
+        else: m.tri(mat, a_, c_, b_); m.tri(mat, b_, c_, d_)
+    # ten spokes, each splitting into two arms that twist toward the rim (22" Magnetite, Stealth Performance Package);
+    # every arm is a solid bar: a ridged face, two side walls and a back, so it has depth from any angle
+    for k in range(10):
+        for arm in (-1, 1):
+            a0 = k/10*2*math.pi; rows = []
+            for q in range(10):
+                t = q/9; rr = .07+(RIM-.028-.07)*t
+                split = arm*.085*min(1, t/.4)**1.3                                   # one root at the hub, two arms toward the rim
+                a = a0+split+.07*t                                                    # a slight twist
+                wd = (.040-.012*min(1, t/.4))/rr                                      # arm ~2.8 cm wide at the rim, wider at the root
+                xo = w*.74+.050*(1-t)**.8                                             # concave: hub stands out
+                pts = [(xo+.006*(j == 1), a+(j-1)*wd/2) for j in range(3)]
+                face = [m.v((outward*x_, rr*math.cos(a_), rr*math.sin(a_))) for x_, a_ in pts]
+                back = [m.v((outward*(xo-.032), rr*math.cos(a+(j-1)*wd/2), rr*math.sin(a+(j-1)*wd/2))) for j in (0, 2)]
+                rows.append(face+back)
+            for q in range(9):
+                r0, r1 = rows[q], rows[q+1]
+                quad('Spoke', r0[0], r1[0], r0[1], r1[1]); quad('Spoke', r0[1], r1[1], r0[2], r1[2])     # face
+                quad('SpokeSide', r0[3], r1[3], r0[0], r1[0]); quad('SpokeSide', r0[2], r1[2], r0[4], r1[4])   # side walls
+    lathe('Spoke', [(w*.74+.050, .095), (w*.74+.056, .082), (w*.74+.058, .05)], 30)                  # hub face
+    lathe('Cap', [(w*.74+.0585, .05), (w*.74+.064, .044), (w*.74+.066, 0.)], 24)                    # plain centre cap
+    for k in range(6):                                                                               # six lug nuts
+        a = k/6*2*math.pi+.26; cy, cz = .068*math.cos(a), .068*math.sin(a)
+        prof = [(w*.74+.0585, .0105), (w*.74+.072, .0105), (w*.74+.074, .006), (w*.74+.0745, 0.)]
+        idx = []
+        for i in range(7):
+            b_ = i/6*2*math.pi; idx.append([m.v((outward*px, cy+pr*math.cos(b_), cz+pr*math.sin(b_))) for px, pr in prof])
+        for i in range(6):
+            for j in range(len(prof)-1): quad('Lug', idx[i][j], idx[i+1][j], idx[i][j+1], idx[i+1][j+1])
     return m
 wheels = [(n, x, ZA) for n, x, ZA in (('Wheel_FL', TRACK/2, ZA_F), ('Wheel_FR', -TRACK/2, ZA_F), ('Wheel_RL', TRACK/2, ZA_R), ('Wheel_RR', -TRACK/2, ZA_R))]
 
@@ -368,8 +399,12 @@ MATS = {
  'Reflector': dict(c=[.35, .02, .02, 1], m=.1, r=.3),
  'Caliper':   dict(c=[.45, .02, .02, 1], m=.2, r=.4),
  'Tyre':      dict(c=[.022, .022, .024, 1], m=0, r=.85),
- 'Rim':       dict(c=[.022, .023, .026, 1], m=.35, r=.45),        # dark gunmetal
- 'Spoke':     dict(c=[.026, .027, .030, 1], m=.35, r=.42),
+ 'Rim':       dict(c=[.045, .048, .052, 1], m=.45, r=.32),        # Magnetite: a dark metallic grey
+ 'SpokeSide': dict(c=[.030, .032, .035, 1], m=.45, r=.35),
+ 'Cap':       dict(c=[.015, .015, .017, 1], m=.5, r=.25),
+ 'Lug':       dict(c=[.30, .31, .33, 1], m=1, r=.25),
+ 'Rotor':     dict(c=[.16, .16, .17, 1], m=.9, r=.45),        # dark gunmetal
+ 'Spoke':     dict(c=[.052, .055, .060, 1], m=.45, r=.30),
  'Well':      dict(c=[.008, .008, .009, 1], m=0, r=.9),
 }
 matnames = list(MATS)
