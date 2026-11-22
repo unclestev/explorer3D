@@ -10,23 +10,25 @@ import numpy as np
 from scipy.interpolate import PchipInterpolator as Pchip
 
 L = 5.334; ZF, ZR = L/2, -L/2                  # 210.0 in
-WB = 3.112; ZA_F = ZF-.985; ZA_R = ZA_F-WB      # 122.5 in wheelbase, ~0.98 m front overhang
-TRACK = 1.72; TYRE_R = .4165; TYRE_W = .275     # 275/50R22
+WB = 3.112; ZA_F = ZF-.968; ZA_R = ZA_F-WB      # 122.5 in wheelbase, 38.1 in front overhang, 49.3 in rear (Ford 2025 spec sheet)
+TRACK = 1.730; TYRE_R = .4165; TYRE_W = .275     # 275/50R22
 HW = 1.012                                      # half the 2.024 m body width (no mirrors)
 
 # ---------- side profile (z, y): a tall box — flat roof, upright tailgate, long flat hood, square nose ----------
-top = Pchip([ZR, -2.66, -2.645, -2.62, -2.56, -2.40, -1.0, .30, .62, .90, 1.20, 1.46, 1.60, 2.10, 2.50, 2.62, ZF],
-            [.56, 1.05,  1.50,  1.76,  1.86,  1.895, 1.905, 1.90, 1.875, 1.74, 1.56, 1.40, 1.385, 1.375, 1.36, 1.335, .80])   # flat hood right to a blunt front edge
+top = Pchip([ZR, -2.662, -2.648, -2.56, -2.47, -2.40, -2.25, -1.0, .30, .62, .90, 1.20, 1.46, 1.60, 2.10, 2.45, 2.56, 2.63, ZF],
+            [.56, 1.05,   1.36,   1.62,  1.84,  1.90,  1.920, 1.925, 1.92, 1.89, 1.75, 1.565, 1.40, 1.385, 1.375, 1.365, 1.35, 1.31, 1.24])   # hood: flat, then a short round-over to a high, blunt front edge   # flat hood right to a blunt front edge
 belt = Pchip([-2.7, -2.2, -1.0, 0., 1.2, 1.40, 1.52, 2.7], [1.34, 1.34, 1.33, 1.325, 1.32, 1.33, 1.42, 1.42])   # up over the hood ahead of the windshield (the hood is body, not glass)
 bot = Pchip([ZR, -2.5, -2.2, -1.95, 1.95, 2.3, 2.55, ZF], [.55, .50, .46, .42, .42, .45, .48, .52])
 
 def hw(z):
-    h = HW
+    h = HW*(1-.030*ease(0, 1, (z-1.95)/.70)**2)        # fenders curve in toward the nose (plan view)
     if z > 2.58: u = min(1, (z-2.58)/(ZF-2.58)); h *= (1-u**7)**(1/7)          # square, upright nose with tight corners (photo)
     if z < -2.60: u = min(1, (-2.60-z)/(-2.60-ZR)); h *= (1-u**6)**(1/6)      # flat tailgate, tight corners
     return max(h, 1e-4)
 def ease(a, b, t): t = min(1, max(0, t)); return a+(b-a)*t*t*(3-2*t)
-def expo(z): return 11.0, 5.5                   # boxy section: flat slab sides, a tight shoulder radius at the belt (crisp edges)
+def expo(z):                                     # (nu: side panel fullness, mu: shoulder roundness) — rounder over the hood and fenders,
+    k = ease(0, 1, (z-1.10)/.45)                  # gently curved doors, tighter at the tailgate
+    return ease(7.5, 5.0, k), ease(4.6, 3.0, k)
 GB = .935                                        # glass base at 93.5% of the half width (little shoulder, upright glass)
 
 def section(z):
@@ -79,9 +81,12 @@ phis = np.linspace(-math.pi/2, math.pi/2, NP)
 SECS = [section(float(z)) for z in zs]
 body = Mesh('Body')
 G = np.array([[[*sec_pt(S, float(ph)), S['z']] for ph in phis] for S in SECS])
-def dome(x, z): return .022*ease(0, 1, (.40-abs(x))/.06)*ease(0, 1, (z-1.62)/.12)*ease(0, 1, (2.52-z)/.10)
+def dome(x, z): return .028*ease(0, 1, (.40-abs(x))/.06)*ease(0, 1, (z-1.62)/.12)*ease(0, 1, (2.52-z)/.10)
 G[:, :, 1] += np.where(G[:, :, 1] > 1.30, np.vectorize(dome)(G[:, :, 0], G[:, :, 2]), 0)   # raised centre of the hood
 RA = .50; XW = .78                               # wheel arches round the 22" wheels
+for za in (ZA_F, ZA_R):                          # flares: the panel swells ~2 cm in a band round each arch, fading up the side
+    d = np.hypot(G[:, :, 2]-za, G[:, :, 1]-TYRE_R)
+    G[:, :, 0] *= 1+.020*np.exp(-((d-RA-.07)/.09)**2)*(G[:, :, 1] < 1.10)*(G[:, :, 0] > .5)
 well = np.zeros(G.shape[:2], bool)
 for za in (ZA_F, ZA_R):
     dz, dy = G[:, :, 2]-za, G[:, :, 1]-TYRE_R; d = (np.abs(dz)**3.2+np.abs(np.maximum(dy, 0)*1.08)**3.2+np.abs(np.minimum(dy, 0))**3.2)**(1/3.2)   # squared-off arches, flatter on top (photo)
@@ -118,7 +123,7 @@ ZW = max(float(z) for z in zz if gh_h(z) > .07)    # the windshield's foot: ahea
 def ggrid(u0, u1, z0f, z1f, nz, nu, mat):
     G = [[gpt(z0f(u)+(z1f(u)-z0f(u))*i/nz, u) for u in np.linspace(u0, u1, nu+1)] for i in range(nz+1)]
     mirror_grid(gh, G, lambda i, j: mat)
-zD = lambda u: -2.50+.02*min(u, .5)/.5             # back of the side glass (a thin body-colour D pillar behind it)
+zD = lambda u: -2.52+.13*min(u, .5)/.5             # back of the side glass (a thin body-colour D pillar behind it)
 zA = lambda u: ZW-.03-.60*min(u, .5)/.5            # front of the door glass, along the A pillar              # front of the door glass: the A pillar leans back
 cz0, cz1 = (lambda u: ZG0), (lambda u: ZG1)
 ggrid(0, .5, cz0, zD, 6, 14, 'Paint')              # D pillar
@@ -134,8 +139,8 @@ ggrid(0, .5, zA, lambda u: ZW, 6, 14, 'TrimGloss') # A pillar: thin, gloss black
 ggrid(0, .5, lambda u: ZW, cz1, 4, 14, 'Paint')    # ahead of the windshield: body
 ggrid(.5, .54, cz0, lambda u: ZW, 140, 1, 'Paint')          # roof edge
 ggrid(.5, .54, lambda u: ZW, cz1, 3, 1, 'Paint')
-ggrid(.54, 1, cz0, lambda u: -2.585, 8, 12, 'Glass')        # tailgate glass (the upright back)
-ggrid(.54, 1, lambda u: -2.585, lambda u: .64, 100, 12, 'Paint')   # flat painted roof
+ggrid(.54, 1, cz0, lambda u: -2.43, 14, 12, 'Glass')         # tailgate glass, leaning forward ~20 degrees
+ggrid(.54, 1, lambda u: -2.43, lambda u: .64, 100, 12, 'Paint')   # flat painted roof
 ggrid(.54, 1, lambda u: .64, lambda u: ZW, 30, 12, 'Glass')  # windshield
 ggrid(.54, 1, lambda u: ZW, cz1, 4, 12, 'Paint')            # cowl / hood behind it
 
@@ -169,7 +174,7 @@ def patch(m, mat, f, nu, nv, push=.004, zfn=zfront, sgn=1, shift=0.):
         for j in range(nv+1):
             x, y = f(i/nu, j/nv); z = zfn(x, y)
             if z is None: z = (ZF-.02 if sgn > 0 else ZR+.02)
-            n = surf_normal(x, y, z, sgn); row.append((x+n[0]*push, y+n[1]*push, z+n[2]*push+shift))
+            n = surf_normal(x, y, z, sgn); row.append((x+n[0]*push*(x > 1e-6), y+n[1]*push, z+n[2]*push+shift))
         pts.append(row)
     for side in (1, -1):
         idx = [[m.v((side*p[0], p[1], p[2])) for p in row] for row in pts]
@@ -293,14 +298,14 @@ for zc in (.30, -.80):
     side_patch(trim, 'Handle', lambda u, v, zc=zc: (zc-.17*u, 1.16+.03*v), 6, 1, push=.008)
 box(trim, 'Trim', (HW-.02, .40, (ZA_F-RA-.10+ZA_R+RA+.10)/2), (.17, .035, (ZA_F-RA-.10)-(ZA_R+RA+.10)))   # running board
 for x in (.80,):
-    box(trim, 'TrimGloss', (x, 1.945, -.95), (.035, .03, 3.1))                                  # roof rail along the roof's edge
-    for zc in (-2.40, .50): box(trim, 'TrimGloss', (x, 1.915, zc), (.045, .05, .16))             # its feet
+    box(trim, 'TrimGloss', (x, 1.962, -.95), (.035, .03, 3.0))                                  # roof rail along the roof's edge
+    for zc in (-2.35, .48): box(trim, 'TrimGloss', (x, 1.932, zc), (.045, .05, .16))             # its feet
 # ---------- door mirrors: gloss black, square-ish, on the door below the A pillar ----------
 mir = Mesh('Mirrors')
-box(trim, 'Paint', (0.0001, 1.872, -2.585), (1.52, .03, .11))      # body-colour spoiler on the roof's back edge, over the glass
-box(tails, 'Taillight', (0.0001, 1.858, -2.64+.035), (.34, .014, .012))   # high-mounted brake light under it (built 3.5 cm in)
-box(trim, 'TrimGloss', (0.0001, 1.50, -2.664), (.07, .04, .02))         # rear wiper: pivot
-box(trim, 'TrimGloss', (-.17, 1.535, -2.668), (.34, .016, .012))      # and its arm and blade, lying across the glass
+box(trim, 'Paint', (0.0001, 1.905, -2.43), (1.52, .03, .12))      # body-colour spoiler on the roof's back edge, over the glass
+box(tails, 'Taillight', (0.0001, 1.886, -2.485+.035), (.34, .014, .012))   # high-mounted brake light under it (built 3.5 cm in)
+box(trim, 'TrimGloss', (0.0001, 1.45, -2.648), (.07, .04, .02))         # rear wiper: pivot
+box(trim, 'TrimGloss', (-.17, 1.48, -2.643), (.34, .016, .012))      # and its arm and blade, lying across the glass
 def ellipsoid(m, mat, c, r, nu=14, nv=10, cut=None):
     for side in (1, -1):
         idx = []
@@ -315,9 +320,9 @@ def ellipsoid(m, mat, c, r, nu=14, nv=10, cut=None):
                 a_, b_, c_, d_ = idx[i][j], idx[i+1][j], idx[i][j+1], idx[i+1][j+1]
                 if side > 0: m.tri(mat, a_, c_, b_); m.tri(mat, b_, c_, d_)
                 else: m.tri(mat, a_, b_, c_); m.tri(mat, b_, d_, c_)
-box(mir, 'TrimGloss', (1.135, 1.445, 1.255), (.215, .165, .085))   # tall, squarish gloss black housing (photo)
-ellipsoid(mir, 'TrimGloss', (1.135, 1.445, 1.285), (.108, .083, .03))
-box(mir, 'MirrorGlass', (1.135, 1.445, 1.211), (.19, .14, .006))    # the glass, facing back
+box(mir, 'TrimGloss', (1.105, 1.445, 1.255), (.19, .165, .085))   # tall, squarish gloss black housing (photo)
+ellipsoid(mir, 'TrimGloss', (1.105, 1.445, 1.285), (.095, .083, .03))
+box(mir, 'MirrorGlass', (1.105, 1.445, 1.211), (.17, .14, .006))    # the glass, facing back
 box(mir, 'TrimGloss', (1.035, 1.39, 1.265), (.07, .06, .11))        # short arm to the door
 # ---------- red brake calipers, fixed to the body inside each wheel ----------
 brk = Mesh('Brakes')
