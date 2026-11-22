@@ -81,7 +81,7 @@ G = np.array([[[*sec_pt(S, float(ph)), S['z']] for ph in phis] for S in SECS])
 RA = .50; XW = .78                               # wheel arches round the 22" wheels
 well = np.zeros(G.shape[:2], bool)
 for za in (ZA_F, ZA_R):
-    dz, dy = G[:, :, 2]-za, G[:, :, 1]-TYRE_R; d = np.hypot(dz, dy)
+    dz, dy = G[:, :, 2]-za, G[:, :, 1]-TYRE_R; d = (np.abs(dz)**3.2+np.abs(np.maximum(dy, 0)*1.08)**3.2+np.abs(np.minimum(dy, 0))**3.2)**(1/3.2)   # squared-off arches, flatter on top (photo)
     k = (d < RA) & (G[:, :, 0] > XW-.001)
     edge = k.copy(); inner = np.zeros_like(k)
     inner[1:-1, 1:-1] = k[1:-1, 1:-1] & k[:-2, 1:-1] & k[2:, 1:-1] & k[1:-1, :-2] & k[1:-1, 2:]
@@ -188,14 +188,16 @@ def box(m, mat, c, s):                             # an axis box, centre c, size
             m.tri(mat, V[a], V[b], V[c_]); m.tri(mat, V[a], V[c_], V[d])
 W = lambda y, z=2.55: max(halfwidth(z, y), .1)
 patch(trim, 'Grille', lambda u, v: (.80*u*W(.88+.36*v), .88+.36*v), 16, 6, push=.004)          # the grille's gloss black field
-for yb in (.95, 1.04, 1.13):                                                                     # three heavy horizontal bars
-    patch(trim, 'Bar', lambda u, v, yb=yb: (.74*u*W(yb), yb+.034*v), 14, 1, push=.010)
+for yb in (.915, .985, 1.055, 1.125, 1.19):                                                      # five heavy horizontal bars, stepped
+    patch(trim, 'Bar', lambda u, v, yb=yb: ((.76-.03*(yb-.9)*4)*u*W(yb), yb+.028*v), 14, 1, push=.010)
 patch(heads, 'Headlight', lambda u, v: ((.80+.17*u)*W(1.05+.15*v), 1.05+.15*v), 10, 4, push=.006, shift=-.035)   # lamps, outer top corners
 patch(heads, 'Headlight', lambda u, v: (.94*u*W(.875), .868+.014*v), 30, 1, push=.008, shift=-.035)            # light line under the grille
 patch(heads, 'Headlight', lambda u, v: ((.955+.02*v)*W(.875+.36*u), .875+.36*u), 12, 1, push=.008, shift=-.035) # up round the outer end
 patch(heads, 'Headlight', lambda u, v: ((.70+.27*u)*W(1.232), 1.226+.012*v), 10, 1, push=.008, shift=-.035)   # over the lamp
-patch(trim, 'Trim', lambda u, v: (.985*u*W(.52+.30*v), .52+.30*v), 20, 4, push=.003)                          # black lower front bumper (photo)
-patch(trim, 'Bar', lambda u, v: (.62*u*W(.62), .58+.11*v), 12, 2, push=.006)                    # lower intake mesh
+patch(trim, 'Trim', lambda u, v: ((.66-.06*(1-v))*u*W(.60+.17*v), .60+.17*v), 14, 3, push=.004)          # black centre intake, narrower at the bottom
+patch(trim, 'Bar', lambda u, v: (.58*u*W(.64), .64+.09*v), 12, 2, push=.007)                                   # its mesh
+patch(trim, 'Trim', lambda u, v: (.80*u*W(.50+.08*v), .50+.08*v), 14, 1, push=.004)                           # black skid along the bottom
+patch(trim, 'Trim', lambda u, v: ((.82+.12*u)*W(.66+.12*v), .66+.12*v), 4, 2, push=.004)                       # corner vents                    # lower intake mesh
 patch(plate, 'Badge', lambda u, v: (.075*u*math.sqrt(max(0, 1-(u*.98)**2))*0+.075*u, 1.06+.03*v+0*u), 4, 2, push=.016)   # plain blue oval (no lettering)
 patch(trim, 'Trim', lambda u, v: (.90*u*W(1.30, 2.40), 1.285+.006*v), 16, 1, push=.003, zfn=lambda x, y: 2.40)   # hood seam above the grille (a line)
 
@@ -204,7 +206,7 @@ patch(trim, 'Trim', lambda u, v: (.90*u*W(1.30, 2.40), 1.285+.006*v), 16, 1, pus
 tails = Mesh('Taillights')
 Wr = lambda y: max(halfwidth(-2.62, y), .1)
 patch(trim, 'Glass', lambda u, v: (.84*u*Wr(1.06+.36*v), 1.06+.36*v), 16, 4, push=.005, zfn=zrear, sgn=-1)       # black band
-patch(trim, 'Trim', lambda u, v: (.985*u*Wr(.57+.18*v), .57+.18*v), 20, 3, push=.003, zfn=zrear, sgn=-1)        # black lower rear bumper
+patch(trim, 'Trim', lambda u, v: (.95*u*Wr(.57+.07*v), .57+.07*v), 20, 1, push=.003, zfn=zrear, sgn=-1)         # black strip along the bottom of the rear bumper
 patch(tails, 'Taillight', lambda u, v: ((.84+.155*u)*Wr(1.0+.46*v), 1.0+.46*v), 6, 8, push=.006, zfn=zrear, sgn=-1, shift=.035)   # corner lamps
 patch(tails, 'Taillight', lambda u, v: ((.60+.25*u)*Wr(1.38), 1.375+.03*v), 8, 1, push=.008, zfn=zrear, sgn=-1, shift=.035)      # inboard red line
 patch(plate, 'Plate', lambda u, v: (.16*u, 1.10+.15*v), 4, 2, push=.009, zfn=zrear, sgn=-1)
@@ -224,6 +226,7 @@ for x in (.70,):
     for zc in (-2.35, .45): box(trim, 'Glass', (x, 1.925, zc), (.05, .05, .14))                  # its feet
 # ---------- door mirrors: gloss black, square-ish, on the door below the A pillar ----------
 mir = Mesh('Mirrors')
+box(trim, 'Paint', (0.0001, 1.885, -2.60), (1.74, .045, .16))      # body-colour spoiler over the tailgate glass
 def ellipsoid(m, mat, c, r, nu=14, nv=10, cut=None):
     for side in (1, -1):
         idx = []
