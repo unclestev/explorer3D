@@ -43,9 +43,9 @@ const SPECS={
     ws:{zB:-1.04,yB:1.09,hwB:.75,zT:-.33,yT:1.63,hwT:.67,bow:.05}, roof:{y:1.655,hw:.71,zR:1.75}, belt:1.16, winTop:1.58, door:.80, zBp:.52, zC:1.48,
     hood:{zr:-1.03,zf:-2.40,yr:1.085,yf:.985,hw:.99,crown:.03,gap:.80,nose:.07,crease:{x:.40,h:.016}},
     dash:[[1.062,-1.045],[1.086,-.84],[1.086,-.68],[1.064,-.615],[.99,-.595],[.87,-.605],[.75,-.55],[.62,-.43]],
-    wheel:{c:[-.38,.975,-.37],r:.188,tilt:24,rim:.0175,flat:true},
+    wheel:{c:[-.38,.975,-.37],r:.188,tilt:24,rim:.021,flat:false},
     cluster:{c:[-.38,1.003,-.672],w:.31,h:.118},
-    screen:{c:[.0,1.075,-.592],w:.205,h:.142,tilt:6},
+    screen:{c:[.0,1.1165,-.592],w:.148,h:.225,tilt:6},
     col:{dash:0x232427,top:0x1e1f22,trim:0x2a2b2f,lower:0x202124,seat:0x1d1d1f,head:0x3a3a3d,stitch:0,accent:'woodEx',carpet:0x111112},
     eng:'ecoboost30', vmaxG:160, red:6.25, tachMax:8},
   navigator:{style:'lux', eye:[-.42,1.565,.12], pitch:81,
@@ -576,7 +576,7 @@ function steeringWheel(G,P){
   // rim: round or flat-bottomed, slightly oval section
   const pts=[]; for(let i=0;i<64;i++){ const a=i/64*Math.PI*2; let x=Math.cos(a)*W.r, y=Math.sin(a)*W.r; if(W.flat&&y<-W.r*.80){ y=-W.r*.80-.006*(1-Math.abs(x)/W.r); } pts.push(new V3(x,y,0)); }
   const curve=new THREE.CatmullRomCurve3(pts,true,'centripetal');
-  const rim=mesh(new THREE.TubeGeometry(curve,160,W.rim,14,true),rimM,spin); rim.scale.z=1.25;
+  const rim=mesh(new THREE.TubeGeometry(curve,160,W.rim,14,true),P.ex?perfLeather():rimM,spin); rim.scale.z=1.25;
   if(P.style==='classic'){ for(let i=0;i<24;i++){ const a=i/24*Math.PI*2+.13, b=mesh(new THREE.SphereGeometry(W.rim*.6,8,6),rimM,spin); b.position.set(Math.cos(a)*(W.r-W.rim*.85),Math.sin(a)*(W.r-W.rim*.85),0); } }   // finger grips
   if(P.col.stitch&&P.style==='sport'){ const st=M({color:0x5a0a14,roughness:.8}); for(const s of [-1,1]){ const sp=[]; for(let i=0;i<=40;i++){ const a=(s>0?-.55:Math.PI-.55)+i/40*1.1; sp.push(new V3(Math.cos(a)*(W.r),Math.sin(a)*(W.r),W.rim*1.21)); }
       mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(sp),60,.0016,5,false),st,spin,false); } }
@@ -595,6 +595,7 @@ function steeringWheel(G,P){
       const bez=mesh(rbox(.038,.03,.008,.003,.008),gloss,spin); bez.position.set(s*.086,-.012,-.008);          // glossy surround
       const sw=mesh(new THREE.CylinderGeometry(.0105,.0105,.014,20),M({color:0x2a2b2e,roughness:.45,metalness:.5,normalMap:rep(textures().grain,1,4)}),spin);
       sw.rotation.z=Math.PI/2; sw.position.set(s*.086,-.012,-.0035); }                                       // the scroll wheel (axis across)
+  } else if(P.ex){ stWheel(spin,W);
   } else {
     const hubM=M({color:P.style==='lux'?0x2a2420:0x161618,roughness:.55,normalMap:rep(textures().leather,P.ex?8:3,P.ex?8:3),normalScale:new THREE.Vector2(P.ex?.15:.5,P.ex?.15:.5)});
     if(P.ex){ const bT=canvasTex(256,128), x=bT.x, g=x.createLinearGradient(0,0,0,128); g.addColorStop(0,'#3d6fc4'); g.addColorStop(.5,'#123a8a'); g.addColorStop(1,'#0a2560'); // plain blue oval badge (no lettering)
@@ -658,6 +659,46 @@ function stalksEx(grp,colM){
       const f=mesh(new THREE.PlaneGeometry(L*.92,.02),m,hd,false,false); f.position.z=.0121; } } }
 function stalkStep(dt){ const st=sigStalk; if(!st) return; const d=window.SIG?SIG.dir:0;
   st.k+=(d-st.k)*Math.min(1,dt*14); st.piv.rotation.z=-.12*st.k; }   // right signal: the end goes up; left: down
+// Explorer ST wheel (owner 2026-11-21, a photo of the real one): thick round rim in perforated leather; a big airbag pad,
+// wider at the top, with the blue oval; a button panel on each side spoke framed in silver; a silver lower spoke round an
+// open trapezoid, with the red ST badge at the bottom
+function perfLeather(){ const T=canvasTex(256,256), x=T.x; x.fillStyle='#808080'; x.fillRect(0,0,256,256);
+  x.fillStyle='#3a3a3a'; for(let i=0;i<16;i++) for(let j=0;j<16;j++){ x.beginPath(); x.arc(8+i*16+(j%2)*8,8+j*16,3.2,0,7); x.fill(); }   // the little holes
+  T.t.wrapS=T.t.wrapT=THREE.RepeatWrapping; T.t.repeat.set(60,3);
+  return M({color:0x161618,roughness:.55,bumpMap:T.t,bumpScale:.0012,normalMap:rep(textures().leather,24,1),normalScale:new THREE.Vector2(.4,.4)}); }
+function stWheel(spin,W){
+  const pad=M({color:0x17181a,roughness:.6,normalMap:rep(textures().leather,10,10),normalScale:new THREE.Vector2(.12,.12)});
+  const sat=M({color:0xc4c9cf,metalness:.9,roughness:.28,env:1.4}), gloss=M({color:0x0b0b0c,roughness:.22,metalness:.15});
+  // the airbag pad: a rounded trapezoid, wider at the top, domed
+  { const sh=new THREE.Shape(), tw=.078, bw=.062, ty=.05, by=-.068, r=.024;
+    sh.moveTo(-tw+r,ty); sh.lineTo(tw-r,ty); sh.quadraticCurveTo(tw,ty,tw,ty-r); sh.lineTo(bw,by+r); sh.quadraticCurveTo(bw,by,bw-r,by);
+    sh.lineTo(-bw+r,by); sh.quadraticCurveTo(-bw,by,-bw,by+r); sh.lineTo(-tw,ty-r); sh.quadraticCurveTo(-tw,ty,-tw+r,ty);
+    const g=new THREE.ExtrudeGeometry(sh,{depth:.025,bevelEnabled:true,bevelThickness:.012,bevelSize:.01,bevelSegments:5,curveSegments:10}); g.translate(0,0,-.037);
+    mesh(g,pad,spin);
+    const bT=canvasTex(256,128), x=bT.x, gr=x.createLinearGradient(0,0,0,128); gr.addColorStop(0,'#3d6fc4'); gr.addColorStop(.5,'#123a8a'); gr.addColorStop(1,'#0a2560');   // plain blue oval (no lettering)
+    x.clearRect(0,0,256,128); x.fillStyle='#d9dde2'; x.beginPath(); x.ellipse(128,64,124,60,0,0,7); x.fill(); x.fillStyle=gr; x.beginPath(); x.ellipse(128,64,112,50,0,0,7); x.fill();
+    x.fillStyle='rgba(255,255,255,.18)'; x.beginPath(); x.ellipse(128,44,96,22,0,0,7); x.fill();
+    const b=mesh(new THREE.PlaneGeometry(.06,.03),new THREE.MeshBasicMaterial({map:bT.t,transparent:true}),spin,false,false); b.position.set(0,-.008,.0012); }
+  // side spokes with button panels
+  for(const s of [-1,1]){
+    const arm=mesh(rbox(.11,.06,.024,.01,.022),pad,spin); arm.position.set(s*.118,-.012,-.022); arm.rotation.z=s*-.10;
+    const T=canvasTex(256,192), x=T.x; x.fillStyle='#0b0b0c'; x.fillRect(0,0,256,192);
+    const key=(X,Y,w,h,t)=>{ x.fillStyle='#17181b'; x.beginPath(); x.roundRect?x.roundRect(X,Y,w,h,10):x.rect(X,Y,w,h); x.fill(); x.strokeStyle='#050505'; x.lineWidth=4; x.stroke();
+      x.fillStyle='#c4c8cd'; x.font='600 30px system-ui,Arial'; x.textAlign='center'; x.textBaseline='middle'; x.fillText(t,X+w/2,Y+h/2+1); };
+    if(s<0){ key(20,20,100,70,'◁'); key(136,20,100,70,'▷'); key(20,102,100,70,'⊝'); key(136,102,100,70,'⊕'); }   // cruise / lane keys
+    else { key(20,20,70,70,'▲'); key(98,20,70,70,'OK'); key(176,20,60,70,'≡'); key(20,102,70,70,'▼'); key(98,102,70,70,'↩'); key(176,102,60,70,'✆'); }   // menu keys
+    const pn=mesh(new THREE.PlaneGeometry(.064,.048),new THREE.MeshBasicMaterial({map:T.t}),spin,false,false); pn.position.set(s*.118,-.010,-.0095); pn.rotation.z=s*-.10;
+    const pb=mesh(rbox(.07,.054,.004,.0015,.008),gloss,spin); pb.position.set(s*.118,-.010,-.0115); pb.rotation.z=s*-.10;
+    // the silver frame along each panel's lower and outer edges
+    mesh(bar([[s*.085,-.040,-.009],[s*.15,-.046,-.009],[s*.158,-.03,-.009],[s*.156,.012,-.009]],.004,.003,[0,0,1],24,6),sat,spin); }
+  // lower spoke: silver sides round an open trapezoid, a dark bottom plate with the ST badge
+  for(const s of [-1,1]) mesh(bar([[s*.045,-.066,-.018],[s*.05,-.11,-.016],[s*.048,-W.r+.02,-.012]],[.014,.012],.008,[0,0,1],12,6),sat,spin);
+  const plate=mesh(rbox(.11,.026,.012,.004,.01),pad,spin); plate.position.set(0,-W.r+.012,-.012);
+  const sv=mesh(new THREE.BoxGeometry(.1,.004,.006),sat,spin); sv.position.set(0,-W.r+.026,-.01);
+  const T=canvasTex(128,64), x=T.x; x.clearRect(0,0,128,64); x.font='italic 900 44px Arial,system-ui'; x.textAlign='center'; x.textBaseline='middle';
+  x.fillStyle='#c9ced4'; x.fillText('ST',66,35); x.fillStyle='#d0202e'; x.fillText('ST',64,33);
+  const bd=mesh(new THREE.PlaneGeometry(.034,.017),new THREE.MeshBasicMaterial({map:T.t,transparent:true}),spin,false,false); bd.position.set(0,-W.r+.012,-.0055);
+}
 
 /* ---------- instruments ---------- */
 // modern digital cluster / panoramic display / centre screen: canvases redrawn ~15 times a second
