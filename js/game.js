@@ -355,7 +355,7 @@ const suv=new THREE.Group(); while(body.children.length) suv.add(body.children[0
 //   sound engine in js/enh/sound.js; vmax top speed in m/s (speedometer units) — cars without one keep the old behaviour
 //   model a .glb 3D model (metres, front +z, ground at y 0, wheels as nodes named Wheel_*) drawn instead of a photo
 const CARS={
-  explorer:{name:'Ford Explorer ST',paint:0x3e4855,img:'img/explorer-rear.webp?v=1',W:2.35,piv:.38,glow:[[.088,.37],[.912,.37]],gw:.26,gh:.3,lamp:.68,front:2.4,sound:'ecoboost30',perf:{t60:5.2,top:143,a0:7.8},
+  explorer:{name:'Ford Explorer ST',paint:0x3e4855,img:'img/explorer-rear.webp?v=2',W:2.35,piv:.38,glow:[[.088,.37],[.912,.37]],gw:.26,gh:.3,lamp:.68,front:2.4,sound:'ecoboost30',perf:{t60:5.2,top:143,a0:7.8},
     fimg:'img/explorer-front.webp?v=1',fW:4.4,fpiv:[.525,.141]},     // front: the owner's Explorer ST photo, front-left three-quarter
   // AMC Javelin (the owner's photo): one full-width tail-light bar low on the tail, reversing light in the middle
   javelin:{name:'AMC Javelin',paint:0x141518,img:'img/javelin-rear.webp?v=1',W:1.95,piv:.40,glow:[[.15,.2],[.27,.2],[.38,.2],[.62,.2],[.73,.2],[.85,.2]],gw:.15,gh:.12,lamp:.62,front:2.44,sound:'amc401',vmax:120/2.237,perf:{t60:6.8,top:120,a0:6.0}},   // top speed 120 mph
