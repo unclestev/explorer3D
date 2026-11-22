@@ -435,7 +435,8 @@ function renderMirror(dt){ if(!MIR.rt) return; MIR.t-=dt; if(MIR.t>0) return; MI
    (mirrored, as real ones are): other cars, and the buildings around you drawn from the map's footprints, with guide lines
    and a distance read-out. The sensors look up to ~2.4 m behind the bumper across the car's width, at buildings and other
    cars, and beep faster as you close in, solid under 30 cm — in any view, in the modern cars ---------- */
-const BC={rt:null,cam:null,mat:null,t:0,d:null,beepT:0,tone:null,wasRev:false};
+const BC={rt:null,cam:null,mat:null,t:0,d:null,beepT:0,tone:null,wasRev:false,hold:0,fwdT:0};
+const powered=()=>!window.IGN||IGN.state==='on'||IGN.state==='crank';   // the car's electrics: on unless the engine's switched off
 const bcCar=()=>mode==='car'&&['explorer','navigator','modely'].includes(typeof CARKEY==='string'?CARKEY:'');
 const reversing=()=>(mode==='car'||mode==='tractor')&&(S.sel==='R'||(!S.sel&&(S.v<-.2||((S.gas||0)<-.05&&Math.abs(S.v)<.5))));
 function rearLen(){ const L=LAMPS[specKey(CARKEY)]||LAMPS.explorer; return (L.front||2.4)+.18; }
@@ -457,14 +458,19 @@ function beep(len){ const A=window.SOUND&&SOUND.state; if(!A||!A.ctx||!SOUND.on|
     const v=(CK.on?.16:.09); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(v,t+.006); g.gain.setValueAtTime(v,t+len-.012); g.gain.linearRampToValueAtTime(0,t+len);
     g.connect(c.destination); o.start(t); o2.start(t); o.stop(t+len+.02); o2.stop(t+len+.02); }catch(e){} }
 if(typeof FRAME_HOOKS!=="undefined") FRAME_HOOKS.push(function parkSensors(dt){
-  const rev=reversing()&&bcCar(); if(!rev){ BC.d=null; BC.wasRev=false; return false; }
+  const rev=reversing()&&bcCar();
+  // the camera stays up a moment after you shift out of reverse (owner 2026-11-21): until you're going forward at 5 mph, or
+  // after 3 seconds of moving forward, whichever comes first
+  if(rev){ BC.hold=1; BC.fwdT=0; }
+  else if(BC.hold){ if(!bcCar()||!powered()) BC.hold=0; else if((S.v||0)>.3){ BC.fwdT+=dt; if(S.v>=2.235||BC.fwdT>=3) BC.hold=0; } }
+  if(!rev){ BC.d=null; BC.wasRev=false; return false; }
   BC.gapT=(BC.gapT||0)-dt; if(BC.gapT<=0){ BC.gapT=.1; BC.d=rearGap(); }
   const d=BC.d; if(!BC.wasRev){ BC.wasRev=true; BC.beepT=0; beep(.09); }                       // one chirp as you select reverse
   if(d!=null&&d<1.8){ BC.beepT-=dt; if(d<.3){ if(BC.beepT<=0){ beep(.26); BC.beepT=.24; } }        // under 30 cm: one long solid tone
     else if(BC.beepT<=0){ beep(.07); BC.beepT=lerp(.09,.6,(d-.3)/1.5); } }
   return false; });
 function backupCam(dt){ const p=CK.cab&&CK.cab.parts&&CK.cab.parts.screen; if(!p||!p.grp) return;
-  const on=reversing()&&bcCar()&&CK.cab.P&&CK.cab.P.style!=='ev';                              // (the Model Y's screen layout draws its own; the sensors still beep)
+  const on=(reversing()||BC.hold)&&bcCar()&&powered()&&CK.cab.P&&CK.cab.P.style!=='ev';                              // (the Model Y's screen layout draws its own; the sensors still beep)
   if(!p.bc){ if(!on) return;
     BC.rt=BC.rt||new THREE.WebGLRenderTarget(640,Math.round(640*p.h/p.w),{minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter});
     BC.cam=BC.cam||new THREE.PerspectiveCamera(100,p.w/p.h,1,1e6);
@@ -899,10 +905,10 @@ function dashModern(G,P,parts){
     if(!lux){ const dial=mesh(new THREE.CylinderGeometry(.034,.036,.03,40),M({map:rep(T.alu,2,1),metalness:.9,roughness:.25}),G); dial.position.set(cx+(P.ex?-.05:0),.66,zc0+.17);
       const ring=mesh(new THREE.TorusGeometry(.04,.003,8,40),M({color:0x111,roughness:.3}),G); ring.position.set(cx+(P.ex?-.05:0),.651,zc0+.17); ring.rotation.x=Math.PI/2;
       const pr=canvasTex(256,64); pr.x.fillStyle='#0a0a0b'; pr.x.fillRect(0,0,256,64); pr.x.font='700 34px system-ui'; pr.x.textAlign='center'; pr.x.textBaseline='middle'; ['P','R','N','D','S'].forEach((t,i)=>{ pr.x.fillStyle=i===3?'#ffffff':'#70757c'; pr.x.fillText(t,28+i*50,32); });
-      const pl=mesh(new THREE.PlaneGeometry(.12,.03),new THREE.MeshBasicMaterial({map:pr.t}),G,false,false); pl.position.set(cx+(P.ex?-.05:0),.6505,zc0+.105); if(P.ex) pl.scale.set(.75,.75,1); pl.rotation.x=-Math.PI/2; parts.prnd={T:pr,cur:'D'}; }
+      const pl=mesh(new THREE.PlaneGeometry(.12,.03),new THREE.MeshBasicMaterial({map:pr.t}),G,false,false); pl.position.set(cx+(P.ex?-.05:0),.6505,zc0+.105); if(P.ex) pl.scale.set(.75,.75,1); pl.rotation.x=-Math.PI/2; parts.prnd={T:pr,cur:'D',m:pl.material}; }
     else { const pr=canvasTex(512,64); pr.x.fillStyle='#16130f'; pr.x.fillRect(0,0,512,64); pr.x.font='600 30px system-ui'; pr.x.textAlign='center'; pr.x.textBaseline='middle'; ['P','R','N','D','S'].forEach((t,i)=>{ pr.x.fillStyle=i===3?'#fff':'#a09c94'; pr.x.fillText(t,52+i*102,32); });
       const keys=mesh(rbox(.24,.03,.012,.003,.006),M({color:0xc8c2b6,metalness:.9,roughness:.22}),G); keys.position.set(P.screen.c[0],P.screen.c[1]-P.screen.h/2-.105,fz(P.screen.c[1]-P.screen.h/2-.105)+.01); keys.rotation.x=-.55;
-      const pl=mesh(new THREE.PlaneGeometry(.23,.026),new THREE.MeshBasicMaterial({map:pr.t}),keys,false,false); pl.position.z=.0065; parts.prnd={T:pr,cur:'D',lux:true}; } }
+      const pl=mesh(new THREE.PlaneGeometry(.23,.026),new THREE.MeshBasicMaterial({map:pr.t}),keys,false,false); pl.position.z=.0065; parts.prnd={T:pr,cur:'D',lux:true,m:pl.material}; } }
   // glovebox seam and passenger knee panel
 }
 // 2020-on Explorer (owner 2026-11-21, a photo of the real dash: "make the inside of the explorer look like this"):
@@ -1074,7 +1080,7 @@ function dashClassic(G,P,parts){
     const st=mesh(new THREE.CylinderGeometry(.007,.009,.18,16),chrome,G); st.position.set(0,.55,-.07); st.rotation.x=-.25;
     const hd=mesh(bar([[-.045,.64,-.05],[-.045,.67,-.08],[0,.685,-.095],[.045,.67,-.08],[.045,.64,-.05]],.024,.022,[0,0,1],24,10),M({color:0x111111,roughness:.3}),G);
     const pr=canvasTex(256,64); pr.x.fillStyle='#0c0c0c'; pr.x.fillRect(0,0,256,64); pr.x.font='700 30px Arial'; pr.x.textAlign='center'; pr.x.textBaseline='middle'; ['P','R','N','D','2','1'].forEach((t,i)=>{ pr.x.fillStyle=i===3?'#ffffff':'#9a9a9a'; pr.x.fillText(t,22+i*42,32); });
-    const pl=mesh(new THREE.PlaneGeometry(.09,.022),new THREE.MeshBasicMaterial({map:pr.t}),G,false,false); pl.position.set(0,.4625,-.15); pl.rotation.x=-Math.PI/2; parts.prnd={T:pr,cur:'D',classic:true}; }
+    const pl=mesh(new THREE.PlaneGeometry(.09,.022),new THREE.MeshBasicMaterial({map:pr.t}),G,false,false); pl.position.set(0,.4625,-.15); pl.rotation.x=-Math.PI/2; parts.prnd={T:pr,cur:'D',classic:true,m:pl.material}; }
   // two small rectangular vents at the dash ends
   for(const s of [-1,1]){ const g=new THREE.Group(); g.position.set(s*(xd-.1),.74,-.43); g.rotation.y=-s*.5; G.add(g);
     mesh(rbox(.10,.05,.02,.004,.006),chrome,g); const b=mesh(new THREE.PlaneGeometry(.085,.037),M({color:0x030303}),g,false); b.position.z=.0105;
@@ -1381,7 +1387,11 @@ function update(dt){
   if(p.gauges) for(const g of p.gauges){ g.face.material.emissiveIntensity=.22+k*.7; g.nm.emissiveIntensity=.25+k*.9; }
   if(p.radio) p.radio.emissiveIntensity=k*.8;
   if(p.sig) for(const a of p.sig){ const lit=a.dir<0?(window.SIG&&SIG.left):(window.SIG&&SIG.right); a.m.color.setHex(lit?0x40ff66:0x0c1a0e); }
-  const dim=1-.25*k; for(const s of [p.cluster,p.screen,p.pano]) if(s) s.m.color.setScalar(.92*dim+.08);
+  // engine off (js/enh/ignition.js): every display goes dark, and lights up again as it starts (owner 2026-11-21: "all dash
+  // and screen displays should turn off when the engine is off and turn on when the engine is on")
+  const pwT=powered()?1:0; CK.pw=CK.pw==null?pwT:CK.pw+(pwT-CK.pw)*Math.min(1,dt*(pwT?5:9)); const pw=CK.pw;
+  const dim=1-.25*k; for(const s of [p.cluster,p.screen,p.pano]) if(s) s.m.color.setScalar((.92*dim+.08)*pw);
+  if(p.prnd&&p.prnd.m) p.prnd.m.color.setScalar(pw); if(p.sig&&pw<.5) for(const a of p.sig) a.m.color.setHex(0x0c1a0e);
   if(p.btns) p.btns.color.setScalar(.75+.25*(1-k));
   for(const m of MIR.mats) m.color.setScalar(.85-.2*k); for(const m of MIR.frames) m.color.setScalar(Math.max(.25,hi/.85));
   // body roll/pitch and bumps move the cabin around your head (your eyes stay level with the horizon)
@@ -1394,7 +1404,7 @@ function update(dt){
     const now=new Date(), hh=(now.getHours()%12)+now.getMinutes()/60; cg.needle.rotation.z=-(hh/12*360)*DEG; if(cg.needle.userData.min) cg.needle.userData.min.rotation.z=-(now.getMinutes()/60*360)*DEG;
   }
   const now=performance.now();
-  if(p.hud){ p.hud.g.visible=CK.hud; if(CK.hud) p.hud.m.opacity=1-.45*k; }
+  if(p.hud){ p.hud.g.visible=CK.hud&&pw>.02; if(CK.hud) p.hud.m.opacity=(1-.45*k)*pw; }
   const ik=[d.mph,Math.round(d.rpm/60),d.gear,d.gearL,d.street,d.limit,d.time,d.temp,d.wx,d.trip,d.nav,d.navArrow,d.navDist,d.navStreet,d.eta,d.compass,CK.hud,d.bl,d.br].join('|');
   if(now-c.lastDraw>66){ c.lastDraw=now; if(ik!==c.ik){ c.ik=ik; if(p.hud&&CK.hud) drawHud(p.hud,d);   // only when a number on them changed (each redraw is a texture upload)
     if(p.cluster) drawSport(p.cluster,d); if(p.pano) drawPano(p.pano,d); } if(p.screen&&now-(c.lastMap||0)>130){ c.lastMap=now; if(P.style==='ev') drawEV(p.screen,d); else drawScreen(p.screen,d,P.style==='lux'); }
