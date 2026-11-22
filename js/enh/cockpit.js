@@ -449,8 +449,12 @@ function rearGap(){ const h=S.hdg*DEG, fx=Math.sin(h), fy=Math.cos(h), rx=Math.c
   const near=(x,y)=>Math.hypot(x-px,y-py)<10, posts=[];
   for(const o of (window.ROADSIDE&&ROADSIDE.state&&ROADSIDE.state.obs)||[]) if(near(o[0],o[1])) posts.push(o);
   for(const o of window.SIGN_PTS||[]) if(near(o.x,o.y)) posts.push([o.x,o.y,o.k==='sig'?.2:.1]);
-  for(let d=0;d<=2.4;d+=.1) for(const l of [-.95,-.5,0,.5,.95]){ const x=px-fx*(Lr+d)+rx*l, y=py-fy*(Lr+d)+ry*l;
-    for(const f of (typeof geoBlocks==='function'?geoBlocks(x/MLNG,y/MLAT):[])) if(typeof contains==='function'&&contains(f.geometry,x/MLNG,y/MLAT)) return d;
+  // the buildings round the back of the car, once (downtown cells hold big, many-cornered footprints: test each point
+  // against a box first)
+  const nb=new Set(); if(typeof geoBlocks==='function') for(const l of [-1,1]) for(const d of [0,1.2,2.4]) for(const f of geoBlocks((px-fx*(Lr+d)+rx*l)/MLNG,(py-fy*(Lr+d)+ry*l)/MLAT)) nb.add(f);
+  const B=[...nb].map(f=>{ if(!f._bb){ let a=1e9,b=1e9,c=-1e9,e=-1e9; const g=f.geometry, P=g.type==='Polygon'?[g.coordinates]:g.coordinates||[]; for(const pl of P) for(const q of pl[0]||[]){ if(q[0]<a)a=q[0]; if(q[0]>c)c=q[0]; if(q[1]<b)b=q[1]; if(q[1]>e)e=q[1]; } f._bb=[a,b,c,e]; } return f; });
+  for(let d=0;d<=2.4;d+=.15) for(const l of [-.95,0,.95]){ const x=px-fx*(Lr+d)+rx*l, y=py-fy*(Lr+d)+ry*l, lng=x/MLNG, lat=y/MLAT;
+    for(const f of B){ const bb=f._bb; if(lng<bb[0]||lng>bb[2]||lat<bb[1]||lat>bb[3]) continue; if(typeof contains==='function'&&contains(f.geometry,lng,lat)) return d; }
     for(const o of posts) if(Math.hypot(x-o[0],y-o[1])<o[2]+.05) return d;
     for(const a of cars){ const sh=Math.sin(a.hd), ch=Math.cos(a.hd), dx=x-a.px, dy=y-a.py, al=dx*sh+dy*ch, ac=dx*ch-dy*sh; if(Math.abs(al)<2.4&&Math.abs(ac)<1.0) return d; } }
   return null; }
@@ -466,7 +470,7 @@ if(typeof FRAME_HOOKS!=="undefined") FRAME_HOOKS.push(function parkSensors(dt){
   if(rev){ BC.hold=1; BC.fwdT=0; }
   else if(BC.hold){ if(!bcCar()||!powered()) BC.hold=0; else if((S.v||0)>.3){ BC.fwdT+=dt; if(S.v>=2.235||BC.fwdT>=3) BC.hold=0; } }
   if(!rev){ BC.d=null; BC.wasRev=false; return false; }
-  BC.gapT=(BC.gapT||0)-dt; if(BC.gapT<=0){ BC.gapT=.1; BC.d=rearGap(); }
+  BC.gapT=(BC.gapT||0)-dt; if(BC.gapT<=0){ BC.gapT=.15; BC.d=rearGap(); }
   const d=BC.d; if(!BC.wasRev){ BC.wasRev=true; BC.beepT=0; beep(.09); }                       // one chirp as you select reverse
   if(d!=null&&d<1.8){ BC.beepT-=dt; if(d<.3){ if(BC.beepT<=0){ beep(.26); BC.beepT=.24; } }        // under 30 cm: one long solid tone
     else if(BC.beepT<=0){ beep(.07); BC.beepT=lerp(.09,.6,(d-.3)/1.5); } }
