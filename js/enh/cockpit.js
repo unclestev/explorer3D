@@ -308,7 +308,7 @@ function shell(G,P,mats){
     // modern door mirror (owner 2026-11-21: "the mirrors on the explorer are just rectangles"): the glass is a rounded
     // trapezoid, short on the inboard edge and tall outboard with a big rounded lower-outer corner, in a black surround; the
     // body-colour housing wraps round it and swells out behind; a black foot on the door with the sail filling the window corner
-    const lux=P.style==='lux', ev=P.style==='ev', ex=!!P.ex, W=lux?.27:ex?.225:ev?.235:.245, H=lux?.185:ex?.19:ev?.15:.165, g=new THREE.Group(); g.position.set(s*(P.door+.235),P.belt+.075,zA+.16); G.add(g);
+    const lux=P.style==='lux', ev=P.style==='ev', ex=!!P.ex, W=lux?.27:ex?.225:ev?.235:.245, H=lux?.185:ex?.19:ev?.15:.165, g=new THREE.Group(); g.position.set(s*(P.door+.235),P.belt+(ex?.085:.075),zA+.16); G.add(g);
     const o=-s;                                                     // the group faces the driver: +x is the driver's right, so outboard is -s
     const shp=(w,h,grow)=>(ev?mirShapeEV:ex?mirShapeEx:mirShape)(w+grow*2,h+grow*2,o);
     const glass=new THREE.ShapeGeometry(shp(W,H,0),12); uvFit(glass);
@@ -317,7 +317,7 @@ function shell(G,P,mats){
     const so=mesh(sg,new THREE.MeshBasicMaterial({map:sf.t,transparent:true}),g,false,false); so.position.z=.0045;
     mesh(new THREE.ShapeGeometry(shp(W,H,ex?.012:.008),12),M({color:0x060607,roughness:.5}),g,false).position.z=.0025;   // black glass surround
     // the Explorer's (owner 2026-11-21, a photo of the real one): a thick black textured housing, not body colour
-    const pm=ex?M({color:0x1b1c1e,roughness:.55,normalMap:rep(textures().grain,5,5),normalScale:new THREE.Vector2(.15,.15),out:true,env:.35})
+    const pm=ex?M({color:0x2f3236,roughness:.5,normalMap:rep(textures().grain,5,5),normalScale:new THREE.Vector2(.15,.15),out:true,env:.35})
               :M({color:CARSPEC.paint||0x333333,metalness:.08,roughness:.42,clearcoat:1,clearcoatRoughness:.05,out:true,env:.55});
     if(ex){ // blind-spot symbol etched in the glass near its outer top corner: grey, lit amber when something's alongside
       const T=canvasTex(128,128), x=T.x; x.clearRect(0,0,128,128); x.fillStyle='#fff'; x.strokeStyle='#fff'; x.lineWidth=7; x.lineCap='round';
@@ -331,6 +331,19 @@ function shell(G,P,mats){
     for(let k=0;k<pz.count;k++){ const z=pz.getZ(k); if(z<-.05){ const t=(-.05-z)/.065; pz.setX(k,pz.getX(k)*(1-.22*t)+o*.012*t); pz.setY(k,pz.getY(k)*(1-.18*t)); } }   // the back of the shell tapers and leans outboard
     hg.computeVertexNormals(); mesh(hg,pm,g);
     const blk=M({color:0x0b0b0c,roughness:.7,normalMap:rep(textures().grain,2,2)});
+    if(ex){ const t=new THREE.Shape(); t.moveTo(0,0); t.lineTo(.2,0); t.quadraticCurveTo(.06,.07,0,.17); t.lineTo(0,0);   // the sail, as below
+      const sm=mesh(new THREE.ShapeGeometry(t,8),M({color:0x0a0a0b,roughness:.8,side:THREE.DoubleSide}),G,false);
+      sm.rotation.y=-Math.PI/2; sm.position.set(s*(P.door+.035),P.belt+.005,zA+.02); }
+    // Explorer (owner 2026-11-21: "it should attach to the car with the proper housing instead of the arm"): no arm — the
+    // housing itself runs inboard as a thick neck and widens onto its mount on the door at the window's front corner
+    if(ex){ g.lookAt(new V3(...P.eye).add(new V3(s>0?-.4:.5,.05,1.6))); g.updateMatrix();
+      const far=s>0, e=new V3(s*(W/2-(far?.07:.05)),-H*(far?.34:.26),far?-.12:-.10).applyMatrix4(g.matrix);   // (the far mirror is seen more side-on: tuck it in further)                  // into the front of the shell, low on its inboard end (hidden behind the glass)
+      const b=new V3(s*(P.door+.004),P.belt+.035,zA+(far?.02:.05));                                // the mount, flat on the door skin at the window's front corner
+      const sq=(c,k)=>Math.sign(c)*Math.pow(Math.abs(c),k);
+      mesh(grid(28,14,(u,v)=>{ const a=u*Math.PI*2, t=v*v*(3-2*v), h=lerp(.10,H*.42,t), d=lerp(.13,.07,t);
+        const x=lerp(b.x,e.x,v), y=lerp(b.y,e.y,t)+sq(Math.sin(a),.45)*h/2+.012*Math.sin(Math.PI*v), z=lerp(b.z,e.z,t)+sq(Math.cos(a),.45)*d/2;
+        return [x,y,z]; }),pm,G);
+      continue; }
     // foot: a tapered black arm from the door's front corner to the inboard lower edge of the shell
     { const xe=P.door+.235-W/2+.02; mesh(bar([[s*(P.door+.025),P.belt+.025,zA+.09],[s*lerp(P.door+.025,xe,.55),P.belt+.04,zA+.085],[s*xe,P.belt+.05,zA+.1]],[.07,.045],.04,[0,1,0],6,8),blk,G); }   // ends at the shell's inboard edge, in front of the glass
     // sail: the black triangle in the front corner of the door glass
