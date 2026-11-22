@@ -202,20 +202,56 @@ def box(m, mat, c, s):                             # an axis box, centre c, size
         for a, b, c_, d in ((0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6), (0, 2, 6, 4), (1, 5, 7, 3)):
             m.tri(mat, V[a], V[b], V[c_]); m.tri(mat, V[a], V[c_], V[d])
 W = lambda y, z=2.55: max(halfwidth(z, y), .1)
-patch(trim, 'Grille', lambda u, v: (.80*u*W(.88+.36*v), .88+.36*v), 16, 6, push=.004)          # the grille's gloss black field
-for yb in (.915, .985, 1.055, 1.125, 1.19):                                                      # five heavy horizontal bars, stepped
-    patch(trim, 'Bar', lambda u, v, yb=yb: ((.76-.03*(yb-.9)*4)*u*W(yb), yb+.028*v), 14, 1, push=.010)
-patch(trim, 'Grille', lambda u, v: ((.79+.18*u)*W(1.04+.17*v), 1.04+.17*v), 10, 4, push=.005)             # lamp housing, dark inside
-patch(trim, 'Chrome', lambda u, v: ((.80+.155*u)*W(1.05+.15*v), 1.05+.15*v), 10, 4, push=.0065)            # its silver reflector
-for yc in (1.085, 1.165):                                                                                    # two projector lenses, stacked (photo)
-    patch(heads, 'Headlight', lambda u, v, yc=yc: ((.83+.11*u)*W(yc), yc-.026+.052*v), 8, 3, push=.010, shift=-.035)
-patch(heads, 'Headlight', lambda u, v: (.94*u*W(.875), .868+.014*v), 30, 1, push=.008, shift=-.035)            # light line under the grille
-patch(heads, 'Headlight', lambda u, v: ((.955+.02*v)*W(.875+.36*u), .875+.36*u), 12, 1, push=.008, shift=-.035) # up round the outer end
-patch(heads, 'Headlight', lambda u, v: ((.70+.27*u)*W(1.232), 1.226+.012*v), 10, 1, push=.008, shift=-.035)   # over the lamp
-patch(trim, 'Trim', lambda u, v: ((.66-.06*(1-v))*u*W(.60+.17*v), .60+.17*v), 14, 3, push=.004)          # black centre intake, narrower at the bottom
-patch(trim, 'Bar', lambda u, v: (.58*u*W(.64), .64+.09*v), 12, 2, push=.007)                                   # its mesh
-patch(trim, 'Trim', lambda u, v: (.80*u*W(.50+.08*v), .50+.08*v), 14, 1, push=.004)                           # black skid along the bottom
-patch(trim, 'Trim', lambda u, v: ((.82+.12*u)*W(.66+.12*v), .66+.12*v), 4, 2, push=.004)                       # corner vents                    # lower intake mesh
+# (front detail pass, owner 2026-11-22: "enhance the detail of the headlights, grille and bumper so it looks realistic")
+def zf(x, y): z = zfront(abs(x), y); return z if z is not None else ZF-.02
+def fbox(m, mat, x, y, w, h, d, out=0., both=True):      # a box sitting on the front face: centre x (>=0), y; width w, height h, depth d; `out` stands proud
+    z = zf(x, y)+out-d/2
+    box(m, mat, (x if both and x > 0 else 0.0001 if x == 0 else x, y, z), (w, h, d)) if x > 0 or x == 0 else None
+# grille: a recess (very dark) in a gloss black frame, five chunky stepped bars, a lattice of short dividers behind them
+GY0, GY1 = .905, 1.225
+gx = lambda y: (.74+.05*(y-GY0)/(GY1-GY0))*W(y)                          # half width: a touch wider at the top
+patch(trim, 'Well', lambda u, v: (gx(GY0+(GY1-GY0)*v)*u, GY0+(GY1-GY0)*v), 16, 6, push=.0035)
+patch(trim, 'TrimGloss', lambda u, v: ((gx(GY1)+.018)*u, GY1+.004+.018*v), 16, 1, push=.006)        # frame: top
+patch(trim, 'TrimGloss', lambda u, v: ((gx(GY0)+.018)*u, GY0-.022+.018*v), 16, 1, push=.006)        # bottom
+patch(trim, 'TrimGloss', lambda u, v: (gx(GY0+(GY1-GY0)*u)+.018*v, GY0+(GY1-GY0)*u), 8, 1, push=.006)   # sides
+for k, yb in enumerate((.935, .995, 1.055, 1.115, 1.175)):
+    hw_ = gx(yb)-.01
+    fbox(trim, 'Bar', 0, yb, 2*hw_, .030, .05, out=.018)                                       # the bar
+    fbox(trim, 'Chrome', 0, yb+.0135, 2*hw_, .003, .045, out=.0185)                            # a thin satin edge on top of it (light catches it)
+    if k < 4:
+        for j in range(9):                                                                     # dividers between this bar and the next, staggered
+            x = (j+.5+(.5 if k % 2 else 0))/9.5*hw_
+            if x < hw_-.02: fbox(trim, 'Grille', x, yb+.03, .012, .032, .03, out=.005)
+# headlamps: in the grille's outer top corners — a dark housing standing proud, two wide projector modules stacked,
+# each with a satin surround and a lit lens, and the amber indicator in the top outer corner
+patch(trim, 'TrimGloss', lambda u, v: ((gx(1.03+.20*v)+(.975*W(1.03+.20*v)-gx(1.03+.20*v))*u), 1.03+.20*v), 6, 4, push=.005)   # the black runs out round the lamps
+for yc in (1.085, 1.165):
+    x0, x1 = .815*W(yc), .955*W(yc); xc = (x0+x1)/2
+    fbox(trim, 'Grille', xc, yc, x1-x0+.03, .062, .03, out=.004)                              # housing cell
+    fbox(trim, 'Chrome', xc, yc, x1-x0, .05, .02, out=.010)                                    # surround
+    fbox(heads, 'Headlight', xc, yc, x1-x0-.016, .036, .02, out=.013-.035)                     # lens (lit; the loader pushes it out 3.5 cm)
+fbox(trim, 'Amber', .945*W(1.205), 1.205, .03, .022, .02, out=.012)
+# the light line: one continuous strip over each lamp, round its outer end and full width under the grille
+LP = [(.79, 1.240), (.93, 1.240)]+[(.93+.035*math.sin(a), 1.205+.035*math.cos(a)) for a in np.linspace(.2, math.pi/2, 4)] \
+     +[(.968, .945)]+[(.928+.04*math.cos(a), .905-.04*math.sin(a)) for a in np.linspace(0, math.pi/2, 4)]+[(.0, .866)]
+for (fa, ya), (fb, yb_) in zip(LP, LP[1:]):
+    xa, xb = fa*W(ya), fb*W(yb_); n = max(1, int(math.hypot(xb-xa, yb_-ya)/.03))
+    for q in range(n):
+        x = xa+(xb-xa)*(q+.5)/n; y = ya+(yb_-ya)*(q+.5)/n; sw = abs(xb-xa)/n+.006; sh = abs(yb_-ya)/n+.006
+        fbox(heads, 'Headlight', x, y, max(sw, .011), max(sh, .011), .015, out=.014-.035)
+# bumper (body colour): a wide black lower intake set in, with three slats; black pockets at the corners; a black skid plate
+IY0, IY1 = .60, .80
+ix = lambda y: (.55+.08*(y-IY0)/(IY1-IY0))*W(y)
+patch(trim, 'Well', lambda u, v: (ix(IY0+(IY1-IY0)*v)*u, IY0+(IY1-IY0)*v), 14, 4, push=.0035)
+patch(trim, 'TrimGloss', lambda u, v: ((ix(IY1)+.02)*u, IY1+.003+.02*v), 14, 1, push=.006)
+patch(trim, 'TrimGloss', lambda u, v: (ix(IY0+(IY1-IY0)*u)+.02*v, IY0+(IY1-IY0)*u), 6, 1, push=.006)
+for yb in (.655, .70, .745): fbox(trim, 'Grille', 0, yb, 2*ix(yb)-.03, .014, .035, out=.008)
+for k in range(13): fbox(trim, 'Grille', (k+.5)/13*ix(.70), .70, .008, .13, .03, out=.004)
+patch(trim, 'Well', lambda u, v: ((.80+.13*u)*W(.63+.17*v), .63+.17*v), 4, 3, push=.0035)               # corner pockets
+patch(trim, 'TrimGloss', lambda u, v: ((.79+.15*u)*W(.80), .80+.016*v), 4, 1, push=.006)
+for yb in (.67, .72, .77): fbox(trim, 'Grille', .865*W(yb), yb, .11*W(yb), .012, .03, out=.006)
+patch(trim, 'Trim', lambda u, v: (.86*u*W(.48+.10*v), .48+.10*v), 14, 2, push=.004)                       # skid plate
+fbox(trim, 'Bar', 0, .585, 2*.86*W(.585), .014, .03, out=.006)
 patch(trim, 'Trim', lambda u, v: (.90*u*W(1.30, 2.40), 1.285+.006*v), 16, 1, push=.003, zfn=lambda x, y: 2.40)   # hood seam above the grille (a line)
 
 # ---------- rear: a gloss black band across the tailgate, tall C-shaped tail lamps at the corners joined by a red line
@@ -224,8 +260,17 @@ tails = Mesh('Taillights')
 Wr = lambda y: max(halfwidth(-2.62, y), .1)
 patch(trim, 'TrimGloss', lambda u, v: (.84*u*Wr(1.06+.36*v), 1.06+.36*v), 16, 4, push=.005, zfn=zrear, sgn=-1)       # black band
 patch(trim, 'Trim', lambda u, v: (.95*u*Wr(.57+.07*v), .57+.07*v), 20, 1, push=.003, zfn=zrear, sgn=-1)         # black strip along the bottom of the rear bumper
-patch(tails, 'Taillight', lambda u, v: ((.84+.155*u)*Wr(1.0+.46*v), 1.0+.46*v), 6, 8, push=.006, zfn=zrear, sgn=-1, shift=.035)   # corner lamps
-patch(tails, 'Taillight', lambda u, v: ((.60+.25*u)*Wr(1.38), 1.375+.03*v), 8, 1, push=.008, zfn=zrear, sgn=-1, shift=.035)      # inboard red line
+# (rear detail pass) tail lamps: a smoked red lens at each corner wrapping round onto the side, with a lit C on its outer
+# edge and top, and a red line running inboard along the top of the black band (photos)
+patch(trim, 'RedLens', lambda u, v: ((.80+.195*u)*Wr(1.04+.40*v), 1.04+.40*v), 6, 6, push=.0055, zfn=zrear, sgn=-1)
+patch(tails, 'Taillight', lambda u, v: ((.955+.035*u)*Wr(1.06+.36*v), 1.06+.36*v), 2, 8, push=.008, zfn=zrear, sgn=-1, shift=.035)   # outer vertical bar
+patch(tails, 'Taillight', lambda u, v: ((.82+.17*u)*Wr(1.405), 1.40+.022*v), 8, 1, push=.008, zfn=zrear, sgn=-1, shift=.035)          # top bar
+patch(tails, 'Taillight', lambda u, v: ((.58+.24*u)*Wr(1.41), 1.403+.012*v), 8, 1, push=.008, zfn=zrear, sgn=-1, shift=.035)          # the line inboard
+patch(tails, 'Taillight', lambda u, v: ((.82+.13*u)*Wr(1.085), 1.075+.016*v), 6, 1, push=.008, zfn=zrear, sgn=-1, shift=.035)        # lower bar: the C
+side_patch(trim, 'RedLens', lambda u, v: (-2.64+.20*u, 1.04+.40*v-.04*u*v), 6, 6, push=.004)                                        # wrapping onto the side
+side_patch(tails, 'Taillight', lambda u, v: (-2.64+.035*u, 1.06+.34*v), 2, 6, push=.007)
+side_patch(tails, 'Taillight', lambda u, v: (-2.64+.18*u, 1.395+.02*v), 6, 1, push=.007)
+patch(trim, 'Trim', lambda u, v: (.18*u, 1.085+.18*v), 4, 2, push=.0065, zfn=zrear, sgn=-1)      # plate recess
 patch(plate, 'Plate', lambda u, v: (.16*u, 1.10+.15*v), 4, 2, push=.009, zfn=zrear, sgn=-1)
 patch(trim, 'Reflector', lambda u, v: ((.78+.14*u)*Wr(.60), .58+.03*v), 4, 1, push=.006, zfn=zrear, sgn=-1)
 
@@ -242,7 +287,10 @@ for x in (.80,):
     for zc in (-2.40, .50): box(trim, 'TrimGloss', (x, 1.915, zc), (.045, .05, .16))             # its feet
 # ---------- door mirrors: gloss black, square-ish, on the door below the A pillar ----------
 mir = Mesh('Mirrors')
-box(trim, 'Paint', (0.0001, 1.878, -2.585), (1.70, .03, .11))      # body-colour spoiler on the roof's back edge, over the glass
+box(trim, 'Paint', (0.0001, 1.872, -2.585), (1.52, .03, .11))      # body-colour spoiler on the roof's back edge, over the glass
+box(tails, 'Taillight', (0.0001, 1.858, -2.64+.035), (.34, .014, .012))   # high-mounted brake light under it (built 3.5 cm in)
+box(trim, 'TrimGloss', (0.0001, 1.50, -2.664), (.07, .04, .02))         # rear wiper: pivot
+box(trim, 'TrimGloss', (-.17, 1.535, -2.668), (.34, .016, .012))      # and its arm and blade, lying across the glass
 def ellipsoid(m, mat, c, r, nu=14, nv=10, cut=None):
     for side in (1, -1):
         idx = []
@@ -306,6 +354,8 @@ MATS = {
  'Glass':     dict(c=[.030, .038, .050, 1], m=.75, r=.04),       # tinted glass, reflective (photo)
  'TrimGloss': dict(c=[.008, .008, .010, 1], m=.4, r=.08),        # gloss black: pillars, tailgate band, mirrors, rails
  'Chrome':    dict(c=[.40, .42, .45, 1], m=1, r=.15),
+ 'Amber':     dict(c=[.55, .22, .02, 1], m=.2, r=.2),
+ 'RedLens':  dict(c=[.09, .008, .008, 1], m=.3, r=.08),        # smoked red lens
  'Trim':      dict(c=[.020, .020, .022, 1], m=.1, r=.6),
  'Grille':    dict(c=[.012, .012, .014, 1], m=.4, r=.25),
  'Bar':       dict(c=[.035, .036, .040, 1], m=.5, r=.35),
