@@ -633,11 +633,10 @@ function stalksEx(grp,colM){
   const face=(w,h,draw)=>{ const T=canvasTex(512,Math.round(512*h/w)), x=T.x; x.fillStyle='#121214'; x.fillRect(0,0,512,T.c.height);
     x.strokeStyle=x.fillStyle='#c9cdd2'; x.lineWidth=7; x.lineCap=x.lineJoin='round'; draw(x,512,T.c.height); return new THREE.MeshBasicMaterial({map:T.t}); };
   for(const s of [-1,1]){
-    const piv=new THREE.Group(); piv.position.set(s*.05,.075,-.10); grp.add(piv);   // high on the column: you see them through the wheel's upper openings
-    mesh(bar([[0,0,0],[s*.06,-.002,.012],[s*.125,-.006,.024]],[.013,.016],.013,[0,1,0],6,10),armM,piv);   // the arm, out and a little back toward you
-    const L=.09, hx=s*(.125+L/2-.008), hd=new THREE.Group(); hd.position.set(hx,-.008,.03); hd.rotation.z=-s*.07; piv.add(hd);   // the end reaches out past the rim
-    mesh(rbox(L,.028,.024,.009,.008),head,hd);                                                         // the chunky end
-    const cap=mesh(new THREE.SphereGeometry(.0135,16,12),head,hd); cap.scale.set(.6,1.04,.9); cap.position.x=s*L/2;
+    const piv=new THREE.Group(); piv.position.set(s*.05,.062,-.10); grp.add(piv);   // high on the column: you see them through the wheel's upper openings
+    mesh(bar([[0,0,0],[s*.035,-.002,.01],[s*.07,-.005,.02]],[.013,.016],.013,[0,1,0],6,10),armM,piv);   // short: the whole stalk stays inside the rim (owner: "they stick out too far")   // the arm, out and a little back toward you
+    const L=.072, hx=s*(.07+L/2-.006), hd=new THREE.Group(); hd.position.set(hx,-.006,.026); hd.rotation.z=-s*.06; piv.add(hd);   // its end stops just inside the rim, as in the photo
+    mesh(rbox(L,.03,.026,.005,.006),head,hd);                                                          // the end: a squared-off block with softened edges, flat at the tip
     if(s<0){ // turn signals / lights: symbols along the face toward the driver
       const m=face(L,.024,(x,W,H)=>{ const y=H/2;
         x.beginPath(); x.moveTo(40,y-20); x.lineTo(60,y-20); x.moveTo(40,y); x.lineTo(60,y); x.moveTo(40,y+20); x.lineTo(60,y+20); x.stroke();            // high-beam lines
