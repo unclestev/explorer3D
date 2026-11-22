@@ -1592,6 +1592,12 @@ function* aoJob(c){
   // 3. switch the colours on only now, every part at once (a material shared by several parts needs them all to have them)
   for(const o of list){ if(!o.material.vertexColors){ o.material.vertexColors=true; o.material.needsUpdate=true; } }
 }
+/* The job is stepped from a frame hook, not from update(): update() only runs on frames the game actually redraws, and parked
+   with nothing moving it redraws a few times a second or not at all, so the job stalled and the colours never switched on
+   (owner 2026-11-22: corner shadows not showing in the live game). Returning true when it finishes makes that frame redraw. */
+if(typeof FRAME_HOOKS!=="undefined") FRAME_HOOKS.push(function cockpitAO(){ const c=CK.cab; if(!c||!c.ao||!CK.on) return false;
+  let done=true; try{ done=c.ao.next().done; }catch(e){ console.warn('cockpit corner shadows',e); }
+  if(done){ c.ao=null; return true; } return false; });
 function build(key){
   if(CK.cab&&CK.built===key+'|'+(CARSPEC.paint||0)) return;
   if(CK.cab) dispose();
@@ -1846,7 +1852,6 @@ function roofStep(c,dt){ for(const s of CK.roofSpots||[]) if(s.flash.material.op
 function update(dt){
   const c=CK.cab, P=c.P, p=c.parts;
   roofStep(c,dt); blisStep(c,dt); stalkStep(dt);
-  if(c.ao&&c.ao.next().done) c.ao=null;
   c.still=Math.abs(S.v||0)<.05&&Math.abs(S.gas||0)<.05?(c.still||0)+dt:0;
   // steering wheel: the input, 900° lock-to-lock (a G29 turns the same as your hands); otherwise from the road wheels
   const st=S.stIn!=null?S.stIn:(S.steer||0)/Math.max(.1,steerLock(S.v||0));
