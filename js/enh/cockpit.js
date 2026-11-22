@@ -1798,7 +1798,9 @@ function update(dt){
   if(p.btns) p.btns.color.setScalar(.75+.25*(1-k));
   for(const m of MIR.mats) m.color.setScalar(.85-.2*k); for(const m of MIR.frames) m.color.setScalar(Math.max(.25,hi/.85));
   // body roll/pitch and bumps move the cabin around your head (your eyes stay level with the horizon)
-  c.root.rotation.set(-((S.pitch||0)+(S.bx||0))*.55,0,-((S.roll||0)*.7+(S.bz||0)*.55)*1);
+  // same signs as the car body in game.js (owner 2026-11-22: it leaned into turns): the body rolls OUT of a turn (turning
+  // right, the left side lifts), squats under the gas and dives under the brakes; your eyes stay level with the horizon
+  c.root.rotation.set(((S.pitch||0)+(S.bx||0))*.55,0,((S.roll||0)*.7+(S.bz||0)*.55));
   c.root.position.y=-(S.by||0)*.5;
   // instruments: analog needles every frame, screens ~15 times a second
   const d=gather(c,dt);

@@ -1545,7 +1545,7 @@ function step(now){
   const bz=S.bz||0, bx=S.bx||0;                                  // rough ground and jolts (js/enh/feel.js)
   body.rotation.z=S.roll+S.sr+bz; body.rotation.x=S.pitch+S.sp+bx; body.position.y=S.by||0;
   tractorG.rotation.z=S.roll*.6+S.sr+bz; tractorG.rotation.x=S.pitch*.6+S.sp+bx;
-  if(boat){ boatG.rotation.z=S.roll*1.6+Math.sin(now/420)*.03; boatG.rotation.x=S.pitch+Math.sin(now/510)*.025; boatG.position.y=-.1+Math.sin(now/360)*.05;
+  if(boat){ boatG.rotation.z=-S.roll*1.6+Math.sin(now/420)*.03;   /* a planing boat banks INTO the turn (a car rolls out of it) */ boatG.rotation.x=S.pitch+Math.sin(now/510)*.025; boatG.position.y=-.1+Math.sin(now/360)*.05;
     if(Math.abs(S.v)>3 && every('wake',.035)) spawn(0,Math.min(3,1+Math.floor(Math.abs(S.v)/15)),1,0xf4fbff); }
   S.dist+=S.v*dt;
   if(mode==='car') wheels.forEach(w=>{ w.spin.rotation.x=-S.dist/.38; if(w.front) w.pivot.rotation.y=-S.steer; });
