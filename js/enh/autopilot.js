@@ -8,7 +8,7 @@ const btn=document.getElementById('navAuto');
 const B=6;                                      // planned braking, game m/s^2 (full brakes are ~28)
 const CAN=()=>mode==='car'||mode==='tractor';
 const A={on:false,i:0,route:null,oxAt:null,stops:[],passed:new Set(),waitT:0,lastTarget:0,
-  lane:1.6,laneT:0,off:0,pass:0,passCar:null,blockT:0,why:''};
+  lane:1.6,laneT:0,off:0,pass:0,passCar:null,blockT:0,why:'',sig:0,sigEnd:0,sigDone:-1,sigT:0};
 
 /* Traffic (owner 2026-11-20: "sometimes gets stuck behind a car and it just stops there… navigate around other cars").
    The route is the road's centre line, so autopilot now keeps to the right-hand lane (like the AI cars do), follows
@@ -74,12 +74,31 @@ function findStops(){
   A.stops=out.filter((s,k)=>k===0||s.at-out[k-1].at>12||s.kind!==out[k-1].kind);
   A.route=N.pts; A.oxAt=OX.at; A.passed.clear();
 }
+/* Turn signals (owner 2026-11-21: "when auto drive is on, make the turning signals go on automatically when there's a
+   turn"). Looks along the route for the next real turn (the road's heading swings more than ~35° within 20 m: a corner,
+   not a gentle bend), puts that signal on ~5 s (at least 45 m) before it, and switches it off once the turn is done. It
+   leaves your own signal or the hazards alone, and if you cancel its signal it won't put it back for that turn. */
+function hdgAt(a,hint){ const p=pointAt(a,hint), q=pointAt(a+2,hint); return Math.atan2(q[0]-p[0],q[1]-p[1]); }
+const wrap=a=>((a+3*Math.PI)%(2*Math.PI))-Math.PI;
+function nextTurn(along,bi,look){
+  for(let s=0;s<=look;s+=3){ const a=along+s, dh=wrap(hdgAt(a+10,bi)-hdgAt(a-10,bi));
+    if(Math.abs(dh)>.6&&a>A.sigDone){ let e=a; while(e<a+60&&Math.abs(wrap(hdgAt(e+10,bi)-hdgAt(e-10,bi)))>.25) e+=3;
+      return {dir:dh>0?1:-1,at:a-10,end:e+10}; } }
+  return null; }
+function autoSignal(dt,along,bi,vw){ if(!window.SIG) return;
+  A.sigT-=dt; if(A.sigT>0) return; A.sigT=.2;
+  if(A.sig){ if(SIG.dir!==A.sig){ A.sigDone=A.sigEnd; A.sig=0; return; }                    // you switched it off / changed it
+    if(along>A.sigEnd+4){ SIG.cancel(); A.sigDone=A.sigEnd; A.sig=0; } return; }               // turn done: off
+  if(SIG.dir||SIG.haz) return;
+  const t=nextTurn(along,bi,Math.max(45,vw*5)); if(!t) return;
+  SIG.press(t.dir); A.sig=t.dir; A.sigEnd=t.end; }
+function sigOff(){ if(A.sig&&window.SIG&&SIG.dir===A.sig) SIG.cancel(); A.sig=0; }
 function lightState(ph){ const t=(Date.now()/1000)%30, a=t<12?'g':t<15?'y':'r', b=t<15?'r':t<27?'g':'y'; return ph===0?a:b; }   // same cycle as the signs
 
 function control(dt){
   const N=YD.NAV;
   if(!N.pts||!CAN()){ stop(N.pts?'Autopilot only drives the SUV and tractor':null); return {st:0,gas:0}; }
-  if(A.route!==N.pts||A.oxAt!==(YD.OX&&YD.OX.at)) { findStops(); A.i=0; }
+  if(A.route!==N.pts||A.oxAt!==(YD.OX&&YD.OX.at)) { if(A.route!==N.pts) A.sigDone=-1; findStops(); A.i=0; }
   const P=N.pts, x=S.lng*MLNG, y=S.lat*MLAT;
   // where are we along the route?
   let bi=A.i, bd=1e18, bt=0;
@@ -127,6 +146,7 @@ function control(dt){
     if(ds<2) A.passed.add(s.id);                                        // green and at the line: go
   }
   A.lastTarget=target;
+  autoSignal(dt,along,bi,vw);
 
   // throttle and brake
   let gas=0; const err=target-v;
@@ -153,10 +173,10 @@ function start(){
   const N=YD.NAV;
   if(!N.pts){ toast('Set a destination first: tap 🔍',2200); return; }
   if(!CAN()){ toast('Autopilot only drives the SUV and tractor',2200); return; }
-  A.on=true; A.i=0; A.route=null; A.waitT=0; A.pass=0; A.passCar=null; A.blockT=0; A.off=0; A.laneT=0; paint(); dirty=true; wakeOn();
+  A.on=true; A.sig=0; A.sigDone=-1; A.sigT=0; A.i=0; A.route=null; A.waitT=0; A.pass=0; A.passCar=null; A.blockT=0; A.off=0; A.laneT=0; paint(); dirty=true; wakeOn();
   toast('Autopilot on · touch the controls to take over',2600);
 }
-function stop(msg){ if(!A.on) return; A.on=false; A.waitT=0; paint(); wakeOff(); if(msg) toast(msg,2200); }
+function stop(msg){ if(!A.on) return; A.on=false; sigOff(); A.waitT=0; paint(); wakeOff(); if(msg) toast(msg,2200); }
 btn.addEventListener('click',e=>{ e.stopPropagation(); A.on?stop('Autopilot off'):start(); });
 btn.addEventListener('pointerdown',e=>e.stopPropagation());
 
