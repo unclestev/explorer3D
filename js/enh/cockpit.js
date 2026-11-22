@@ -430,7 +430,7 @@ function renderMirror(dt){ if(!MIR.rt) return; MIR.t-=dt; if(MIR.t>0) return; MI
   renderer.setRenderTarget(MIR.rt); renderer.clear(); renderer.render(scene,c); renderer.setRenderTarget(null);
   scene.background=bg; car.visible=vis; }
 function drawRearFrame(x,P){ const W=512,H=128; x.clearRect(0,0,W,H); x.fillStyle=P.style==='lux'?'#5a544b':'#1a1a1c';
-  x.fillStyle=P.style==='lux'?'#8a8070':'#121213'; for(const cx of [150,256,362]){ x.beginPath(); x.ellipse(cx,118,40,28,0,0,7); x.fill(); }
+  // (no painted headrests: owner 2026-11-21, "lets just remove the seat headrests")
   const g=x.createLinearGradient(0,0,0,H); g.addColorStop(0,'rgba(255,255,255,.08)'); g.addColorStop(1,'rgba(0,0,0,.15)'); x.fillStyle=g; x.fillRect(0,0,W,H); }
 function drawSideFrame(x,s,clean){ const W=256,H=160; x.clearRect(0,0,W,H); const pc='#'+new THREE.Color(CARSPEC.paint||0x333333).getHexString();
   // the car's own flank along the inner edge of each door mirror
