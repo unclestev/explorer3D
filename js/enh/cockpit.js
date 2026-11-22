@@ -308,16 +308,25 @@ function shell(G,P,mats){
     // modern door mirror (owner 2026-11-21: "the mirrors on the explorer are just rectangles"): the glass is a rounded
     // trapezoid, short on the inboard edge and tall outboard with a big rounded lower-outer corner, in a black surround; the
     // body-colour housing wraps round it and swells out behind; a black foot on the door with the sail filling the window corner
-    const lux=P.style==='lux', ev=P.style==='ev', W=lux?.27:ev?.235:.245, H=lux?.185:ev?.15:.165, g=new THREE.Group(); g.position.set(s*(P.door+.235),P.belt+.075,zA+.16); G.add(g);
+    const lux=P.style==='lux', ev=P.style==='ev', ex=!!P.ex, W=lux?.27:ex?.225:ev?.235:.245, H=lux?.185:ex?.19:ev?.15:.165, g=new THREE.Group(); g.position.set(s*(P.door+.235),P.belt+.075,zA+.16); G.add(g);
     const o=-s;                                                     // the group faces the driver: +x is the driver's right, so outboard is -s
-    const shp=(w,h,grow)=>(ev?mirShapeEV:mirShape)(w+grow*2,h+grow*2,o);
+    const shp=(w,h,grow)=>(ev?mirShapeEV:ex?mirShapeEx:mirShape)(w+grow*2,h+grow*2,o);
     const glass=new THREE.ShapeGeometry(shp(W,H,0),12); uvFit(glass);
     const gl=mesh(MIR.uv(glass,s<0?0:.64,s<0?.36:1),new THREE.MeshBasicMaterial({map:MIR.tex(),toneMapped:false}),g,false); gl.position.z=.004; MIR.mats.push(gl.material);
-    const sf=canvasTex(256,160); drawSideFrame(sf.x,s); const sg=new THREE.ShapeGeometry(shp(W,H,0),12); uvFit(sg);
+    const sf=canvasTex(256,160); drawSideFrame(sf.x,s,ex); const sg=new THREE.ShapeGeometry(shp(W,H,0),12); uvFit(sg);
     const so=mesh(sg,new THREE.MeshBasicMaterial({map:sf.t,transparent:true}),g,false,false); so.position.z=.0045;
-    mesh(new THREE.ShapeGeometry(shp(W,H,.008),12),M({color:0x060607,roughness:.5}),g,false).position.z=.0025;   // black glass surround
-    const pm=M({color:CARSPEC.paint||0x333333,metalness:.08,roughness:.42,clearcoat:1,clearcoatRoughness:.05,out:true,env:.55});
-    const hg=new THREE.ExtrudeGeometry(shp(W,H,.012),{depth:.045,bevelEnabled:true,bevelThickness:.035,bevelSize:.012,bevelSegments:5,curveSegments:12});
+    mesh(new THREE.ShapeGeometry(shp(W,H,ex?.012:.008),12),M({color:0x060607,roughness:.5}),g,false).position.z=.0025;   // black glass surround
+    // the Explorer's (owner 2026-11-21, a photo of the real one): a thick black textured housing, not body colour
+    const pm=ex?M({color:0x1b1c1e,roughness:.55,normalMap:rep(textures().grain,5,5),normalScale:new THREE.Vector2(.15,.15),out:true,env:.35})
+              :M({color:CARSPEC.paint||0x333333,metalness:.08,roughness:.42,clearcoat:1,clearcoatRoughness:.05,out:true,env:.55});
+    if(ex){ // blind-spot symbol etched in the glass near its outer top corner: grey, lit amber when something's alongside
+      const T=canvasTex(128,128), x=T.x; x.clearRect(0,0,128,128); x.fillStyle='#fff'; x.strokeStyle='#fff'; x.lineWidth=7; x.lineCap='round';
+      x.fillRect(30,46,30,44); x.fillRect(36,34,18,14); x.clearRect(36,52,18,12);                 // a little car seen from behind
+      for(const r of [20,34]){ x.beginPath(); x.arc(52,68,r+22,-.55,.55); x.stroke(); }          // and the waves beside it
+      const bm=new THREE.MeshBasicMaterial({map:T.t,transparent:true,color:0x9a9ea4,opacity:.55,depthWrite:false,toneMapped:false});
+      const bi=mesh(new THREE.PlaneGeometry(.026,.026),bm,g,false,false); bi.position.set(-o*(W/2-.042),H/2-.055,.0052); if(o<0) bi.scale.x=-1;
+      (mats.blis||(mats.blis={}))[s]=bm; }
+    const hg=new THREE.ExtrudeGeometry(shp(W,H,ex?.02:.012),{depth:.045,bevelEnabled:true,bevelThickness:.035,bevelSize:.012,bevelSegments:5,curveSegments:12});
     hg.translate(0,0,-.045-.035); const pz=hg.attributes.position;
     for(let k=0;k<pz.count;k++){ const z=pz.getZ(k); if(z<-.05){ const t=(-.05-z)/.065; pz.setX(k,pz.getX(k)*(1-.22*t)+o*.012*t); pz.setY(k,pz.getY(k)*(1-.18*t)); } }   // the back of the shell tapers and leans outboard
     hg.computeVertexNormals(); mesh(hg,pm,g);
@@ -355,6 +364,13 @@ function mirShape(w,h,o){ const hw=w/2, hh=h/2, ti=hh*.78, bi=-hh*.70, to=hh, bo
   s.quadraticCurveTo(X(0),hh*.97,X(hw-r2),to); s.quadraticCurveTo(X(hw),to,X(hw),to-r2);
   s.lineTo(X(hw),bo+r3); s.quadraticCurveTo(X(hw),bo,X(hw-r3),bo);
   s.quadraticCurveTo(X(-hw*.1),bo+.01,X(-hw+r4),bi); s.quadraticCurveTo(X(-hw),bi,X(-hw),bi+r4); s.lineTo(X(-hw),ti-r1); return s; }
+// Explorer door-mirror glass (owner's photo): a big sweeping curve at the outer top corner (the end away from the car),
+// straight top edge, small rounded corners by the car, straight sides and bottom
+function mirShapeEx(w,h,o){ const hw=w/2, hh=h/2, X=v=>v*o, s=new THREE.Shape(), R=Math.min(.075,h*.4), r=.018, rb=.02;
+  s.moveTo(X(-hw),-hh+rb); s.lineTo(X(-hw),hh-R); s.quadraticCurveTo(X(-hw),hh,X(-hw+R*1.25),hh);
+  s.lineTo(X(hw-r),hh); s.quadraticCurveTo(X(hw),hh,X(hw),hh-r);
+  s.lineTo(X(hw),-hh+rb*1.4); s.quadraticCurveTo(X(hw),-hh,X(hw-rb*1.4),-hh);
+  s.lineTo(X(-hw+rb),-hh); s.quadraticCurveTo(X(-hw),-hh,X(-hw),-hh+rb); return s; }
 // Tesla door-mirror glass: frameless and soft — an arched top rising outboard, a big round outboard end, a nearly straight
 // bottom edge that lifts toward the inboard end
 function mirShapeEV(w,h,o){ const hw=w/2, hh=h/2, X=v=>v*o, s=new THREE.Shape();
@@ -390,11 +406,11 @@ function drawRearFrame(x,P){ const W=512,H=128; x.clearRect(0,0,W,H); x.fillStyl
   x.beginPath(); x.rect(0,0,W,H); x.moveTo(70,18); x.lineTo(442,18); x.quadraticCurveTo(470,20,476,60); x.lineTo(480,112); x.lineTo(32,112); x.lineTo(36,60); x.quadraticCurveTo(42,20,70,18); x.fill('evenodd');
   x.fillStyle=P.style==='lux'?'#8a8070':'#121213'; for(const cx of [150,256,362]){ x.beginPath(); x.ellipse(cx,118,40,28,0,0,7); x.fill(); }
   const g=x.createLinearGradient(0,0,0,H); g.addColorStop(0,'rgba(255,255,255,.08)'); g.addColorStop(1,'rgba(0,0,0,.15)'); x.fillStyle=g; x.fillRect(0,0,W,H); }
-function drawSideFrame(x,s){ const W=256,H=160; x.clearRect(0,0,W,H); const pc='#'+new THREE.Color(CARSPEC.paint||0x333333).getHexString();
+function drawSideFrame(x,s,clean){ const W=256,H=160; x.clearRect(0,0,W,H); const pc='#'+new THREE.Color(CARSPEC.paint||0x333333).getHexString();
   // the car's own flank along the inner edge of each door mirror
   const ix=s<0?W:0, g=x.createLinearGradient(ix,0,ix+(s<0?-48:48),0); g.addColorStop(0,pc); g.addColorStop(1,'rgba(0,0,0,0)');
   x.fillStyle=g; x.beginPath(); x.moveTo(ix,H*.35); x.lineTo(ix+(s<0?-44:44),H*.62); x.lineTo(ix+(s<0?-52:52),H); x.lineTo(ix,H); x.fill();
-  x.fillStyle='rgba(255,255,255,.06)'; x.fillRect(0,0,W,H*.4); }
+  if(!clean){ x.fillStyle='rgba(255,255,255,.06)'; x.fillRect(0,0,W,H*.4); } }   // the Explorer's glass is kept clean (owner)
 
 /* ---------- tractor cab (owner 2026-11-20: "make a cockpit view for tractor"): an original modern row-crop cab, glass all
    round on four posts; the long green hood with its stack and air pre-cleaner ahead, the front tyres turning below it,
@@ -1137,6 +1153,12 @@ CK.roof=function(k){ let t;
   else if(k==='open'){ ROOF.cover=true; t='Sunroof cover: open'; }
   else if(k==='shut'){ ROOF.cover=false; t='Sunroof cover: closed'; }   // the cover keys only ever move the cover (owner 2026-11-21)
   toast(t,1300); };
+// blind-spot lamps: amber in that mirror when a traffic car is in the next lane beside or just behind you
+function blisStep(c,dt){ const B=c.parts.blis; if(!B) return; const T=window.TRAFFIC&&TRAFFIC.state, on={'-1':0,'1':0};
+  if(T&&T.on&&T.agents){ const px=S.lng*MLNG, py=S.lat*MLAT, h=S.hdg*DEG, sh=Math.sin(h), ch=Math.cos(h);
+    for(const a of T.agents){ if(!a.path||a.occ===undefined&&!a.mesh) continue; const dx=a.px-px, dy=a.py-py, f=dx*sh+dy*ch, r=dx*ch-dy*sh;
+      if(f>-9&&f<1.5&&Math.abs(r)>1.6&&Math.abs(r)<5.5&&Math.cos(a.hd-h)>.5) on[r>0?'1':'-1']=1; } }
+  for(const k of ['-1','1']){ const m=B[k]; if(!m) continue; const lit=on[k]; m.color.setHex(lit?0xffa21a:0x9a9ea4); m.opacity=lit?1:.55; } }
 function roofStep(c,dt){ for(const s of CK.roofSpots||[]) if(s.flash.material.opacity>0) s.flash.material.opacity=Math.max(0,s.flash.material.opacity-dt*2.5);
   const r=c.parts.sunroof; if(!r) return; r.slide=r.slide||0;
   const wantV=ROOF.vent||(ROOF.slide&&r.slide<.98)?1:0;                    // to slide, the back edge first lifts a little, then the glass runs back over the roof
@@ -1148,7 +1170,7 @@ function roofStep(c,dt){ for(const s of CK.roofSpots||[]) if(s.flash.material.op
   const e=t=>t*t*(3-2*t); r.hinge.rotation.x=-.06*e(r.vent); r.hinge.position.z=r.z0+(r.len+.02)*e(r.slide); r.cov.position.z=(r.len+.04)*e(r.cover); }
 function update(dt){
   const c=CK.cab, P=c.P, p=c.parts;
-  roofStep(c,dt);
+  roofStep(c,dt); blisStep(c,dt);
   c.still=Math.abs(S.v||0)<.05&&Math.abs(S.gas||0)<.05?(c.still||0)+dt:0;
   // steering wheel: the input, 900° lock-to-lock (a G29 turns the same as your hands); otherwise from the road wheels
   const st=S.stIn!=null?S.stIn:(S.steer||0)/Math.max(.1,steerLock(S.v||0));
