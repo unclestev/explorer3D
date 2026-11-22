@@ -50,6 +50,9 @@
     cfg[g.id]=Object.assign(cfg[g.id]||{},{gas:c.out.gas, brake:c.out.brake}); save(); cal=null; live={}; live[c.out.gas.i]=live[c.out.brake.i]=1;
     showRow(); say('🏁 Wheel ready — gas and brake; shifter 1st = Drive, 2nd = Reverse; paddles = turn signals',4200); }
 
+  // which axis is the hat: the one sitting outside -1..1 when nothing's pressed (G29 ~1.29); remembered per wheel
+  const hats={};
+  function hatAxis(g){ if(hats[g.id]!=null) return hats[g.id]; const i=g.axes.findIndex(v=>Math.abs(v)>1.05); if(i>=0) hats[g.id]=i; return i; }
   let last=performance.now();
   window.WHEEL={
     read(){ const now=performance.now(), dt=Math.min(.1,(now-last)/1000); last=now;
@@ -80,6 +83,16 @@
             if(window.SIG&&paddleT.did) SIG.press(paddleT.d);         // undo the signal the first press switched
             if(!shUsed){ sel=sel==='R'?'D':'R'; say(sel==='R'?'⏪ Reverse':'⏩ Drive',1400); } paddleT=null; }
           else { paddleT={t:now2,d,did:!!window.SIG}; if(window.SIG) SIG.press(d); } } }
+      // D-pad (owner 2026-11-21: "make those buttons move the camera angle"): held, it turns the view — up / down look
+      // higher / lower, left / right look round — in chase and cockpit view, like dragging on the screen. The G29 reports
+      // its D-pad as one "hat" axis (a value in 8 steps from -1 to 1, ~1.29 when let go); on the standard layout it's buttons 12-15.
+      if(!shLearn&&!learn){ let hx=0, hy=0;
+        if(g.mapping==='standard'){ hx=(down(15)?1:0)-(down(14)?1:0); hy=(down(12)?1:0)-(down(13)?1:0); }
+        else { const hi=hatAxis(g); if(hi>=0){ const v=g.axes[hi]; if(v>=-1.05&&v<=1.05){ const k=Math.round((v+1)*3.5)&7, a=k*Math.PI/4; hx=Math.round(Math.sin(a)); hy=Math.round(Math.cos(a)); } } }
+        if((hx||hy)&&typeof LOOK!=="undefined"){ const ck=window.COCKPIT&&COCKPIT.on, dY=hx*90*dt;
+          LOOK.yaw=((LOOK.yaw+dY)%360+540)%360-180; S.camB=((S.camB+dY)%360+360)%360;
+          LOOK.pitch=Math.max(-55,Math.min(ck?135:12,LOOK.pitch+hy*(ck?70:45)*dt)); dirty=true;
+          const c=document.getElementById('compass'); if(c) c.classList.add('look'); } }
       prevB=bs.map((b,i)=>down(i));
       if(cal){ runCal(g,dt); return {st:0,gas:0,cal:true}; }
       let st=g.axes[ST]||0; st=Math.abs(st)<DEAD?0:(st-Math.sign(st)*DEAD)/(1-DEAD);
