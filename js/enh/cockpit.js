@@ -1111,11 +1111,19 @@ function wiperEx(G,wsP,pu){
   const g=new THREE.Group(); G.add(g);
   const blk=M({color:0x0b0b0c,roughness:.45,metalness:.25,env:.6}), rub=M({color:0x050505,roughness:.9});
   const box=(w,h,l,y,z,m,rx)=>{ const o=mesh(new THREE.BoxGeometry(w,h,l),m||blk,g); o.position.set(0,y,z); if(rx) o.rotation.x=rx; return o; };
-  const cap=mesh(new THREE.CylinderGeometry(.017,.02,.03,20),blk,g); cap.position.set(0,.016,0);              // pivot cap
-  { const ag=new THREE.BoxGeometry(1,1,1); ag.translate(0,0,.5); const P=ag.attributes.position;                // tapered arm: 2.2 cm wide at the pivot, 1.4 cm at the bend
-    for(let i=0;i<P.count;i++){ const t=P.getZ(i); P.setX(i,P.getX(i)*lerp(.022,.014,t)); P.setY(i,P.getY(i)*lerp(.012,.009,t)); P.setZ(i,t*L*.51); }
-    ag.computeVertexNormals(); const arm=mesh(ag,blk,g); arm.position.set(0,.026,0); }
-  const bz0=L*.51, bz1=L*.6, dz=bz1-bz0, dy=.026-.013; box(.013,.006,Math.hypot(dz,dy),(.026+.013)/2,(bz0+bz1)/2,blk,Math.atan2(dy,dz));   // the S-bend down
+  // the arm, as in the photo: lofted along z with a rounded-top section — a big hinge cover over the pivot, a seam, the
+  // wide main arm narrowing toward the blade, then a thin flat strip that bends down into the clip
+  const loft=(z0,z1,w0,w1,h0,h1,y0,y1,K)=>{ const pr=[]; const N=10; pr.push([-.5,0]); for(let i=0;i<=N;i++){ const a=Math.PI*i/N; pr.push([-Math.cos(a)*.5,K+(1-K)*Math.sin(a)]); } pr.push([.5,0]);
+    const pos=[], idx=[], R=8, m=pr.length;
+    for(let r=0;r<=R;r++){ const t=r/R, w=lerp(w0,w1,t), h=lerp(h0,h1,t), y=lerp(y0,y1,t), z=lerp(z0,z1,t); for(const [px,py] of pr) pos.push(px*w,y+py*h,z); }
+    for(let r=0;r<R;r++) for(let i=0;i<m;i++){ const j=(i+1)%m, A=r*m+i, B=r*m+j, C=A+m, D=B+m; idx.push(A,C,B,B,C,D); }
+    for(const r of [0,R]){ const c=pos.length/3; pos.push(0,lerp(y0,y1,r/R)+lerp(h0,h1,r/R)*.5,r?z1:z0); for(let i=0;i<m;i++){ const j=(i+1)%m; r?idx.push(c,r*m+i,r*m+j):idx.push(c,j,i); } }
+    const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); geo.setIndex(idx); geo.computeVertexNormals(); return mesh(geo,blk,g); };
+  loft(-.02,L*.15,.046,.042,.03,.026,0,.004,.55);                                     // hinge cover over the pivot
+  box(.04,.001,.004,.017,L*.152,rub);                                                 // the seam where the arm hinges up
+  loft(L*.153,L*.46,.038,.024,.021,.013,.006,.016,.35);                                // main arm, a rounded channel
+  loft(L*.46,L*.51,.016,.013,.006,.005,.019,.021,.2);                                  // thin flat strip toward the bend
+  const bz0=L*.51, bz1=L*.6, dz=bz1-bz0, dy=.023-.013; box(.013,.005,Math.hypot(dz,dy),(.023+.013)/2,(bz0+bz1)/2,blk,Math.atan2(dy,dz));   // the S-bend down
   box(.026,.016,.055,.012,L*.62);                                                                              // J-hook clip
   box(.02,.004,L*.86,.006,L*.57); box(.012,.003,L*.86,.002,L*.57,rub);                                       // flat beam blade, rubber under it
   for(const z of [L*.14,L]) box(.024,.008,.02,.006,z);                                                         // end caps
