@@ -376,6 +376,9 @@ const CARS={
   // instead of an engine (js/enh/sound.js 'tesla'). Top speed 135 mph.
   modely:{name:'Tesla Model Y',paint:0xeceeee,model:'models/model-y.glb?v=5',W:1.92,lamp:.66,front:2.30,sound:'tesla',ev:true,regen:1.7,
     vmax:135/2.237,perf:{t60:4.2,top:135,a0:9.0}},
+  // 2025 Ford Expedition (owner 2026-11-22, photos of a light blue-grey one with the black Stealth-look trim): a 3D model
+  // built by tools/make-expedition.py (nothing from the photos copied in). 3.5 L EcoBoost V6, 440 hp: 0-60 in ~5.9 s.
+  expedition:{name:'Ford Expedition',paint:0xb4c3d2,model:'models/expedition.glb?v=9',W:2.03,lamp:.80,front:2.67,sound:'ecoboost35',perf:{t60:5.9,top:112,a0:7.4}},
   // the farm tractor as its own choice (owner 2026-11-20: "just another car option… don't change to the tractor automatically
   // when you enter a farm field"): drives in tractor mode (its 3D model, 75% speed, diesel sound) wherever you take it
   tractor:{name:'Farm tractor',tractor:true,paint:0x367c2b,W:2.3,lamp:.55,front:2.1,sound:'jd68'}
