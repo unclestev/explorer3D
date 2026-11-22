@@ -915,7 +915,7 @@ function dashModern(G,P,parts){
   if(P.ex) explorerStack(G,P,parts,fz,xd,upM,loM);
   if(P.xp) expeditionDash(G,P,parts,fz,xd);
   // climate / hazard buttons row under the screen
-  if(!P.ex){ const by=P.screen.c[1]-P.screen.h/2-.05, bz=fz(by)+.012, row=new THREE.Group(); row.position.set(P.screen.c[0],by,bz); row.rotation.x=-.5; G.add(row);
+  if(!P.ex&&!P.xp){ const by=P.screen.c[1]-P.screen.h/2-.05, bz=fz(by)+.012, row=new THREE.Group(); row.position.set(P.screen.c[0],by,bz); row.rotation.x=-.5; G.add(row);
     const plate=mesh(rbox(.30,.05,.012,.003,.008),M({color:lux?0x1a1715:0x0a0a0b,roughness:.18,metalness:.25}),row);
     if(!lux) for(const sx of [-1,1]){ const kn=mesh(new THREE.CylinderGeometry(.017,.018,.018,32),M({color:0xc3c8ce,metalness:1,roughness:.22,out:true}),row); kn.rotation.x=Math.PI/2; kn.position.set(sx*.175,0,.012); kn.material.userData.out=false; kn.material.envMap=ENV.inn; kn.material.envMapIntensity=1.5;
       const kc=mesh(new THREE.CylinderGeometry(.013,.013,.004,24),M({color:0x101112,roughness:.4}),row); kc.rotation.x=Math.PI/2; kc.position.set(sx*.175,0,.022); }
@@ -986,7 +986,23 @@ function expeditionDash(G,P,parts,fz,xd){
   mesh(bar(pts,.018,.008,[0,0,1],120,6),sat,G);
   // the recessed stack panel inside the dip, with the big rotary dial and a row of keys (the generic button row sits on it)
   mesh(grid(10,6,(u,v)=>{ const x=lerp(-sx+.03,sx-.03,u), y=lerp(yd+.02,yb-.02,v); return [x,y,fz(y)+.008]; }),M({color:0x141517,roughness:.35}),G);
-  const dial=mesh(new THREE.CylinderGeometry(.026,.028,.028,40),M({map:rep(textures().alu,2,1),metalness:.95,roughness:.22,env:1.4}),G); dial.rotation.x=Math.PI/2-.4; dial.position.set(S.c[0]-.05,yd+.055,fz(yd+.055)+.03);
+  // the controls under the screen (owner 2026-11-22, "put all of the buttons and knobs under the screen" as in the photo):
+  // a row of keys on the left, the big chrome rotary dial with a smaller knob beside it, more keys on the right
+  { const cy=yd+.045, g=new THREE.Group(); g.position.set(S.c[0],cy,fz(cy)+.012); g.rotation.x=-.35; G.add(g);
+    const W2=2*(sx-.05), T=canvasTex(1024,96), x=T.x;
+    x.fillStyle='#0c0d0f'; x.fillRect(0,0,1024,96);
+    const key=(X,w,t)=>{ x.fillStyle='#1b1c1f'; x.beginPath(); x.roundRect?x.roundRect(X,22,w,52,10):x.rect(X,22,w,52); x.fill(); x.strokeStyle='#050505'; x.lineWidth=3; x.stroke();
+      x.fillStyle='#c9cdd2'; x.font='600 '+(t.length>2?17:26)+'px system-ui,Arial'; x.textAlign='center'; x.textBaseline='middle'; x.fillText(t,X+w/2,49); };
+    [['⏻',30],['❄',100],['A/C',170],['⇵',240]].forEach(([t,X])=>key(X,62,t));                    // left keys: power, fan, A/C, recirc
+    [['⊟',650],['⊞',720],['MAX',790],['AUTO',860],['▲',930]].forEach(([t,X])=>key(X,62,t));       // right keys: defrost front / rear, max, auto, hazard
+    x.strokeStyle='#d01c24'; x.lineWidth=5; x.beginPath(); x.moveTo(961,30); x.lineTo(980,66); x.lineTo(942,66); x.closePath(); x.stroke();   // red hazard triangle
+    const face=mesh(new THREE.PlaneGeometry(W2,W2*96/1024),new THREE.MeshBasicMaterial({map:T.t}),g,false,false); face.position.z=.001; parts.btns=face.material;
+    const plate=mesh(rbox(W2+.01,W2*96/1024+.01,.006,.002,.004),M({color:0x0b0b0c,roughness:.2,metalness:.2}),g); plate.position.z=-.003;
+    const chrome=M({map:rep(textures().alu,2,1),color:0xe0e4e8,metalness:.75,roughness:.22,env:1.6});
+    const knob=(xk,r,h)=>{ const k=mesh(new THREE.CylinderGeometry(r,r*1.04,h,40),chrome,g); k.rotation.x=Math.PI/2; k.position.set(xk,0,h/2);
+      const top=mesh(new THREE.CylinderGeometry(r*.8,r*.8,.003,32),M({color:0x111214,roughness:.3}),g); top.rotation.x=Math.PI/2; top.position.set(xk,0,h+.001);
+      const rg=mesh(new THREE.TorusGeometry(r*1.15,.0025,8,40),chrome,g); rg.position.set(xk,0,.002); };
+    knob(-.03,.026,.03); knob(.035,.014,.022); } 
   // glovebox seam on the passenger side
   const gm=M({color:0x0a0a0b,roughness:.9});
   mesh(grid(20,1,(u,v)=>{ const x=lerp(sx+.12,xd-.12,u), y=yd-.07+(v-.5)*.0025; return [x,y,fz(y)+.004+.10*sstep(.55,1,x/xd)]; }),gm,G,false);
