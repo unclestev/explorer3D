@@ -57,6 +57,19 @@ const SPECS={
     screen:{c:[.02,1.13,-.652],w:.30,h:.17,tilt:14},
     col:{dash:0x2b2522,top:0x1f1b19,trim:0xc9b79c,lower:0xcbb99e,seat:0xd4c4a9,head:0xd9d1c3,stitch:0xa8977c,accent:'wood',carpet:0x3a332c},
     eng:'ecoboost35', vmaxG:160, red:6.0, tachMax:8},
+  // 2025 Expedition (owner 2026-11-22, two photos of the real cabin; "put the stuff in the inside of the expedition"):
+  // same platform and size as the Navigator, its own dash — a 24-inch panoramic display along the top of the dash in
+  // front of the driver, a 13.2-inch touchscreen in a silver frame with tall chrome vents either side, a satin band
+  // sweeping across the dash and down round the centre stack, a squared-off two-tone wheel, light grey seats
+  expedition:{style:'sport', xp:true, eye:[-.42,1.565,.12], pitch:81,
+    ws:{zB:-1.10,yB:1.30,hwB:.81,zT:-.30,yT:1.855,hwT:.73,bow:.05}, roof:{y:1.88,hw:.77,zR:1.95}, belt:1.36, winTop:1.79, door:.86, zBp:.58, zC:1.62,
+    hood:{zr:-1.15,zf:-2.62,yr:1.288,yf:1.205,hw:1.05,crown:.03,gap:.86,nose:.08,crease:{x:.40,h:.014}},
+    dash:[[1.262,-1.115],[1.282,-.94],[1.28,-.77],[1.258,-.70],[1.18,-.675],[1.05,-.69],[.93,-.635],[.79,-.50]],
+    wheel:{c:[-.42,1.105,-.40],r:.19,tilt:24,rim:.020,flat:false},
+    pano:{x0:-.86,x1:.10,y:1.335,z:-.83,h:.095,tilt:16},
+    screen:{c:[.06,1.165,-.66],w:.29,h:.165,tilt:10},
+    col:{dash:0x2e3034,top:0x26282b,trim:0x3a3c40,lower:0x35373b,seat:0x9c9e9d,head:0xb3b3b0,stitch:0,accent:'alu',carpet:0x1c1d1f},
+    eng:'ecoboost35', vmaxG:160, red:6.0, tachMax:8},
   javelin:{style:'classic', eye:[-.38,1.03,.22], pitch:82,
     ws:{zB:-.78,yB:.862,hwB:.71,zT:-.09,yT:1.205,hwT:.60,bow:.065}, roof:{y:1.225,hw:.64,zR:1.02}, belt:.875, winTop:1.165, door:.76, zBp:null, zC:1.02,
     hood:{zr:-.80,zf:-2.33,yr:.862,yf:.765,hw:.95,crown:.012,gap:.70,nose:.05,humps:{x:.79,h:.065,w:.085}},
@@ -83,7 +96,7 @@ SPECS.tractor={style:'tractor', eye:[0,2.46,.9], pitch:76,
     screen:{c:[.5,2.2,.3],w:.2,h:.13},
     col:{dash:0x1a1b1d,top:0x161718,trim:0x2b2c2f,lower:0x1e1f21,seat:0x1d1e20,head:0x3d3f42,carpet:0x141516},
     eng:'jd68', vmaxG:60, red:2.3, tachMax:3, wipers:[.5]};
-const specKey=k=>/^javelin/.test(k||'')?'javelin':k==='navigator'?'navigator':k==='tractor'?'tractor':k==='modely'?'modely':'explorer';
+const specKey=k=>/^javelin/.test(k||'')?'javelin':k==='navigator'?'navigator':k==='tractor'?'tractor':k==='modely'?'modely':k==='expedition'?'expedition':'explorer';
 
 /* ---------- procedural textures ---------- */
 function cnv(w,h){ const c=document.createElement('canvas'); c.width=w; c.height=h; return c; }
@@ -437,7 +450,7 @@ function renderMirror(dt){ if(!MIR.rt) return; MIR.t-=dt; if(MIR.t>0) return; MI
    cars, and beep faster as you close in, solid under 30 cm — in any view, in the modern cars ---------- */
 const BC={rt:null,cam:null,mat:null,t:0,d:null,beepT:0,tone:null,wasRev:false,hold:0,fwdT:0};
 const powered=()=>!window.IGN||IGN.state==='on'||IGN.state==='crank';   // the car's electrics: on unless the engine's switched off
-const bcCar=()=>mode==='car'&&['explorer','navigator','modely'].includes(typeof CARKEY==='string'?CARKEY:'');
+const bcCar=()=>mode==='car'&&['explorer','navigator','modely','expedition'].includes(typeof CARKEY==='string'?CARKEY:'');
 // in reverse: the wheel's selector says R, or (keys / touch) the car is actually rolling backwards. Holding the brake at a stop
 // used to count too, so every stop brought the camera back up (owner 2026-11-21: "the backup camera is not switch to map ever")
 const reversing=()=>(mode==='car'||mode==='tractor')&&(S.sel==='R'||(!S.sel&&S.v<-.2));
@@ -661,9 +674,12 @@ function steeringWheel(G,P){
   const rimM=classic?M({color:0x161616,roughness:.35,normalMap:rep(textures().vinyl,8,1),normalScale:new THREE.Vector2(.4,.4)})
                     :M({color:P.style==='lux'?0x2a2420:0x141416,roughness:.5,normalMap:rep(textures().leather,24,1),normalScale:new THREE.Vector2(.8,.8)});
   // rim: round or flat-bottomed, slightly oval section
-  const pts=[]; for(let i=0;i<64;i++){ const a=i/64*Math.PI*2; let x=Math.cos(a)*W.r, y=Math.sin(a)*W.r; if(W.flat&&y<-W.r*.80){ y=-W.r*.80-.006*(1-Math.abs(x)/W.r); } pts.push(new V3(x,y,0)); }
+  const pts=[]; for(let i=0;i<64;i++){ const a=i/64*Math.PI*2; let x=Math.cos(a)*W.r, y=Math.sin(a)*W.r;
+    if(P.xp){ const c=Math.cos(a), s2=Math.sin(a); x=Math.sign(c)*Math.pow(Math.abs(c),2/3.3)*W.r*1.02; y=Math.sign(s2)*Math.pow(Math.abs(s2),2/3.3)*W.r*.84+(s2>0?-.012*Math.pow(Math.abs(c),.5):0); }   /* squared-off (photo) */ if(W.flat&&y<-W.r*.80){ y=-W.r*.80-.006*(1-Math.abs(x)/W.r); } pts.push(new V3(x,y,0)); }
   const curve=new THREE.CatmullRomCurve3(pts,true,'centripetal');
   const rim=mesh(new THREE.TubeGeometry(curve,160,W.rim,14,true),P.ex?perfLeather():rimM,spin); rim.scale.z=1.25;
+  if(P.xp){ const lo=[]; for(let i=0;i<=48;i++){ const t=lerp(.56,.94,i/48); lo.push(curve.getPoint(t)); }     // the lower rim in light grey leather (two-tone, photo)
+    const lr=mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(lo),60,W.rim*1.03,14,false),M({color:0xa7a9a8,roughness:.6,normalMap:rep(textures().leather,10,1),normalScale:new THREE.Vector2(.5,.5)}),spin); lr.scale.z=1.25; }
   if(P.style==='classic'){ for(let i=0;i<24;i++){ const a=i/24*Math.PI*2+.13, b=mesh(new THREE.SphereGeometry(W.rim*.6,8,6),rimM,spin); b.position.set(Math.cos(a)*(W.r-W.rim*.85),Math.sin(a)*(W.r-W.rim*.85),0); } }   // finger grips
   if(P.col.stitch&&P.style==='sport'){ const st=M({color:0x5a0a14,roughness:.8}); for(const s of [-1,1]){ const sp=[]; for(let i=0;i<=40;i++){ const a=(s>0?-.55:Math.PI-.55)+i/40*1.1; sp.push(new V3(Math.cos(a)*(W.r),Math.sin(a)*(W.r),W.rim*1.21)); }
       mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(sp),60,.0016,5,false),st,spin,false); } }
@@ -683,9 +699,10 @@ function steeringWheel(G,P){
       const sw=mesh(new THREE.CylinderGeometry(.0105,.0105,.014,20),M({color:0x2a2b2e,roughness:.45,metalness:.5,normalMap:rep(textures().grain,1,4)}),spin);
       sw.rotation.z=Math.PI/2; sw.position.set(s*.086,-.012,-.0035); }                                       // the scroll wheel (axis across)
   } else if(P.ex){ stWheel(spin,W);
+  } else if(P.xp){ xpWheel(spin,W);
   } else {
     const hubM=M({color:P.style==='lux'?0x2a2420:0x161618,roughness:.55,normalMap:rep(textures().leather,P.ex?8:3,P.ex?8:3),normalScale:new THREE.Vector2(P.ex?.15:.5,P.ex?.15:.5)});
-    if(P.ex){ const bT=canvasTex(256,128), x=bT.x, g=x.createLinearGradient(0,0,0,128); g.addColorStop(0,'#3d6fc4'); g.addColorStop(.5,'#123a8a'); g.addColorStop(1,'#0a2560'); // plain blue oval badge (no lettering)
+    if(P.ex||P.xp){ const bT=canvasTex(256,128), x=bT.x, g=x.createLinearGradient(0,0,0,128); g.addColorStop(0,'#3d6fc4'); g.addColorStop(.5,'#123a8a'); g.addColorStop(1,'#0a2560'); // plain blue oval badge (no lettering)
       x.fillStyle='#0000'; x.clearRect(0,0,256,128); x.fillStyle='#d9dde2'; x.beginPath(); x.ellipse(128,64,124,60,0,0,7); x.fill(); x.fillStyle=g; x.beginPath(); x.ellipse(128,64,112,50,0,0,7); x.fill();
       x.fillStyle='rgba(255,255,255,.18)'; x.beginPath(); x.ellipse(128,44,96,22,0,0,7); x.fill();
       const b=mesh(new THREE.PlaneGeometry(.056,.028),new THREE.MeshBasicMaterial({map:bT.t,transparent:true}),spin,false,false); b.position.set(0,.004,.0165); }
@@ -695,7 +712,7 @@ function steeringWheel(G,P){
       const sw=mesh(rbox(.05,.036,.008,.002,.008),M({color:0x0b0b0c,roughness:.25,metalness:.1}),spin); sw.position.set(s*W.r*.6,-.006,-.007);
       for(let k=0;k<4;k++){ const b=mesh(new THREE.CircleGeometry(.0042,10),M({color:0x1c1e21,roughness:.6,env:.15}),spin,false); b.position.set(s*W.r*.6+(k%2?.01:-.01),-.006+(k<2?.008:-.008),-.0028); b.userData.btn=1; }
       const tr=mesh(new THREE.BoxGeometry(.06,.004,.004),trimM,spin); tr.position.set(s*(W.r*.62),-.035,-.008); }
-    if(P.style==='sport'){ const sat=M({color:0xc9ced4,metalness:.9,roughness:.3,env:1.4}), y0=-.045, yb=-W.r*.86;
+    if(P.style==='sport'){ const sat=P.xp?M({color:0xa7a9a8,roughness:.6,normalMap:rep(textures().leather,4,4),normalScale:new THREE.Vector2(.4,.4)}):M({color:0xc9ced4,metalness:.9,roughness:.3,env:1.4}), y0=-.045, yb=-W.r*(P.xp?.80:.86);
       mesh(bar([[-.03,y0,-.016],[-.045,(y0+yb)/2,-.014],[-.035,yb+.02,-.01],[0,yb,-.008],[.035,yb+.02,-.01],[.045,(y0+yb)/2,-.014],[.03,y0,-.016]],.016,.01,[0,0,1],40,8),sat,spin);
       mesh(bar([[-.03,y0,-.02],[0,y0-.012,-.02],[.03,y0,-.02]],.03,.012,[0,0,1],8,8),hubM,spin); }   // satin U-spoke under the hub
     else { const low=mesh(rbox(.03,.08,.02,.006,.012),hubM,spin); low.position.set(0,-W.r*.58,-.018); }
@@ -706,6 +723,7 @@ function steeringWheel(G,P){
   const sh=mesh(rbox(.11,.10,.26,.03,.04),colM,grp); sh.position.set(0,-.01,-.17);
   sigStalk=null;
   if(P.ex) stalksEx(grp,colM);
+  else if(P.xp) stalkXp(grp,colM);
   else for(const s of [-1,1]){ const st=mesh(bar([[s*.04,0,-.09],[s*.12,-.005,-.07],[s*.16,-.012,-.06]],.012,.012,[0,1,0],6,8),colM,grp); }
   return spin;
 }
@@ -760,11 +778,59 @@ function stalksEx(grp,colM){
   const v=r&&r.width?Math.round(r.right+8)+'px':''; if(document.body.style.getPropertyValue('--cx')!==v){ if(v) document.body.style.setProperty('--cx',v); else document.body.style.removeProperty('--cx'); } });
 function rrGeo(w,h,r){ const s=new THREE.Shape(), x=w/2, y=h/2; s.moveTo(-x+r,-y); s.lineTo(x-r,-y); s.quadraticCurveTo(x,-y,x,-y+r); s.lineTo(x,y-r); s.quadraticCurveTo(x,y,x-r,y);
   s.lineTo(-x+r,y); s.quadraticCurveTo(-x,y,-x,y-r); s.lineTo(-x,-y+r); s.quadraticCurveTo(-x,-y,-x+r,-y); const g=new THREE.ShapeGeometry(s,8); uvFit(g); return g; }
+// Expedition (owner 2026-11-22, a close-up of the real one: "it should flow seamlessly into the steering column"): one
+// stalk on the left of the column — a straight, even ~2.6 cm cylinder that grows out of the shroud through a smooth flare
+// in the shroud's own plastic; a twist collar near the column (wiper symbol, ribbed edges); the long body with a recessed
+// strip along its top; a flat round end cap. It tips with the turn signal.
+function stalkXp(grp,colM){
+  const blk=M({color:0x1c1d20,roughness:.42,metalness:.12,env:.8}), dk=M({color:0x0b0b0c,roughness:.6});
+  const piv=new THREE.Group(); piv.position.set(-.045,.018,-.08); piv.rotation.y=-.10; grp.add(piv);   // inside the shroud's left side, aimed a touch back toward you
+  const along=(geo)=>{ geo.rotateZ(Math.PI/2); return geo; };                                    // lathe axis (y) -> along -x
+  const lathe=(prof,mat,n=36)=>mesh(along(new THREE.LatheGeometry(prof.map(([x,r])=>new THREE.Vector2(r,-x)),n)),mat,piv);
+  const R=.013;
+  // the flare: shroud plastic swelling out and narrowing smoothly into the stalk (no seam)
+  lathe([[.012,0],[.012,.034],[.004,.033],[-.004,.029],[-.012,.022],[-.020,.0165],[-.028,.0142],[-.034,R+.0005],[-.036,R]],colM,40);
+  // twist collar: thin dark grooves either side, fine ribs round its edge
+  lathe([[-.036,R],[-.038,R-.0012],[-.040,R],[-.072,R],[-.074,R-.0012],[-.076,R]],blk);
+  { const T=canvasTex(256,64), x=T.x; x.fillStyle='#1c1d20'; x.fillRect(0,0,256,64); x.fillStyle='#3a3b40'; for(let i=0;i<256;i+=8) x.fillRect(i,0,3,7), x.fillRect(i,57,3,7);
+    x.strokeStyle=x.fillStyle='#c9cdd2'; x.lineWidth=3; x.beginPath(); x.arc(128,44,13,Math.PI*1.15,Math.PI*1.85); x.stroke(); x.beginPath(); x.moveTo(128,44); x.lineTo(136,31); x.stroke();   // wiper symbol
+    for(const X of [84,100,156,172]) x.fillRect(X,30,8,3);
+    T.t.wrapS=THREE.RepeatWrapping; const col=mesh(along(new THREE.CylinderGeometry(R+.0004,R+.0004,.032,40,1,true)),M({map:T.t,roughness:.45,metalness:.12}),piv); col.position.x=-.056; col.rotation.x=Math.PI*.9; }
+  // the body, then a slightly bigger flat end cap with a bevelled edge
+  lathe([[-.076,R],[-.078,R-.0012],[-.080,R],[-.196,R],[-.198,R-.0012],[-.200,R+.0008],[-.213,R+.0008],[-.2145,R-.0008],[-.2150,0]],blk);
+  // recessed strip along the top of the body, with a raised flat pad in it (the photo's long indent)
+  const sp=mesh(new THREE.BoxGeometry(.095,.0025,.009),dk,piv); sp.position.set(-.138,R-.0004,0);
+  const pad=mesh(new THREE.BoxGeometry(.085,.0018,.0055),blk,piv); pad.position.set(-.138,R+.0005,0);
+  sigStalk={piv,k:0}; }
 function stalkStep(dt){ const st=sigStalk; if(!st) return; const d=window.SIG?SIG.dir:0;
   st.k+=(d-st.k)*Math.min(1,dt*14); st.piv.rotation.z=-.2*st.k; }   // right signal: the lever swings up; left: down (owner: "show the lever shift up or down")
 // Explorer ST wheel (owner 2026-11-21, a photo of the real one): thick round rim in perforated leather; a big airbag pad,
 // wider at the top, with the blue oval; a button panel on each side spoke framed in silver; a silver lower spoke round an
 // open trapezoid, with the red ST badge at the bottom
+// Expedition wheel (owner's photo of the 2025 cabin): a big rounded-square pad with the plain oval, wide dark side spokes
+// each carrying a glossy black touch panel with a small lit icon, and light grey leather lower spokes that curve down and
+// out into the grey lower rim
+function xpWheel(spin,W){
+  const dk=M({color:0x1a1b1d,roughness:.55,normalMap:rep(textures().leather,8,8),normalScale:new THREE.Vector2(.18,.18)});
+  const gr=M({color:0xa7a9a8,roughness:.6,normalMap:rep(textures().leather,6,6),normalScale:new THREE.Vector2(.4,.4)});
+  const gloss=M({color:0x070708,roughness:.12,metalness:.3,env:.8});
+  { const sh=new THREE.Shape(), tw=.074, bw=.066, ty=.052, by=-.05, r=.03;         // pad: rounded square, a touch wider at the top
+    sh.moveTo(-tw+r,ty); sh.lineTo(tw-r,ty); sh.quadraticCurveTo(tw,ty,tw,ty-r); sh.lineTo(bw,by+r); sh.quadraticCurveTo(bw,by,bw-r,by);
+    sh.lineTo(-bw+r,by); sh.quadraticCurveTo(-bw,by,-bw,by+r); sh.lineTo(-tw,ty-r); sh.quadraticCurveTo(-tw,ty,-tw+r,ty);
+    const g=new THREE.ExtrudeGeometry(sh,{depth:.022,bevelEnabled:true,bevelThickness:.012,bevelSize:.01,bevelSegments:5,curveSegments:10}); g.translate(0,0,-.036); mesh(g,dk,spin);
+    const bT=canvasTex(256,128), x=bT.x, gg=x.createLinearGradient(0,0,0,128); gg.addColorStop(0,'#3d6fc4'); gg.addColorStop(.5,'#123a8a'); gg.addColorStop(1,'#0a2560');
+    x.clearRect(0,0,256,128); x.fillStyle='#d9dde2'; x.beginPath(); x.ellipse(128,64,124,60,0,0,7); x.fill(); x.fillStyle=gg; x.beginPath(); x.ellipse(128,64,112,50,0,0,7); x.fill();
+    const b=mesh(new THREE.PlaneGeometry(.052,.026),new THREE.MeshBasicMaterial({map:bT.t,transparent:true}),spin,false,false); b.position.set(0,.008,.0012); }
+  for(const s of [-1,1]){
+    const len=W.r*1.02-.07, sp=mesh(rbox(len,.05,.022,.01,.02),dk,spin); sp.position.set(s*(.07+len/2-.01),.004,-.022);   // side spoke out to the rim
+    const pb=mesh(rbox(.044,.04,.006,.002,.008),gloss,spin); pb.position.set(s*.105,.004,-.01);                         // touch panel
+    const T=canvasTex(128,128), x=T.x; x.clearRect(0,0,128,128); x.strokeStyle='#8fb8e8'; x.lineWidth=7; x.beginPath(); x.roundRect?x.roundRect(40,44,48,40,10):x.rect(40,44,48,40); x.stroke();
+    x.fillStyle='#8fb8e8'; x.beginPath(); x.arc(s<0?30:98,28,7,0,7); x.fill();
+    const ic=mesh(new THREE.PlaneGeometry(.036,.036),new THREE.MeshBasicMaterial({map:T.t,transparent:true}),spin,false,false); ic.position.set(s*.105,.004,-.0065); }
+  // lower spokes: light grey, from under the pad curving down and out into the lower rim
+  for(const s of [-1,1]) mesh(bar([[s*.04,-.048,-.022],[s*.065,-.085,-.018],[s*.10,-.115,-.012],[s*.13,-W.r*.80+.01,-.006]],[.032,.024],.014,[0,0,1],24,8),gr,spin);
+  mesh(bar([[-.045,-.05,-.024],[0,-.058,-.024],[.045,-.05,-.024]],.03,.014,[0,0,1],12,8),gr,spin);                   // the band joining them under the pad
+}
 function perfLeather(){ const T=canvasTex(256,256), x=T.x; x.fillStyle='#808080'; x.fillRect(0,0,256,256);
   x.fillStyle='#3a3a3a'; for(let i=0;i<16;i++) for(let j=0;j<16;j++){ x.beginPath(); x.arc(8+i*16+(j%2)*8,8+j*16,3.2,0,7); x.fill(); }   // the little holes
   T.t.wrapS=T.t.wrapT=THREE.RepeatWrapping; T.t.repeat.set(60,3);
@@ -851,19 +917,20 @@ function dashModern(G,P,parts){
   const upM=M({color:P.col.top,roughness:.72,normalMap:rep(lux?T.leather:T.grain,lux?30:14,lux?9:4),normalScale:new THREE.Vector2(lux?.25:.55,lux?.25:.55)});
   const loM=M({color:P.col.lower,roughness:lux?.58:.75,normalMap:rep(lux?T.leather:T.grain,lux?26:10,lux?10:4),normalScale:new THREE.Vector2(lux?.22:.5,lux?.22:.5)});
   const xd=P.door+.005, end=x=>.10*sstep(.55,1,Math.abs(x)/xd);       // the ends sweep back into the doors
-  const rec=x=>lux?0:sstep(.24,.20,Math.abs(x-P.cluster.c[0]));     // the sport cluster sits in a recess under its brow
+  const rec=x=>lux||!P.cluster?0:sstep(.24,.20,Math.abs(x-P.cluster.c[0]));     // the sport cluster sits in a recess under its brow
   loftDash(G,P,upM,-xd,xd,P.dash.slice(0,5),(x,v)=>[end(x)*sstep(.2,.6,v)-.095*rec(x)*sstep(.55,.9,v),0]);
   loftDash(G,P,loM,-xd,xd,P.dash.slice(4),(x,v)=>[end(x)-.095*rec(x)*(1-sstep(0,.4,v)),0]);
   // accent strip across the dash face (brushed metal / wood) with a chrome or red pinstripe
   const ac=P.col.accent==='wood'?M({map:rep(T.ash,2,1),roughness:.35,clearcoat:.8,clearcoatRoughness:.1}):M({map:rep(T.alu,3,1),metalness:.85,roughness:.34,color:0xb8bcc2});
   const sp=new THREE.SplineCurve(P.dash.map(p=>new THREE.Vector2(p[1],p[0]))), a=sp.getPoint(lux?.55:.62), b=sp.getPoint(lux?.67:.68);
-  if(!P.ex) mesh(grid(60,4,(u,v)=>{ const x=lerp(-xd+.04,xd-.04,u), q=a.clone().lerp(b,v), o=.10*sstep(.55,1,Math.abs(x)/xd); return [x,q.y,q.x+o+.004]; }),ac,G);
+  if(!P.ex&&!P.xp) mesh(grid(60,4,(u,v)=>{ const x=lerp(-xd+.04,xd-.04,u), q=a.clone().lerp(b,v), o=.10*sstep(.55,1,Math.abs(x)/xd); return [x,q.y,q.x+o+.004]; }),ac,G);
   if(false){ const st=M({color:new THREE.Color(P.col.stitch).multiplyScalar(.7),roughness:.6}), q=sp.getPoint(.45); mesh(bar([[P.screen.c[0]+.2,q.y+.002,q.x+.006],[.45,q.y+.002,q.x+.006],[xd-.12,q.y+.002,q.x+.03]],.0018,.0018,[0,1,0],40,5),st,G,false); }
   // defroster slots near the glass
   { const vm=M({color:0x070707,roughness:.9}); for(const s of [-1,1]) for(let k=0;k<5;k++){ const v=mesh(new THREE.BoxGeometry(.16,.003,.006),vm,G,false); v.position.set(s*.32,lerp(P.dash[0][0],P.dash[1][0],.5)+.004,P.dash[0][1]+.05+k*.016); } }
   // vents: two in the middle beside the screen, one at each end
   const vent=(cx,cy,cz,w,h,rot)=>{ const g=new THREE.Group(); g.position.set(cx,cy,cz); g.rotation.set(rot[0]||0,rot[1]||0,0); G.add(g);
     if(P.ex){ ventEx(g,w,h); return; }
+    if(P.xp){ ventXp(g,w,h); return; }
     mesh(rbox(w+.016,h+.016,.02,.004,.008),M({color:lux?0xb9b2a5:0x0d0d0e,metalness:lux?.9:.2,roughness:lux?.25:.4}),g);
     if(!lux){ const ch=M({color:0xd5dade,metalness:1,roughness:.2,env:1.5});
       for(const yy of [-1,1]) mesh(new THREE.BoxGeometry(w+.01,.003,.004),ch,g,false).position.set(0,yy*(h/2+.006),.011);
@@ -873,12 +940,14 @@ function dashModern(G,P,parts){
     for(let k=0;k<5;k++){ const s=mesh(new THREE.BoxGeometry(w-.006,.0035,.014),M({color:0x1a1a1b,roughness:.5,metalness:.3}),g); s.position.set(0,-h/2+(k+.5)*h/5,.008); s.rotation.x=-.25; } };
   const fz=(y)=>{ let best=P.dash[4][1]; for(let i=0;i<P.dash.length-1;i++){ const A=P.dash[i],B=P.dash[i+1]; if((A[0]-y)*(B[0]-y)<=0&&A[0]!==B[0]) best=lerp(A[1],B[1],(y-A[0])/(B[0]-A[0])); } return best; };
   const vy=P.ex?P.dash[4][0]-.025:P.dash[4][0]-.06, vw=P.ex?.125:lux?.12:.14, vh=P.ex?.066:lux?.055:.05;
-  const ey=P.ex?0:.55; vent(-xd+.13,vy,fz(vy)+.13,vw,vh,[0,ey]); vent(xd-.13,vy,fz(vy)+.13,vw,vh,[0,-ey]);   // Explorer: facing straight back (owner: "make the vents straight")
+  const ey=P.ex||P.xp?0:.55, ew=P.xp?.075:vw, eh=P.xp?.15:vh, ey2=P.xp?P.screen.c[1]-.005:vy;
+  vent(-xd+.13,ey2,fz(ey2)+.13,ew,eh,[0,ey]); vent(xd-.13,ey2,fz(ey2)+.13,ew,eh,[0,-ey]);   // Explorer: facing straight back (owner: "make the vents straight")
   if(P.ex){ for(const s of [-1,1]) vent(s*.215,vy,fz(vy)+.024,.17,vh,[0,0]); }     // the two big ones either side of the screen
+  else if(P.xp){ for(const s of [-1,1]) vent(P.screen.c[0]+s*(P.screen.w/2+.075),P.screen.c[1]-.005,fz(P.screen.c[1])+.03,.075,.15,[0,0]); }
   else if(!lux){ for(const s of [-1,1]) vent(P.screen.c[0]+s*.23,vy-.035,fz(vy-.035)+.02,.15,.05,[0,0]); }
   else { for(const s of [-1,1]) vent(P.screen.c[0]+s*.24,vy-.02,fz(vy-.02)+.015,.11,.03,[0,0]); }
   // driver's cluster brow (sport) — Navigator's panoramic screen has its own hood
-  if(!lux){ const C=P.cluster, bw=.21;
+  if(!P.pano){ const C=P.cluster, bw=.21;
     const bh=(s)=>.042*(1-Math.pow(Math.abs(s),4)), ty=P.dash[1][0]+.002, zb=C.c[2]+.085;
     mesh(grid(30,10,(u,v)=>{ const s=u*2-1; return [C.c[0]+s*bw,ty+bh(s)*sstep(0,.8,v)*(1-.15*v*v),lerp(P.dash[1][1]+.05,zb,v)]; }),upM,G);
     mesh(grid(30,3,(u,v)=>{ const s=u*2-1; return [C.c[0]+s*bw,ty+bh(s)*.85-.016*v,zb+.004*v]; }),upM,G);
@@ -894,8 +963,9 @@ function dashModern(G,P,parts){
     const gl=mesh(grid(n,1,(u,v)=>{ const q=curve(u), t=Pn.tilt*DEG; return [q[0],Pn.y-Pn.h/2+v*Pn.h*Math.cos(t),q[1]+(v-.5)*Pn.h*Math.sin(t)+.0015]; }),M({color:0,metalness:1,roughness:.05,transparent:true,opacity:.16,depthWrite:false,env:1.3}),G,false,false); }
   parts.screen=screenMesh(G,P.screen.c,P.screen.w,P.screen.h,P.screen.tilt,1024,null);
   if(P.ex) explorerStack(G,P,parts,fz,xd,upM,loM);
+  if(P.xp) expeditionDash(G,P,parts,fz,xd);
   // climate / hazard buttons row under the screen
-  if(!P.ex){ const by=P.screen.c[1]-P.screen.h/2-.05, bz=fz(by)+.012, row=new THREE.Group(); row.position.set(P.screen.c[0],by,bz); row.rotation.x=-.5; G.add(row);
+  if(!P.ex&&!P.xp){ const by=P.screen.c[1]-P.screen.h/2-.05, bz=fz(by)+.012, row=new THREE.Group(); row.position.set(P.screen.c[0],by,bz); row.rotation.x=-.5; G.add(row);
     const plate=mesh(rbox(.30,.05,.012,.003,.008),M({color:lux?0x1a1715:0x0a0a0b,roughness:.18,metalness:.25}),row);
     if(!lux) for(const sx of [-1,1]){ const kn=mesh(new THREE.CylinderGeometry(.017,.018,.018,32),M({color:0xc3c8ce,metalness:1,roughness:.22,out:true}),row); kn.rotation.x=Math.PI/2; kn.position.set(sx*.175,0,.012); kn.material.userData.out=false; kn.material.envMap=ENV.inn; kn.material.envMapIntensity=1.5;
       const kc=mesh(new THREE.CylinderGeometry(.013,.013,.004,24),M({color:0x101112,roughness:.4}),row); kc.rotation.x=Math.PI/2; kc.position.set(sx*.175,0,.022); }
@@ -941,6 +1011,51 @@ function ventEx(g,w,h){
   const n=6; for(let k=0;k<n;k++){ const f=(k+.5)/n, y=-h/2+f*h, ww=w*lerp(K,1,f)-(k===0?.02:.006);
     const sl=mesh(new THREE.BoxGeometry(ww,.0024,.014),slatM,g); sl.position.set(0,y,.002); sl.rotation.x=-.15; }
   const tab=mesh(rbox(.02,.009,.008,.003,.004),satin,g); tab.position.set(0,-h/n*.5,.011);
+}
+function ventXp(g,w,h){
+  const ch=M({color:0xe6e9ec,metalness:.6,roughness:.2,env:1.8});
+  const sh=(W,H,R)=>{ const s=new THREE.Shape(), x=-W/2, y=-H/2; s.moveTo(x+R,y); s.lineTo(x+W-R,y); s.quadraticCurveTo(x+W,y,x+W,y+R); s.lineTo(x+W,y+H-R); s.quadraticCurveTo(x+W,y+H,x+W-R,y+H); s.lineTo(x+R,y+H); s.quadraticCurveTo(x,y+H,x,y+H-R); s.lineTo(x,y+R); s.quadraticCurveTo(x,y,x+R,y); return s; };
+  const ring=sh(w+.018,h+.018,.016); ring.holes.push(sh(w,h,.01));
+  mesh(new THREE.ExtrudeGeometry(ring,{depth:.008,bevelEnabled:true,bevelThickness:.002,bevelSize:.002,bevelSegments:3,curveSegments:8}),ch,g).position.z=.004;   // chrome frame
+  mesh(new THREE.ShapeGeometry(sh(w,h,.01),8),M({color:0x020202,roughness:1}),g,false).position.z=-.004;
+  for(let k=0;k<7;k++){ const s=mesh(new THREE.BoxGeometry(.003,h-.008,.016),M({color:0x1c1d1f,roughness:.45,metalness:.3}),g); s.position.set(-w/2+(k+.5)*w/7,0,.002); s.rotation.y=.25; }   // vertical slats
+  const tab=mesh(rbox(.008,.03,.008,.002,.003),ch,g); tab.position.set(0,0,.012); }
+// the Expedition's dash furniture (owner's photos): the silver-framed centre screen, the satin band across the dash and down
+// round the centre stack (with a dark recessed panel for the dial and keys), the glovebox line
+function expeditionDash(G,P,parts,fz,xd){
+  const sat=M({map:rep(textures().alu,4,1),color:0xe2e6ea,metalness:.55,roughness:.32,env:1.6}), S=P.screen;
+  { const f=new THREE.Group(); f.position.set(S.c[0],S.c[1],S.c[2]); f.rotation.x=-S.tilt*DEG; G.add(f);
+    const bz=mesh(rbox(S.w+.03,S.h+.03,.03,.008,.012),sat,f); bz.position.z=-.018;                       // silver frame round the screen
+    const bk=mesh(rbox(S.w+.012,S.h+.012,.03,.004,.008),M({color:0x060607,roughness:.3}),f); bk.position.z=-.012; }
+  // the satin band: along the dash face below the vents, then dipping down round the centre stack
+  const yb=S.c[1]-S.h/2-.06, yd=.94, sx=S.w/2+.16, P2=[];
+  for(const x of [-xd+.05,-.55,-sx-.06]) P2.push([x,yb]);
+  P2.push([-sx,yb-.03],[-sx+.02,yd+.02],[-sx+.06,yd],[sx-.06,yd],[sx-.02,yd+.02],[sx,yb-.03]);
+  for(const x of [sx+.06,.55,xd-.05]) P2.push([x,yb]);
+  const pts=P2.map(([x,y])=>[x,y,fz(y)+.016+.10*sstep(.55,1,Math.abs(x)/xd)]);
+  mesh(bar(pts,.018,.008,[0,0,1],120,6),sat,G);
+  // the recessed stack panel inside the dip, with the big rotary dial and a row of keys (the generic button row sits on it)
+  mesh(grid(10,6,(u,v)=>{ const x=lerp(-sx+.03,sx-.03,u), y=lerp(yd+.02,yb-.02,v); return [x,y,fz(y)+.008]; }),M({color:0x141517,roughness:.35}),G);
+  // the controls under the screen (owner 2026-11-22, "put all of the buttons and knobs under the screen" as in the photo):
+  // a row of keys on the left, the big chrome rotary dial with a smaller knob beside it, more keys on the right
+  { const cy=yd+.045, g=new THREE.Group(); g.position.set(S.c[0],cy,fz(cy)+.012); g.rotation.x=-.35; G.add(g);
+    const W2=2*(sx-.05), T=canvasTex(1024,96), x=T.x;
+    x.fillStyle='#0c0d0f'; x.fillRect(0,0,1024,96);
+    const key=(X,w,t)=>{ x.fillStyle='#1b1c1f'; x.beginPath(); x.roundRect?x.roundRect(X,22,w,52,10):x.rect(X,22,w,52); x.fill(); x.strokeStyle='#050505'; x.lineWidth=3; x.stroke();
+      x.fillStyle='#c9cdd2'; x.font='600 '+(t.length>2?17:26)+'px system-ui,Arial'; x.textAlign='center'; x.textBaseline='middle'; x.fillText(t,X+w/2,49); };
+    [['⏻',30],['❄',100],['A/C',170],['⇵',240]].forEach(([t,X])=>key(X,62,t));                    // left keys: power, fan, A/C, recirc
+    [['⊟',650],['⊞',720],['MAX',790],['AUTO',860],['▲',930]].forEach(([t,X])=>key(X,62,t));       // right keys: defrost front / rear, max, auto, hazard
+    x.strokeStyle='#d01c24'; x.lineWidth=5; x.beginPath(); x.moveTo(961,30); x.lineTo(980,66); x.lineTo(942,66); x.closePath(); x.stroke();   // red hazard triangle
+    const face=mesh(new THREE.PlaneGeometry(W2,W2*96/1024),new THREE.MeshBasicMaterial({map:T.t}),g,false,false); face.position.z=.001; parts.btns=face.material;
+    const plate=mesh(rbox(W2+.01,W2*96/1024+.01,.006,.002,.004),M({color:0x0b0b0c,roughness:.2,metalness:.2}),g); plate.position.z=-.003;
+    const chrome=M({map:rep(textures().alu,2,1),color:0xe0e4e8,metalness:.75,roughness:.22,env:1.6});
+    const knob=(xk,r,h)=>{ const k=mesh(new THREE.CylinderGeometry(r,r*1.04,h,40),chrome,g); k.rotation.x=Math.PI/2; k.position.set(xk,0,h/2);
+      const top=mesh(new THREE.CylinderGeometry(r*.8,r*.8,.003,32),M({color:0x111214,roughness:.3}),g); top.rotation.x=Math.PI/2; top.position.set(xk,0,h+.001);
+      const rg=mesh(new THREE.TorusGeometry(r*1.15,.0025,8,40),chrome,g); rg.position.set(xk,0,.002); };
+    knob(-.03,.026,.03); knob(.035,.014,.022); } 
+  // glovebox seam on the passenger side
+  const gm=M({color:0x0a0a0b,roughness:.9});
+  mesh(grid(20,1,(u,v)=>{ const x=lerp(sx+.12,xd-.12,u), y=yd-.07+(v-.5)*.0025; return [x,y,fz(y)+.004+.10*sstep(.55,1,x/xd)]; }),gm,G,false);
 }
 function explorerStack(G,P,parts,fz,xd,upM,loM){
   const T=textures(), wood=M({map:rep(T.ash,3,1),color:0x76675b,roughness:.38,clearcoat:.6,clearcoatRoughness:.15});
@@ -1495,7 +1610,7 @@ function buildIndex(){ BI.t=performance.now(); BI.at=[S.lng,S.lat]; BI.cells=new
   BI.kx=kx; BI.o=[S.lng,S.lat]; }
 // where this car's headlights are, for the cockpit beams (atmos.js makeCkBeams): lamp centres off the centre line and the
 // front of the car (m), and the colour of the light (LED white on the Fords, warm halogen on the Javelin and the tractor)
-const LAMPS={explorer:{lamp:.70,front:2.42,col:[236,244,255]},navigator:{lamp:.75,front:2.64,col:[236,244,255]},
+const LAMPS={explorer:{lamp:.70,front:2.42,col:[236,244,255]},expedition:{lamp:.80,front:2.67,col:[236,244,255]},navigator:{lamp:.75,front:2.64,col:[236,244,255]},
   javelin:{lamp:.60,front:2.36,col:[255,238,205]},modely:{lamp:.66,front:2.30,col:[240,246,255]},tractor:{lamp:.34,front:1.86,col:[255,236,200]}};
 CK.lamps=function(){ const k=mode==='tractor'?'tractor':specKey(CARKEY), L=LAMPS[k]||LAMPS.explorer; return {...L,key:k}; };
 CK.blocksAt=function(lng,lat){
