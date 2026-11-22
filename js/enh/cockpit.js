@@ -871,8 +871,8 @@ function stalkStep(dt){ const st=sigStalk; if(!st) return; const d=window.SIG?SI
 const XPC={dark:0x1f1c1a,tan:0x46332a};
 function xpRim(spin,W){
   // the traced outline, fitted from the driver's eye to within 1%: an oval, a little rounder over the top (superellipse
-  // n 2.5) and squarer across the bottom (n 3.2)
-  const L=[]; for(let i=0;i<=24;i++){ const t=Math.PI/2+i/24*Math.PI, c=Math.cos(t), s=Math.sin(t), n=s>0?2.5:3.2, b=s>0?.97:1;
+  // n 2.3, its sides curving rather than straight) and squarer across the bottom (n 3.0)
+  const L=[]; for(let i=0;i<=24;i++){ const t=Math.PI/2+i/24*Math.PI, c=Math.cos(t), s=Math.sin(t), n=s>0?2.3:3.0, b=s>0?.97:1;
     L.push([Math.abs(c)<1e-9?0:Math.sign(c)*Math.pow(Math.abs(c),2/n),Math.sign(s)*Math.pow(Math.abs(s),2/n)*b]); }
   const loop=[...L,...L.slice(1,-1).reverse().map(([x,y])=>[-x,y])], hw=.19-W.rim, hh=.1785-W.rim;
   const curve=new THREE.CatmullRomCurve3(loop.map(([x,y])=>new V3(x*hw,y*hh,0)),true,'centripetal');
@@ -881,11 +881,12 @@ function xpRim(spin,W){
   for(let i=0;i<p.count;i++){ const x=p.getX(i), y=p.getY(i), l=Math.hypot(x,y)||1, inw=-(n.getX(i)*x+n.getY(i)*y)/l;   // -1 facing out, +1 facing the middle
     const t=sstep(-.62,-.3,inw)*sstep(-.040,-.050,y), c=D.clone().lerp(T,t); col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b; }   // tan face from the chrome frames' bottom corners down, a thin dark outer edge
   g.setAttribute('color',new THREE.BufferAttribute(col,3));
-  const rim=mesh(g,M({color:0xffffff,vertexColors:true,roughness:.55,normalMap:rep(textures().leather,28,1),normalScale:new THREE.Vector2(.7,.7)}),spin);
+  const rim=mesh(g,M({color:0xffffff,vertexColors:true,roughness:.55,normalMap:rep(textures().leather,28,4),normalScale:new THREE.Vector2(.5,.5)}),spin);   /* grain ~25 repeats a metre, both ways, like the spokes */
   rim.scale.z=1.9; return rim; }   // deep front to back: from the seat you see the top of the rim as well as its face (photo)
 function xpWheel(spin,W){
-  const leaf=c=>M({color:c,roughness:.55,normalMap:rep(textures().leather,8,8),normalScale:new THREE.Vector2(.2,.2)});
+  const leaf=c=>M({color:c,roughness:.55,normalMap:rep(textures().leather,25,25),normalScale:new THREE.Vector2(.5,.5)});   // uv in metres (see mUV): the same grain as the rim
   const dk=leaf(XPC.dark), tan=leaf(XPC.tan), gloss=M({color:0x060607,roughness:.1,metalness:.3,env:.9}), chrome=M({color:0xdfe3e7,metalness:.9,roughness:.18,env:1.8});
+  const mUV=g=>{ const p=g.attributes.position, uv=g.attributes.uv; for(let i=0;i<p.count;i++) uv.setXY(i,p.getX(i),p.getY(i)); uv.needsUpdate=true; return g; };
   const ext=(sh,d,bv)=>new THREE.ExtrudeGeometry(sh,{depth:d,bevelEnabled:bv>0,bevelThickness:bv,bevelSize:bv,bevelSegments:3,curveSegments:10});
   // closed outline through [x,y] points (s mirrors x), each corner rounded by r (one number, or one per point)
   const poly=(Q,s,r)=>{ const P=Q.map(([x,y])=>[s*x,y]), N=P.length, sh=new THREE.Shape();
@@ -913,16 +914,23 @@ function xpWheel(spin,W){
     { const T=canvasTex(128,128), x=T.x; x.clearRect(0,0,128,128); x.strokeStyle=x.fillStyle='#53c4ec'; x.lineWidth=9; x.beginPath(); x.roundRect?x.roundRect(24,40,72,48,12):x.rect(24,40,72,48); x.stroke();
       const ic=mesh(new THREE.PlaneGeometry(.022,.022),new THREE.MeshBasicMaterial({map:T.t,transparent:true}),spin,false,false); ic.position.set(s*-0.1148,-0.0056,-.0162);
       const dot=mesh(new THREE.CircleGeometry(.0028,16),new THREE.MeshBasicMaterial({color:0x53c4ec}),spin,false,false); dot.position.set(s*-0.1022,0.0094,-.0162); }
-    // tan under the panel, one piece with the rim: a curved sheet from the chrome frame's bottom edge (top) to its free edge
-    // (bottom). By the hub it sits at the spoke's depth; nearing the rim it sweeps forward to the rim's face and tucks under
-    // it (q: where a point sits between the middle (0) and the rim's centre line (1)), so the rim and spoke read as one piece
-    { const cv=P=>new THREE.CatmullRomCurve3(P.map(([x,y])=>new V3(s*x,y,0))), hw=.19-W.rim, hh=.1785-W.rim;
-      const q=(x,y)=>Math.pow(Math.pow(Math.abs(x)/hw,3.2)+Math.pow(Math.abs(y)/hh,3.2),1/3.2);
-      const fit=p=>{ const k=q(p.x,p.y); if(k>.985) p.multiplyScalar(.985/k); p.z=lerp(-.0185,.029,sstep(.78,.975,q(p.x,p.y))); return p; };
-      const A=cv([[-.0904,-.0330],[-.1320,-.0440],[-.1734,-.0550],[-.1900,-.0600]]), B=cv([[-.0908,-.0455],[-.1098,-.0566],[-.1330,-.0746],[-.1493,-.0970],[-.1644,-.1143],[-.1760,-.1230]]);
-      mesh(grid(16,56,(u,v)=>{ const p=fit(A.getPoint(v).lerp(B.getPoint(v),u)); return [p.x,p.y,p.z]; }),tan,spin);
-      const E=[]; for(let k=0;k<=48;k++){ const p=fit(B.getPoint(k/48)); p.z-=.0025; E.push(p); }      // the rounded free edge
-      mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(E),64,.0028,8,false),tan,spin); }
+    // tan under the panel, one piece with the rim: a fillet. Each cross-section starts on the rim's own surface (60° round
+    // from its inner side toward you), leaves it along the rim's own slope, and curves back to the spoke's depth at the
+    // chrome frame's bottom edge or the free edge (G: corner -> along the chrome -> the hub -> down the free edge to the
+    // rim). Same slope where they meet = no crease: the rim and the spoke read as one piece of leather.
+    { const hw=.19-W.rim, hh=.1785-W.rim, rr=W.rim, SZ=1.9, f0=60*DEG, zS=-.0185;
+      const ctr=t=>new V3(-s*hw*Math.pow(Math.abs(Math.cos(t)),2/3),-hh*Math.pow(Math.abs(Math.sin(t)),2/3),0);   // rim centre line, lower quarter (n 3.0)
+      const t0=Math.asin(Math.pow(.05/hh,1.5)), t1=Math.asin(Math.pow(.123/hh,1.5));
+      const G=new THREE.CatmullRomCurve3([[-.165,-.0525],[-.1320,-.0432],[-.0904,-.0322],[-.0908,-.0455],[-.1098,-.0566],[-.1330,-.0746],[-.1493,-.0970],[-.1560,-.1120]].map(([x,y])=>new V3(s*x,y,zS)));
+      const sec=v=>{ const t=lerp(t0,t1,v), C=ctr(t), dC=ctr(t+.001).sub(ctr(t-.001)), inw=new V3(-dC.y,dC.x,0).normalize(); if(inw.dot(C)>0) inw.negate();
+        const P0=C.clone().addScaledVector(inw,rr*Math.cos(f0)); P0.z=SZ*rr*Math.sin(f0);
+        const T0=inw.clone().multiplyScalar(Math.sin(f0)).add(new V3(0,0,-SZ*Math.cos(f0))).normalize(), P1=G.getPoint(v), L=P0.distanceTo(P1);
+        const T1=P1.clone().sub(P0).setZ(0).normalize();
+        return u=>{ const u2=u*u, u3=u2*u; return P0.clone().multiplyScalar(2*u3-3*u2+1).addScaledVector(T0,(u3-2*u2+u)*L*.9).addScaledVector(P1,-2*u3+3*u2).addScaledVector(T1,(u3-u2)*L*.9); }; };
+      const S=[]; for(let k=0;k<=56;k++) S.push(sec(k/56));
+      mesh(mUV(grid(20,56,(u,v)=>{ const p=S[Math.round(v*56)](u); return [p.x,p.y,p.z]; })),tan,spin);
+      const E=[]; for(let k=0;k<=40;k++){ const p=G.getPoint(lerp(3/7,1,k/40)); p.z-=.0025; E.push(p); }             // the rounded free edge
+      mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(E),48,.0028,8,false),tan,spin); }
   }
   // pad: wide flat top, the sides drawing in a little to a rounded bottom; the oval low on it
   part(poly([[-.0701,.0479],[.0692,.0479],[.0685,-.0799],[-.0694,-.0799]],1,[.022,.022,.036,.036]),-.004,.024,.004,dk);   // a slim bevel: no thick border round it
