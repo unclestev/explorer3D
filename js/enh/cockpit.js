@@ -636,27 +636,31 @@ function stalksEx(grp,colM){
     const piv=new THREE.Group(); piv.position.set(s*.05,.062,-.10); grp.add(piv);   // high on the column: you see them through the wheel's upper openings
     mesh(bar([[0,0,0],[s*.035,-.002,.01],[s*.07,-.005,.02]],[.013,.016],.013,[0,1,0],6,10),armM,piv);   // short: the whole stalk stays inside the rim (owner: "they stick out too far")   // the arm, out and a little back toward you
     const L=.072, hx=s*(.07+L/2-.006), hd=new THREE.Group(); hd.position.set(hx,-.006,.026); hd.rotation.z=-s*.06; piv.add(hd);   // its end stops just inside the rim, as in the photo
-    mesh(rbox(L,.03,.026,.005,.006),head,hd);                                                          // the end: a squared-off block with softened edges, flat at the tip
-    if(s<0){ // turn signals / lights: symbols along the face toward the driver
-      const m=face(L,.024,(x,W,H)=>{ const y=H/2;
-        x.beginPath(); x.moveTo(40,y-20); x.lineTo(60,y-20); x.moveTo(40,y); x.lineTo(60,y); x.moveTo(40,y+20); x.lineTo(60,y+20); x.stroke();            // high-beam lines
-        x.beginPath(); x.arc(92,y,24,-Math.PI/2,Math.PI/2); x.closePath(); x.stroke(); x.font='700 26px system-ui,Arial'; x.textAlign='center'; x.textBaseline='middle'; x.fillText('A',92,y+1);
-        x.beginPath(); x.arc(200,y,22,-Math.PI/2,Math.PI/2); x.closePath(); x.stroke(); for(const d of [-14,0,14]){ x.beginPath(); x.moveTo(170,y+d); x.lineTo(150,y+d+5); x.stroke(); }   // headlamp
-        const ar=(cx,dir)=>{ x.beginPath(); x.moveTo(cx+dir*26,y); x.lineTo(cx,y-20); x.lineTo(cx,y-9); x.lineTo(cx-dir*22,y-9); x.lineTo(cx-dir*22,y+9); x.lineTo(cx,y+9); x.lineTo(cx,y+20); x.closePath(); x.stroke(); };
-        ar(310,-1); ar(372,1); });
-      const f=mesh(new THREE.PlaneGeometry(L*.92,.02),m,hd,false,false); f.position.z=.0121; f.scale.x=1;
+    const HH=.036, D=.026;
+    mesh(rbox(L,HH,D,.005,.007),head,hd);                                                              // the end: a squared-off block, flat at the tip
+    const FW=L*.9, FH=HH*.86, fz=D/2+.0008;                                                            // the symbol face, just proud of the block (it used to sit inside it)
+    if(s<0){ // turn signals / lights (photos): auto high beam and the headlamp on the left, the ⇦ ⇨ arrows on the right
+      const m=face(FW,FH,(x,W,H)=>{ x.lineWidth=8;
+        const lamp=(cx,cy,r,a)=>{ x.beginPath(); x.arc(cx,cy,r,-Math.PI/2,Math.PI/2); x.closePath(); x.stroke();
+          for(const d of [-.6,0,.6]){ x.beginPath(); x.moveTo(cx-r*.35,cy+d*r); x.lineTo(cx-r*1.35,cy+d*r+(a?0:r*.25)); x.stroke(); }
+          if(a){ x.font='800 '+Math.round(r*1.1)+'px system-ui,Arial'; x.textAlign='center'; x.textBaseline='middle'; x.fillText('A',cx+r*.42,cy+r*.05); } };
+        lamp(120,H*.3,34,true); lamp(120,H*.72,34,false);                                              // auto high beam over the headlamp
+        const ar=(cx,cy,dir)=>{ x.beginPath(); x.moveTo(cx+dir*38,cy); x.lineTo(cx,cy-30); x.lineTo(cx,cy-13); x.lineTo(cx-dir*32,cy-13); x.lineTo(cx-dir*32,cy+13); x.lineTo(cx,cy+13); x.lineTo(cx,cy+30); x.closePath(); x.stroke(); };
+        ar(300,H/2,-1); ar(410,H/2,1); });
+      const f=mesh(new THREE.PlaneGeometry(FW,FH),m,hd,false,false); f.position.z=fz;
       sigStalk={piv,k:0}; }
-    else { // wipers: the ridged roller round the stalk, speed dots, and the wiper / washer symbols on the end
-      const RT=canvasTex(64,128), r=RT.x; r.fillStyle='#0c0c0d'; r.fillRect(0,0,64,128); r.fillStyle='#3b3c40'; for(let i=0;i<128;i+=12) r.fillRect(0,i,64,5);
-      RT.t.wrapS=RT.t.wrapT=THREE.RepeatWrapping; RT.t.repeat.set(1,3);
-      const roll=mesh(new THREE.CylinderGeometry(.0165,.0165,.02,28,1),M({map:RT.t,roughness:.45,metalness:.25}),hd); roll.rotation.z=Math.PI/2; roll.position.x=-s*(L/2-.018);
-      const m=face(L,.024,(x,W,H)=>{ const y=H/2;
-        for(let i=0;i<3;i++){ x.beginPath(); x.arc(150,y-18+i*18,4.5,0,7); x.fill(); }                           // speed dots by the roller
-        const wip=(cx,rear)=>{ x.beginPath(); x.arc(cx,y+22,34,Math.PI*1.15,Math.PI*1.85); x.stroke(); x.beginPath(); x.moveTo(cx,y+22); x.lineTo(cx+20,y-6); x.stroke();
-          if(rear){ x.strokeRect(cx-34,y-30,68,58); } };
-        wip(250,false); for(const d of [-12,0,12]){ x.beginPath(); x.moveTo(250+d,y+26); x.lineTo(250+d*1.6,y+38); x.stroke(); }   // washer spray
-        wip(380,true); });
-      const f=mesh(new THREE.PlaneGeometry(L*.92,.02),m,hd,false,false); f.position.z=.0121; } } }
+    else { // wipers (photo): the ridged thumbwheel set in the face by the column, the speed marks beside it, then the wiper / washer symbols in a 2 × 2 block
+      const m=face(FW,FH,(x,W,H)=>{ x.lineWidth=7;
+        x.fillStyle='#050506'; x.fillRect(22,12,92,H-24); x.fillStyle='#c9cdd2';                        // the slot the wheel sits in
+        for(let i=0;i<3;i++){ const y=H*.22+i*H*.28; x.beginPath(); x.arc(140,y,6,0,7); x.fill(); x.fillRect(152,y-3,18-i*6,6); }   // speed marks
+        const wip=(cx,cy,rear,spray)=>{ x.beginPath(); x.arc(cx,cy+24,30,Math.PI*1.12,Math.PI*1.88); x.stroke(); x.beginPath(); x.moveTo(cx,cy+24); x.lineTo(cx+16,cy-2); x.stroke();
+          if(rear) x.strokeRect(cx-34,cy-20,68,50); if(spray) for(const d of [-12,0,12]){ x.beginPath(); x.moveTo(cx+d*.6,cy+28); x.lineTo(cx+d*1.4,cy+40); x.stroke(); } };
+        wip(260,H*.26,false,false); wip(380,H*.26,false,true); wip(260,H*.68,true,false); wip(380,H*.68,true,true); });
+      const f=mesh(new THREE.PlaneGeometry(FW,FH),m,hd,false,false); f.position.z=fz;
+      const RT=canvasTex(128,32), r=RT.x; r.fillStyle='#0c0c0d'; r.fillRect(0,0,128,32); r.fillStyle='#4a4b50'; for(let i=0;i<128;i+=10) r.fillRect(i,0,4,32);   // ridges along the wheel's axis
+      RT.t.wrapS=RT.t.wrapT=THREE.RepeatWrapping; RT.t.repeat.set(3,1);
+      const roll=mesh(new THREE.CylinderGeometry(.009,.009,.019,28,1),M({map:RT.t,roughness:.45,metalness:.25}),hd);   // axis across the stalk: you roll it with your thumb, ridges run across it
+      roll.rotation.z=Math.PI/2; roll.position.set(-s*(FW/2-.0105)*-1*-1,0,fz-.003); roll.position.x=-(FW/2)+.0105; } } }
 function stalkStep(dt){ const st=sigStalk; if(!st) return; const d=window.SIG?SIG.dir:0;
   st.k+=(d-st.k)*Math.min(1,dt*14); st.piv.rotation.z=-.12*st.k; }   // right signal: the end goes up; left: down
 // Explorer ST wheel (owner 2026-11-21, a photo of the real one): thick round rim in perforated leather; a big airbag pad,
