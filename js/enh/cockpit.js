@@ -913,8 +913,16 @@ function xpWheel(spin,W){
     { const T=canvasTex(128,128), x=T.x; x.clearRect(0,0,128,128); x.strokeStyle=x.fillStyle='#53c4ec'; x.lineWidth=9; x.beginPath(); x.roundRect?x.roundRect(24,40,72,48,12):x.rect(24,40,72,48); x.stroke();
       const ic=mesh(new THREE.PlaneGeometry(.022,.022),new THREE.MeshBasicMaterial({map:T.t,transparent:true}),spin,false,false); ic.position.set(s*-0.1148,-0.0056,-.0162);
       const dot=mesh(new THREE.CircleGeometry(.0028,16),new THREE.MeshBasicMaterial({color:0x53c4ec}),spin,false,false); dot.position.set(s*-0.1022,0.0094,-.0162); }
-    // tan wedge under the panel, running down into the tan face of the lower rim
-    part(poly([[-.0904,-.0330],[-.1734,-.0550],[-.1939,-.0606],[-.1926,-.1011],[-.1644,-.1143],[-.1493,-.0970],[-.1330,-.0746],[-.1098,-.0566],[-.0908,-.0455]],s,[.004,.002,0,.01,.012,.02,.02,.012,.004]),-.0175,.010,.003,tan);
+    // tan under the panel, one piece with the rim: a curved sheet from the chrome frame's bottom edge (top) to its free edge
+    // (bottom). By the hub it sits at the spoke's depth; nearing the rim it sweeps forward to the rim's face and tucks under
+    // it (q: where a point sits between the middle (0) and the rim's centre line (1)), so the rim and spoke read as one piece
+    { const cv=P=>new THREE.CatmullRomCurve3(P.map(([x,y])=>new V3(s*x,y,0))), hw=.19-W.rim, hh=.1785-W.rim;
+      const q=(x,y)=>Math.pow(Math.pow(Math.abs(x)/hw,3.2)+Math.pow(Math.abs(y)/hh,3.2),1/3.2);
+      const fit=p=>{ const k=q(p.x,p.y); if(k>.985) p.multiplyScalar(.985/k); p.z=lerp(-.0185,.029,sstep(.78,.975,q(p.x,p.y))); return p; };
+      const A=cv([[-.0904,-.0330],[-.1320,-.0440],[-.1734,-.0550],[-.1900,-.0600]]), B=cv([[-.0908,-.0455],[-.1098,-.0566],[-.1330,-.0746],[-.1493,-.0970],[-.1644,-.1143],[-.1760,-.1230]]);
+      mesh(grid(16,56,(u,v)=>{ const p=fit(A.getPoint(v).lerp(B.getPoint(v),u)); return [p.x,p.y,p.z]; }),tan,spin);
+      const E=[]; for(let k=0;k<=48;k++){ const p=fit(B.getPoint(k/48)); p.z-=.0025; E.push(p); }      // the rounded free edge
+      mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(E),64,.0028,8,false),tan,spin); }
   }
   // pad: wide flat top, the sides drawing in a little to a rounded bottom; the oval low on it
   part(poly([[-.0701,.0479],[.0692,.0479],[.0685,-.0799],[-.0694,-.0799]],1,[.022,.022,.036,.036]),-.004,.024,.004,dk);   // a slim bevel: no thick border round it
