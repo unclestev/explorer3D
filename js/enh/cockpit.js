@@ -627,12 +627,13 @@ function steeringWheel(G,P){
 // and it tips up / down with the signal. Right: wipers, with the ridged roller round the stalk and the wiper symbols.
 let sigStalk=null;
 function stalksEx(grp,colM){
-  const head=M({color:0x111113,roughness:.5,normalMap:rep(textures().grain,4,2),normalScale:new THREE.Vector2(.25,.25)});
+  const head=M({color:0x1e1f22,roughness:.38,metalness:.1,env:.9,normalMap:rep(textures().grain,4,2),normalScale:new THREE.Vector2(.2,.2)});   // a soft sheen, so they read against the dark dash as in the photos
+  const armM=M({color:0x1a1b1e,roughness:.42,metalness:.1,env:.8});
   const face=(w,h,draw)=>{ const T=canvasTex(512,Math.round(512*h/w)), x=T.x; x.fillStyle='#121214'; x.fillRect(0,0,512,T.c.height);
     x.strokeStyle=x.fillStyle='#c9cdd2'; x.lineWidth=7; x.lineCap=x.lineJoin='round'; draw(x,512,T.c.height); return new THREE.MeshBasicMaterial({map:T.t}); };
   for(const s of [-1,1]){
-    const piv=new THREE.Group(); piv.position.set(s*.05,.05,-.10); grp.add(piv);   // high on the column: you see them through the wheel's upper openings
-    mesh(bar([[0,0,0],[s*.06,-.002,.012],[s*.125,-.006,.024]],[.011,.013],.011,[0,1,0],6,10),colM,piv);   // the arm, out and a little back toward you
+    const piv=new THREE.Group(); piv.position.set(s*.05,.075,-.10); grp.add(piv);   // high on the column: you see them through the wheel's upper openings
+    mesh(bar([[0,0,0],[s*.06,-.002,.012],[s*.125,-.006,.024]],[.013,.016],.013,[0,1,0],6,10),armM,piv);   // the arm, out and a little back toward you
     const L=.09, hx=s*(.125+L/2-.008), hd=new THREE.Group(); hd.position.set(hx,-.008,.03); hd.rotation.z=-s*.07; piv.add(hd);   // the end reaches out past the rim
     mesh(rbox(L,.028,.024,.009,.008),head,hd);                                                         // the chunky end
     const cap=mesh(new THREE.SphereGeometry(.0135,16,12),head,hd); cap.scale.set(.6,1.04,.9); cap.position.x=s*L/2;
