@@ -66,7 +66,7 @@ const SPECS={
     hood:{zr:-1.15,zf:-2.62,yr:1.288,yf:1.205,hw:1.05,crown:.03,gap:.86,nose:.08,crease:{x:.40,h:.014}},
     dash:[[1.262,-1.115],[1.282,-.94],[1.28,-.77],[1.258,-.70],[1.18,-.675],[1.05,-.69],[.93,-.635],[.79,-.50]],
     wheel:{c:[-.42,1.105,-.40],r:.19,tilt:24,rim:.017,flat:false},
-    pano:{x0:-.86,x1:.10,y:1.335,z:-.83,h:.095,tilt:16},
+    pano:{x0:-.46,x1:.055,y:1.322,z:-.745,h:.11,tilt:16},   /* photo: from about the wheel's centre to above the middle of the centre screen, standing just above it */
     screen:{c:[.06,1.165,-.66],w:.29,h:.165,tilt:10},
     col:{dash:0x2e3034,top:0x26282b,trim:0x3a3c40,lower:0x35373b,seat:0x9c9e9d,head:0xb3b3b0,stitch:0,accent:'alu',carpet:0x1c1d1f},
     eng:'ecoboost35', vmaxG:160, red:6.0, tachMax:8},
@@ -868,7 +868,7 @@ function stalkStep(dt){ const st=sigStalk; if(!st) return; const d=window.SIG?SI
 // mirrors it). Two-tone as in the photo: dark leather on the rim and pad; tan on a small wing off the hub's top corner,
 // the wedge under each touch panel, and the whole face of the lower rim, so the tan runs unbroken from under one panel
 // round the bottom to the other.
-const XPC={dark:0x1f1c1a,tan:0x46332a};
+const XPC={dark:0x1d1e20,tan:0x4b4d51};   // charcoal and mid grey (owner's photo of the 2025 cabin; was brown and tan)
 function xpRim(spin,W){
   // the traced outline, fitted from the driver's eye to within 1%: an oval, a little rounder over the top (superellipse
   // n 2.3, its sides curving rather than straight) and squarer across the bottom (n 3.0)
@@ -1060,6 +1060,7 @@ function dashModern(G,P,parts){
     mesh(grid(30,3,(u,v)=>{ const s=u*2-1; return [C.c[0]+s*bw,ty+bh(s)*.85-.016*v,zb+.004*v]; }),upM,G);
     const back=mesh(rbox(C.w+.05,C.h+.07,.02,.005,.01),M({color:0x050505,roughness:.8}),G); back.position.set(C.c[0],C.c[1]+.005,C.c[2]); back.lookAt(new V3(...P.eye)); back.translateZ(-.016);
     parts.cluster=screenMesh(G,C.c,C.w,C.h,0,1024,P.eye); }
+  else if(P.xp) panoXp(G,P,parts);
   else { const Pn=P.pano, len=Pn.x1-Pn.x0, n=48;
     const T2=canvasTex(2560,Math.round(2560*Pn.h/len*1.0),true), pm=new THREE.MeshBasicMaterial({map:T2.t,toneMapped:false,side:THREE.DoubleSide});
     const curve=(u)=>{ const x=lerp(Pn.x0,Pn.x1,u), zc=Pn.z+.06*Math.pow((x-P.eye[0]*.3)/.9,2); return [x,zc]; };
@@ -1080,6 +1081,7 @@ function dashModern(G,P,parts){
     ['❄','A/C','▲','◢◣','✱','AUTO','≋'].forEach((t,i)=>x.fillText(t,40+i*72,48)); if(!lux){ x.fillStyle='#d01c24'; x.beginPath(); x.moveTo(256,22); x.lineTo(278,70); x.lineTo(234,70); x.closePath(); x.lineWidth=5; x.strokeStyle='#d01c24'; x.stroke(); }
     const lab=mesh(new THREE.PlaneGeometry(.29,.045),new THREE.MeshBasicMaterial({map:T3.t}),row,false,false); lab.position.z=.0065; parts.btns=lab.material; }
   // centre console with the gear selector (rotary dial / piano-key buttons) and armrest
+  if(P.xp) consoleXp(G,P,T,loM); else
   { const cm=M({color:P.col.top,roughness:.45,normalMap:rep(T.grain,4,6),normalScale:new THREE.Vector2(.4,.4)}), cx=0;
     const zc0=P.dash[P.dash.length-1][1]-.03, zc1=P.eye[2]+.45;
     mesh(grid(10,10,(u,v)=>{ const s=u*2-1, z=lerp(zc0,zc1,v); return [cx+s*.15,.62+.03*(1-s*s)-.06*v+(v<.15?.12*(1-v/.15):0),z]; }),cm,G);
@@ -1132,38 +1134,161 @@ function ventXp(g,w,h){
 function expeditionDash(G,P,parts,fz,xd){
   const sat=M({map:rep(textures().alu,4,1),color:0xe2e6ea,metalness:.55,roughness:.32,env:1.6}), S=P.screen;
   { const f=new THREE.Group(); f.position.set(S.c[0],S.c[1],S.c[2]); f.rotation.x=-S.tilt*DEG; G.add(f);
-    const bz=mesh(rbox(S.w+.03,S.h+.03,.03,.008,.012),sat,f); bz.position.z=-.018;                       // silver frame round the screen
-    const bk=mesh(rbox(S.w+.012,S.h+.012,.03,.004,.008),M({color:0x060607,roughness:.3}),f); bk.position.z=-.012; }
+    const bz=mesh(rbox(S.w+.03,S.h+.03,.03,.008,.012),sat,f); bz.position.z=-.022;                       // silver frame round the screen
+    const bk=mesh(rbox(S.w+.012,S.h+.012,.03,.004,.008),M({color:0x060607,roughness:.3}),f); bk.position.z=-.0175; }   // behind the screen (it sat 3 mm in front and hid it)
   // the satin band: along the dash face below the vents, then dipping down round the centre stack
-  const yb=S.c[1]-S.h/2-.06, yd=.94, sx=S.w/2+.16, P2=[];
+  const yb=S.c[1]-S.h/2-.035, yd=yb-.10, sx=.19, P2=[];   // photo: the chrome runs just under the screen and wraps snugly round the control strip
   for(const x of [-xd+.05,-.55,-sx-.06]) P2.push([x,yb]);
   P2.push([-sx,yb-.03],[-sx+.02,yd+.02],[-sx+.06,yd],[sx-.06,yd],[sx-.02,yd+.02],[sx,yb-.03]);
   for(const x of [sx+.06,.55,xd-.05]) P2.push([x,yb]);
   const pts=P2.map(([x,y])=>[x,y,fz(y)+.016+.10*sstep(.55,1,Math.abs(x)/xd)]);
   mesh(bar(pts,.018,.008,[0,0,1],120,6),sat,G);
+  // the engraved dark grey trim band right across the dash under the screen (photo)
+  { const y0=yb+.008, y1=S.c[1]-S.h/2-.008, xa=-xd+.06, xb=xd-.05;
+    mesh(grid(80,3,(u,v)=>{ const x=lerp(xa,xb,u), y=lerp(y0,y1,v); return [x,y,fz(y)+.010+.10*sstep(.55,1,Math.abs(x)/xd)]; }),xpTrimMat(xb-xa,y1-y0),G); }
+  // the round engine start button between the wheel and the left vent (photo)
+  { const y=S.c[1]+.03, b=new THREE.Group(); b.position.set(S.c[0]-S.w/2-.165,y,fz(y)+.018); G.add(b); b.lookAt(new V3(...P.eye));
+    const T=canvasTex(128,128), x=T.x, gg=x.createRadialGradient(64,56,8,64,64,64); gg.addColorStop(0,'#2a2c30'); gg.addColorStop(1,'#0c0d0f'); x.fillStyle=gg; x.fillRect(0,0,128,128);
+    x.fillStyle='#d6dadf'; x.textAlign='center'; x.textBaseline='middle'; x.font='700 17px system-ui,Arial'; x.fillText('ENGINE',64,52); x.fillText('START',64,72); x.font='600 13px system-ui,Arial'; x.fillText('STOP',64,90);
+    mesh(new THREE.TorusGeometry(.0165,.0028,10,40),M({color:0xdfe3e7,metalness:.9,roughness:.18,env:1.8}),b);
+    mesh(new THREE.CircleGeometry(.0155,40),M({map:T.t,roughness:.35,metalness:.2}),b).position.z=.001;
+    const cup=mesh(new THREE.CylinderGeometry(.021,.021,.012,40,1,true),M({color:0x111214,roughness:.4}),b); cup.rotation.x=Math.PI/2; cup.position.z=-.004; }
   // the recessed stack panel inside the dip, with the big rotary dial and a row of keys (the generic button row sits on it)
-  mesh(grid(10,6,(u,v)=>{ const x=lerp(-sx+.03,sx-.03,u), y=lerp(yd+.02,yb-.02,v); return [x,y,fz(y)+.008]; }),M({color:0x141517,roughness:.35}),G);
+  mesh(grid(10,6,(u,v)=>{ const x=lerp(-sx+.03,sx-.03,u), y=lerp(yd+.02,yb-.02,v); return [x,y,fz(y)+.008]; }),xpTrimMat(2*sx-.06,yb-yd-.04),G);
   // the controls under the screen (owner 2026-11-22, "put all of the buttons and knobs under the screen" as in the photo):
   // a row of keys on the left, the big chrome rotary dial with a smaller knob beside it, more keys on the right
   { const cy=yd+.045, g=new THREE.Group(); g.position.set(S.c[0],cy,fz(cy)+.012); g.rotation.x=-.35; G.add(g);
-    const W2=2*(sx-.05), T=canvasTex(1024,96), x=T.x;
+    // photo: two keys on the left, the big chrome rotary dial (the gear selector, P R N D lit above it), a small volume
+    // knob, then a row of climate keys ending in the hazard button
+    const W2=.27, H2=W2*96/1024, T=canvasTex(1024,96), x=T.x, X2=X=>(X/1024-.5)*W2;
     x.fillStyle='#0c0d0f'; x.fillRect(0,0,1024,96);
     const key=(X,w,t)=>{ x.fillStyle='#1b1c1f'; x.beginPath(); x.roundRect?x.roundRect(X,22,w,52,10):x.rect(X,22,w,52); x.fill(); x.strokeStyle='#050505'; x.lineWidth=3; x.stroke();
       x.fillStyle='#c9cdd2'; x.font='600 '+(t.length>2?17:26)+'px system-ui,Arial'; x.textAlign='center'; x.textBaseline='middle'; x.fillText(t,X+w/2,49); };
-    [['⏻',30],['❄',100],['A/C',170],['⇵',240]].forEach(([t,X])=>key(X,62,t));                    // left keys: power, fan, A/C, recirc
-    [['⊟',650],['⊞',720],['MAX',790],['AUTO',860],['▲',930]].forEach(([t,X])=>key(X,62,t));       // right keys: defrost front / rear, max, auto, hazard
-    x.strokeStyle='#d01c24'; x.lineWidth=5; x.beginPath(); x.moveTo(961,30); x.lineTo(980,66); x.lineTo(942,66); x.closePath(); x.stroke();   // red hazard triangle
-    const face=mesh(new THREE.PlaneGeometry(W2,W2*96/1024),new THREE.MeshBasicMaterial({map:T.t}),g,false,false); face.position.z=.001; parts.btns=face.material;
-    const plate=mesh(rbox(W2+.01,W2*96/1024+.01,.006,.002,.004),M({color:0x0b0b0c,roughness:.2,metalness:.2}),g); plate.position.z=-.003;
+    [['⏻',28],['⇵',106]].forEach(([t,X])=>key(X,64,t));
+    [['❄',470],['A/C',552],['⊟',634],['⊞',716],['AUTO',798],['',880]].forEach(([t,X])=>key(X,72,t));
+    x.strokeStyle='#d01c24'; x.lineWidth=5; x.beginPath(); x.moveTo(916,30); x.lineTo(936,66); x.lineTo(896,66); x.closePath(); x.stroke();   // red hazard triangle
+    const face=mesh(new THREE.PlaneGeometry(W2,H2),new THREE.MeshBasicMaterial({map:T.t}),g,false,false); face.position.z=.001; parts.btns=face.material;
+    const plate=mesh(rbox(W2+.012,H2+.036,.006,.002,.004),M({color:0x0b0b0c,roughness:.2,metalness:.2}),g); plate.position.set(0,.012,-.003);   // tall enough for the gear letters over the dial
     const chrome=M({map:rep(textures().alu,2,1),color:0xe0e4e8,metalness:.75,roughness:.22,env:1.6});
-    const knob=(xk,r,h)=>{ const k=mesh(new THREE.CylinderGeometry(r,r*1.04,h,40),chrome,g); k.rotation.x=Math.PI/2; k.position.set(xk,0,h/2);
-      const top=mesh(new THREE.CylinderGeometry(r*.8,r*.8,.003,32),M({color:0x111214,roughness:.3}),g); top.rotation.x=Math.PI/2; top.position.set(xk,0,h+.001);
-      const rg=mesh(new THREE.TorusGeometry(r*1.15,.0025,8,40),chrome,g); rg.position.set(xk,0,.002); };
-    knob(-.03,.026,.03); knob(.035,.014,.022); } 
+    const knob=(xk,r,h)=>{ const k=mesh(new THREE.CylinderGeometry(r,r*1.04,h,48),chrome,g); k.rotation.x=Math.PI/2; k.position.set(xk,0,h/2);
+      for(let i=0;i<24;i++){ const a=i/24*Math.PI*2, rib=mesh(new THREE.BoxGeometry(.0012,.0012,h*.7),chrome,g); rib.position.set(xk+Math.cos(a)*r*1.01,Math.sin(a)*r*1.01,h*.5); }   // knurled edge
+      const top=mesh(new THREE.CylinderGeometry(r*.82,r*.82,.003,40),M({color:0x111214,roughness:.3}),g); top.rotation.x=Math.PI/2; top.position.set(xk,0,h+.001);
+      const rg=mesh(new THREE.TorusGeometry(r*1.15,.0022,8,40),chrome,g); rg.position.set(xk,0,.002); };
+    knob(X2(258),.022,.028); knob(X2(398),.012,.022);
+    const pr=canvasTex(256,64), pl=mesh(new THREE.PlaneGeometry(.08,.02),new THREE.MeshBasicMaterial({map:pr.t}),g,false,false); pl.position.set(X2(258),H2/2+.0115,.0005);
+    parts.prnd={T:pr,cur:'',m:pl.material}; } 
   // glovebox seam on the passenger side
   const gm=M({color:0x0a0a0b,roughness:.9});
   mesh(grid(20,1,(u,v)=>{ const x=lerp(sx+.12,xd-.12,u), y=yd-.07+(v-.5)*.0025; return [x,y,fz(y)+.004+.10*sstep(.55,1,x/xd)]; }),gm,G,false);
 }
+// Expedition displays (owner 2026-11-22, a photo of the 2025 dash: "make sure nothing overlaps other values on the
+// display"). Every item has its own zone, and text is shrunk to fit its zone (fitText), so nothing can run into anything.
+function fitText(x,t,X,Y,maxW,size,weight,align,num){ t=String(t); let s=size; const mn=num?6:Math.max(8,Math.round(size*.62)), f=()=>{ x.font=`${weight} ${s}px system-ui,"Helvetica Neue",Arial`; }; f();
+  while(s>mn&&x.measureText(t).width>maxW){ s-=1; f(); }
+  if(x.measureText(t).width>maxW){ while(t.length>1&&x.measureText(t+'…').width>maxW) t=t.slice(0,-1); t=t.trimEnd()+'…'; }   // still too long at the smallest readable size: trim it
+  x.textAlign=align||'left'; x.fillText(t,X,Y); return s; }
+// the 24" panoramic display (photo): a status line along the top; on the left the speed in a rounded pill with the gear
+// letters under it, the turn arrows either side and the limit sign beyond; a card in the middle (next turn, or the street);
+// the moving map on the right
+function drawPanoXp(pn,d){ const x=pn.T.x, W=pn.w, H=pn.h, u=H/100;
+  x.fillStyle='#05070b'; x.fillRect(0,0,W,H);
+  const g=x.createLinearGradient(0,0,0,H); g.addColorStop(0,'#0d121a'); g.addColorStop(1,'#06080c'); x.fillStyle=g; x.fillRect(0,0,W,H);
+  x.textBaseline='middle';
+  // status line (top 14%)
+  x.fillStyle='#9aa3ad'; fitText(x,(d.temp+(d.wx?'  ·  '+d.wx:'')).trim(),W*.02,H*.085,W*.30,Math.round(11*u),'500','left');
+  fitText(x,d.time,W*.985,H*.085,W*.12,Math.round(11*u),'500','right');
+  fitText(x,d.compass,W*.81,H*.085,W*.14,Math.round(11*u),'500','center');
+  // speed pill (zone .15–.29 W)
+  const pc=W*.22, pw=W*.13, ph=H*.50, py=H*.20; x.fillStyle='#1a2029'; rr(x,pc-pw/2,py,pw,ph,ph*.32); x.fill();
+  x.strokeStyle='#2a323d'; x.lineWidth=Math.max(2,u*.8); x.stroke();
+  x.fillStyle='#f2f4f7'; fitText(x,String(d.mph),pc,py+ph*.47,pw*.86,Math.round(40*u),'300','center',1);
+  x.fillStyle='#8f98a3'; fitText(x,'mph',pc,py+ph*.86,pw*.5,Math.round(9*u),'500','center');
+  // gear letters under the pill, the current one bright
+  const L=['P','R','N','D'], gy=H*.84, gs=pw/4.6; L.forEach((t,i)=>{ x.fillStyle=t===d.gearL?'#ffffff':'#4c5560'; fitText(x,t,pc+(i-1.5)*gs,gy,gs*.9,Math.round(12*u),t===d.gearL?'700':'500','center'); });
+  // turn arrows beside the pill, the limit sign at the far left
+  if(d.bl) sigArrow(x,pc-pw/2-W*.03,py+ph*.47,Math.round(18*u),-1);
+  if(d.br) sigArrow(x,pc+pw/2+W*.03,py+ph*.47,Math.round(18*u),1);
+  if(d.limit){ const lw=W*.042, lh=H*.50, lx=W*.06-lw/2, ly=H*.22; x.fillStyle='#f4f4f2'; rr(x,lx,ly,lw,lh,u*2.5); x.fill(); x.strokeStyle='#111'; x.lineWidth=u*.7; x.stroke();
+    x.fillStyle='#111'; fitText(x,'SPEED',lx+lw/2,ly+lh*.15,lw*.86,Math.round(6*u),'700','center'); fitText(x,'LIMIT',lx+lw/2,ly+lh*.29,lw*.86,Math.round(6*u),'700','center');
+    fitText(x,String(d.limit),lx+lw/2,ly+lh*.66,lw*.86,Math.round(22*u),'800','center',1); }
+  // middle card (zone .36–.62 W)
+  const cx0=W*.36, cw=W*.26, cy0=H*.20, ch=H*.70; x.fillStyle='#121821'; rr(x,cx0,cy0,cw,ch,u*6); x.fill();
+  if(d.nav){ x.fillStyle='#ffffff'; fitText(x,d.navArrow||'↑',cx0+cw*.13,cy0+ch*.45,cw*.18,Math.round(34*u),'600','center');
+    fitText(x,d.navDist,cx0+cw*.27,cy0+ch*.30,cw*.68,Math.round(18*u),'600','left');
+    x.fillStyle='#b8c0ca'; fitText(x,d.navStreet,cx0+cw*.27,cy0+ch*.58,cw*.68,Math.round(12*u),'400','left');
+    x.fillStyle='#8f98a3'; fitText(x,d.eta,cx0+cw*.27,cy0+ch*.82,cw*.68,Math.round(10*u),'400','left'); }
+  else { x.fillStyle='#e9edf2'; fitText(x,d.street||'—',cx0+cw*.06,cy0+ch*.36,cw*.88,Math.round(16*u),'600','left');
+    x.fillStyle='#8f98a3'; fitText(x,'Trip '+d.trip+' mi',cx0+cw*.06,cy0+ch*.72,cw*.88,Math.round(11*u),'400','left'); }
+  // map (zone .64–.985 W)
+  const mx=W*.64, mw=W*.345, my=H*.20, mh=H*.74; x.save(); rr(x,mx,my,mw,mh,u*6); x.clip();
+  drawMap(x,{x:mx,y:my,w:mw,h:mh,cx:mx+mw*.5,cy:my+mh*.68,s:(mh*.6)/160},{land:'#152030',edge:'#1d2a3c',road:'#4f5f75',route:'#3d8bff',arrow:'#ffffff',arrowEdge:'#3d8bff'});
+  x.restore();
+  pn.T.t.needsUpdate=true; }
+// the 13.2" centre screen (photo): status bar; the map on the left; on the right a "now playing" card and a card with the
+// street and the limit; along the bottom the dock with the climate temperatures at each end
+function drawScreenXp(sc,d){ const x=sc.T.x, W=sc.w, H=sc.h, DH=Math.round(H*.12), TH=Math.round(H*.08);
+  x.fillStyle='#0b0e13'; x.fillRect(0,0,W,H); x.textBaseline='middle';
+  // status bar
+  x.fillStyle='#c9d0d8'; fitText(x,d.time,18,TH/2,W*.2,Math.round(TH*.5),'500','left'); fitText(x,d.temp,W-18,TH/2,W*.2,Math.round(TH*.5),'500','right');
+  // map (left 60%)
+  const mx=10, my=TH, mw=Math.round(W*.58), mh=H-TH-DH-8; x.save(); rr(x,mx,my,mw,mh,14); x.clip();
+  drawMap(x,{x:mx,y:my,w:mw,h:mh,cx:mx+mw*.5,cy:my+mh*.66,s:(mh*.55)/220},{land:'#141c28',edge:'#1c2634',road:'#4a5568',route:'#3d8bff',arrow:'#ffffff',arrowEdge:'#3d8bff'});
+  x.fillStyle='rgba(8,11,16,.78)'; x.fillRect(mx,my+mh-50,mw,50); x.fillStyle='#fff';
+  if(d.nav) fitText(x,(d.navArrow||'↑')+'  '+d.navDist+'  ·  '+d.navStreet,mx+14,my+mh-25,mw-28,24,'600','left');
+  else fitText(x,d.street||'—',mx+14,my+mh-25,mw-28,24,'600','left');
+  x.restore();
+  // cards (right)
+  const cx0=mx+mw+12, cw=W-cx0-10, c1=TH, h1=Math.round((H-TH-DH-20)*.52), c2=c1+h1+10, h2=H-DH-8-c2;
+  x.fillStyle='#161c25'; rr(x,cx0,c1,cw,h1,14); x.fill(); rr(x,cx0,c2,cw,h2,14); x.fill();
+  { const a=Math.round(h1*.56), ax=cx0+16, ay=c1+(h1-a)/2-8, gg=x.createLinearGradient(ax,ay,ax+a,ay+a); gg.addColorStop(0,'#3a6ea8'); gg.addColorStop(1,'#a24f7c');
+    x.fillStyle=gg; rr(x,ax,ay,a,a,8); x.fill(); x.fillStyle='rgba(255,255,255,.85)'; fitText(x,'♪',ax+a/2,ay+a/2,a*.8,Math.round(a*.5),'400','center');
+    x.fillStyle='#e9edf2'; fitText(x,'FM 101.1',ax+a+14,ay+a*.32,cw-a-44,26,'600','left');
+    x.fillStyle='#8f98a3'; fitText(x,'Radio',ax+a+14,ay+a*.72,cw-a-44,20,'400','left');
+    x.fillStyle='#c9d0d8'; ['⏮','⏸','⏭'].forEach((t,i)=>fitText(x,t,cx0+cw*(.3+i*.2),c1+h1-22,cw*.15,22,'400','center')); }
+  { x.fillStyle='#8f98a3'; fitText(x,d.compass,cx0+16,c2+h2*.28,cw-32-(d.limit?60:0),20,'500','left');
+    x.fillStyle='#e9edf2'; fitText(x,d.wx?d.wx:'',cx0+16,c2+h2*.66,cw-32-(d.limit?60:0),20,'400','left');
+    if(d.limit){ const lw=48, lh=60, lx=cx0+cw-lw-14, ly=c2+(h2-lh)/2; x.fillStyle='#f4f4f2'; rr(x,lx,ly,lw,lh,6); x.fill();
+      x.fillStyle='#111'; fitText(x,'LIMIT',lx+lw/2,ly+13,lw-6,11,'700','center'); fitText(x,String(d.limit),lx+lw/2,ly+40,lw-6,28,'800','center',1); } }
+  // dock
+  x.fillStyle='#10141a'; x.fillRect(0,H-DH,W,DH); x.fillStyle='#c9d0d8';
+  fitText(x,'68°',22,H-DH/2,70,Math.round(DH*.45),'500','left'); fitText(x,'72°',W-22,H-DH/2,70,Math.round(DH*.45),'500','right');
+  ['⌂','♪','✆','≋','❄','AUTO','✱'].forEach((t,i)=>{ x.fillStyle=t==='AUTO'?'#7fb2ff':'#9aa3ad'; fitText(x,t,W*(.22+i*.095),H-DH/2,W*.08,Math.round(DH*.42),'500','center'); });
+  sc.T.t.needsUpdate=true; }
+// the Expedition's panoramic display (photo): a slim gloss-black slab standing on the dash top from about the wheel's
+// centre to above the middle of the centre screen, leaning back toward your eye — no hood over it
+function panoXp(G,P,parts){ const Pn=P.pano, len=Pn.x1-Pn.x0, g=new THREE.Group(); g.position.set((Pn.x0+Pn.x1)/2,Pn.y,Pn.z); g.rotation.x=-Pn.tilt*DEG; G.add(g);
+  const T2=canvasTex(2560,Math.round(2560*Pn.h/len),true), pm=new THREE.MeshBasicMaterial({map:T2.t,toneMapped:false});
+  const slab=mesh(rbox(len+.018,Pn.h+.018,.022,.007,.014),M({color:0x09090a,roughness:.22,metalness:.25,env:.8}),g); slab.position.z=-.012;
+  mesh(new THREE.PlaneGeometry(len,Pn.h),pm,g,false,false).position.z=.0002;
+  mesh(new THREE.PlaneGeometry(len,Pn.h),M({color:0,metalness:1,roughness:.05,transparent:true,opacity:.14,depthWrite:false,env:1.3}),g,false,false).position.z=.0014;   // the glass
+  const st=mesh(rbox(len*.55,.05,.03,.006,.012),M({color:0x121315,roughness:.5}),g); st.position.set(0,-Pn.h/2-.016,-.024);    // the foot down into the dash
+  parts.pano={T:T2,m:pm,w:T2.c.width,h:T2.c.height}; }
+// the dark grey trim with a fine engraved diamond pattern, across the dash under the screen and inside the chrome U (photo)
+function xpTrimMat(lenX,lenY){ const T=canvasTex(128,128), x=T.x; x.fillStyle='#1f2023'; x.fillRect(0,0,128,128);
+  x.strokeStyle='rgba(150,154,160,.55)'; x.lineWidth=1.4; for(let i=-128;i<=256;i+=10){ x.beginPath(); x.moveTo(i,0); x.lineTo(i+128,128); x.stroke(); x.beginPath(); x.moveTo(i,128); x.lineTo(i+128,0); x.stroke(); }
+  x.fillStyle='rgba(0,0,0,.18)'; for(let i=0;i<600;i++) x.fillRect(Math.random()*128,Math.random()*128,1,1);
+  T.t.wrapS=T.t.wrapT=THREE.RepeatWrapping; T.t.repeat.set(lenX/.035,lenY/.035);
+  return M({map:T.t,roughness:.62,metalness:.15,normalMap:rep(textures().grain,lenX/.12,lenY/.12),normalScale:new THREE.Vector2(.25,.25)}); }
+// centre console (photo): dark grey with a satin-chrome surround on top framing a gloss-black tray at the front and two cup
+// holders behind it; the armrest beyond
+function consoleXp(G,P,T,loM){
+  const cm=M({color:0x2a2c2f,roughness:.5,normalMap:rep(T.grain,4,6),normalScale:new THREE.Vector2(.4,.4)});
+  const zc0=P.dash[P.dash.length-1][1]-.03, zc1=P.eye[2]+.45, top=(s,v)=>.63+.012*(1-s*s)-.03*v;
+  mesh(grid(12,12,(u,v)=>{ const s=u*2-1, z=lerp(zc0,zc1,v); return [s*.16,top(s,v)+(v<.12?.10*(1-v/.12):0),z]; }),cm,G);
+  for(const s of [-1,1]) mesh(grid(2,8,(u,v)=>[s*.165,lerp(.34,top(1,v),u),lerp(zc0,zc1,v)]),loM,G);
+  const z0=zc0+.15, z1=zc0+.53, zm=(z0+z1)/2, vm=(zm-zc0)/(zc1-zc0), g=new THREE.Group(); g.position.set(0,top(0,vm)+.012,zm);
+  g.rotation.x=-Math.PI/2+Math.atan(.03/(zc1-zc0)); G.add(g);                                     // local y = forward, local z = up
+  const sat=M({map:rep(T.alu,3,1),color:0xd9dde2,metalness:.8,roughness:.26,env:1.6}), L=z1-z0;
+  const rs=(w,h,r)=>{ const s=new THREE.Shape(), X=w/2, Y=h/2; s.moveTo(-X+r,-Y); s.lineTo(X-r,-Y); s.quadraticCurveTo(X,-Y,X,-Y+r); s.lineTo(X,Y-r); s.quadraticCurveTo(X,Y,X-r,Y); s.lineTo(-X+r,Y); s.quadraticCurveTo(-X,Y,-X,Y-r); s.lineTo(-X,-Y+r); s.quadraticCurveTo(-X,-Y,-X+r,-Y); return s; };
+  { const f=rs(.27,L,.035); f.holes.push(rs(.246,L-.024,.026)); mesh(new THREE.ExtrudeGeometry(f,{depth:.004,bevelEnabled:true,bevelThickness:.0015,bevelSize:.0015,bevelSegments:2,curveSegments:8}),sat,g); }
+  mesh(new THREE.ShapeGeometry(rs(.246,L-.024,.026),8),M({color:0x1a1b1d,roughness:.4}),g).position.z=-.001;
+  const tray=mesh(rbox(.222,L*.42,.008,.003,.012),M({color:0x070708,roughness:.12,metalness:.3,env:.9}),g); tray.position.set(0,L*.24,.002);   // gloss lid at the front
+  const trim=mesh(rbox(.06,.008,.004,.0015,.003),sat,g); trim.position.set(0,L*.24+L*.21-.012,.007);
+  for(const s of [-1,1]){ const cx=s*.058, cy=-L*.22;                                                 // cup holders behind it
+    const ring=mesh(new THREE.TorusGeometry(.039,.003,8,40),sat,g); ring.position.set(cx,cy,.003);
+    const well=mesh(new THREE.CylinderGeometry(.037,.034,.07,32,1,true),M({color:0x0b0b0c,roughness:.8}),g); well.rotation.x=Math.PI/2; well.position.set(cx,cy,-.034);
+    mesh(new THREE.CircleGeometry(.034,32),M({color:0x060606,roughness:1}),g).position.set(cx,cy,-.068); }
+  const ar=mesh(rbox(.2,.07,.32,.03,.05),M({color:0x3a3c40,roughness:.6,normalMap:rep(T.leather,3,4)}),G); ar.position.set(0,.66,zc1-.18); }
 function explorerStack(G,P,parts,fz,xd,upM,loM){
   const T=textures(), wood=M({map:rep(T.ash,3,1),color:0x76675b,roughness:.38,clearcoat:.6,clearcoatRoughness:.15});
   const chrome=M({color:0xd5dade,metalness:1,roughness:.18,env:1.5}), satin=M({map:rep(T.alu,2,1),color:0xc4c9cf,metalness:.9,roughness:.3,env:1.3});
@@ -1672,7 +1797,7 @@ function update(dt){
   if(p.hud){ p.hud.g.visible=CK.hud&&pw>.02; if(CK.hud) p.hud.m.opacity=(1-.45*k)*pw; }
   const ik=[d.mph,Math.round(d.rpm/60),d.gear,d.gearL,d.street,d.limit,d.time,d.temp,d.wx,d.trip,d.nav,d.navArrow,d.navDist,d.navStreet,d.eta,d.compass,CK.hud,d.bl,d.br].join('|');
   if(now-c.lastDraw>66){ c.lastDraw=now; if(ik!==c.ik){ c.ik=ik; if(p.hud&&CK.hud) drawHud(p.hud,d);   // only when a number on them changed (each redraw is a texture upload)
-    if(p.cluster) drawSport(p.cluster,d); if(p.pano) drawPano(p.pano,d); } if(p.screen&&now-(c.lastMap||0)>130){ c.lastMap=now; if(P.style==='ev') drawEV(p.screen,d); else drawScreen(p.screen,d,P.style==='lux'); }
+    if(p.cluster) drawSport(p.cluster,d); if(p.pano) (P.xp?drawPanoXp:drawPano)(p.pano,d); } if(p.screen&&now-(c.lastMap||0)>130){ c.lastMap=now; if(P.style==='ev') drawEV(p.screen,d); else if(P.xp) drawScreenXp(p.screen,d); else drawScreen(p.screen,d,P.style==='lux'); }
     if(p.prnd&&p.prnd.cur!==d.gearL){ const pr=p.prnd, x=pr.T.x, L=pr.classic?['P','R','N','D','2','1']:['P','R','N','D','S'], W=pr.T.c.width, step=pr.classic?42:pr.lux?102:50, o=pr.classic?22:pr.lux?52:28;
       x.fillStyle=pr.lux?'#16130f':pr.classic?'#0c0c0c':'#0a0a0b'; x.fillRect(0,0,W,64); x.font=pr.lux?'600 30px system-ui':pr.classic?'700 30px Arial':'700 34px system-ui'; x.textAlign='center'; x.textBaseline='middle';
       L.forEach((t,i)=>{ x.fillStyle=t===d.gearL?(pr.classic?'#ff7a2a':'#ffffff'):(pr.lux?'#a09c94':'#70757c'); x.fillText(t,o+i*step,32); }); pr.T.t.needsUpdate=true; pr.cur=d.gearL; } }
