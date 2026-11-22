@@ -38,7 +38,14 @@ function whoosh(up){ const A=window.SOUND&&SOUND.state; if(!A||!A.ctx||!SOUND.on
 const ov=q=>Promise.race([ovFetch('[out:json][timeout:18];'+q),new Promise((_,no)=>setTimeout(()=>no(new Error('slow')),18000))]);
 const bbStr=(s,w,n,e)=>`(${s.toFixed(4)},${w.toFixed(4)},${n.toFixed(4)},${e.toFixed(4)})`;
 const tagName=t=>t&&(t['name:en']||t.name)||'';
-async function interesting(lat,lng,r){   // something with a Wikipedia entry within r degrees, else any named attraction
+// Wikipedia's map of articles first (fast): its landmarks within ~8 km, picked at random
+async function wikiSpot(lat,lng){ const c=new AbortController(), to=setTimeout(()=>c.abort(),12000);
+  try{ const j=await fetch('https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord='+lat.toFixed(5)+'|'+lng.toFixed(5)+'&gsradius=8000&gslimit=100&gsprop=type&format=json&origin=*',{signal:c.signal}).then(r=>r.json());
+    const g=(j.query&&j.query.geosearch||[]).filter(x=>isFinite(x.lat)&&isFinite(x.lon)), L=g.filter(x=>x.type==='landmark'), P=L.length?L:g.filter(x=>!x.type||x.type==='null');
+    if(!P.length) return null; const x=P[Math.floor(Math.random()*P.length)]; return {lat:x.lat,lng:x.lon,name:x.title}; }
+  catch(e){ return null; } finally{ clearTimeout(to); } }
+async function interesting(lat,lng,r){   // something with a Wikipedia entry within r degrees, else any named attraction (OpenStreetMap, slower)
+  const w=await wikiSpot(lat,lng); if(w) return w;
   const bb=bbStr(lat-r,lng-r/Math.cos(lat*Math.PI/180)*.9,lat+r,lng+r/Math.cos(lat*Math.PI/180)*.9);
   const K=`nwr["tourism"~"^(attraction|museum|viewpoint|zoo|theme_park|gallery|aquarium)$"]`, H=`nwr["historic"~"^(monument|memorial|castle|fort|monastery|ruins|archaeological_site|palace)$"]`;
   for(const need of ['["wikidata"]','["name"]']){

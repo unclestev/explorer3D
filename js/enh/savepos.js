@@ -75,7 +75,7 @@ if(typeof START!=='undefined'&&START.place){
   const tryIt=()=>{
     if(typeof S==='undefined'||S.dist>5) return;                        // already driving: leave it
     if(typeof styleReady!=='undefined'&&styleReady&&snapToRoad(P)){ if(typeof toast==='function') toast('📍 '+P.name,3500); save(true); return; }
-    if(Date.now()-t0<15000) setTimeout(tryIt,500);
+    if(Date.now()-t0<(START.tp?30000:15000)) setTimeout(tryIt,500);   // (a teleport: the new area's roads can take a while to arrive)
     else if(typeof toast==='function') toast('📍 Near '+P.name,3500);
   };
   setTimeout(tryIt,800);
