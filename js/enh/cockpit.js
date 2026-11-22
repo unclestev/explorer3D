@@ -310,12 +310,12 @@ function shell(G,P,mats){
     // body-colour housing wraps round it and swells out behind; a black foot on the door with the sail filling the window corner
     const lux=P.style==='lux', ev=P.style==='ev', ex=!!P.ex, W=lux?.27:ex?.25:ev?.235:.245, H=lux?.185:ex?.19:ev?.15:.165, g=new THREE.Group(); g.position.set(s*(P.door+.235),P.belt+(ex?.085:.075),zA+.16); G.add(g);
     const o=-s;                                                     // the group faces the driver: +x is the driver's right, so outboard is -s
-    const shp=(w,h,grow)=>(ev?mirShapeEV:ex?mirShapeEx:mirShape)(w+grow*2,h+grow*2,o);
+    const shp=(w,h,grow,inb)=>ex?mirShapeEx(w,h,o,grow,inb):(ev?mirShapeEV:mirShape)(w+grow*2,h+grow*2,o);
     const glass=new THREE.ShapeGeometry(shp(W,H,0),12); uvFit(glass);
     const gl=mesh(MIR.uv(glass,s<0?0:.64,s<0?.36:1),new THREE.MeshBasicMaterial({map:MIR.tex(),toneMapped:false}),g,false); gl.position.z=.004; MIR.mats.push(gl.material);
     const sf=canvasTex(256,160); drawSideFrame(sf.x,s,ex); const sg=new THREE.ShapeGeometry(shp(W,H,0),12); uvFit(sg);
     const so=mesh(sg,new THREE.MeshBasicMaterial({map:sf.t,transparent:true}),g,false,false); so.position.z=.0045;
-    mesh(new THREE.ShapeGeometry(shp(W,H,ex?.012:.008),12),M({color:0x060607,roughness:.5}),g,false).position.z=.0025;   // black glass surround
+    mesh(new THREE.ShapeGeometry(shp(W,H,ex?.005:.008),12),M({color:0x060607,roughness:.5}),g,false).position.z=.0025;   // black glass surround
     // the Explorer's (owner 2026-11-21, a photo of the real one): a thick black textured housing, not body colour
     const pm=ex?M({color:0x161719,roughness:.72,normalMap:rep(textures().grain,5,5),normalScale:new THREE.Vector2(.15,.15),out:true,env:.35})
               :M({color:CARSPEC.paint||0x333333,metalness:.08,roughness:.42,clearcoat:1,clearcoatRoughness:.05,out:true,env:.55});
@@ -326,9 +326,9 @@ function shell(G,P,mats){
       const bm=new THREE.MeshBasicMaterial({map:T.t,transparent:true,color:0x9a9ea4,opacity:.55,depthWrite:false,toneMapped:false});
       const bi=mesh(new THREE.PlaneGeometry(.026,.026),bm,g,false,false); bi.position.set(ex?-o*(W/2-.04):-o*(W/2-.042),ex?H/2-.34*H:H/2-.055,.0052); if(o<0) bi.scale.x=-1;
       (mats.blis||(mats.blis={}))[s]=bm; }
-    const hg=new THREE.ExtrudeGeometry(shp(W,H,ex?.02:.012),{depth:.045,bevelEnabled:true,bevelThickness:.035,bevelSize:.012,bevelSegments:5,curveSegments:12});
+    const hg=new THREE.ExtrudeGeometry(ex?shp(W,H,.004,.05):shp(W,H,.012),{depth:.045,bevelEnabled:true,bevelThickness:ex?.03:.035,bevelSize:ex?.005:.012,bevelSegments:5,curveSegments:12});
     hg.translate(0,0,-.045-.035); const pz=hg.attributes.position;
-    for(let k=0;k<pz.count;k++){ const z=pz.getZ(k); if(z<-.05){ const t=(-.05-z)/.065; pz.setX(k,pz.getX(k)*(1-.22*t)+o*.012*t); pz.setY(k,pz.getY(k)*(1-.18*t)); } }   // the back of the shell tapers and leans outboard
+    for(let k=0;k<pz.count;k++){ const z=pz.getZ(k); if(z<-.05){ const t=(-.05-z)/.065; pz.setX(k,pz.getX(k)*(1-(ex?.3:.22)*t)+(ex?-o*.012:o*.012)*t); pz.setY(k,pz.getY(k)*(1-(ex?.26:.18)*t)); } }   // the back of the shell tapers and leans outboard
     hg.computeVertexNormals(); mesh(hg,pm,g);
     const blk=M({color:0x0b0b0c,roughness:.7,normalMap:rep(textures().grain,2,2)});
     if(ex){ const t=new THREE.Shape(); t.moveTo(0,0); t.lineTo(.2,0); t.quadraticCurveTo(.06,.07,0,.17); t.lineTo(0,0);   // the sail, as below
@@ -337,12 +337,13 @@ function shell(G,P,mats){
     // Explorer (owner 2026-11-21: "it should attach to the car with the proper housing instead of the arm"): no arm — the
     // housing itself runs inboard as a thick neck and widens onto its mount on the door at the window's front corner
     if(ex){ g.lookAt(new V3(...P.eye).add(new V3(s>0?-.4:.5,.05,1.6))); g.updateMatrix();
-      const far=s>0, e=new V3(s*(W/2-(far?.07:.05)),-H*(far?.34:.26),far?-.12:-.10).applyMatrix4(g.matrix);   // (the far mirror is seen more side-on: tuck it in further)                  // into the front of the shell, low on its inboard end (hidden behind the glass)
-      const b=new V3(s*(P.door+.004),P.belt+.035,zA+(far?.02:.05));                                // the mount, flat on the door skin at the window's front corner
-      const sq=(c,k)=>Math.sign(c)*Math.pow(Math.abs(c),k);
-      mesh(grid(28,14,(u,v)=>{ const a=u*Math.PI*2, t=v*v*(3-2*v), h=lerp(.10,H*.42,t), d=lerp(.13,.07,t);
-        const x=lerp(b.x,e.x,v), y=lerp(b.y,e.y,t)+sq(Math.sin(a),.45)*h/2+.012*Math.sin(Math.PI*v), z=lerp(b.z,e.z,t)+sq(Math.cos(a),.45)*d/2;
-        return [x,y,z]; }),pm,G);
+      // built in the mirror's own frame, entirely behind the glass: it leaves the housing's body on the inboard side and
+      // sweeps down and in to its mount on the door at the window's front corner, never crossing the glass
+      const inv=new THREE.Matrix4().copy(g.matrix).invert(), b=new V3(s*(P.door+.004),P.belt+.035,zA+.06).applyMatrix4(inv);
+      const e=new V3(s*(W/2+.012),-H*.16,-.085), sq=(c,k)=>Math.sign(c)*Math.pow(Math.abs(c),k);
+      mesh(grid(28,16,(u,v)=>{ const a=u*Math.PI*2, t=v*v*(3-2*v), hh=lerp(H*.62,.10,t), dd=lerp(.07,.12,t);
+        const x=lerp(e.x,b.x,v), y=lerp(e.y,b.y,t)+sq(Math.sin(a),.4)*hh/2, z=Math.min(lerp(e.z,b.z,t)+sq(Math.cos(a),.4)*dd/2,-.012-.02*(1-v));
+        return [x,y,z]; }),pm,g);
       continue; }
     // foot: a tapered black arm from the door's front corner to the inboard lower edge of the shell
     { const xe=P.door+.235-W/2+.02; mesh(bar([[s*(P.door+.025),P.belt+.025,zA+.09],[s*lerp(P.door+.025,xe,.55),P.belt+.04,zA+.085],[s*xe,P.belt+.05,zA+.1]],[.07,.045],.04,[0,1,0],6,8),blk,G); }   // ends at the shell's inboard edge, in front of the glass
@@ -379,15 +380,20 @@ function mirShape(w,h,o){ const hw=w/2, hh=h/2, ti=hh*.78, bi=-hh*.70, to=hh, bo
   s.quadraticCurveTo(X(-hw*.1),bo+.01,X(-hw+r4),bi); s.quadraticCurveTo(X(-hw),bi,X(-hw),bi+r4); s.lineTo(X(-hw),ti-r1); return s; }
 // Explorer door-mirror glass (owner's photo): a big sweeping curve at the outer top corner (the end away from the car),
 // straight top edge, small rounded corners by the car, straight sides and bottom
-function mirShapeEx(w,h,o){ const hw=w/2, hh=h/2, X=v=>v*o, s=new THREE.Shape();
+function mirShapeEx(w,h,o,rim,inb){ rim=rim||0; inb=inb||0; const hw=w/2, hh=h/2, X=v=>v*o, s=new THREE.Shape();
   // traced from the owner's photo of the real Explorer mirror (2026-11-21), in that photo's pixels: the outboard end comes
-  // to a point like "<" about a third of the way down — a 45° edge up to the top, a steep edge down to the bottom — the top
-  // runs nearly level to a rounded corner, the inboard edge is almost upright, and the bottom rises gently toward the point
-  const P=[[77,198,8],[121,122,60],[213,62,45],[572,73,35],[560,442,30],[119,375,25],[89,287,90]], k=w/495;   // [x, y, corner radius]
-  const pt=([x,y])=>new THREE.Vector2(-hw+(x-77)/495*w,hh-(y-62)/380*h);
-  for(let i=0;i<P.length;i++){ const V=pt(P[i]), A=pt(P[(i+P.length-1)%P.length]), B=pt(P[(i+1)%P.length]), r=Math.min(P[i][2]*k,A.distanceTo(V)/2,B.distanceTo(V)/2);
-    const a=A.clone().sub(V).normalize().multiplyScalar(r).add(V), b=B.clone().sub(V).normalize().multiplyScalar(r).add(V);
-    if(i===0) s.moveTo(X(a.x),a.y); else s.lineTo(X(a.x),a.y); s.quadraticCurveTo(X(V.x),V.y,X(b.x),b.y); }
+  // to a point like "<" about a third of the way down — a curved ~45° edge up to the top, a steep edge down to the bottom —
+  // the top runs nearly level to a rounded corner, the inboard edge is almost upright and rounds off in a big curve into
+  // the bottom, which rises gently toward the point. rim grows the outline evenly (the housing's thin frame); inb pushes
+  // the inboard end further in (the housing's body, which shows beside the glass on the side nearest the car)
+  const P=[[77,198,8],[121,122,60],[213,62,45],[572,73,35],[562,442,120],[119,375,25],[89,287,90]], k=w/495;   // [x, y, corner radius]
+  const V0=P.map(([x,y])=>new THREE.Vector2(-hw+(x-77)/495*w,hh-(y-62)/380*h)), n=V0.length;
+  const V=V0.map((v,i)=>{ const a=V0[(i+n-1)%n], b=V0[(i+1)%n], e1=v.clone().sub(a).normalize(), e2=b.clone().sub(v).normalize();
+    const n1=new THREE.Vector2(-e1.y,e1.x), n2=new THREE.Vector2(-e2.y,e2.x), m=n1.clone().add(n2).normalize(), c=Math.max(.35,m.dot(n1));
+    const q=v.clone().addScaledVector(m,rim/c); if(P[i][0]>500) q.x+=inb; return q; });
+  for(let i=0;i<n;i++){ const v=V[i], A=V[(i+n-1)%n], B=V[(i+1)%n], r=Math.min(P[i][2]*k+rim+(P[i][0]>500?inb*1.4:0),A.distanceTo(v)/2,B.distanceTo(v)/2);   // the body rounds off generously
+    const a=A.clone().sub(v).normalize().multiplyScalar(r).add(v), b=B.clone().sub(v).normalize().multiplyScalar(r).add(v);
+    if(i===0) s.moveTo(X(a.x),a.y); else s.lineTo(X(a.x),a.y); s.quadraticCurveTo(X(v.x),v.y,X(b.x),b.y); }
   s.closePath(); return s; }
 // Tesla door-mirror glass: frameless and soft — an arched top rising outboard, a big round outboard end, a nearly straight
 // bottom edge that lifts toward the inboard end
