@@ -429,6 +429,72 @@ function renderMirror(dt){ if(!MIR.rt) return; MIR.t-=dt; if(MIR.t>0) return; MI
   const bg=scene.background, vis=car.visible; scene.background=MIR.bgT; car.visible=false;
   renderer.setRenderTarget(MIR.rt); renderer.clear(); renderer.render(scene,c); renderer.setRenderTarget(null);
   scene.background=bg; car.visible=vis; }
+/* ---------- backup camera + parking sensors (owner 2026-11-21: "when backing up ... the screen in the explorer show a backup
+   camera showing what is behind you and give audible beeps like a real car would make if you are about to hit something
+   ... an onscreen warning on the backup camera"). In reverse, the centre screen shows a wide camera low on the tailgate
+   (mirrored, as real ones are): other cars, and the buildings around you drawn from the map's footprints, with guide lines
+   and a distance read-out. The sensors look up to ~2.4 m behind the bumper across the car's width, at buildings and other
+   cars, and beep faster as you close in, solid under 30 cm — in any view, in the modern cars ---------- */
+const BC={rt:null,cam:null,mat:null,t:0,d:null,beepT:0,tone:null,wasRev:false};
+const bcCar=()=>mode==='car'&&['explorer','navigator','modely'].includes(typeof CARKEY==='string'?CARKEY:'');
+const reversing=()=>(mode==='car'||mode==='tractor')&&(S.sel==='R'||(!S.sel&&(S.v<-.2||((S.gas||0)<-.05&&Math.abs(S.v)<.5))));
+function rearLen(){ const L=LAMPS[specKey(CARKEY)]||LAMPS.explorer; return (L.front||2.4)+.18; }
+// distance (m) from the rear bumper to the nearest building or car behind, out to 2.4 m; null if clear
+function rearGap(){ const h=S.hdg*DEG, fx=Math.sin(h), fy=Math.cos(h), rx=Math.cos(h), ry=-Math.sin(h), px=S.lng*MLNG, py=S.lat*MLAT, Lr=rearLen();
+  const T=window.TRAFFIC&&TRAFFIC.state, cars=(T&&T.on&&T.agents||[]).filter(a=>a.path&&a.mesh&&a.mesh.visible&&Math.hypot(a.px-px,a.py-py)<12);
+  for(let d=0;d<=2.4;d+=.1) for(const l of [-.95,-.5,0,.5,.95]){ const x=px-fx*(Lr+d)+rx*l, y=py-fy*(Lr+d)+ry*l;
+    for(const f of (typeof geoBlocks==='function'?geoBlocks(x/MLNG,y/MLAT):[])) if(typeof contains==='function'&&contains(f.geometry,x/MLNG,y/MLAT)) return d;
+    for(const a of cars){ const sh=Math.sin(a.hd), ch=Math.cos(a.hd), dx=x-a.px, dy=y-a.py, al=dx*sh+dy*ch, ac=dx*ch-dy*sh; if(Math.abs(al)<2.4&&Math.abs(ac)<1.0) return d; } }
+  return null; }
+function beep(len){ const A=window.SOUND&&SOUND.state; if(!A||!A.ctx||!SOUND.on||A.ctx.state!=='running') return;
+  try{ const c=A.ctx, t=c.currentTime, o=c.createOscillator(), o2=c.createOscillator(), g=c.createGain();
+    o.frequency.value=1960; o2.frequency.value=3920; const g2=c.createGain(); g2.gain.value=.18; o2.connect(g2); g2.connect(g); o.connect(g);   // a clean ~2 kHz chirp, a little overtone
+    const v=(CK.on?.16:.09); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(v,t+.006); g.gain.setValueAtTime(v,t+len-.012); g.gain.linearRampToValueAtTime(0,t+len);
+    g.connect(c.destination); o.start(t); o2.start(t); o.stop(t+len+.02); o2.stop(t+len+.02); }catch(e){} }
+if(typeof FRAME_HOOKS!=="undefined") FRAME_HOOKS.push(function parkSensors(dt){
+  const rev=reversing()&&bcCar(); if(!rev){ BC.d=null; BC.wasRev=false; return false; }
+  BC.gapT=(BC.gapT||0)-dt; if(BC.gapT<=0){ BC.gapT=.1; BC.d=rearGap(); }
+  const d=BC.d; if(!BC.wasRev){ BC.wasRev=true; BC.beepT=0; beep(.09); }                       // one chirp as you select reverse
+  if(d!=null&&d<1.8){ BC.beepT-=dt; if(d<.3){ if(BC.beepT<=0){ beep(.26); BC.beepT=.24; } }        // under 30 cm: one long solid tone
+    else if(BC.beepT<=0){ beep(.07); BC.beepT=lerp(.09,.6,(d-.3)/1.5); } }
+  return false; });
+function backupCam(dt){ const p=CK.cab&&CK.cab.parts&&CK.cab.parts.screen; if(!p||!p.grp) return;
+  const on=reversing()&&bcCar()&&CK.cab.P&&CK.cab.P.style!=='ev';                              // (the Model Y's screen layout draws its own; the sensors still beep)
+  if(!p.bc){ if(!on) return;
+    BC.rt=BC.rt||new THREE.WebGLRenderTarget(640,Math.round(640*p.h/p.w),{minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter});
+    BC.cam=BC.cam||new THREE.PerspectiveCamera(100,p.w/p.h,1,1e6);
+    const pw=p.grp.children[0].geometry.parameters.width, ph=p.grp.children[0].geometry.parameters.height;
+    const g=new THREE.PlaneGeometry(pw,ph), uv=g.attributes.uv; for(let i=0;i<uv.count;i++) uv.setX(i,1-uv.getX(i));   // mirrored, like a real backup camera
+    const cam=mesh(g,new THREE.MeshBasicMaterial({map:BC.rt.texture,toneMapped:false}),p.grp,false,false); cam.position.z=.0004;
+    const OT=canvasTex(512,Math.round(512*ph/pw),true), ov=mesh(new THREE.PlaneGeometry(pw,ph),new THREE.MeshBasicMaterial({map:OT.t,transparent:true,toneMapped:false,depthWrite:false}),p.grp,false,false); ov.position.z=.0008;
+    p.bc={cam,ov,OT,key:''}; }
+  p.bc.cam.visible=p.bc.ov.visible=on; if(!on) return;
+  BC.t-=dt; if(BC.t>0) return; BC.t=QL>=2?.05:QL>=1?.066:.1;
+  // the camera: on the tailgate, ~1 m up, looking back and down
+  const e=CK.eyeLocal; if(!e) return; const mm=e.mm, d=(S.hdg-S.camB)*DEG, bx=-Math.sin(d), bz=Math.cos(d), Lr=rearLen()-.15;
+  const c=BC.cam; c.aspect=p.w/p.h; c.position.set(bx*Lr/mm,1.0/mm,bz*Lr/mm); c.near=.2/mm; c.far=300/mm; c.up.set(0,1,0);
+  c.lookAt(c.position.x+bx*100,c.position.y-48,c.position.z+bz*100); c.updateProjectionMatrix();
+  if(!BC.bmat) BC.bmat=new THREE.MeshLambertMaterial({color:0x8e939a});
+  const occ=window.TRAFFIC&&TRAFFIC.occMesh&&TRAFFIC.occMesh(), om=occ&&occ.material, ov=occ&&occ.visible;
+  if(!MIR.bgT){ MIR.tex(); mirrorBackdrop(); }
+  const bg=scene.background, vis=car.visible; scene.background=MIR.bgT; car.visible=false; if(occ){ occ.material=BC.bmat; occ.visible=true; }
+  renderer.setRenderTarget(BC.rt); renderer.clear(); renderer.render(scene,c); renderer.setRenderTarget(null);
+  scene.background=bg; car.visible=vis; if(occ){ occ.material=om; occ.visible=ov; }
+  // guide lines and the warning
+  const gap=BC.d, key=gap==null?'-':gap.toFixed(1); if(key===p.bc.key) return; p.bc.key=key;
+  const x=p.bc.OT.x, W=p.bc.OT.c.width, H=p.bc.OT.c.height; x.clearRect(0,0,W,H);
+  x.fillStyle='rgba(0,0,0,.55)'; x.fillRect(0,0,W,46); x.fillStyle='#e8eef8'; x.font='600 22px system-ui,Arial'; x.textAlign='center'; x.textBaseline='middle'; x.fillText('REAR CAMERA',W/2,23);
+  const by=H-8, ty=H*.42, bl=W*.14, br=W*.86, tl=W*.34, tr=W*.66, at=k=>[lerp(bl,tl,k),lerp(br,tr,k),lerp(by,ty,k)];   // the car's path, narrowing away from you
+  x.lineWidth=7; x.lineCap='round';
+  for(const [k0,k1,col] of [[0,.28,'#ef4444'],[.28,.58,'#facc15'],[.58,1,'#22c55e']]){ const a=at(k0), b=at(k1); x.strokeStyle=col;
+    x.beginPath(); x.moveTo(a[0],a[2]); x.lineTo(b[0],b[2]); x.moveTo(a[1],a[2]); x.lineTo(b[1],b[2]); x.stroke();
+    x.beginPath(); x.moveTo(b[0],b[2]); x.lineTo(b[0]+(b[1]-b[0])*.16,b[2]); x.moveTo(b[1],b[2]); x.lineTo(b[1]-(b[1]-b[0])*.16,b[2]); x.stroke(); }
+  x.font='500 16px system-ui,Arial'; x.fillStyle='rgba(232,238,248,.85)'; x.fillText('Check surroundings for safety',W/2,H-24-40);
+  if(gap!=null&&gap<2.4){ const near=gap<.5, mid=gap<1.2, col=near?'#ef4444':mid?'#facc15':'#22c55e';
+    x.fillStyle='rgba(0,0,0,.6)'; rr(x,W/2-150,62,300,near?96:64,14); x.fill();
+    x.fillStyle=col; x.font='800 '+(near?44:30)+'px system-ui,Arial'; x.fillText(near?'STOP':gap.toFixed(1)+' m',W/2,near?96:94);
+    if(near){ x.font='600 18px system-ui,Arial'; x.fillText('Obstacle behind · '+gap.toFixed(1)+' m',W/2,138); x.strokeStyle='#ef4444'; x.lineWidth=12; x.strokeRect(6,6,W-12,H-12); } }
+  p.bc.OT.t.needsUpdate=true; }
 function drawRearFrame(x,P){ const W=512,H=128; x.clearRect(0,0,W,H); x.fillStyle=P.style==='lux'?'#5a544b':'#1a1a1c';
   // (no painted headrests: owner 2026-11-21, "lets just remove the seat headrests")
   const g=x.createLinearGradient(0,0,0,H); g.addColorStop(0,'rgba(255,255,255,.08)'); g.addColorStop(1,'rgba(0,0,0,.15)'); x.fillStyle=g; x.fillRect(0,0,W,H); }
@@ -1501,7 +1567,7 @@ CK.view=function(dt){
   if(typeof shadow==='object') shadow.visible=false;
   if(typeof tractorG==='object') tractorG.visible=false;
 };
-CK.render=function(dt){ const c=CK.cab; if(!c) return; update(dt||.016); try{ renderMirror(dt||.016); }catch(e){ console.warn('mirror',e); }
+CK.render=function(dt){ const c=CK.cab; if(!c) return; update(dt||.016); try{ renderMirror(dt||.016); }catch(e){ console.warn('mirror',e); } try{ backupCam(dt||.016); }catch(e){ console.warn('backup camera',e); }
   const sm=renderer.shadowMap; if(sm.enabled){ sm.autoUpdate=false; const h=S.hdg||0, r=(S.roll||0)+(S.pitch||0)+(S.bz||0)+(S.bx||0);
     c.sf=(c.sf||0)+1; if(c.sf>=3||Math.abs(h-(c.sh||0))>.8||Math.abs(r-(c.sr||0))>.004){ c.sf=0; c.sh=h; c.sr=r; sm.needsUpdate=true; } }
   renderer.autoClear=false; renderer.clearDepth(); renderer.render(c.scene,c.cam); renderer.autoClear=true; };
