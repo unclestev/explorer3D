@@ -438,7 +438,9 @@ function renderMirror(dt){ if(!MIR.rt) return; MIR.t-=dt; if(MIR.t>0) return; MI
 const BC={rt:null,cam:null,mat:null,t:0,d:null,beepT:0,tone:null,wasRev:false,hold:0,fwdT:0};
 const powered=()=>!window.IGN||IGN.state==='on'||IGN.state==='crank';   // the car's electrics: on unless the engine's switched off
 const bcCar=()=>mode==='car'&&['explorer','navigator','modely'].includes(typeof CARKEY==='string'?CARKEY:'');
-const reversing=()=>(mode==='car'||mode==='tractor')&&(S.sel==='R'||(!S.sel&&(S.v<-.2||((S.gas||0)<-.05&&Math.abs(S.v)<.5))));
+// in reverse: the wheel's selector says R, or (keys / touch) the car is actually rolling backwards. Holding the brake at a stop
+// used to count too, so every stop brought the camera back up (owner 2026-11-21: "the backup camera is not switch to map ever")
+const reversing=()=>(mode==='car'||mode==='tractor')&&(S.sel==='R'||(!S.sel&&S.v<-.2));
 function rearLen(){ const L=LAMPS[specKey(CARKEY)]||LAMPS.explorer; return (L.front||2.4)+.18; }
 // distance (m) from the rear bumper to the nearest building or car behind, out to 2.4 m; null if clear
 function rearGap(){ const h=S.hdg*DEG, fx=Math.sin(h), fy=Math.cos(h), rx=Math.cos(h), ry=-Math.sin(h), px=S.lng*MLNG, py=S.lat*MLAT, Lr=rearLen();
