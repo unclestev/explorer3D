@@ -902,10 +902,10 @@ function xpWheel(spin,W){
       p.setZ(i,p.getZ(i)-(lerp(dRim,dHub,h)-.01)); if(p.getY(i)>0) p.setY(i,p.getY(i)+lift*h); }
     g.computeVertexNormals(); g.translate(0,0,z-.01-bv); return mesh(g,m,spin); };
   // the hub behind the pad (dark), deep back toward the column; only its top shows, above the pad
-  deep(poly([[-.0838,.0500],[.0829,.0500],[.0830,-.0300],[-.0840,-.0300]],1,.02),-.024,.06,.06,.003,dk);
+  deep(poly([[-.0838,.0500],[.0829,.0500],[.0830,-.0560],[-.0840,-.0560]],1,.02),-.024,.06,.06,.003,dk);
   for(const s of [-1,1]){
     // the spoke itself (tan): short at the hub, deeper toward the rim; deep back to the column by the hub, shallow at the rim
-    deep(poly([[-.0811,.0313],[-.1867,.0283],[-.1978,-.0626],[-.0836,-.0388]],s,.006),-.019,.10,.012,.002,tan,.018);
+    deep(poly([[-.0811,.0313],[-.1867,.0283],[-.1978,-.0626],[-.0836,-.0388]],s,.006),-.019,.10,.012,.002,tan,.009);
     // chrome frame round the black touch panel, its bottom edge slanting down toward the rim
     { const f=poly([[-.0878,.0248],[-.1883,.0248],[-.1939,-.0436],[-.1744,-.0531],[-.0899,-.0304]],s,[.008,.006,.008,.004,.012]);
       f.holes.push(poly([[-.0919,.0211],[-.1847,.0211],[-.1897,-.0417],[-.1723,-.0487],[-.0938,-.0262]],s,[.006,.004,.006,.003,.01]));
@@ -916,12 +916,12 @@ function xpWheel(spin,W){
       const dot=mesh(new THREE.CircleGeometry(.0028,16),new THREE.MeshBasicMaterial({color:0x53c4ec}),spin,false,false); dot.position.set(s*-0.1022,0.0094,-.0162); }
     // tan under the panel, one piece with the rim: a fillet. Each cross-section starts on the rim's own surface (60° round
     // from its inner side toward you), leaves it along the rim's own slope, and curves back to the spoke's depth at the
-    // chrome frame's bottom edge or the free edge (G: corner -> along the chrome -> the hub -> down the free edge to the
-    // rim). Same slope where they meet = no crease: the rim and the spoke read as one piece of leather.
+    // chrome frame's bottom edge or the free edge (G: corner -> along the chrome -> round the hub corner, tucked just
+    // behind the pad's edge so no kink shows -> down the free edge to the rim). Same slope where they meet = no crease: the rim and the spoke read as one piece of leather.
     { const hw=.19-W.rim, hh=.1785-W.rim, rr=W.rim, SZ=1.9, f0=60*DEG, zS=-.0185;
       const ctr=t=>new V3(-s*hw*Math.pow(Math.abs(Math.cos(t)),2/3),-hh*Math.pow(Math.abs(Math.sin(t)),2/3),0);   // rim centre line, lower quarter (n 3.0)
       const t0=Math.asin(Math.pow(.05/hh,1.5)), t1=Math.asin(Math.pow(.123/hh,1.5));
-      const G=new THREE.CatmullRomCurve3([[-.165,-.0525],[-.1320,-.0432],[-.0904,-.0322],[-.0908,-.0455],[-.1098,-.0566],[-.1330,-.0746],[-.1493,-.0970],[-.1560,-.1120]].map(([x,y])=>new V3(s*x,y,zS)));
+      const G=new THREE.CatmullRomCurve3([[-.165,-.0525],[-.1320,-.0432],[-.0960,-.0338],[-.0745,-.0372],[-.0745,-.0500],[-.0980,-.0590],[-.1330,-.0746],[-.1493,-.0970],[-.1560,-.1120]].map(([x,y])=>new V3(s*x,y,zS)));
       const sec=v=>{ const t=lerp(t0,t1,v), C=ctr(t), dC=ctr(t+.001).sub(ctr(t-.001)), inw=new V3(-dC.y,dC.x,0).normalize(); if(inw.dot(C)>0) inw.negate();
         const P0=C.clone().addScaledVector(inw,rr*Math.cos(f0)); P0.z=SZ*rr*Math.sin(f0);
         const T0=inw.clone().multiplyScalar(Math.sin(f0)).add(new V3(0,0,-SZ*Math.cos(f0))).normalize(), P1=G.getPoint(v), L=P0.distanceTo(P1);
@@ -929,7 +929,7 @@ function xpWheel(spin,W){
         return u=>{ const u2=u*u, u3=u2*u; return P0.clone().multiplyScalar(2*u3-3*u2+1).addScaledVector(T0,(u3-2*u2+u)*L*.9).addScaledVector(P1,-2*u3+3*u2).addScaledVector(T1,(u3-u2)*L*.9); }; };
       const S=[]; for(let k=0;k<=56;k++) S.push(sec(k/56));
       mesh(mUV(grid(20,56,(u,v)=>{ const p=S[Math.round(v*56)](u); return [p.x,p.y,p.z]; })),tan,spin);
-      const E=[]; for(let k=0;k<=40;k++){ const p=G.getPoint(lerp(3/7,1,k/40)); p.z-=.0025; E.push(p); }             // the rounded free edge
+      const E=[]; for(let k=0;k<=40;k++){ const p=G.getPoint(lerp(4.6/8,1,k/40)); p.z-=.0025; E.push(p); }             // the rounded free edge
       mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(E),48,.0028,8,false),tan,spin); }
   }
   // pad: wide flat top, the sides drawing in a little to a rounded bottom; the oval low on it
