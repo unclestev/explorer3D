@@ -320,7 +320,7 @@ function shell(G,P,mats){
     if(P.style==='classic'){ if(s>0) continue;
       const cr=M({color:0xd9dde2,metalness:1,roughness:.1,out:true}), g=new THREE.Group(); g.position.set(s*(P.door+.19),P.belt+.07,zA+.12); G.add(g);
       const hs=mesh(new THREE.SphereGeometry(.06,24,16,0,Math.PI*2,0,Math.PI/2),cr,g); hs.rotation.x=-Math.PI/2; hs.scale.set(1.25,1,.8);
-      const gl=mesh(MIR.uv(new THREE.CircleGeometry(.058,28),0,.36),new THREE.MeshBasicMaterial({map:MIR.tex(),toneMapped:false}),g,false); gl.position.z=.002; gl.scale.set(1.25,1,1); MIR.mats.push(gl.material);
+      const gl=mesh(MIR.uv(new THREE.CircleGeometry(.058,28),.64,1),new THREE.MeshBasicMaterial({map:MIR.tex(),toneMapped:false}),g,false); gl.position.z=.002; gl.scale.set(1.25,1,1); MIR.mats.push(gl.material);
       mesh(bar([[s*(P.door+.02),P.belt+.0,zA+.12],[s*(P.door+.12),P.belt+.05,zA+.1],[s*(P.door+.17),P.belt+.07,zA+.1]],.02,.015,[0,0,1],6,8),cr,G);
       g.lookAt(new V3(...P.eye).add(new V3(.25,0,1.5))); continue; }
     // modern door mirror (owner 2026-11-21: "the mirrors on the explorer are just rectangles"): the glass is a rounded
@@ -330,7 +330,7 @@ function shell(G,P,mats){
     const o=-s;                                                     // the group faces the driver: +x is the driver's right, so outboard is -s
     const shp=(w,h,grow,inb)=>ex?mirShapeEx(w,h,o,grow,inb):(ev?mirShapeEV:mirShape)(w+grow*2,h+grow*2,o);
     const glass=new THREE.ShapeGeometry(shp(W,H,0),12); uvFit(glass);
-    const gl=mesh(MIR.uv(glass,s<0?0:.64,s<0?.36:1),new THREE.MeshBasicMaterial({map:MIR.tex(),toneMapped:false}),g,false); gl.position.z=.004; MIR.mats.push(gl.material);
+    const gl=mesh(MIR.uv(glass,s<0?.64:0,s<0?1:.36),new THREE.MeshBasicMaterial({map:MIR.tex(),toneMapped:false}),g,false); gl.position.z=.004; MIR.mats.push(gl.material);
     const sf=canvasTex(256,160); drawSideFrame(sf.x,s,ex); const sg=new THREE.ShapeGeometry(shp(W,H,0),12); uvFit(sg);
     const so=mesh(sg,new THREE.MeshBasicMaterial({map:sf.t,transparent:true}),g,false,false); so.position.z=.0045;
     mesh(new THREE.ShapeGeometry(shp(W,H,ex?.009:.008),12),M({color:0x060607,roughness:.5}),g,false).position.z=.0025;   // black glass surround
@@ -425,7 +425,9 @@ function uvFit(g){ g.computeBoundingBox(); const b=g.boundingBox, p=g.attributes
    backdrop, mirrored; the inside mirror shows its middle framed by the rear window, each door mirror its own side ---------- */
 const MIR={rt:null,cam:null,bg:null,bgT:null,mats:[],frames:[],t:0,
   tex(){ if(!this.rt) this.init(); return this.rt.texture; },
-  // a render target's texture can't be cloned with its own offset, so each mirror maps its slice through its UVs (flipped: it's a mirror)
+  // a render target's texture can't be cloned with its own offset, so each mirror maps its slice through its UVs (flipped: it's a mirror).
+  // The picture looks backward, so its left part (u 0-.36) is the passenger's side and its right part (.64-1) the driver's
+  // (owner 2026-11-22: the driver's mirror was showing the passenger side and vice versa)
   uv(g,u0,u1){ const a=g.attributes.uv; for(let i=0;i<a.count;i++) a.setX(i,u1-a.getX(i)*(u1-u0)); a.needsUpdate=true; return g; },
   init(){ this.rt=new THREE.WebGLRenderTarget(768,160,{minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter});
     this.cam=new THREE.PerspectiveCamera(34,768/160,1,1e6);
@@ -589,7 +591,7 @@ function tractorCab(G,P,parts){
   // big door mirrors on arms
   for(const s of [-1,1]){ const g=new THREE.Group(); g.position.set(s*1.02,2.5,.2); G.add(g);
     mesh(rbox(.24,.32,.05,.015,.04),blk,g).position.z=-.03;
-    const gl=mesh(MIR.uv(new THREE.PlaneGeometry(.21,.29),s<0?0:.64,s<0?.36:1),new THREE.MeshBasicMaterial({map:MIR.tex(),toneMapped:false}),g,false); gl.position.z=-.003; MIR.mats.push(gl.material);
+    const gl=mesh(MIR.uv(new THREE.PlaneGeometry(.21,.29),s<0?.64:0,s<0?1:.36),new THREE.MeshBasicMaterial({map:MIR.tex(),toneMapped:false}),g,false); gl.position.z=-.003; MIR.mats.push(gl.material);
     g.lookAt(new V3(...P.eye).add(new V3(s*.6,0,1.8)));
     mesh(bar([[s*.62,2.55,.2],[s*.85,2.55,.22],[s*1.0,2.52,.21]],.025,.025,[0,1,0],6,8),blk,G); }
   return {wsP:(u,v)=>[(u*2-1)*.58,lerp(1.48,2.7,v),.16]};
