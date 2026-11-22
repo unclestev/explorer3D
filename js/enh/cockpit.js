@@ -723,7 +723,7 @@ function steeringWheel(G,P){
   const sh=mesh(rbox(.11,.10,.26,.03,.04),colM,grp); sh.position.set(0,-.01,-.17);
   sigStalk=null;
   if(P.ex) stalksEx(grp,colM);
-  else if(P.xp) stalkXp(grp);
+  else if(P.xp) stalkXp(grp,colM);
   else for(const s of [-1,1]){ const st=mesh(bar([[s*.04,0,-.09],[s*.12,-.005,-.07],[s*.16,-.012,-.06]],.012,.012,[0,1,0],6,8),colM,grp); }
   return spin;
 }
@@ -778,17 +778,29 @@ function stalksEx(grp,colM){
   const v=r&&r.width?Math.round(r.right+8)+'px':''; if(document.body.style.getPropertyValue('--cx')!==v){ if(v) document.body.style.setProperty('--cx',v); else document.body.style.removeProperty('--cx'); } });
 function rrGeo(w,h,r){ const s=new THREE.Shape(), x=w/2, y=h/2; s.moveTo(-x+r,-y); s.lineTo(x-r,-y); s.quadraticCurveTo(x,-y,x,-y+r); s.lineTo(x,y-r); s.quadraticCurveTo(x,y,x-r,y);
   s.lineTo(-x+r,y); s.quadraticCurveTo(-x,y,-x,y-r); s.lineTo(-x,-y+r); s.quadraticCurveTo(-x,-y,-x+r,-y); const g=new THREE.ShapeGeometry(s,8); uvFit(g); return g; }
-// Expedition (owner's photo): one chunky stalk on the left of the column — signals, lights and wipers in one — a thick
-// black arm with a ridged roller near its end and a flat end cap; it tips with the turn signal
-function stalkXp(grp){
-  const blk=M({color:0x1a1b1e,roughness:.4,metalness:.1,env:.8});
-  const piv=new THREE.Group(); piv.position.set(-.05,.03,-.10); grp.add(piv);   // low enough to come out past the rim beside the upper spoke (photo)
-  mesh(bar([[0,0,0],[-.07,-.003,.012],[-.14,-.007,.022],[-.19,-.010,.028]],[.017,.022],.017,[0,1,0],10,12),blk,piv);   // the arm, thickening outward
-  const RT=canvasTex(128,32), r=RT.x; r.fillStyle='#0c0c0d'; r.fillRect(0,0,128,32); r.fillStyle='#4a4b50'; for(let i=0;i<128;i+=10) r.fillRect(i,0,4,32);
-  RT.t.wrapS=RT.t.wrapT=THREE.RepeatWrapping; RT.t.repeat.set(3,1);
-  const roll=mesh(new THREE.CylinderGeometry(.0125,.0125,.016,28),M({map:RT.t,roughness:.45,metalness:.25}),piv); roll.rotation.z=Math.PI/2; roll.position.set(-.198,-.010,.029);   // ridged roller
-  const end=mesh(new THREE.CylinderGeometry(.0118,.0122,.026,28),blk,piv); end.rotation.z=Math.PI/2; end.position.set(-.219,-.011,.030);                 // end cap
-  const ring=mesh(new THREE.TorusGeometry(.0122,.0012,6,28),M({color:0x9a9ea4,metalness:.8,roughness:.3}),piv); ring.rotation.y=Math.PI/2; ring.position.set(-.2325,-.011,.030);
+// Expedition (owner 2026-11-22, a close-up of the real one: "it should flow seamlessly into the steering column"): one
+// stalk on the left of the column — a straight, even ~2.6 cm cylinder that grows out of the shroud through a smooth flare
+// in the shroud's own plastic; a twist collar near the column (wiper symbol, ribbed edges); the long body with a recessed
+// strip along its top; a flat round end cap. It tips with the turn signal.
+function stalkXp(grp,colM){
+  const blk=M({color:0x1c1d20,roughness:.42,metalness:.12,env:.8}), dk=M({color:0x0b0b0c,roughness:.6});
+  const piv=new THREE.Group(); piv.position.set(-.045,.018,-.08); piv.rotation.y=-.10; grp.add(piv);   // inside the shroud's left side, aimed a touch back toward you
+  const along=(geo)=>{ geo.rotateZ(Math.PI/2); return geo; };                                    // lathe axis (y) -> along -x
+  const lathe=(prof,mat,n=36)=>mesh(along(new THREE.LatheGeometry(prof.map(([x,r])=>new THREE.Vector2(r,-x)),n)),mat,piv);
+  const R=.013;
+  // the flare: shroud plastic swelling out and narrowing smoothly into the stalk (no seam)
+  lathe([[.012,0],[.012,.034],[.004,.033],[-.004,.029],[-.012,.022],[-.020,.0165],[-.028,.0142],[-.034,R+.0005],[-.036,R]],colM,40);
+  // twist collar: thin dark grooves either side, fine ribs round its edge
+  lathe([[-.036,R],[-.038,R-.0012],[-.040,R],[-.072,R],[-.074,R-.0012],[-.076,R]],blk);
+  { const T=canvasTex(256,64), x=T.x; x.fillStyle='#1c1d20'; x.fillRect(0,0,256,64); x.fillStyle='#3a3b40'; for(let i=0;i<256;i+=8) x.fillRect(i,0,3,7), x.fillRect(i,57,3,7);
+    x.strokeStyle=x.fillStyle='#c9cdd2'; x.lineWidth=3; x.beginPath(); x.arc(128,44,13,Math.PI*1.15,Math.PI*1.85); x.stroke(); x.beginPath(); x.moveTo(128,44); x.lineTo(136,31); x.stroke();   // wiper symbol
+    for(const X of [84,100,156,172]) x.fillRect(X,30,8,3);
+    T.t.wrapS=THREE.RepeatWrapping; const col=mesh(along(new THREE.CylinderGeometry(R+.0004,R+.0004,.032,40,1,true)),M({map:T.t,roughness:.45,metalness:.12}),piv); col.position.x=-.056; col.rotation.x=Math.PI*.9; }
+  // the body, then a slightly bigger flat end cap with a bevelled edge
+  lathe([[-.076,R],[-.078,R-.0012],[-.080,R],[-.196,R],[-.198,R-.0012],[-.200,R+.0008],[-.213,R+.0008],[-.2145,R-.0008],[-.2150,0]],blk);
+  // recessed strip along the top of the body, with a raised flat pad in it (the photo's long indent)
+  const sp=mesh(new THREE.BoxGeometry(.095,.0025,.009),dk,piv); sp.position.set(-.138,R-.0004,0);
+  const pad=mesh(new THREE.BoxGeometry(.085,.0018,.0055),blk,piv); pad.position.set(-.138,R+.0005,0);
   sigStalk={piv,k:0}; }
 function stalkStep(dt){ const st=sigStalk; if(!st) return; const d=window.SIG?SIG.dir:0;
   st.k+=(d-st.k)*Math.min(1,dt*14); st.piv.rotation.z=-.2*st.k; }   // right signal: the lever swings up; left: down (owner: "show the lever shift up or down")
