@@ -264,10 +264,15 @@ function shell(G,P,mats){
     const cx=0, cy=ws.yT-(P.style==='classic'?.085:.125), vg=(cy+.05-ws.yB)/(ws.yT-ws.yB), zg=lerp(ws.zB,ws.zT,vg)-ws.bow*Math.sin(Math.PI*(.3+.7*vg)), cz=zg+.075;
     const grp=new THREE.Group(); grp.position.set(cx,cy,cz); G.add(grp);
     const mw=P.style==='classic'?.225:.255, mh=P.style==='classic'?.05:.06;
-    const h=mesh(rbox(mw+.015,mh+.012,.035,.012,.03),hm,grp); h.position.z=-.012;
-    const g=mesh(MIR.uv(new THREE.PlaneGeometry(mw,mh),.30,.70),new THREE.MeshBasicMaterial({map:MIR.tex(),toneMapped:false}),grp,false,false); g.position.z=.0062; MIR.mats.push(g.material);
-    const fr=canvasTex(512,128); drawRearFrame(fr.x,P); const fo=mesh(new THREE.PlaneGeometry(mw,mh),new THREE.MeshBasicMaterial({map:fr.t,transparent:true}),grp,false,false); fo.position.z=.0066; MIR.frames.push(fo.material);
-    mesh(new THREE.PlaneGeometry(mw,mh),M({color:0,metalness:1,roughness:.05,transparent:true,opacity:.12,depthWrite:false,out:true}),grp,false,false).position.z=.007;
+    // the glass follows the housing's rounded corners (owner 2026-11-21: "the rearview mirror ... very rectangular not
+    // fitting within the housing"): a rounded rectangle a little inside the housing's outline, so a thin even rim shows
+    const cr=P.style==='classic'?.018:.027, rr=(w,h,r)=>{ const s=new THREE.Shape(), x=w/2, y=h/2; s.moveTo(-x+r,-y); s.lineTo(x-r,-y); s.quadraticCurveTo(x,-y,x,-y+r);
+      s.lineTo(x,y-r); s.quadraticCurveTo(x,y,x-r,y); s.lineTo(-x+r,y); s.quadraticCurveTo(-x,y,-x,y-r); s.lineTo(-x,-y+r); s.quadraticCurveTo(-x,-y,-x+r,-y); return s; };
+    const gg=()=>{ const q=new THREE.ShapeGeometry(rr(mw,mh,cr),10); uvFit(q); return q; };
+    const h=mesh(rbox(mw+.014,mh+.014,.035,.012,cr+.007),hm,grp); h.position.z=-.012;
+    const g=mesh(MIR.uv(gg(),.30,.70),new THREE.MeshBasicMaterial({map:MIR.tex(),toneMapped:false}),grp,false,false); g.position.z=.0062; MIR.mats.push(g.material);
+    const fr=canvasTex(512,128); drawRearFrame(fr.x,P); const fo=mesh(gg(),new THREE.MeshBasicMaterial({map:fr.t,transparent:true}),grp,false,false); fo.position.z=.0066; MIR.frames.push(fo.material);
+    mesh(gg(),M({color:0,metalness:1,roughness:.05,transparent:true,opacity:.12,depthWrite:false,out:true}),grp,false,false).position.z=.007;
     grp.lookAt(new V3(...P.eye).add(new V3(0,0,.3)));               // aimed back at the driver (and a little behind)
     const stalk=mesh(bar([[cx,cy+.025,cz-.015],[cx,cy+.05,zg+.012]],.016,.016,[0,1,0],4,8),hm,G); const ft=mesh(rbox(.05,.035,.012,.004,.008),hm,G); ft.position.set(cx,cy+.055,zg+.008); ft.rotation.x=-Math.atan2(ws.zT-ws.zB,ws.yT-ws.yB)+Math.PI/2*0; }
   // doors: inner panels with armrest, pull, window sill cap, switch pack (driver), speaker
