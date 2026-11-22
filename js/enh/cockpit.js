@@ -315,7 +315,7 @@ function shell(G,P,mats){
     const gl=mesh(MIR.uv(glass,s<0?0:.64,s<0?.36:1),new THREE.MeshBasicMaterial({map:MIR.tex(),toneMapped:false}),g,false); gl.position.z=.004; MIR.mats.push(gl.material);
     const sf=canvasTex(256,160); drawSideFrame(sf.x,s,ex); const sg=new THREE.ShapeGeometry(shp(W,H,0),12); uvFit(sg);
     const so=mesh(sg,new THREE.MeshBasicMaterial({map:sf.t,transparent:true}),g,false,false); so.position.z=.0045;
-    mesh(new THREE.ShapeGeometry(shp(W,H,ex?.005:.008),12),M({color:0x060607,roughness:.5}),g,false).position.z=.0025;   // black glass surround
+    mesh(new THREE.ShapeGeometry(shp(W,H,ex?.009:.008),12),M({color:0x060607,roughness:.5}),g,false).position.z=.0025;   // black glass surround
     // the Explorer's (owner 2026-11-21, a photo of the real one): a thick black textured housing, not body colour
     const pm=ex?M({color:0x161719,roughness:.72,normalMap:rep(textures().grain,5,5),normalScale:new THREE.Vector2(.15,.15),out:true,env:.35})
               :M({color:CARSPEC.paint||0x333333,metalness:.08,roughness:.42,clearcoat:1,clearcoatRoughness:.05,out:true,env:.55});
@@ -326,9 +326,9 @@ function shell(G,P,mats){
       const bm=new THREE.MeshBasicMaterial({map:T.t,transparent:true,color:0x9a9ea4,opacity:.55,depthWrite:false,toneMapped:false});
       const bi=mesh(new THREE.PlaneGeometry(.026,.026),bm,g,false,false); bi.position.set(ex?-o*(W/2-.04):-o*(W/2-.042),ex?H/2-.34*H:H/2-.055,.0052); if(o<0) bi.scale.x=-1;
       (mats.blis||(mats.blis={}))[s]=bm; }
-    const hg=new THREE.ExtrudeGeometry(ex?shp(W,H,.004,.05):shp(W,H,.012),{depth:.045,bevelEnabled:true,bevelThickness:ex?.03:.035,bevelSize:ex?.005:.012,bevelSegments:5,curveSegments:12});
-    hg.translate(0,0,-.045-.035); const pz=hg.attributes.position;
-    for(let k=0;k<pz.count;k++){ const z=pz.getZ(k); if(z<-.05){ const t=(-.05-z)/.065; pz.setX(k,pz.getX(k)*(1-(ex?.3:.22)*t)+(ex?-o*.012:o*.012)*t); pz.setY(k,pz.getY(k)*(1-(ex?.26:.18)*t)); } }   // the back of the shell tapers and leans outboard
+    const hg=new THREE.ExtrudeGeometry(ex?shp(W,H,.014,.05):shp(W,H,.012),{depth:ex?.035:.045,bevelEnabled:true,bevelThickness:ex?.03:.035,bevelSize:ex?.01:.012,bevelSegments:5,curveSegments:12});
+    hg.translate(0,0,ex?-.065:-.045-.035); const pz=hg.attributes.position;
+    for(let k=0;k<pz.count;k++){ const z=pz.getZ(k); if(z<-.05){ const t=(-.05-z)/.065; pz.setX(k,pz.getX(k)*(1-(ex?.34:.22)*t)+(ex?-o*.03:o*.012)*t); pz.setY(k,pz.getY(k)*(1-(ex?.3:.18)*t)+(ex?.022*t:0)); } }   // the back of the shell tapers and leans outboard
     hg.computeVertexNormals(); mesh(hg,pm,g);
     const blk=M({color:0x0b0b0c,roughness:.7,normalMap:rep(textures().grain,2,2)});
     if(ex){ const t=new THREE.Shape(); t.moveTo(0,0); t.lineTo(.2,0); t.quadraticCurveTo(.06,.07,0,.17); t.lineTo(0,0);   // the sail, as below
@@ -340,7 +340,7 @@ function shell(G,P,mats){
       // built in the mirror's own frame, entirely behind the glass: it leaves the housing's body on the inboard side and
       // sweeps down and in to its mount on the door at the window's front corner, never crossing the glass
       const inv=new THREE.Matrix4().copy(g.matrix).invert(), b=new V3(s*(P.door+.004),P.belt+.035,zA+.06).applyMatrix4(inv);
-      const e=new V3(s*(W/2+.012),-H*.16,-.085), sq=(c,k)=>Math.sign(c)*Math.pow(Math.abs(c),k);
+      const e=new V3(o*(W/2+.02),-H*.16,-.07), sq=(c,k)=>Math.sign(c)*Math.pow(Math.abs(c),k);
       mesh(grid(28,16,(u,v)=>{ const a=u*Math.PI*2, t=v*v*(3-2*v), hh=lerp(H*.62,.10,t), dd=lerp(.07,.12,t);
         const x=lerp(e.x,b.x,v), y=lerp(e.y,b.y,t)+sq(Math.sin(a),.4)*hh/2, z=Math.min(lerp(e.z,b.z,t)+sq(Math.cos(a),.4)*dd/2,-.012-.02*(1-v));
         return [x,y,z]; }),pm,g);
