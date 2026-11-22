@@ -269,7 +269,7 @@ function shell(G,P,mats){
     const cr=P.style==='classic'?.018:.027, rr=(w,h,r)=>{ const s=new THREE.Shape(), x=w/2, y=h/2; s.moveTo(-x+r,-y); s.lineTo(x-r,-y); s.quadraticCurveTo(x,-y,x,-y+r);
       s.lineTo(x,y-r); s.quadraticCurveTo(x,y,x-r,y); s.lineTo(-x+r,y); s.quadraticCurveTo(-x,y,-x,y-r); s.lineTo(-x,-y+r); s.quadraticCurveTo(-x,-y,-x+r,-y); return s; };
     const gg=()=>{ const q=new THREE.ShapeGeometry(rr(mw,mh,cr),10); uvFit(q); return q; };
-    const h=mesh(rbox(mw+.014,mh+.014,.035,.012,cr+.007),hm,grp); h.position.z=-.012;
+    const h=mesh(rbox(mw+.024,mh+.024,.035,.012,cr),hm,grp); h.position.z=-.012;   // its flat face is exactly mw x mh with corner cr: the glass fills it, only the rounded edge shows black
     const g=mesh(MIR.uv(gg(),.30,.70),new THREE.MeshBasicMaterial({map:MIR.tex(),toneMapped:false}),grp,false,false); g.position.z=.0062; MIR.mats.push(g.material);
     const fr=canvasTex(512,128); drawRearFrame(fr.x,P); const fo=mesh(gg(),new THREE.MeshBasicMaterial({map:fr.t,transparent:true}),grp,false,false); fo.position.z=.0066; MIR.frames.push(fo.material);
     mesh(gg(),M({color:0,metalness:1,roughness:.05,transparent:true,opacity:.12,depthWrite:false,out:true}),grp,false,false).position.z=.007;
@@ -430,7 +430,6 @@ function renderMirror(dt){ if(!MIR.rt) return; MIR.t-=dt; if(MIR.t>0) return; MI
   renderer.setRenderTarget(MIR.rt); renderer.clear(); renderer.render(scene,c); renderer.setRenderTarget(null);
   scene.background=bg; car.visible=vis; }
 function drawRearFrame(x,P){ const W=512,H=128; x.clearRect(0,0,W,H); x.fillStyle=P.style==='lux'?'#5a544b':'#1a1a1c';
-  x.beginPath(); x.rect(0,0,W,H); x.moveTo(70,18); x.lineTo(442,18); x.quadraticCurveTo(470,20,476,60); x.lineTo(480,112); x.lineTo(32,112); x.lineTo(36,60); x.quadraticCurveTo(42,20,70,18); x.fill('evenodd');
   x.fillStyle=P.style==='lux'?'#8a8070':'#121213'; for(const cx of [150,256,362]){ x.beginPath(); x.ellipse(cx,118,40,28,0,0,7); x.fill(); }
   const g=x.createLinearGradient(0,0,0,H); g.addColorStop(0,'rgba(255,255,255,.08)'); g.addColorStop(1,'rgba(0,0,0,.15)'); x.fillStyle=g; x.fillRect(0,0,W,H); }
 function drawSideFrame(x,s,clean){ const W=256,H=160; x.clearRect(0,0,W,H); const pc='#'+new THREE.Color(CARSPEC.paint||0x333333).getHexString();
