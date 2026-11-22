@@ -1183,6 +1183,11 @@ function expeditionDash(G,P,parts,fz,xd){
     knob(X2(258),.022,.028); knob(X2(398),.012,.022);
     const pr=canvasTex(256,64), pl=mesh(new THREE.PlaneGeometry(.08,.02),new THREE.MeshBasicMaterial({map:pr.t}),g,false,false); pl.position.set(X2(258),H2/2+.0115,.0005);
     parts.prnd={T:pr,cur:'',m:pl.material}; } 
+  // a stitched seam along the upper dash (photo): a fine groove with light grey stitches beside it
+  { const T=canvasTex(1024,16), x=T.x; x.clearRect(0,0,1024,16); x.fillStyle='rgba(12,12,13,.9)'; x.fillRect(0,0,1024,4);
+    x.fillStyle='#62656a'; for(let i=0;i<64;i++) x.fillRect(i*16+4,9,8,3); T.t.wrapS=THREE.RepeatWrapping;
+    const ys=S.c[1]+S.h/2-.012, xa=-xd+.09, xb=xd-.09; T.t.repeat.set((xb-xa)/.0055/64,1);
+    mesh(grid(120,1,(u,v)=>{ const x=lerp(xa,xb,u), y=ys-.0035+v*.007; return [x,y,fz(y)+.006+.10*sstep(.55,1,Math.abs(x)/xd)]; }),M({map:T.t,transparent:true,alphaTest:.4,roughness:.6}),G,false,false); }
   // glovebox seam on the passenger side
   const gm=M({color:0x0a0a0b,roughness:.9});
   mesh(grid(20,1,(u,v)=>{ const x=lerp(sx+.12,xd-.12,u), y=yd-.07+(v-.5)*.0025; return [x,y,fz(y)+.004+.10*sstep(.55,1,x/xd)]; }),gm,G,false);
@@ -1520,6 +1525,73 @@ function updateRain(R,dt,P){
 }
 
 /* ---------- build a cabin ---------- */
+/* ---------- corner shadows (ambient occlusion), worked out once per cabin ----------
+   Real interiors are darker where surfaces meet: under the dash lip, round the vents and screens, in the door pockets,
+   down the console sides. This works it out once when the cabin is built and paints it into each part's vertex colours,
+   so it costs nothing per frame. The cabin is sampled into a coarse 3D grid (2 cm cells); for each point the job looks
+   out over its visible side in 16 directions and darkens it by how much is close by. It runs a few milliseconds a frame
+   (CK.cab.ao), so opening the cockpit doesn't stutter; the parts darken as they finish. (owner 2026-11-22: "add texture
+   to the cockpit view to make it look more real without affecting performance") */
+/* ---------- surface detail: sheen and smudges (owner 2026-11-22: "more detail on the interior", no performance cost) ----------
+   Two small shared textures put on the cabin's existing materials once it's built (no new parts, nothing per frame):
+   gloss black (screen surrounds, the control strip, the tray, touch panels) gets faint fingerprints and wipe marks; the
+   matte plastics and leather get a gentle, uneven sheen, so they don't read as one flat colour. */
+const DT={};
+function detailTex(){ if(DT.done) return DT; DT.done=true; const r=rnd(77), n1=vnoise(31,16), n2=vnoise(32,64);
+  { const c=cnv(512,512), x=c.getContext('2d'); x.fillStyle='rgb(34,34,34)'; x.fillRect(0,0,512,512);        // gloss: low roughness...
+    for(let i=0;i<26;i++){ const cx=r()*512, cy=r()*512, s=10+r()*18, a=r()*Math.PI;                         // ...fingerprints: rings of ridges
+      x.save(); x.translate(cx,cy); x.rotate(a); x.strokeStyle=`rgba(150,150,150,${.10+r()*.12})`; x.lineWidth=1.1;
+      for(let k=1;k<7;k++){ x.beginPath(); x.ellipse(0,0,s*k/7,s*k/7*.72,0,0,7); x.stroke(); } x.restore(); }
+    for(let i=0;i<9;i++){ const g=x.createLinearGradient(0,0,512,0), y=r()*512, h=20+r()*50; g.addColorStop(0,'rgba(120,120,120,0)'); g.addColorStop(.5,`rgba(120,120,120,${.10+r()*.10})`); g.addColorStop(1,'rgba(120,120,120,0)');
+      x.save(); x.translate(0,y); x.rotate((r()-.5)*.5); x.fillStyle=g; x.fillRect(0,-h/2,512,h); x.restore(); }               // wipe marks
+    DT.gloss=new THREE.CanvasTexture(c); DT.gloss.wrapS=DT.gloss.wrapT=THREE.RepeatWrapping; }
+  { const c=heightTex(256,(i,j)=>.80+.14*n1(i/16,j/16)+.06*n2(i/3,j/3)); DT.sheen=new THREE.CanvasTexture(c); DT.sheen.wrapS=DT.sheen.wrapT=THREE.RepeatWrapping; }
+  return DT; }
+function detailPass(c){ const T=detailTex(), seen=new Set(), lum=col=>.2126*col.r+.7152*col.g+.0722*col.b;
+  c.G.traverse(o=>{ if(!o.isMesh||!o.geometry.attributes.uv) return; const m=o.material; if(Array.isArray(m)||seen.has(m)||!m.isMeshStandardMaterial||m.transparent||m.roughnessMap) return; seen.add(m);
+    if(m.roughness<=.3&&m.metalness<.5&&lum(m.color)<.03&&!m.map){ m.roughnessMap=T.gloss; m.roughness=1; m.needsUpdate=true; }   // gloss black: roughness now .13, with the marks to ~.6
+    else if(m.roughness>=.45&&m.metalness<.3){ m.roughnessMap=T.sheen; m.needsUpdate=true; } }); }                                 // matte: 80–100% of its own roughness, unevenly
+function* aoJob(c){
+  const G=c.G, P=c.P; G.updateMatrixWorld(true);
+  const inv=new THREE.Matrix4().copy(G.matrixWorld).invert(), list=[];
+  G.traverse(o=>{ if(!o.isMesh||!o.geometry||!o.geometry.attributes.position) return; const m=o.material;
+    if(Array.isArray(m)||m.isMeshBasicMaterial||m.transparent) return; list.push(o); });
+  // the grid: the cabin interior in car coordinates
+  const V=.02, X0=-1.02, Y0=.28, Z0=-1.45, NX=104, NY=90, NZ=126, occ=new Uint8Array(NX*NY*NZ);
+  const cell=(x,y,z)=>{ const i=Math.floor((x-X0)/V), j=Math.floor((y-Y0)/V), k=Math.floor((z-Z0)/V);
+    return i<0||j<0||k<0||i>=NX||j>=NY||k>=NZ?-1:(k*NY+j)*NX+i; };
+  const mats=list.map(o=>new THREE.Matrix4().multiplyMatrices(inv,o.matrixWorld));
+  const a=new V3(), b=new V3(), d=new V3(), q=new V3();
+  let t0=performance.now();
+  // 1. mark the cells every surface passes through
+  for(let mi=0;mi<list.length;mi++){ const g=list[mi].geometry, p=g.attributes.position, idx=g.index, M4=mats[mi], n=idx?idx.count:p.count;
+    const pt=(i,v)=>v.fromBufferAttribute(p,idx?idx.getX(i):i).applyMatrix4(M4);
+    for(let t=0;t<n;t+=3){ pt(t,a); pt(t+1,b); pt(t+2,d);
+      const s=Math.max(1,Math.ceil(Math.max(a.distanceTo(b),a.distanceTo(d),b.distanceTo(d))/(V*.7)));
+      for(let u=0;u<=s;u++) for(let w=0;w<=s-u;w++){ const fu=u/s, fw=w/s; q.set(a.x+(b.x-a.x)*fu+(d.x-a.x)*fw,a.y+(b.y-a.y)*fu+(d.y-a.y)*fw,a.z+(b.z-a.z)*fu+(d.z-a.z)*fw);
+        const ci=cell(q.x,q.y,q.z); if(ci>=0) occ[ci]=1; } }
+    if(performance.now()-t0>6){ yield; t0=performance.now(); } }
+  // 2. directions over a hemisphere (around +z), cosine-weighted
+  const DIR=[], N=24; for(let i=0;i<N;i++){ const z=Math.sqrt(1-(i+.5)/N), r=Math.sqrt(1-z*z), ph=i*2.39996; DIR.push([Math.cos(ph)*r,Math.sin(ph)*r,z]); }
+  const STEPS=[.03,.05,.075,.105,.14], eye=new V3(...P.eye), nm=new THREE.Matrix3(), n0=new V3(), tA=new V3(), tB=new V3(), up=new V3(0,1,0), side=new V3(1,0,0);
+  for(let mi=0;mi<list.length;mi++){ const o=list[mi], g=o.geometry, p=g.attributes.position;
+    if(!g.attributes.normal) g.computeVertexNormals(); const nr=g.attributes.normal; nm.getNormalMatrix(mats[mi]);
+    const col=new Float32Array(p.count*3);
+    for(let v=0;v<p.count;v++){ a.fromBufferAttribute(p,v).applyMatrix4(mats[mi]); n0.fromBufferAttribute(nr,v).applyMatrix3(nm).normalize();
+      if(n0.dot(q.copy(eye).sub(a))<0) n0.negate();                                    // the side you see from the seat
+      tA.crossVectors(Math.abs(n0.y)<.9?up:side,n0).normalize(); tB.crossVectors(n0,tA);
+      let hit=0, wsum=0; a.addScaledVector(n0,V*1.8);                                // start just off the surface, clear of its own cells
+      for(const [dx,dy,dz] of DIR){ if(dz<.3) continue; const w=dz; wsum+=w;          // and skip directions that skim along it
+        for(let s=0;s<STEPS.length;s++){ const L=STEPS[s], x=a.x+(tA.x*dx+tB.x*dy+n0.x*dz)*L, y=a.y+(tA.y*dx+tB.y*dy+n0.y*dz)*L, z=a.z+(tA.z*dx+tB.z*dy+n0.z*dz)*L, ci=cell(x,y,z);
+          if(ci>=0&&occ[ci]){ hit+=w*Math.pow(1-s/STEPS.length,1.6); break; } } }
+      const ao=clamp(1-1.15*hit/wsum,.4,1); col[v*3]=col[v*3+1]=col[v*3+2]=ao; }
+    const had=g.attributes.color;                                                  // parts with their own shading (the wheel's two-tone rim): multiply in
+    if(had&&had.count===p.count) for(let v=0;v<p.count;v++){ col[v*3]*=had.getX(v); col[v*3+1]*=had.getY(v); col[v*3+2]*=had.getZ(v); }
+    g.setAttribute('color',new THREE.BufferAttribute(col,3));
+    if(performance.now()-t0>6){ yield; t0=performance.now(); } }
+  // 3. switch the colours on only now, every part at once (a material shared by several parts needs them all to have them)
+  for(const o of list){ if(!o.material.vertexColors){ o.material.vertexColors=true; o.material.needsUpdate=true; } }
+}
 function build(key){
   if(CK.cab&&CK.built===key+'|'+(CARSPEC.paint||0)) return;
   if(CK.cab) dispose();
@@ -1547,6 +1619,7 @@ function build(key){
   G.position.set(-P.eye[0],-P.eye[1],-P.eye[2]);                   // built in car coordinates; the eye sits at the origin
   CK.cab={scene:sc,root,G,cam,hemi,sunL,amb,glow,P,parts,key,lastDraw:0,rpm:700,gear:0,trip:S.dist||0};
   CK.built=key+'|'+(CARSPEC.paint||0);
+  if(P.xp){ detailPass(CK.cab); CK.cab.ao=aoJob(CK.cab); }                                // corner shadows, a few ms a frame (Expedition first; owner reviews, then the other cars)
   applyShadows();
 }
 function dispose(){ const c=CK.cab; if(!c) return;
@@ -1773,6 +1846,7 @@ function roofStep(c,dt){ for(const s of CK.roofSpots||[]) if(s.flash.material.op
 function update(dt){
   const c=CK.cab, P=c.P, p=c.parts;
   roofStep(c,dt); blisStep(c,dt); stalkStep(dt);
+  if(c.ao&&c.ao.next().done) c.ao=null;
   c.still=Math.abs(S.v||0)<.05&&Math.abs(S.gas||0)<.05?(c.still||0)+dt:0;
   // steering wheel: the input, 900° lock-to-lock (a G29 turns the same as your hands); otherwise from the road wheels
   const st=S.stIn!=null?S.stIn:(S.steer||0)/Math.max(.1,steerLock(S.v||0));
