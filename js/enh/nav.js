@@ -86,6 +86,7 @@ document.getElementById('navX').addEventListener('click',e=>{ e.stopPropagation(
 // breadcrumb trail of where you've driven (kept between visits on this device)
 const TRAIL={segs:[[]],n:0,changed:false,saved:0};
 try{ const t=JSON.parse(localStorage.getItem('ydTrail')||'null'); if(Array.isArray(t)){ TRAIL.segs=t.filter(s=>Array.isArray(s)&&s.length>1); TRAIL.segs.push([]); TRAIL.n=TRAIL.segs.reduce((a,s)=>a+s.length,0); } }catch(e){}
+function trailPush(){ const d=trailData(); const s=map.getSource('trail'); if(s) s.setData(d); const m=ENH.miniOk&&mini.getSource('trail'); if(m) m.setData(d); }
 function trailData(){ const lines=TRAIL.segs.filter(s=>s.length>1); return lines.length?{type:'Feature',properties:{},geometry:{type:'MultiLineString',coordinates:lines}}:EMPTY; }
 onTick(500,function trailTick(){
   const cur=TRAIL.segs[TRAIL.segs.length-1], last=cur[cur.length-1], p=[+S.lng.toFixed(6),+S.lat.toFixed(6)];
@@ -96,8 +97,9 @@ onTick(500,function trailTick(){
   while(TRAIL.n>5000&&TRAIL.segs.length){ const s=TRAIL.segs[0]; s.shift(); TRAIL.n--; if(s.length<2&&TRAIL.segs.length>1){ TRAIL.n-=s.length; TRAIL.segs.shift(); } }
 });
 onTick(1000,function trailDraw(){
-  if(!TRAIL.changed) return; TRAIL.changed=false; const d=trailData();
-  const s=map.getSource('trail'); if(s) s.setData(d); const m=ENH.miniOk&&mini.getSource('trail'); if(m) m.setData(d);
+  if(!TRAIL.changed) return; TRAIL.changed=false;
+  if(typeof trailOn==='undefined'||trailOn) trailPush();            // hidden (the default): only remembered, not redrawn
+
   if(Date.now()-TRAIL.saved>15000){ TRAIL.saved=Date.now(); try{ localStorage.setItem('ydTrail',JSON.stringify(TRAIL.segs.filter(s=>s.length>1))); }catch(e){} }
 });
 // ⚙️ Driven trail (owner 2026-11-21: "a setting to toggle the purple lines that show where you've driven ... hidden by
@@ -106,7 +108,7 @@ let trailOn=false; try{ trailOn=localStorage.getItem('ydTrailShow')==='on'; }cat
 function trailVis(){ const v=trailOn?'visible':'none';
   for(const m of [map,ENH.miniOk?mini:null]){ try{ if(m&&m.getLayer('trail-line')&&(m.getLayoutProperty('trail-line','visibility')||'visible')!==v) m.setLayoutProperty('trail-line','visibility',v); }catch(e){} }
   const b=document.getElementById('trailBtn'); if(b) b.classList.toggle('on',trailOn); }
-{ const b=document.getElementById('trailBtn'); if(b) b.addEventListener('click',e=>{ e.stopPropagation(); trailOn=!trailOn; try{ localStorage.setItem('ydTrailShow',trailOn?'on':'off'); }catch(e){} trailVis(); }); trailVis(); }
+{ const b=document.getElementById('trailBtn'); if(b) b.addEventListener('click',e=>{ e.stopPropagation(); trailOn=!trailOn; try{ localStorage.setItem('ydTrailShow',trailOn?'on':'off'); }catch(e){} if(trailOn) trailPush(); trailVis(); }); trailVis(); }
 onTick(2000,function trailShown(){ trailVis(); });   // after a style reload or the minimap appearing
 onReady(function navLayers(){
   addImg('sg-chev',img(32,32,(x)=>{ x.strokeStyle='#fff'; x.lineWidth=5; x.lineCap='round'; x.lineJoin='round'; x.beginPath(); x.moveTo(10,7); x.lineTo(22,16); x.lineTo(10,25); x.stroke(); }));
