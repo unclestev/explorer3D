@@ -1283,7 +1283,7 @@ function enter(){ if(CK.on) return; CK.on=true; CK.exag=EXAG; EXAG=1; LOOK.yaw=0
   // map lookup reads depth back from the GPU, and from the seat the view runs far down the road); back on leaving
   applyTerrain();                                                  // per ⚙️ 3D terrain (game.js terrWant)
   document.body.classList.add('cockpit'); build(CARKEY); dirty=true; if(CK.real) setSpeedScale(1); try{ SOUND.cabin(true,mode==='tractor'); }catch(e){} }
-function leave(){ if(!CK.on) return; CK.on=false; if(CK.drop){ CK.drop=0; mapEl.style.transform=''; } EXAG=CK.exag; renderer.shadowMap.autoUpdate=true; labels(true);
+function leave(){ if(!CK.on) return; CK.on=false; if(CK.drop){ CK.drop=0; map.getCanvas().style.transform=''; } EXAG=CK.exag; renderer.shadowMap.autoUpdate=true; labels(true);
   applyTerrain(); setSpeedScale(3); glareEl.style.opacity='0'; CK.snd=null; try{ SOUND.cabin(false); }catch(e){} refreshNear(); try{ map.triggerRepaint(); }catch(e){}
   document.body.classList.remove('cockpit');
   try{ map.transform.fov=36.87; }catch(e){}
@@ -1326,7 +1326,7 @@ CK.view=function(dt){
   // further still (up at the roof and the overhead console): the cabin and car cameras really tilt up, and the map
   // picture (its own canvas, under ours) slides down to match; past the windshield's top edge only the sky shows anyway
   const tilt=clamp(want-99,0,72), drop=Math.round(.5*H/Math.tan(fov*DEG/2)*Math.tan(tilt*DEG));
-  if(drop!==(CK.drop||0)){ CK.drop=drop; mapEl.style.transform=drop?'translateY('+drop+'px)':''; }
+  if(drop!==(CK.drop||0)){ CK.drop=drop; map.getCanvas().style.transform=drop?'translateY('+drop+'px)':''; }   // only the picture moves: the map panel still covers the screen and gets your taps (moving the whole panel left the top of the screen dead, so the overhead keys never got a real tap)
   try{ if(Math.abs(map.transform.fov-fov)>.01) map.transform.fov=fov; }catch(e){}
   // the eye turns about the neck (10 cm behind the eyes); bumps lift the head a little
   // your head moves with the car: sways out in corners, pitches forward braking / back accelerating (a damped spring)
