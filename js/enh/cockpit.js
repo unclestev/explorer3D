@@ -39,7 +39,7 @@ window.COCKPIT=CK;
 
 /* ---------- per-car cabins (car frame: metres, x right, y up from the ground, z toward the back; car centre = 0) ---------- */
 const SPECS={
-  explorer:{style:'sport', ex:true, sunroof:{hw:.40,z0:-.09,z1:.60}, eye:[-.38,1.37,.08], pitch:81,
+  explorer:{style:'sport', ex:true, sunroof:{hw:.40,z0:.03,z1:.68}, eye:[-.38,1.37,.08], pitch:81,
     ws:{zB:-1.04,yB:1.09,hwB:.75,zT:-.33,yT:1.63,hwT:.67,bow:.05}, roof:{y:1.655,hw:.71,zR:1.75}, belt:1.16, winTop:1.58, door:.80, zBp:.52, zC:1.48,
     hood:{zr:-1.03,zf:-2.40,yr:1.085,yf:.985,hw:.99,crown:.03,gap:.80,nose:.07,crease:{x:.40,h:.016}},
     dash:[[1.062,-1.045],[1.086,-.84],[1.086,-.68],[1.064,-.615],[.99,-.595],[.87,-.605],[.75,-.55],[.62,-.43]],
@@ -486,10 +486,14 @@ function sunroof(G,P,R,rf,trimM,parts){
   parts.sunroof={hinge,cov,len,vent:0,cover:0,slide:0,z0:hinge.position.z};
 }
 function overheadEx(G,P,ws){
-  const W=.25, D=.25, zf=ws.zT+.075, cz=zf+D/2, y0=P.roof.y-.006, th=.032;
-  const g=new THREE.Group(); g.position.set(0,y0-th,cz); g.rotation.x=.10; G.add(g);    // face tipped a little toward the driver
+  // built into the roof (owner 2026-11-21: "make the overhead console built in the roof"): the pod is set up into the
+  // headliner so its face sits ~1 cm below it, inside a soft trim ring, level with the roof (no longer hanging down)
+  const W=.25, D=.25, zf=ws.zT+.075, cz=zf+D/2, th=.03;
+  const g=new THREE.Group(); g.position.set(0,P.roof.y-.009,cz); G.add(g);
   const blk=M({color:0x151517,roughness:.62,normalMap:rep(textures().grain,3,3),normalScale:new THREE.Vector2(.35,.35)});
   const pod=mesh(rbox(W,D,th,.03,.06),blk,g); pod.rotation.x=-Math.PI/2; pod.position.y=th/2;
+  const ring=mesh(rbox(W+.026,D+.026,.006,.04,.008),M({color:new THREE.Color(P.col.head).multiplyScalar(.75),roughness:.9,normalMap:rep(textures().fabric,6,6),normalScale:new THREE.Vector2(.4,.4)}),g);
+  ring.rotation.x=-Math.PI/2; ring.position.y=.006;                                        // the headliner's edge rolled in round it
   // the face, drawn: 1024 px across the 25 cm pod (y down the picture = toward the driver)
   const T=canvasTex(1024,1024), x=T.x, R=(X,Y,w,h,r)=>{ x.beginPath(); x.moveTo(X+r,Y); x.arcTo(X+w,Y,X+w,Y+h,r); x.arcTo(X+w,Y+h,X,Y+h,r); x.arcTo(X,Y+h,X,Y,r); x.arcTo(X,Y,X+w,Y,r); x.closePath(); };
   x.fillStyle='#17181a'; x.fillRect(0,0,1024,1024);
