@@ -1119,12 +1119,11 @@ function gather(c,dt){ const e=engineState(c,dt), sp=c.P, mph=Math.round(Math.ab
 /* ---------- per frame ---------- */
 let lastHash='';
 // sunroof motors: glass tilts in ~2 s, the cover slides in ~3 s
-// VENT opens the sunroof all the way (owner: "on the vent button, make the sunroof open"; the cover goes back with it,
-// as in the real car) and pressed again closes it; △ tilts the glass up / back down; the cover keys open / close the cover.
+// VENT and △ (the arrow pointing back, beside it) both open the sunroof all the way (owner 2026-11-21; the cover goes back
+// with it, as in the real car) and pressed again close it; the cover keys open / close the cover.
 const ROOF={vent:false,slide:false,cover:false};
 CK.roof=function(k){ let t;
-  if(k==='vent'){ if(ROOF.slide||ROOF.vent){ ROOF.slide=ROOF.vent=false; t='Sunroof: closing'; } else { ROOF.slide=true; ROOF.cover=true; t='Sunroof: opening'; } }
-  else if(k==='close'){ if(ROOF.slide){ ROOF.slide=false; t='Sunroof: closing'; } else if(ROOF.vent){ ROOF.vent=false; t='Sunroof: closed'; } else { ROOF.vent=true; t='Sunroof: tilted open'; } }
+  if(k==='vent'||k==='close'){ if(ROOF.slide||ROOF.vent){ ROOF.slide=ROOF.vent=false; t='Sunroof: closing'; } else { ROOF.slide=true; ROOF.cover=true; t='Sunroof: opening'; } }
   else if(k==='open'){ ROOF.cover=true; t='Sunroof cover: open'; }
   else if(k==='shut'){ if(ROOF.slide){ t='Close the sunroof first (VENT)'; } else { ROOF.cover=false; t='Sunroof cover: closed'; } }
   toast(t,1300); };
