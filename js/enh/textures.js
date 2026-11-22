@@ -63,11 +63,16 @@ function addTextureLayers(){
   const src=srcName(), all=map.getStyle().layers, ids=all.map(l=>l.id);
   const firstRoad=(all.find(l=>l['source-layer']==='transportation')||{}).id;
   const before=firstRoad&&map.getLayer(firstRoad)?firstRoad:undefined;
+  // The ground textures go UNDER the style's water fill: the style draws water just before the roads, so textures added
+  // before the first road covered any pond or lake inside a park, residential or grass polygon (OSM often has no hole there).
+  const belowWater=map.getLayer('water')?'water':before;
   const add=(l,b)=>{ if(map.getLayer(l.id)) return; l.layout=Object.assign({visibility:POWER&&HEAVY(l.id)?'none':'visible'},l.layout||{}); map.addLayer(l,b); TXLAYERS.push(l.id); };
   safe('tx-ground',()=>{
-    add({id:'tx-landuse',type:'fill',source:src,'source-layer':'landuse',minzoom:13,filter:['!=',LANDUSE,'none'],paint:{'fill-pattern':LANDUSE,'fill-opacity':1}},before);
-    add({id:'tx-park',type:'fill',source:src,'source-layer':'park',minzoom:13,paint:{'fill-pattern':'tx-grass','fill-opacity':1}},before);
-    add({id:'tx-landcover',type:'fill',source:src,'source-layer':'landcover',minzoom:13,filter:['!=',LANDCOVER,'none'],paint:{'fill-pattern':LANDCOVER,'fill-opacity':1}},before);
+    add({id:'tx-landuse',type:'fill',source:src,'source-layer':'landuse',minzoom:13,filter:['!=',LANDUSE,'none'],paint:{'fill-pattern':LANDUSE,'fill-opacity':1}},belowWater);
+    add({id:'tx-park',type:'fill',source:src,'source-layer':'park',minzoom:13,paint:{'fill-pattern':'tx-grass','fill-opacity':1}},belowWater);
+    add({id:'tx-landcover',type:'fill',source:src,'source-layer':'landcover',minzoom:13,filter:['all',['!=',LANDCOVER,'none'],['!=',['get','class'],'sand']],paint:{'fill-pattern':LANDCOVER,'fill-opacity':1}},belowWater);
+    // the style itself draws sand above the water (beaches), so the sand texture keeps its old place above it
+    add({id:'tx-sand',type:'fill',source:src,'source-layer':'landcover',minzoom:13,filter:['==',['get','class'],'sand'],paint:{'fill-pattern':'tx-sand','fill-opacity':1}},before);
   });
   // ripples just above the water fill, under the shoreline
   safe('tx-water',()=>{ if(!map.getLayer('water')) return;
