@@ -616,9 +616,48 @@ function steeringWheel(G,P){
   // column shroud and stalks (stay put while the wheel turns)
   const colM=M({color:0x0f0f10,roughness:.7,normalMap:rep(textures().grain,3,3)});
   const sh=mesh(rbox(.11,.10,.26,.03,.04),colM,grp); sh.position.set(0,-.01,-.17);
-  for(const s of [-1,1]){ const st=mesh(bar([[s*.04,0,-.09],[s*.12,-.005,-.07],[s*.16,-.012,-.06]],.012,.012,[0,1,0],6,8),colM,grp); }
+  sigStalk=null;
+  if(P.ex) stalksEx(grp,colM);
+  else for(const s of [-1,1]){ const st=mesh(bar([[s*.04,0,-.09],[s*.12,-.005,-.07],[s*.16,-.012,-.06]],.012,.012,[0,1,0],6,8),colM,grp); }
   return spin;
 }
+
+// Explorer stalks (owner 2026-11-21, two photos of the real ones): a slim arm out of the column that swells into a chunky
+// black end with the symbols on the face toward you. Left: turn signals and lights (auto-high-beam, headlamp, ⇦ ⇨),
+// and it tips up / down with the signal. Right: wipers, with the ridged roller round the stalk and the wiper symbols.
+let sigStalk=null;
+function stalksEx(grp,colM){
+  const head=M({color:0x111113,roughness:.5,normalMap:rep(textures().grain,4,2),normalScale:new THREE.Vector2(.25,.25)});
+  const face=(w,h,draw)=>{ const T=canvasTex(512,Math.round(512*h/w)), x=T.x; x.fillStyle='#121214'; x.fillRect(0,0,512,T.c.height);
+    x.strokeStyle=x.fillStyle='#c9cdd2'; x.lineWidth=7; x.lineCap=x.lineJoin='round'; draw(x,512,T.c.height); return new THREE.MeshBasicMaterial({map:T.t}); };
+  for(const s of [-1,1]){
+    const piv=new THREE.Group(); piv.position.set(s*.05,.05,-.10); grp.add(piv);   // high on the column: you see them through the wheel's upper openings
+    mesh(bar([[0,0,0],[s*.06,-.002,.012],[s*.125,-.006,.024]],[.011,.013],.011,[0,1,0],6,10),colM,piv);   // the arm, out and a little back toward you
+    const L=.09, hx=s*(.125+L/2-.008), hd=new THREE.Group(); hd.position.set(hx,-.008,.03); hd.rotation.z=-s*.07; piv.add(hd);   // the end reaches out past the rim
+    mesh(rbox(L,.028,.024,.009,.008),head,hd);                                                         // the chunky end
+    const cap=mesh(new THREE.SphereGeometry(.0135,16,12),head,hd); cap.scale.set(.6,1.04,.9); cap.position.x=s*L/2;
+    if(s<0){ // turn signals / lights: symbols along the face toward the driver
+      const m=face(L,.024,(x,W,H)=>{ const y=H/2;
+        x.beginPath(); x.moveTo(40,y-20); x.lineTo(60,y-20); x.moveTo(40,y); x.lineTo(60,y); x.moveTo(40,y+20); x.lineTo(60,y+20); x.stroke();            // high-beam lines
+        x.beginPath(); x.arc(92,y,24,-Math.PI/2,Math.PI/2); x.closePath(); x.stroke(); x.font='700 26px system-ui,Arial'; x.textAlign='center'; x.textBaseline='middle'; x.fillText('A',92,y+1);
+        x.beginPath(); x.arc(200,y,22,-Math.PI/2,Math.PI/2); x.closePath(); x.stroke(); for(const d of [-14,0,14]){ x.beginPath(); x.moveTo(170,y+d); x.lineTo(150,y+d+5); x.stroke(); }   // headlamp
+        const ar=(cx,dir)=>{ x.beginPath(); x.moveTo(cx+dir*26,y); x.lineTo(cx,y-20); x.lineTo(cx,y-9); x.lineTo(cx-dir*22,y-9); x.lineTo(cx-dir*22,y+9); x.lineTo(cx,y+9); x.lineTo(cx,y+20); x.closePath(); x.stroke(); };
+        ar(310,-1); ar(372,1); });
+      const f=mesh(new THREE.PlaneGeometry(L*.92,.02),m,hd,false,false); f.position.z=.0121; f.scale.x=1;
+      sigStalk={piv,k:0}; }
+    else { // wipers: the ridged roller round the stalk, speed dots, and the wiper / washer symbols on the end
+      const RT=canvasTex(64,128), r=RT.x; r.fillStyle='#0c0c0d'; r.fillRect(0,0,64,128); r.fillStyle='#3b3c40'; for(let i=0;i<128;i+=12) r.fillRect(0,i,64,5);
+      RT.t.wrapS=RT.t.wrapT=THREE.RepeatWrapping; RT.t.repeat.set(1,3);
+      const roll=mesh(new THREE.CylinderGeometry(.0165,.0165,.02,28,1),M({map:RT.t,roughness:.45,metalness:.25}),hd); roll.rotation.z=Math.PI/2; roll.position.x=-s*(L/2-.018);
+      const m=face(L,.024,(x,W,H)=>{ const y=H/2;
+        for(let i=0;i<3;i++){ x.beginPath(); x.arc(150,y-18+i*18,4.5,0,7); x.fill(); }                           // speed dots by the roller
+        const wip=(cx,rear)=>{ x.beginPath(); x.arc(cx,y+22,34,Math.PI*1.15,Math.PI*1.85); x.stroke(); x.beginPath(); x.moveTo(cx,y+22); x.lineTo(cx+20,y-6); x.stroke();
+          if(rear){ x.strokeRect(cx-34,y-30,68,58); } };
+        wip(250,false); for(const d of [-12,0,12]){ x.beginPath(); x.moveTo(250+d,y+26); x.lineTo(250+d*1.6,y+38); x.stroke(); }   // washer spray
+        wip(380,true); });
+      const f=mesh(new THREE.PlaneGeometry(L*.92,.02),m,hd,false,false); f.position.z=.0121; } } }
+function stalkStep(dt){ const st=sigStalk; if(!st) return; const d=window.SIG?SIG.dir:0;
+  st.k+=(d-st.k)*Math.min(1,dt*14); st.piv.rotation.z=-.12*st.k; }   // right signal: the end goes up; left: down
 
 /* ---------- instruments ---------- */
 // modern digital cluster / panoramic display / centre screen: canvases redrawn ~15 times a second
@@ -1192,7 +1231,7 @@ function roofStep(c,dt){ for(const s of CK.roofSpots||[]) if(s.flash.material.op
   const e=t=>t*t*(3-2*t); r.hinge.rotation.x=-.06*e(r.vent); r.hinge.position.z=r.z0+(r.len+.02)*e(r.slide); r.cov.position.z=(r.len+.04)*e(r.cover); }
 function update(dt){
   const c=CK.cab, P=c.P, p=c.parts;
-  roofStep(c,dt); blisStep(c,dt);
+  roofStep(c,dt); blisStep(c,dt); stalkStep(dt);
   c.still=Math.abs(S.v||0)<.05&&Math.abs(S.gas||0)<.05?(c.still||0)+dt:0;
   // steering wheel: the input, 900° lock-to-lock (a G29 turns the same as your hands); otherwise from the road wheels
   const st=S.stIn!=null?S.stIn:(S.steer||0)/Math.max(.1,steerLock(S.v||0));
