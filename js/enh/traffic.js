@@ -174,11 +174,10 @@ function occFeatures(){ const out=[]; const add=(src,sl,hk,bk)=>{ let fs=[]; try
 function buildOcc(){ OCC.t=performance.now(); OCC.at=[S.lng,S.lat]; OCC.dirty=false; OCC.ter=terrainOn; OCC.job=occJob(); }
 function* occJob(){
   const ox=S.lng*MLNG, oy=S.lat*MLAT, R=700, pos=[], idx=[], seen=new Set(), e0=terrainOn?(map.transform.elevation||0):0; let n=0;
-  const ir=window.WALK&&WALK.inside&&WALK.inside.rec;                                               // the building you're inside (js/enh/walk.js): not a blocker
+  const ir=window.WALK&&WALK.inside&&WALK.inside.rec;                                               // the building you're inside (js/enh/walk.js): its own shell stands in (walk.js ROOM)
   const mine=ring=>{ if(!ir) return false; let x=0,y=0; const n=ring.length-1; for(let i=0;i<n;i++){ x+=ring[i][0]; y+=ring[i][1]; } return WALK.inRec(ir,y/n,x/n); };
   for(const [f,hk] of occFeatures()){ if(++n%40===0) yield; const g=f.geometry; if(!g) continue; const polys=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
     const pr=f.properties||{}; let h,h0;
-    if(ir&&hk!=='b'&&pr.bk===ir.key) continue;
     if(hk==='b'){ h=+(pr.render_height??pr.height??6)||6; h0=+(pr.render_min_height??pr.min_height??0)||0; } else { h=+pr.h||0; h0=+pr.b||0; }
     if(h<=h0) continue;
     for(const pl of polys){ const ring=pl[0]; if(!ring||ring.length<4||(ir&&hk!=='h'&&mine(ring))) continue;

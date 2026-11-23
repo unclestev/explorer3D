@@ -205,9 +205,14 @@ function drawInterior(r){
     map.addLayer({id:'interior-3d',type:'fill-extrusion',source:'interior',
       paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-base':['get','b'],'fill-extrusion-height':['get','h'],'fill-extrusion-vertical-gradient':false}},
       map.getLayer('hn-big')?'hn-big':undefined); }
-  map.getSource('interior').setData({type:'FeatureCollection',features:r&&mode!=='walk'?interiorFeatures(r):[]});   // on foot: the real room (ROOM) instead
-  if(r&&mode==='walk') buildRoom(r); else dropRoom();
+  map.getSource('interior').setData({type:'FeatureCollection',features:[]});   /* the old cut-away (unused since 2026-11-23: the building stays) */
+  if(r) buildRoom(r); else dropRoom();
+  // the map's own building: hidden only on foot inside it (your eyes are inside its walls); in the car it stays, and the
+  // room's shell (depth only) shows your car and the garage through the open door, the walls and roof hiding the rest
+  const hk=r&&mode==='walk'?r.key:null;
+  if(hk!==HIDK.key){ HIDK.key=hk; safe('inside hide',()=>hideBuilding(hk?r:null)); if(window.TRAFFIC&&TRAFFIC.occRebuild) TRAFFIC.occRebuild(); }
 }
+const HIDK={key:null};
 /* ---------- first person indoors (owner 2026-11-23: "could the building stay and the doors just open to let you in, and when
    you are inside you see the walls and the roof if you look up?") ----------
    On foot inside a building the camera goes to your eyes (1.62 m) and the room is built in the car layer at real size:
@@ -273,6 +278,19 @@ function buildRoom(r){
     const m=new THREE.Mesh(new THREE.BoxGeometry(W0,1,.05),rmat('gar'+q.col,new THREE.Color(q.col||'#e5dfd3').getHex(),0x202020));
     m.position.set((ax+bx)/2,0,(az+bz)/2); m.rotation.y=-Math.atan2(bz-az,bx-ax); g.add(m); ROOM.gar.push({m,q}); }
   for(const o of g.children) o.traverse(c=>{ if(c.isMesh){ c.renderOrder=1; c.frustumCulled=false; } });
+  // the shell: the building's outside walls and top, depth only, with the doorways open — it stands in for the map's
+  // building in the car layer (the general building blockers leave this one out), so from outside you see in only
+  // through an open door
+  { const sh2=[], HB=Math.max(HC+.3,r.h||3);
+    for(let i=0;i<p.length;i++){ const a=p[i], b=p[(i+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1]); if(L<.05) continue;
+      const ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux, at=t=>[a[0]+ux*t+nx*.02,a[1]+uy*t+ny*.02];
+      const gaps=ways.filter(w=>w.d.ei===i).map(w=>({s0:w.d.s0,s1:w.d.s1,h:w.h})).sort((x,y)=>x.s0-y.s0);
+      let t=0; for(const q of gaps){ if(q.s0>t) quad(sh2,at(t),at(q.s0),0,HB); quad(sh2,at(q.s0),at(q.s1),q.h,HB); t=Math.max(t,q.s1); }
+      if(L>t) quad(sh2,at(t),at(L),0,HB); }
+    const occM=new THREE.MeshBasicMaterial({colorWrite:false,side:THREE.DoubleSide});
+    const w=meshOf(sh2,occM); w.renderOrder=-9; w.frustumCulled=false; g.add(w);
+    const top=new THREE.Mesh(new THREE.ShapeGeometry(sh),occM); top.rotation.x=-Math.PI/2; top.position.y=HB; top.renderOrder=-9; top.frustumCulled=false; g.add(top);
+    ROOM.shell=[w,top]; }
   scene.add(g); ROOM.g=g; ROOM.key=r.key; ROOM.r=r; garUpdate(); }
 function dropRoom(){ if(!ROOM.g) return; scene.remove(ROOM.g); ROOM.g.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); ROOM.g=null; ROOM.key=null; ROOM.r=null; ROOM.leaves=[]; ROOM.gar=[]; }
 function garUpdate(){ for(const G2 of ROOM.gar){ const o=window.GARAGE?GARAGE.openness(G2.q.gk):0, b0=o*1.95, top=2.2, h=Math.max(.15,top-b0);
@@ -285,6 +303,12 @@ function placeRoom(m,b){ const r=ROOM.r; if(!r) return; const kx=111320*cosLat()
 function doorSwing(dt){ const r=ROOM.r; if(!r) return; const q=loc(r,S.lat,S.lng);
   for(const L of ROOM.leaves){ const mx=(L.d.x0+L.d.x1)/2, my=(L.d.y0+L.d.y1)/2, near=Math.hypot(q[0]-mx,q[1]-my)<1.8;
     L.o=Math.max(0,Math.min(1,L.o+(near?1:-1)*dt/.7)); L.pv.rotation.y=L.angC+L.dA*.95*(L.o*L.o*(3-2*L.o)); } }
+// in the car (a garage): keep the room and its shell in place every frame, like the cars
+FRAME_HOOKS.push(function roomInCar(){ if(!ROOM.g||mode==='walk') return false;
+  if(mode!=='car'&&mode!=='tractor'){ ROOM.g.visible=false; return false; } ROOM.g.visible=true;
+  placeRoom(mpp(S.lat,S.zoom),rad(S.camB)); garUpdate(); return false; });
+// on foot near the parked car (or indoors): the photo cars show their 3D stand-in, so they don't turn to face you (game.js placePhoto)
+const near3D=()=>!!IN.rec||(PK.mode==='car'&&meters(S.lat,S.lng,PK.lat,PK.lng)<14);
 function fpCam(dt){
   if(!FPV.on){ FPV.on=true; step.W=0; LOOK.pitch=0; }
   const W2=innerWidth, H=innerHeight, fov=FPV.fov, DEGR=Math.PI/180;
@@ -306,12 +330,11 @@ function fpOff(){ FPV.on=false; FPV.drop=0; map.getCanvas().style.transform=''; 
   camera.fov=36.87; camera.near=10; camera.far=50000; camera.updateProjectionMatrix(); LOOK.pitch=Math.min(LOOK.pitch,12); step.W=0; step.cam=null; dirty=true; }
 function setInside(r){
   IN.rec=r; IN.key=r?r.key:null;
-  safe('inside hide',()=>hideBuilding(r));
   safe('inside draw',()=>drawInterior(r));
   person.traverse(o=>{ if(o.isMesh&&o.material!==shadow.material) o.material.depthTest=!r; });   // never hidden by the walls round you
   if(window.TRAFFIC&&TRAFFIC.occRebuild) TRAFFIC.occRebuild();                                    // and drop it from the car layer's building blockers
   step.cam=null; dirty=true; step.surf=null;
-  if(r&&!IN.told){ IN.told=true; toast('Inside: the walls are cut away so you can see in'+(mode==='walk'?'. Walk out through a door to leave':''),3800); }
+  if(r&&mode==='walk'&&!IN.told){ IN.told=true; toast('Inside: drag the screen to look around (and up). Walk out through a door to leave',3800); }
 }
 // work out which building you're in (if any), from where you stand
 function updInside(recs){
@@ -363,7 +386,7 @@ window.onModeChange=(m,was)=>{ if(prevMode) prevMode(m,was);
   person.visible=(m==='walk'); setPedals(m==='walk'||m==='glider'&&!!PK.mode);
   if(m!=='walk'&&m!=='glider') PK.mode=null;                       // back in a vehicle
   if(m!=='walk'&&FPV.on) fpOff();
-  if(IN.rec&&(m==='walk'||was==='walk')) safe('inside draw',()=>drawInterior(IN.rec));   /* car <-> foot in a garage: cut-away <-> the room */
+  if(IN.rec&&(m==='walk'||was==='walk')) safe('inside draw',()=>drawInterior(IN.rec));   /* car <-> foot in a garage: hide / show the map's building */
   if(m!=='walk'){ if(IN.rec&&(m==='glider'||!inRec(IN.rec,S.lat,S.lng))) setInside(null);   /* got back in the car in the garage: stay inside */ if(IN.open!=null&&window.ROOFS){ IN.open=null; ROOFS.openDoor(null); } IN.ip=68; }
   if(m==='walk'){ car.visible=true; W.v=0; S.zoom=Math.max(S.zoom,19.3); }
   updateBtn();
@@ -448,7 +471,7 @@ function walkStep(dt,st,gas,now){
   // car layer: you at the centre, the parked vehicle where you left it (same projection as the traffic)
   const m=mpp(S.lat,S.zoom), sc=WX/m, b=rad(S.camB), sb=Math.sin(b), cb=Math.cos(b);
   person.scale.setScalar(sc); person.rotation.y=-rad(S.hdg-S.camB); person.visible=!IN.rec;   /* first person indoors: you're the camera */
-  if(ROOM.g){ placeRoom(m,b); doorSwing(dt); }
+  if(ROOM.g){ ROOM.g.visible=true; placeRoom(m,b); doorSwing(dt); }
   const dx=(PK.lng-S.lng)*111320*cosLat(), dy=(PK.lat-S.lat)*111320, f=dx*sb+dy*cb, r=dx*cb-dy*sb;
   car.visible=true; car.position.set(r/m,0,-f/m); car.scale.setScalar(sc); car.rotation.y=-(rad(PK.hdg)-b);
   body.rotation.set(0,0,0); tractorG.rotation.set(0,0,0); debris.scale.setScalar(sc);
@@ -463,7 +486,7 @@ function walkStep(dt,st,gas,now){
 }
 window.WALK={step:(dt,st,gas,now)=>{ try{ walkStep(dt,st,gas,now); }catch(e){ console.warn('walk',e); renderer.render(scene,camera); } },
   parked:()=>PK.mode, getOut:()=>safe('walk',getOut), toggle:()=>safe('walk',getOut), state:W, person, parkedAt:PK,   /* toggle: the F key (js/enh/controls.js) */
-  insideId:()=>IN.rec?IN.rec.id:null, inside:IN,
+  insideId:()=>IN.rec?IN.rec.id:null, inside:IN, near3D:()=>{ try{ return near3D(); }catch(e){ return false; } },
   setInside:r=>safe('inside',()=>{ if((r?r.key:null)!==IN.key) setInside(r); }), redrawInside:()=>{ if(IN.rec) safe('inside draw',()=>{ if(ROOM.g) garUpdate(); else drawInterior(IN.rec); }); }, inRec};
 updateBtn();
 })();

@@ -64,7 +64,7 @@ function gate(lat,lng,nLat,nLng,ahead){
     const cIn=c.dep>0&&(Math.abs(c.al)<c.bay||inP(r.p,...loc(r,nLat,nLng)))&&c.dep<g.D+2, aIn=a.dep>0&&Math.abs(a.al)<a.bay+.5;
     if(cIn){
       if(a.dep>0) return (Math.abs(a.al)<a.bay||Math.abs(a.al)<Math.abs(c.al))&&a.dep<g.D?'pass':'wall';   // around inside: the back and side walls (never stuck off to one side)
-      return open&&Math.abs(a.al)<a.half?'pass':'wall';                            // nose out through the door (if it's up)
+      return open&&Math.abs(a.al)<a.half+.5?'pass':'wall';                         // out through the door (if it's up); some slack, the assist lines you up
     }
     if(aIn&&c.dep>-9){
       if(open&&Math.abs(a.al)<a.half-.1&&Math.abs(c.al)<a.half+.5) return 'pass';  // lined up with the open door: in you go
@@ -87,7 +87,17 @@ FRAME_HOOKS.push(function garageStep(dt){
     if((d>0&&o>=1)||(d<0&&o<=0)) delete G.dir[k];
     if(window.WALK&&WALK.inside&&WALK.inside.rec&&(WALK.inside.rec.garages||[]).some(g=>g.gk===gk)) WALK.redrawInside();
     moved=true; }
-  // in the car: the cut-away view while the car is inside a house's garage
+  // in the car, in or just in front of a garage with its door up: ease the car onto the doorway's centre line and square
+  // it up, so driving in and backing out don't need pixel-perfect steering (owner 2026-11-23: "a hard time backing out")
+  if((mode==='car'||mode==='tractor')&&Math.abs(S.v)>.05) for(const r of near(S.lat,S.lng,10)) for(const g of r.garages){
+    if(openness(g.gk)<.85) continue; const f=frame(r,g,S.lat,S.lng);
+    if(f.dep<-6||f.dep>g.D+1||Math.abs(f.al)>f.half+1.2) continue;
+    const L=Math.hypot(g.x1-g.x0,g.y1-g.y0)||1, ux=(g.x1-g.x0)/L, uy=(g.y1-g.y0)/L, sl=-Math.sign(f.al)*Math.min(Math.abs(f.al),.25*dt*Math.abs(S.v)*SPEEDUP);
+    S.lng+=ux*sl/r.kx; S.lat+=uy*sl/r.ky;
+    const hin=Math.atan2(-g.nx,-g.ny)*180/Math.PI, d1=((hin-S.hdg)%360+540)%360-180, d2=((hin+180-S.hdg)%360+540)%360-180, d=Math.abs(d1)<Math.abs(d2)?d1:d2;
+    if(Math.abs(d)<35) S.hdg+=Math.sign(d)*Math.min(Math.abs(d),14*dt*Math.min(1,Math.abs(S.v)));
+    moved=true; }
+  // in the car: the room (and its shell) while the car is inside a house's garage
   if((mode==='car'||mode==='tractor')&&window.WALK&&WALK.setInside){
     let r=null; const cur=WALK.inside&&WALK.inside.rec;
     if(cur&&WALK.inRec(cur,S.lat,S.lng)) r=cur; else for(const q of near(S.lat,S.lng,4)) if(WALK.inRec(q,S.lat,S.lng)){ r=q; break; }
