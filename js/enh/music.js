@@ -76,7 +76,11 @@ au.addEventListener('error',()=>{ const n=MU.now; if(n&&n.radio&&au.getAttribute
 $('musicPlay').onclick=()=>{ const n=MU.now; if(!n) return; if(!carOn()){ say('📻 Turn the engine on to listen',2200); return; } if(!au.paused){ au.pause(); return; } if(n.radio) play(n); else au.play(); };
 $('musicNext').onclick=()=>{ if(MU.queue.length||(MU.now&&MU.now.radio)) next(); };
 $('musicStop').onclick=()=>{ resume=false; au.pause(); au.removeAttribute('src'); au.load(); MU.now=null; MU.queue=[]; MU.qi=-1; setNow(); };
-$('musicVol').oninput=e=>{ vol=+e.target.value; au.volume=vol; LSs('ydMusicVol',vol); };
+$('musicVol').oninput=e=>{ vol=+e.target.value; au.volume=vol*duckF; LSs('ydMusicVol',vol); };
+// turned down while you talk to the car (owner 2026-11-22: "turn down the volume in the car when I'm using voice recognition")
+let duckF=1, duckT=0;
+function duck(on){ const to=on?.15:1; clearInterval(duckT); duckT=setInterval(()=>{ duckF+=Math.sign(to-duckF)*Math.min(Math.abs(to-duckF),.08);
+  au.volume=Math.max(0,Math.min(1,vol*duckF)); if(duckF===to) clearInterval(duckT); },25); }
 
 // ---------- songs: iTunes Search API through JSONP (works from any page, no key)
 let seq=0;
@@ -197,6 +201,6 @@ MU.playRadio=async q=>{ q=q.toLowerCase().trim(); const ws=q.split(/\s+/).filter
     return (s.countrycode==='US'?3000:20000)+(/\.m3u8|hls/i.test(s.url_resolved||'')?500:0); };
   rs.sort((a,b)=>score(a)-score(b)); const st=toStation(rs[0]); playStation(st); return st.title; };
 MU.stop=()=>$('musicStop').click(); MU.resume=()=>{ if(MU.now&&au.paused) $('musicPlay').click(); };
-MU.open=open; MU.close=close; MU.pause=()=>{ if(!au.paused) au.pause(); }; MU.toggle=toggle; MU.presets=presets; MU.playStation=playStation;
+MU.duck=duck; MU.open=open; MU.close=close; MU.pause=()=>{ if(!au.paused) au.pause(); }; MU.toggle=toggle; MU.presets=presets; MU.playStation=playStation;
 window.MUSIC=MU;
 })();

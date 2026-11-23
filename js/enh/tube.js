@@ -121,5 +121,5 @@ function frame(){ requestAnimationFrame(frame); if(!T.frame) return; if(!(window
   const st=window.IGN&&IGN.state, off=window.COCKPIT&&COCKPIT.screenOn?!COCKPIT.screenOn():(st==='off'||st==='stop');   // the screen's own ⏻ (or the car) switched it off
   if(off!==!!T.off){ T.off=off; box.classList.toggle('off',off); if(off) cmd('pauseVideo'); } }
 requestAnimationFrame(frame);
-window.TUBE={watch,stop,idOf,listOf,state:T};
+window.TUBE={watch,stop,idOf,listOf,state:T,duck:on=>cmd('setVolume',[on?15:100])};
 })();

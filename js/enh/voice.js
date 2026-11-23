@@ -25,8 +25,15 @@ function hideBar(ms){ clearTimeout(hideT); hideT=setTimeout(()=>bar.classList.re
 let voice=null;
 function pickVoice(){ const vs=speechSynthesis.getVoices(); voice=vs.find(v=>/en[-_]US/i.test(v.lang)&&/Google|Natural|Aria|Jenny|Guy/i.test(v.name))||vs.find(v=>/^en/i.test(v.lang))||null; }
 if(window.speechSynthesis){ pickVoice(); speechSynthesis.onvoiceschanged=pickVoice; }
+// the music, video and engine go quiet while you talk and while the car answers, then come back up
+let ducked=false, unduckT=0;
+function duck(on){ clearTimeout(unduckT); if(on===ducked) return; ducked=on;
+  for(const f of [()=>window.MUSIC&&MUSIC.duck&&MUSIC.duck(on),()=>window.TUBE&&TUBE.duck&&TUBE.duck(on),()=>window.SOUND&&SOUND.duck&&SOUND.duck(on)]) try{ f(); }catch(e){} }
+function unduck(ms){ clearTimeout(unduckT); unduckT=setTimeout(()=>duck(false),ms||0); }
 function say(t){ showBar(t,true); hideBar(Math.max(2500,t.length*70)); if(typeof toast==='function'&&!window.speechSynthesis) toast(t,2500);
-  try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(t); if(voice) u.voice=voice; u.lang='en-US'; u.rate=1.02; speechSynthesis.speak(u); }catch(e){} }
+  unduck(Math.max(3000,t.length*95));                                   // in case the speech never reports that it ended
+  try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(t); if(voice) u.voice=voice; u.lang='en-US'; u.rate=1.02;
+    u.onend=u.onerror=()=>unduck(300); speechSynthesis.speak(u); }catch(e){ unduck(800); } }
 
 // ---------- what it understands
 const has=(t,...w)=>w.some(x=>t.includes(x));
@@ -219,13 +226,13 @@ function listen(){
   try{ speechSynthesis.cancel(); }catch(e){}
   rec=new SR(); rec.lang='en-US'; rec.interimResults=true; rec.maxAlternatives=1; rec.continuous=false;
   let final='', heard='';
-  rec.onstart=()=>{ busy=true; showBar('Listening…'); if(window.MUSIC&&MUSIC.duck) MUSIC.duck(true); };
+  rec.onstart=()=>{ busy=true; showBar('Listening…'); duck(true); };
   rec.onresult=e=>{ heard=''; for(let i=e.resultIndex;i<e.results.length;i++){ const r=e.results[i]; if(r.isFinal) final+=r[0].transcript; else heard+=r[0].transcript; }
     showBar('“'+(final+heard).trim()+'”'); };
-  rec.onerror=e=>{ busy=false; if(e.error==='not-allowed'||e.error==='service-not-allowed') say('Please allow the microphone for this page, then try again.');
+  rec.onerror=e=>{ busy=false; unduck(600); if(e.error==='not-allowed'||e.error==='service-not-allowed') say('Please allow the microphone for this page, then try again.');
     else if(e.error==='no-speech') { showBar('I didn\'t hear anything.',true); hideBar(1800); }
     else if(e.error!=='aborted') { showBar('Voice isn\'t working right now ('+e.error+').',true); hideBar(2500); } };
-  rec.onend=()=>{ busy=false; const t=(final||heard).trim(); if(t) handle(t); else if(bar.classList.contains('on')&&!bar.classList.contains('think')) hideBar(300); };
+  rec.onend=()=>{ busy=false; const t=(final||heard).trim(); if(t){ duck(true); handle(t); } else { unduck(400); } if(!t&&bar.classList.contains('on')&&!bar.classList.contains('think')) hideBar(300); };
   try{ rec.start(); }catch(e){ busy=false; }
 }
 addEventListener('keydown',e=>{ if(e.repeat||(e.target&&/INPUT|TEXTAREA/.test(e.target.tagName))) return; if(e.key.toLowerCase()==='v') listen(); });
