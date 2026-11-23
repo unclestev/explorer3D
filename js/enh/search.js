@@ -109,6 +109,7 @@ input.addEventListener('input',()=>{ if(!input.value.trim()) showSaved(); });   
 for(const t of ['keydown','keyup','keypress']) input.addEventListener(t,e=>{ e.stopPropagation(); if(t==='keydown'&&e.key==='Escape') close(); });
 for(const t of ['pointerdown','click','touchstart']) panel.addEventListener(t,e=>e.stopPropagation());
 YD.PLACES={fav:()=>FAV,recent:()=>RECENT,toggleFav,addRecent,
+  goTo:o=>go(o,o.name),   // the phone's Maps app: a saved place
   // voice (voice.js): "navigate to …" heads to the nearest match; resolves to its name, or null
   navigate:async q=>{ open(); input.value=q; const rs=await search(q); if(!rs||!rs.length) return null; go(rs[0].o,rs[0].name); return rs[0].name; }};
 })();

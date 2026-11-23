@@ -54,6 +54,7 @@ const A=[
   {id:'voice',   g:'Music & voice', label:'Voice command',  t:'press', run:()=>window.VOICE&&VOICE.listen()},
   {id:'walk',    g:'Getting around', label:'Get out and walk / back in', t:'press', run:()=>window.WALK&&WALK.toggle&&WALK.toggle()},
   {id:'glider',  g:'Getting around', label:'Hang glider',   t:'press', run:()=>typeof toggleGlider==='function'&&toggleGlider()},
+  {id:'phone',   g:'Game',    label:'Phone',            t:'press', run:()=>window.PHONE&&PHONE.toggle()},
   {id:'controls',g:'Game',    label:'Show / hide this screen', t:'press', always:true, run:()=>window.CTRLVIEW&&CTRLVIEW.toggle()},
 ];
 const ACT={}; for(const a of A) ACT[a.id]=a;
@@ -69,7 +70,7 @@ const DEFAULTS={
     sigL:['BracketLeft'], sigR:['BracketRight'], hazard:['Backslash'],
     view:['KeyC'], hud:['KeyH'], lookL:['KeyQ'], lookR:['KeyE'], recenter:['KeyR'],
     music:['KeyM'], next:['Period'], prev:['Comma'], volUp:['Equal'], volDn:['Minus'], voice:['KeyV'],
-    walk:['KeyF'], glider:['KeyG'], controls:['Slash'] },
+    walk:['KeyF'], glider:['KeyG'], phone:['KeyT'], controls:['Slash'] },
   wheel:{
     steer:[{axis:0}], gas:[{pedal:'gas'}], brake:[{pedal:'brake'}],
     gearD:[{shift:12}], gearR:[{shift:13},{shift:18}], gearN:[{shift:14},{shift:15},{shift:16},{shift:17}], gearToggle:[{b:[4,5]}],
