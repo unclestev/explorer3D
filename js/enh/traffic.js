@@ -219,7 +219,7 @@ function frame(dt){
   const now=performance.now(), doOcc=now-occT>(POWER?600:250); if(doOcc) occT=now;
   const sc=EXAG/m, night=tailOff.color.r>.7;
   T.parts.tail.color.setHex(night?0xd01c24:0x8a1216); T.parts.head.color.setHex(night?0xfffbe0:0xe8ecf2);
-  let any=false;
+  let any=false; const near=[];
   while(T.agents.length<MAXCARS()){ const a={mesh:carMesh()}; T.agents.push(a); if(!spawn(a,60,420)) a.path=null; }
   while(T.agents.length>MAXCARS()){ const a=T.agents.pop(); T.group.remove(a.mesh); }
   for(const a of T.agents){
@@ -228,6 +228,7 @@ function frame(dt){
     if(doOcc) a.occ=hiddenByBuilding(a,camX,camY,camH);
     const g=a.mesh; g.visible=!a.occ; if(a.occ) continue;
     const dx=a.px-px, dy=a.py-py, f=dx*sb+dy*cb, r=dx*cb-dy*sb;          // metres ahead / to the right of the camera's view
+    if(g.userData.real){ a.d=Math.hypot(dx,dy); near.push(a); }
     a.fade=Math.min(1,(a.fade||0)+dt*2.5); const out=Math.max(0,Math.min(1,(a.endIn-1)/14));   // fading out as its road runs out
     g.position.set(r/m,0,-f/m); g.scale.setScalar(sc*a.fade*out); g.rotation.y=-(a.hd-b);
     // wheels roll with the distance driven; front wheels steer from how fast the car is turning (same bicycle model as yours)
@@ -236,7 +237,17 @@ function frame(dt){
     for(const w of u.wheels) w.rotation.x=u.spin; for(const p of u.fronts) p.rotation.y=-u.steer;
     any=true;
   }
+  realDetail(near);
   return any;
+}
+// the drivable cars' real models in traffic (js/enh/vehicles.js): full model only for the nearest few within ~80 m
+// (95 m to switch back, so it doesn't flicker at the edge); the rest show their low-poly stand-in
+const NEAR_D=80, FAR_D=95;
+function realDetail(near){
+  const cap=Q3(2,3,4); near.sort((p,q)=>p.d-q.d); let n=0;
+  for(const a of near){ const R=a.mesh.userData.real, want=n<cap&&a.d<(R.on?FAR_D:NEAR_D);
+    if(YD.VEH.detail(a.mesh,want)) n++; }
+  for(const a of T.agents) if(!a.mesh.visible&&a.mesh.userData.real&&a.mesh.userData.real.on) YD.VEH.detail(a.mesh,false);   // off-screen / respawning
 }
 
 onReady(function trafficInit(){
