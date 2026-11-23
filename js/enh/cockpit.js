@@ -1253,9 +1253,10 @@ function drawScreenXp(sc,d){ const x=sc.T.x, W=sc.w, H=sc.h, DH=Math.round(H*.12
   x.fillStyle='#161c25'; rr(x,cx0,c1,cw,h1,14); x.fill(); rr(x,cx0,c2,cw,h2,14); x.fill();
   { const a=Math.round(h1*.56), ax=cx0+16, ay=c1+(h1-a)/2-8, gg=x.createLinearGradient(ax,ay,ax+a,ay+a); gg.addColorStop(0,'#3a6ea8'); gg.addColorStop(1,'#a24f7c');
     x.fillStyle=gg; rr(x,ax,ay,a,a,8); x.fill(); x.fillStyle='rgba(255,255,255,.85)'; fitText(x,'♪',ax+a/2,ay+a/2,a*.8,Math.round(a*.5),'400','center');
-    x.fillStyle='#e9edf2'; fitText(x,'FM 101.1',ax+a+14,ay+a*.32,cw-a-44,26,'600','left');
-    x.fillStyle='#8f98a3'; fitText(x,'Radio',ax+a+14,ay+a*.72,cw-a-44,20,'400','left');
-    x.fillStyle='#c9d0d8'; ['⏮','⏸','⏭'].forEach((t,i)=>fitText(x,t,cx0+cw*(.3+i*.2),c1+h1-22,cw*.15,22,'400','center')); }
+    const mi=window.MUSIC&&MUSIC.info&&MUSIC.info();   /* what's playing (music.js), else the idle card */
+    x.fillStyle='#e9edf2'; fitText(x,mi?mi.title:'Radio',ax+a+14,ay+a*.32,cw-a-44,26,'600','left');
+    x.fillStyle='#8f98a3'; fitText(x,mi?(mi.artist||(mi.live?'LIVE':'')):'Tap the screen for music',ax+a+14,ay+a*.72,cw-a-44,20,'400','left');
+    x.fillStyle='#c9d0d8'; ['⏮',mi&&mi.playing?'⏸':'▶','⏭'].forEach((t,i)=>fitText(x,t,cx0+cw*(.3+i*.2),c1+h1-22,cw*.15,22,'400','center')); }
   { x.fillStyle='#8f98a3'; fitText(x,d.compass,cx0+16,c2+h2*.28,cw-32-(d.limit?60:0),20,'500','left');
     x.fillStyle='#e9edf2'; fitText(x,d.wx?d.wx:'',cx0+16,c2+h2*.66,cw-32-(d.limit?60:0),20,'400','left');
     if(d.limit){ const lw=48, lh=60, lx=cx0+cw-lw-14, ly=c2+(h2-lh)/2; x.fillStyle='#f4f4f2'; rr(x,lx,ly,lw,lh,6); x.fill();
@@ -1753,7 +1754,7 @@ function musicBar(sc){ const n=window.MUSIC&&MUSIC.info&&MUSIC.info(); if(!n) re
   x.fillStyle='rgba(8,10,14,.92)'; x.fillRect(0,y,W,bh); x.fillStyle='#2b3340'; x.fillRect(0,y,W,3);
   if(n.dur) { x.fillStyle='#4f8ef7'; x.fillRect(0,y,W*Math.min(1,n.pos/n.dur),3); }
   const f=Math.round(bh*.36); x.textBaseline='middle'; x.textAlign='left'; x.fillStyle='#e8edf4'; x.font=`600 ${f}px system-ui,Arial`;
-  const t=(n.playing?'♪  ':'⏸  ')+n.title, a=n.artist?'  —  '+n.artist:''; let line=t+a; while(x.measureText(line).width>W*.94&&line.length>4) line=line.slice(0,-2);
+  const t=(n.playing?(n.live?'📻  ':'♪  '):'⏸  ')+n.title, a=n.artist?'  —  '+n.artist:''; let line=t+a; while(x.measureText(line).width>W*.94&&line.length>4) line=line.slice(0,-2);
   x.fillText(line===t+a?line:line+'…',W*.03,y+bh/2+2); sc.T.t.needsUpdate=true; }
 function drawScreen(sc,d,lux){ const x=sc.T.x, W=sc.w, H=sc.h; const bg=lux?'#0e0d0b':'#0c0f14'; x.fillStyle=bg; x.fillRect(0,0,W,H);
   drawMap(x,{x:0,y:56,w:W,h:H-56,cx:W*.5,cy:H*.66,s:(H*.55)/220},                       // ~220 m from the car to the top

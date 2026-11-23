@@ -102,7 +102,10 @@
         // from 1 on the G29's usual numbering — or whichever button was set in ⚙️ (Start button). js/enh/ignition.js
         const sb=cfg[g.id]&&cfg[g.id].start!=null?cfg[g.id].start:23; if(down(sb)&&!prevB[sb]&&window.IGN) IGN.button();
         // wipers on / off (owner 2026-11-22): the blue R2 button on the G29's right spoke — button 7 counting from 1
-        if(g.mapping!=='standard'&&down(6)&&!prevB[6]&&window.COCKPIT&&COCKPIT.wiper) COCKPIT.wiper(); }
+        if(g.mapping!=='standard'&&down(6)&&!prevB[6]&&window.COCKPIT&&COCKPIT.wiper) COCKPIT.wiper();
+        // Music panel open / close (owner 2026-11-22): the L2 button on the G29's left spoke — button 8 counting from 1.
+        // Opened this way it doesn't take the keyboard (js/enh/music.js)
+        if(g.mapping!=='standard'&&down(7)&&!prevB[7]&&window.MUSIC&&MUSIC.toggle) MUSIC.toggle(false); }
       // gear selector: the shifter when it's been used (otherwise D, or R after both paddles together)
       if(!shLearn&&!learn){ const sh=(cfg[g.id]&&cfg[g.id].shift)||{d:12,r:13};
         if(down(sh.d)||down(sh.r)) shUsed=true;

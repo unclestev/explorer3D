@@ -1,9 +1,14 @@
 /* Car music (owner 2026-11-22: "make me type a song on the lower screen and play from the car").
-   Tap the centre screen in cockpit view (or press M) to open Music: type a song or artist and pick a result to hear it.
-   Searches use Apple's free iTunes Search API (no key, no account): every song there has a 30-second preview, which is
-   what plays (full songs need a streaming licence the game doesn't have; explicit songs are left out). "My music" plays
-   songs you pick from your own device, start to finish, one after another. What's playing shows along the bottom of the
-   car's centre screen. Volume is remembered on this device (localStorage ydMusicVol). */
+   Tap the centre screen in cockpit view, press M, or press L2 on the G29 to open / close Music.
+   Songs tab: type a song or artist and pick a result. Searches use Apple's free iTunes Search API (no key, no account):
+   every song there has a 30-second preview, which is what plays (explicit songs are left out). "My music" plays
+   songs you pick from your own device, start to finish, one after another.
+   Radio tab (owner 2026-11-22: "live streaming radio stations … for example 93.9 lite fm. searchable with saved presets"):
+   live stations from Radio Browser (radio-browser.info), a free open directory — no key, no sign-in. Search by name;
+   ☆ saves a station to your presets (kept on this device, localStorage ydRadioPresets, at most 12); ⏭ while a station
+   plays moves to the next preset. Streams that are HLS-only (.m3u8) often won't play in a browser, so direct streams are
+   listed first. What's playing shows along the bottom of the car's centre screen. Volume is remembered (ydMusicVol).
+   Everything from the directory is shown as plain text (never as HTML), and only http(s) stream addresses are used. */
 (()=>{
 'use strict';
 const css=document.createElement('style'); css.textContent=`
@@ -12,41 +17,60 @@ const css=document.createElement('style'); css.textContent=`
 #musicPanel form{display:flex;gap:6px}
 #musicPanel input[type=search]{flex:1;min-width:0;font:16px system-ui;padding:8px 10px;border-radius:9px;border:1px solid var(--line);background:rgba(255,255,255,.08);color:#fff}
 #musicPanel button{font:600 14px system-ui;padding:8px 11px;border-radius:9px;border:1px solid var(--line);background:rgba(255,255,255,.1);color:#fff;cursor:pointer}
+#musicPanel .tabs{display:flex;gap:6px;margin-bottom:8px}
+#musicPanel .tabs button{flex:1}
+#musicPanel .tabs button.on{background:#3d6fd6;border-color:#3d6fd6}
 #musicPanel .row{display:flex;gap:6px;align-items:center;margin-top:8px}
 #musicPanel .now{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.9}
-#musicList{max-height:min(46vh,360px);overflow-y:auto;margin-top:8px}
-#musicList .it{display:flex;gap:9px;align-items:center;padding:6px;border-radius:9px;cursor:pointer}
-#musicList .it:hover,#musicList .it.on{background:rgba(255,255,255,.1)}
-#musicList img{width:40px;height:40px;border-radius:6px;flex:none;background:#223}
-#musicList .t{min-width:0}#musicList .t b,#musicList .t span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#musicList .t span{opacity:.65;font-size:12px}
+#musicList,#radioList{max-height:min(40vh,320px);overflow-y:auto;margin-top:8px}
+#musicPanel .it{display:flex;gap:9px;align-items:center;padding:6px;border-radius:9px;cursor:pointer}
+#musicPanel .it:hover,#musicPanel .it.on{background:rgba(255,255,255,.1)}
+#musicPanel .it img,#musicPanel .it .ph{width:40px;height:40px;border-radius:6px;flex:none;background:#223;object-fit:contain}
+#musicPanel .it .ph{display:flex;align-items:center;justify-content:center;font-size:20px}
+#musicPanel .t{min-width:0;flex:1}#musicPanel .t b,#musicPanel .t span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#musicPanel .t span{opacity:.65;font-size:12px}
+#musicPanel .it .star{flex:none;padding:4px 9px;font-size:18px;background:none;border:none;color:#ffd24a}
+#radioPresets{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+#radioPresets button{max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:6px 10px;font-weight:500}
+#radioPresets button.on{background:#3d6fd6;border-color:#3d6fd6}
+#musicPanel .hd{opacity:.6;font-size:12px;margin-top:8px}
 #musicPanel .note{opacity:.55;font-size:11px;margin-top:6px}
 #musicPanel input[type=range]{width:90px}`;
 document.head.appendChild(css);
 const panel=document.createElement('div'); panel.id='musicPanel';
-panel.innerHTML=`<form id="musicForm"><input id="musicQ" type="search" placeholder="Type a song or artist" autocomplete="off" enterkeyhint="search"><button type="submit">Search</button><button type="button" id="musicX" aria-label="Close">✕</button></form>
-<div class="row"><button type="button" id="musicPlay">⏯</button><button type="button" id="musicNext">⏭</button><button type="button" id="musicStop">⏹</button><span class="now" id="musicNow">Nothing playing</span><input type="range" id="musicVol" min="0" max="1" step="0.05" aria-label="Volume"></div>
+panel.innerHTML=`<div class="tabs"><button type="button" id="tabSongs">🎵 Songs</button><button type="button" id="tabRadio">📻 Radio</button><button type="button" id="musicX" aria-label="Close" style="flex:none">✕</button></div>
+<div class="row" style="margin-top:0"><button type="button" id="musicPlay">⏯</button><button type="button" id="musicNext">⏭</button><button type="button" id="musicStop">⏹</button><span class="now" id="musicNow">Nothing playing</span><input type="range" id="musicVol" min="0" max="1" step="0.05" aria-label="Volume"></div>
+<div id="paneSongs"><form id="musicForm" style="margin-top:8px"><input id="musicQ" type="search" placeholder="Type a song or artist" autocomplete="off" enterkeyhint="search"><button type="submit">Search</button></form>
 <div class="row"><button type="button" id="musicMine">📁 My music…</button><input type="file" id="musicFiles" accept="audio/*" multiple hidden></div>
-<div id="musicList"></div><div class="note">Search results play Apple's 30-second previews. "My music" plays whole songs from your device.</div>`;
+<div id="musicList"></div><div class="note">Search results play Apple's 30-second previews. "My music" plays whole songs from your device.</div></div>
+<div id="paneRadio" style="display:none"><form id="radioForm" style="margin-top:8px"><input id="radioQ" type="search" placeholder="Station name, e.g. 93.9 Lite FM" autocomplete="off" enterkeyhint="search"><button type="submit">Search</button></form>
+<div class="hd">Presets</div><div id="radioPresets"></div>
+<div id="radioList"></div><div class="note">Live stations from the free Radio Browser directory. ☆ saves a station to your presets.</div></div>`;
 document.body.appendChild(panel);
-const $=id=>document.getElementById(id), input=$('musicQ'), list=$('musicList');
+const $=id=>document.getElementById(id), input=$('musicQ'), list=$('musicList'), rInput=$('radioQ'), rList=$('radioList');
 for(const t of ['keydown','keyup','keypress']) panel.addEventListener(t,e=>{ e.stopPropagation(); if(t==='keydown'&&e.key==='Escape') close(); });   // typing here doesn't drive the car
 for(const t of ['pointerdown','touchstart','wheel']) panel.addEventListener(t,e=>e.stopPropagation(),{passive:true});
+const LSg=(k,d)=>{ try{ const v=localStorage.getItem(k); return v==null?d:v; }catch(_){ return d; } }, LSs=(k,v)=>{ try{ localStorage.setItem(k,v); }catch(_){ } };
+const say=(m,ms)=>{ if(typeof toast==='function') toast(m,ms||1800); };
 
 const au=new Audio(); au.preload='auto';
-let vol=+(localStorage.getItem('ydMusicVol')||.7); if(!(vol>=0&&vol<=1)) vol=.7; au.volume=vol; $('musicVol').value=vol;
+let vol=+LSg('ydMusicVol',.7); if(!(vol>=0&&vol<=1)) vol=.7; au.volume=vol; $('musicVol').value=vol;
 const MU={now:null,queue:[],qi:-1};
-function setNow(){ const n=MU.now; $('musicNow').textContent=n?(au.paused?'⏸ ':'♪ ')+n.title+(n.artist?' — '+n.artist:''):'Nothing playing'; }
-function play(track){ MU.now=track; au.src=track.url; au.currentTime=0; au.play().then(setNow,()=>{ toast('Could not play that song',1600); }); setNow();
-  for(const el of list.querySelectorAll('.it')) el.classList.toggle('on',el.dataset.url===track.url); }
-function next(){ if(MU.qi>=0&&MU.qi<MU.queue.length-1){ MU.qi++; play(MU.queue[MU.qi]); } else { MU.qi=-1; setNow(); } }
-au.addEventListener('ended',next); au.addEventListener('pause',setNow); au.addEventListener('play',setNow);
-$('musicPlay').onclick=()=>{ if(!MU.now) return; au.paused?au.play():au.pause(); };
-$('musicNext').onclick=()=>{ if(MU.queue.length) next(); };
+function setNow(){ const n=MU.now; $('musicNow').textContent=n?(au.paused?'⏸ ':n.radio?'📻 ':'♪ ')+n.title+(n.artist?' — '+n.artist:''):'Nothing playing';
+  for(const el of panel.querySelectorAll('.it,#radioPresets button')) el.classList.toggle('on',!!n&&el.dataset.url===n.url); }
+function play(track){ MU.now=track; au.src=track.url; if(!track.radio) au.currentTime=0;
+  au.play().then(setNow,()=>{ if(MU.now===track) say(track.radio?'That station won\'t play here — try another':'Could not play that song',2200); }); setNow(); }
+function next(){ const n=MU.now; if(n&&n.radio){ const P=presets(); if(!P.length) return; const i=P.findIndex(p=>p.url===n.url); playStation(P[(i+1)%P.length]); return; }
+  if(MU.qi>=0&&MU.qi<MU.queue.length-1){ MU.qi++; play(MU.queue[MU.qi]); } else { MU.qi=-1; setNow(); } }
+au.addEventListener('ended',()=>{ if(!(MU.now&&MU.now.radio)) next(); }); au.addEventListener('pause',setNow); au.addEventListener('play',setNow);
+au.addEventListener('error',()=>{ const n=MU.now; if(n&&n.radio&&au.getAttribute('src')) say('Lost '+n.title+' — the station stopped sending',2400); });
+// live radio: after a pause, start again at "now" (not where it stopped)
+$('musicPlay').onclick=()=>{ const n=MU.now; if(!n) return; if(!au.paused){ au.pause(); return; } if(n.radio) play(n); else au.play(); };
+$('musicNext').onclick=()=>{ if(MU.queue.length||(MU.now&&MU.now.radio)) next(); };
 $('musicStop').onclick=()=>{ au.pause(); au.removeAttribute('src'); au.load(); MU.now=null; MU.queue=[]; MU.qi=-1; setNow(); };
-$('musicVol').oninput=e=>{ vol=+e.target.value; au.volume=vol; try{ localStorage.setItem('ydMusicVol',vol); }catch(_){ } };
+$('musicVol').oninput=e=>{ vol=+e.target.value; au.volume=vol; LSs('ydMusicVol',vol); };
 
-// search: iTunes Search API through JSONP (works from any page, no key)
+// ---------- songs: iTunes Search API through JSONP (works from any page, no key)
 let seq=0;
 function search(q){ q=q.trim(); if(!q) return; list.innerHTML='<div style="opacity:.6;padding:6px">Searching…</div>';
   const cb='__ydMusic'+(++seq), s=document.createElement('script'); let done=false;
@@ -59,7 +83,8 @@ function show(rs){ rs=rs.filter(r=>r.previewUrl); list.innerHTML=rs.length?'':'<
     const el=document.createElement('div'); el.className='it'; el.dataset.url=t.url;
     const img=document.createElement('img'); img.src=t.art; img.alt=''; const tx=document.createElement('div'); tx.className='t';
     const b=document.createElement('b'); b.textContent=t.title; const sp=document.createElement('span'); sp.textContent=t.artist+(r.collectionName?' · '+r.collectionName:'');
-    tx.append(b,sp); el.append(img,tx); el.onclick=()=>{ MU.queue=[]; MU.qi=-1; play(t); }; list.appendChild(el); } }
+    tx.append(b,sp); el.append(img,tx); el.onclick=()=>{ MU.queue=[]; MU.qi=-1; play(t); }; list.appendChild(el); }
+  setNow(); }
 $('musicForm').onsubmit=e=>{ e.preventDefault(); input.blur(); search(input.value); };
 
 // my music: whole songs from the device, played in order
@@ -70,13 +95,78 @@ $('musicFiles').onchange=e=>{ const fs=[...e.target.files]; if(!fs.length) retur
     const b=document.createElement('b'); b.textContent=(i+1)+'. '+t.title; tx.append(b); el.append(tx); el.onclick=()=>{ MU.qi=i; play(t); }; list.appendChild(el); });
   e.target.value=''; };
 
-function open(){ panel.classList.add('on'); setTimeout(()=>input.focus(),50); }
-function close(){ panel.classList.remove('on'); input.blur(); }
-$('musicX').onclick=close;
-addEventListener('keydown',e=>{ if(e.repeat||(e.target&&/INPUT|TEXTAREA/.test(e.target.tagName))) return; if(e.key.toLowerCase()==='m') panel.classList.contains('on')?close():open(); });
+// ---------- radio: Radio Browser directory (CORS, no key). all.api… picks a server; named mirrors are the fallback.
+const RB=['https://all.api.radio-browser.info','https://de1.api.radio-browser.info','https://de2.api.radio-browser.info','https://fi1.api.radio-browser.info'];
+let rbi=0;
+async function rbGet(path){ for(let k=0;k<RB.length;k++){ const base=RB[(rbi+k)%RB.length], ac=new AbortController(), t=setTimeout(()=>ac.abort(),8000);
+    try{ const r=await fetch(base+path,{signal:ac.signal}); clearTimeout(t); if(!r.ok) throw 0; rbi=(rbi+k)%RB.length; return await r.json(); }
+    catch(_){ clearTimeout(t); } }
+  throw new Error('unreachable'); }
+const okUrl=u=>typeof u==='string'&&/^https?:\/\//i.test(u)&&u.length<2000;
+const place=s=>[s.state,s.countrycode].filter(Boolean).join(', ');
+const toStation=s=>({title:String(s.name||'').trim().slice(0,80)||'Radio', artist:place(s), url:s.url_resolved||s.url, uuid:s.stationuuid||'',
+  fav:/^https:\/\//i.test(s.favicon||'')?s.favicon:'', radio:true, hls:!!s.hls||/\.m3u8(\?|$)/i.test(s.url_resolved||''), info:[s.codec,s.bitrate?s.bitrate+'k':''].filter(Boolean).join(' ')});
+let PRE=[]; try{ PRE=JSON.parse(LSg('ydRadioPresets','null')); }catch(_){ PRE=null; }
+if(!Array.isArray(PRE)) PRE=[{title:'93.9 LITE FM',artist:'Chicago, US',url:'https://stream.revma.ihrhls.com/zc853',uuid:'',fav:'',radio:true}];   // owner's example, ready on first use
+PRE=PRE.filter(p=>p&&okUrl(p.url)).slice(0,12);
+const presets=()=>PRE;
+function savePre(){ LSs('ydRadioPresets',JSON.stringify(PRE.map(p=>({title:p.title,artist:p.artist,url:p.url,uuid:p.uuid,fav:p.fav,radio:true})))); drawPre(); }
+const isPre=st=>PRE.some(p=>p.url===st.url);
+function togglePre(st){ const i=PRE.findIndex(p=>p.url===st.url); if(i>=0){ PRE.splice(i,1); say('Removed '+st.title+' from presets'); }
+  else { if(PRE.length>=12){ say('Presets are full (12) — remove one first',2200); return false; } PRE.push(st); say('⭐ Saved '+st.title); }
+  savePre(); return true; }
+function drawPre(){ const box=$('radioPresets'); box.textContent='';
+  if(!PRE.length){ const d=document.createElement('div'); d.className='note'; d.style.margin='0'; d.textContent='No presets yet — search for a station and tap ☆.'; box.append(d); }
+  PRE.forEach((p,i)=>{ const b=document.createElement('button'); b.type='button'; b.dataset.url=p.url; b.textContent=(i+1)+'. '+p.title; b.title=p.title+(p.artist?' — '+p.artist:'');
+    b.onclick=()=>playStation(p); box.append(b); });
+  for(const s of rList.querySelectorAll('.star')) s.textContent=PRE.some(p=>p.url===s.dataset.url)?'★':'☆';
+  setNow(); }
+function playStation(st){ MU.queue=[]; MU.qi=-1; play(st);
+  if(st.uuid) rbGet('/json/url/'+encodeURIComponent(st.uuid)).catch(()=>{}); }   // the directory's "someone listened" count, as it asks
+let rseq=0;
+async function radioSearch(q){ q=q.trim(); if(!q) return; const my=++rseq; rList.innerHTML='<div style="opacity:.6;padding:6px">Searching stations…</div>';
+  const go=(n,lim)=>rbGet('/json/stations/search?hidebroken=true&order=clickcount&reverse=true&limit='+(lim||60)+'&name='+encodeURIComponent(n));
+  let rs;
+  try{ rs=await go(q);
+    // nothing for the whole phrase ("lite fm 93.9"): search the most telling word — a frequency if there is one, else the
+    // longest word — and keep the stations whose names have every word
+    if(!rs.length&&/\s/.test(q)){ const ws=q.toLowerCase().split(/\s+/).filter(Boolean), key=ws.find(w=>/\d/.test(w))||ws.slice().sort((a,b)=>b.length-a.length)[0];
+      rs=(await go(key,300)).filter(s=>{ const nm=String(s.name||'').toLowerCase(); return ws.every(w=>nm.includes(w)); }); } }
+  catch(_){ if(my===rseq) rList.innerHTML='<div style="opacity:.6;padding:6px">The station directory isn\'t reachable right now.</div>'; return; }
+  if(my!==rseq) return;
+  // one entry per station (the directory often lists a station twice), direct streams before HLS, secure before plain
+  const seen=new Map();
+  for(const s of rs){ if(!okUrl(s.url_resolved||s.url)) continue; const st=toStation(s), k=st.title.toLowerCase()+'|'+st.artist;
+    const rank=x=>(x.hls?2:0)+(/^https:/i.test(x.url)?0:1), o=seen.get(k); if(!o||rank(st)<rank(o)) seen.set(k,st); }
+  const out=[...seen.values()].sort((a,b)=>(a.hls-b.hls)).slice(0,30);
+  rList.textContent=''; if(!out.length){ rList.innerHTML='<div style="opacity:.6;padding:6px">No stations found.</div>'; return; }
+  for(const st of out){ const el=document.createElement('div'); el.className='it'; el.dataset.url=st.url;
+    let ic; if(st.fav){ ic=document.createElement('img'); ic.alt=''; ic.referrerPolicy='no-referrer'; ic.loading='lazy'; ic.src=st.fav; ic.onerror=()=>{ const ph=document.createElement('div'); ph.className='ph'; ph.textContent='📻'; ic.replaceWith(ph); }; }
+    else { ic=document.createElement('div'); ic.className='ph'; ic.textContent='📻'; }
+    const tx=document.createElement('div'); tx.className='t'; const b=document.createElement('b'); b.textContent=st.title;
+    const sp=document.createElement('span'); sp.textContent=[st.artist,st.info,st.hls?'may not play here':''].filter(Boolean).join(' · ');
+    tx.append(b,sp); const star=document.createElement('button'); star.type='button'; star.className='star'; star.dataset.url=st.url; star.textContent=isPre(st)?'★':'☆';
+    star.setAttribute('aria-label','Save to presets'); star.onclick=e=>{ e.stopPropagation(); togglePre(st); };
+    el.append(ic,tx,star); el.onclick=()=>playStation(st); rList.append(el); }
+  setNow(); }
+$('radioForm').onsubmit=e=>{ e.preventDefault(); rInput.blur(); radioSearch(rInput.value); };
+drawPre();
 
-// for the car's centre screen: what's playing and how far along
-MU.info=()=>MU.now?{title:MU.now.title,artist:MU.now.artist,playing:!au.paused,pos:au.currentTime||0,dur:isFinite(au.duration)?au.duration:0}:null;
-MU.open=open; MU.close=close;
+// ---------- tabs, open / close
+let tab=LSg('ydMusicTab','songs')==='radio'?'radio':'songs';
+function setTab(t){ tab=t; LSs('ydMusicTab',t); $('paneSongs').style.display=t==='songs'?'':'none'; $('paneRadio').style.display=t==='radio'?'':'none';
+  $('tabSongs').classList.toggle('on',t==='songs'); $('tabRadio').classList.toggle('on',t==='radio'); }
+$('tabSongs').onclick=()=>setTab('songs'); $('tabRadio').onclick=()=>setTab('radio'); setTab(tab);
+// focus: false when opened from the wheel, so the keyboard keeps driving
+function open(focus){ panel.classList.add('on'); if(focus!==false) setTimeout(()=>(tab==='radio'?rInput:input).focus(),50); }
+function close(){ panel.classList.remove('on'); input.blur(); rInput.blur(); }
+const toggle=focus=>panel.classList.contains('on')?close():open(focus);
+$('musicX').onclick=close;
+addEventListener('keydown',e=>{ if(e.repeat||(e.target&&/INPUT|TEXTAREA/.test(e.target.tagName))) return; if(e.key.toLowerCase()==='m') toggle(); });
+
+// for the car's centre screen: what's playing and how far along (live radio: no length, live:true)
+MU.info=()=>MU.now?{title:MU.now.title,artist:MU.now.radio?(MU.now.artist?MU.now.artist+' · LIVE':'LIVE'):MU.now.artist,playing:!au.paused,live:!!MU.now.radio,
+  pos:au.currentTime||0,dur:!MU.now.radio&&isFinite(au.duration)?au.duration:0}:null;
+MU.open=open; MU.close=close; MU.toggle=toggle; MU.presets=presets; MU.playStation=playStation;
 window.MUSIC=MU;
 })();
