@@ -12,6 +12,7 @@ const css=document.createElement('style'); css.textContent=`
 #tubeBox iframe{width:100%;height:100%;border:0;display:block}
 #tubeBox .stop{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.86);color:#fff;font:600 28px system-ui,Arial;text-align:center;padding:20px;box-sizing:border-box}
 #tubeBox.moving .stop{display:flex}
+#tubeBox.off{visibility:hidden!important}
 #paneVideo .it{display:flex;gap:9px;align-items:center;padding:6px;border-radius:9px;cursor:pointer}
 #paneVideo .it:hover{background:rgba(255,255,255,.1)}
 #tubeResults{max-height:min(40vh,320px);overflow-y:auto;margin-top:6px}
@@ -114,7 +115,11 @@ function place(){ if(!T.frame) return;
   if(moving!==T.moving){ T.moving=moving; box.classList.toggle('moving',moving);
     if(moving){ cmd('pauseVideo'); if(!T.warned){ T.warned=true; toast('Video pauses while the car is moving',2000); } } } }
 if(window.COCKPIT&&COCKPIT.afterRender) COCKPIT.afterRender.push(place);
-function frame(){ requestAnimationFrame(frame); if(T.frame&&!(window.COCKPIT&&COCKPIT.on)) box.style.visibility='hidden'; }
+// the car switched off (owner 2026-11-22): the video pauses and its screen goes dark with the car's other screens; it comes
+// back, paused where it was, once the car is started again
+function frame(){ requestAnimationFrame(frame); if(!T.frame) return; if(!(window.COCKPIT&&COCKPIT.on)) box.style.visibility='hidden';
+  const st=window.IGN&&IGN.state, off=st==='off'||st==='stop';
+  if(off!==!!T.off){ T.off=off; box.classList.toggle('off',off); if(off) cmd('pauseVideo'); } }
 requestAnimationFrame(frame);
 window.TUBE={watch,stop,idOf,listOf,state:T};
 })();
