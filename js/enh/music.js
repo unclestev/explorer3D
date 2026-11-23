@@ -174,7 +174,7 @@ function open(focus){ panel.classList.add('on'); if(focus!==false) setTimeout(()
 function close(){ panel.classList.remove('on'); input.blur(); rInput.blur(); }
 const toggle=focus=>panel.classList.contains('on')?close():open(focus);
 $('musicX').onclick=close;
-addEventListener('keydown',e=>{ if(e.repeat||(e.target&&/INPUT|TEXTAREA/.test(e.target.tagName))) return; if(e.key.toLowerCase()==='m') toggle(); });
+/* the M key: js/enh/controls.js */
 
 // for the car's centre screen: what's playing and how far along (live radio: no length, live:true)
 MU.info=()=>MU.now?{title:MU.now.title,artist:MU.now.radio?(MU.now.artist?MU.now.artist+' · LIVE':'LIVE'):MU.now.artist,playing:!au.paused,live:!!MU.now.radio,
@@ -201,6 +201,12 @@ MU.playRadio=async q=>{ q=q.toLowerCase().trim(); const ws=q.split(/\s+/).filter
     return (s.countrycode==='US'?3000:20000)+(/\.m3u8|hls/i.test(s.url_resolved||'')?500:0); };
   rs.sort((a,b)=>score(a)-score(b)); const st=toStation(rs[0]); playStation(st); return st.title; };
 MU.stop=()=>$('musicStop').click(); MU.resume=()=>{ if(MU.now&&au.paused) $('musicPlay').click(); };
+// Controls (js/enh/controls.js): next / previous song or preset station, volume steps (the wheel's + / −, the = / − keys)
+MU.next=()=>{ if(MU.queue.length||(MU.now&&MU.now.radio)) next(); };
+MU.prev=()=>{ const n=MU.now; if(n&&n.radio){ const P=presets(); if(!P.length) return; const i=P.findIndex(p=>p.url===n.url); playStation(P[(i-1+P.length)%P.length]); return; }
+  if(n&&!au.paused&&au.currentTime>3){ au.currentTime=0; return; }                       // like a car stereo: first back to the start of the song
+  if(MU.qi>0){ MU.qi--; play(MU.queue[MU.qi]); } else if(n){ au.currentTime=0; } };
+MU.volStep=d=>{ vol=Math.round(Math.max(0,Math.min(1,vol+d*.05))*100)/100; au.volume=vol*duckF; $('musicVol').value=vol; LSs('ydMusicVol',vol); say('🔊 Volume '+Math.round(vol*100),900); };
 MU.duck=duck; MU.open=open; MU.close=close; MU.pause=()=>{ if(!au.paused) au.pause(); }; MU.toggle=toggle; MU.presets=presets; MU.playStation=playStation;
 window.MUSIC=MU;
 })();

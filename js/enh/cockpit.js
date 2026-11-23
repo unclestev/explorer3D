@@ -1515,6 +1515,19 @@ function wsVec(wsP,u,v){ const p=wsP(clamp(u,0,1),clamp(v,0,1)); return new V3(p
 CK.wipe=null;
 CK.wiper=function(){ if(!powered()) return; const R=CK.cab&&CK.cab.parts.rain, W=YD.AT&&YD.AT.wx||{}, going=CK.wipe===true||(CK.wipe!==false&&!!W.type)||(R&&R.ang>.01&&R.dir>0);
   CK.wipe=!going; toast(CK.wipe?'Wipers on':'Wipers off',1100); };
+/* washer fluid (owner 2026-11-22, Controls: O key / R3 on the wheel / D-pad down on a controller): the jets put streaks of
+   fluid on the glass ahead of the driver, then the wipers make three strokes and go back to what they were doing.
+   Works with the engine running (like the wipers); in the chase view you just hear it. */
+CK.washN=0;
+CK.washer=function(){ if(!powered()){ toast('Turn the engine on first',1200); return; }
+  if(window.SOUND&&SOUND.squirt) try{ SOUND.squirt(); }catch(e){}
+  const R=CK.cab&&CK.cab.parts.rain; CK.washN=3; if(!R){ toast('💦 Washer',900); return; }
+  const x=R.T.x, w=512, h=256;
+  for(const jet of [.34,.66]) for(let i=0;i<70;i++){ const px=(jet+(Math.random()-.5)*.26)*w, py=h*(.25+Math.random()*.5), len=4+Math.random()*16, r=1+Math.random()*2.2;
+    const g=x.createLinearGradient(px,py,px,py+len); g.addColorStop(0,'rgba(215,232,245,.55)'); g.addColorStop(1,'rgba(150,175,200,.18)');
+    x.fillStyle=g; x.beginPath(); x.ellipse(px,py+len/2,r,len/2,0,0,7); x.fill(); }
+  x.fillStyle='rgba(200,215,228,.10)'; for(let i=0;i<14;i++){ x.beginPath(); x.arc(w*(.2+Math.random()*.6),h*(.25+Math.random()*.5),20+Math.random()*30,0,7); x.fill(); }
+  R.T.t.needsUpdate=true; R.cleared=false; };
 function updateRain(R,dt,P){
   const W=YD.AT&&YD.AT.wx||{}, wet=W.type?(W.int||.5):0, x=R.T.x, w=512, h=256, v=Math.abs(S.v||0);
   R.t+=dt; let changed=false;
@@ -1525,9 +1538,9 @@ function updateRain(R,dt,P){
     if(v>12&&W.type!=='snow'){ x.globalCompositeOperation='destination-out'; x.fillStyle='rgba(0,0,0,.05)'; x.fillRect(0,0,w,h); x.globalCompositeOperation='source-over'; }   // the wind blows the drops up and off at speed
     changed=true; }
   // automatic wipers while it's wet; finish the stroke and park when it stops
-  const on=powered()&&(CK.wipe===true||(CK.wipe!==false&&wet>0)), per=wet>.6?.9:1.5;   // CK.wipe: true = switched on, false = switched off, null = automatic
+  const on=powered()&&(CK.washN>0||CK.wipe===true||(CK.wipe!==false&&wet>0)), per=wet>.6?.9:1.5;   // CK.wipe: true = switched on, false = switched off, null = automatic
   if(on||R.ang>.01){ const prev=R.ang; R.ang+=R.dir*dt*(SWEEP*2/per);
-    if(R.ang>=SWEEP){ R.ang=SWEEP; R.dir=-1; } if(R.ang<=0){ R.ang=0; R.dir=on?1:0; if(!on) R.dir=1; }
+    if(R.ang>=SWEEP){ R.ang=SWEEP; R.dir=-1; } if(R.ang<=0){ R.ang=0; if(prev>0&&CK.washN>0) CK.washN--; R.dir=on?1:0; if(!on) R.dir=1; }
     // erase the swept wedge on the glass
     x.globalCompositeOperation='destination-out'; x.fillStyle='rgba(0,0,0,1)';
     for(const a of R.arms){ const cx=a.pu*w, cy=h, tip=t=>[cx+Math.cos(t)*LU*a.k*w*1.06,cy-Math.sin(t)*LV*a.k*h*1.06], t0=Math.min(prev,R.ang)-.05, t1=Math.max(prev,R.ang)+.05;
@@ -2051,7 +2064,7 @@ CK.view=function(dt){
   const P=CK.cab.P, W=innerWidth, H=innerHeight;
   if(W!==CK.W||H!==CK.H){ CK.W=W; CK.H=H; renderer.setSize(W,H,false); }
   // glance left / right with Q / E (held), on top of a drag on the screen
-  const kl=(K.q?-1:0)+(K.e?1:0); CK.look+=(kl*80-CK.look)*Math.min(1,dt*7);
+  const KH=id=>!!(window.CTRL&&CTRL.held(id)), kl=(KH('lookL')?-1:0)+(KH('lookR')?1:0); CK.look+=(kl*80-CK.look)*Math.min(1,dt*7);
   const yaw=clamp(LOOK.yaw,-140,140)+CK.look, yr=yaw*DEG;
   S.camB=((S.hdg+yaw)%360+360)%360;
   const want=P.pitch+LOOK.pitch*.6, pitch=clamp(want,50,85), fov=CK.fov;   // default a little below level (more road, less sky); drag up to raise it
@@ -2142,7 +2155,9 @@ function setHud(v){ CK.hud=v; LSs('ydHud',v?'1':'0'); showPick(); dirty=true; }
     if(Math.abs(d.y)<1e-4) return null; const q=o.addScaledVector(d,(-.0012-o.y)/d.y);   // where the tap meets the console's face, not the target box's underside
     let best=null,bd=1e9; for(const s of CK.roofSpots){ const d=Math.hypot(q.x-s.x,q.z-s.z); if(d<bd){ bd=d; best=s; } }
     if(!best) return null; best.flash.material.opacity=.55; CK.roof(best.k); return best.k; }; }
-addEventListener('keydown',e=>{ if(e.repeat||(e.target&&e.target.tagName==='INPUT')) return; const k=e.key.toLowerCase(); if(k==='c') CK.toggle(); else if(k==='h'&&CK.on){ setHud(!CK.hud); toast(CK.hud?'Head-up display on':'Head-up display off',1400); } });
+/* C and H keys: js/enh/controls.js */
+CK.hudToggle=function(){ if(!CK.on) return; setHud(!CK.hud); toast(CK.hud?'Head-up display on':'Head-up display off',1400); };
+CK.recenter=function(){ CK.look=0; dirty=true; };
 const prevMode=window.onModeChange;
 window.onModeChange=(m,was)=>{ if(prevMode) prevMode(m,was); if(CK.on&&m!=='car'&&m!=='tractor') leave(); else if(CK.on&&m!==was){ dispose(); } };
 const prevCar=window.onCarChange;

@@ -138,8 +138,7 @@ function lamps(){
 }
 
 /* ---------- keys and on-screen buttons ---------- */
-addEventListener('keydown',e=>{ if(e.repeat||(e.target&&e.target.tagName==='INPUT')) return;
-  if(e.key==='[') { SIG.press(-1); } else if(e.key===']') { SIG.press(1); } else if(e.key==='\\') { SIG.hazard(); } });
+/* [ ] \ keys: js/enh/controls.js */
 const box=document.createElement('div'); box.id='sigBtns';
 box.innerHTML='<button id="sigL" aria-label="Left turn signal">◀</button><button id="sigH" aria-label="Hazard lights">⚠</button><button id="sigR" aria-label="Right turn signal">▶</button>';
 const ctl=document.getElementById('ctl'); if(ctl) ctl.appendChild(box);

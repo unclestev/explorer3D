@@ -140,7 +140,7 @@ function getIn(){
   toast('Back in the '+(m==='tractor'?'tractor':(CARSPEC&&CARSPEC.name)||'car'),1600);
 }
 if(btn) btn.addEventListener('click',e=>{ e.stopPropagation(); safe('walk',getOut); });
-addEventListener('keydown',e=>{ if(!e.repeat&&e.key.toLowerCase()==='f'&&!(e.target&&e.target.tagName==='INPUT')) safe('walk',getOut); });
+window.WALK={toggle:()=>safe('walk',getOut)};   /* the F key: js/enh/controls.js */
 
 // mode changes (here, the glider, anything else): show/hide the person, relabel the pedals and the button
 const prevMode=window.onModeChange;

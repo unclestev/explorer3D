@@ -177,7 +177,7 @@ function applyAtmos(){
   safe('carlight',()=>{
     const hemi=scene.children.find(o=>o&&o.isHemisphereLight); if(hemi) hemi.intensity=.85-.5*k-.2*cl*(1-k);
     sun.intensity=.9*(1-k)*(1-.5*cl)+.08;
-    headM.color.setHex(k>.35?0xfffbe6:0xf4f8ff); tailOff.color.setHex(k>.35?0xc01820:0x8a1216);
+    headM.color.setHex(lightsOn()?0xfffbe6:0xf4f8ff); tailOff.color.setHex(lightsOn()?0xc01820:0x8a1216);
     if(!AT.beams) AT.beams=makeBeams();
   });
   updateBeams(); dirty=true;
@@ -185,7 +185,16 @@ function applyAtmos(){
 // a different car has its lamps elsewhere: rebuild the beams for it
 const prevCar=window.onCarChange;
 window.onCarChange=(k)=>{ if(prevCar) prevCar(k); safe('beams',()=>{ const b=AT.beams; if(b){ car.remove(b); b.geometry.dispose(); b.material.map.dispose(); b.material.dispose(); AT.beams=makeBeams(); updateBeams(); } }); };
-function updateBeams(){ let b=AT.beams; if(!b) return; const on=AT.k>.35&&(mode==='car'||mode==='tractor');
+/* headlight switch (owner 2026-11-22, Controls: L key / ◻ on the wheel / left stick click): Auto (on after dusk, as
+   before) → On → Off. Saved on this device (ydLights). window.LIGHTS = {mode, on(), cycle()} */
+var lightMode='auto'; try{ const v=localStorage.getItem('ydLights'); if(v==='on'||v==='off') lightMode=v; }catch(e){}
+function lightsOn(){ return lightMode==='on'||lightMode!=='off'&&AT.k>.35; }   /* hoisted: applyAtmos can run first */
+window.LIGHTS={get mode(){ return lightMode; }, on:lightsOn,
+  cycle(){ lightMode=lightMode==='auto'?'on':lightMode==='on'?'off':'auto'; try{ localStorage.setItem('ydLights',lightMode); }catch(e){}
+    if(typeof toast==='function') toast(lightMode==='auto'?'💡 Headlights: Auto':lightMode==='on'?'💡 Headlights: On':'Headlights: Off',1400);
+    safe('carlight',()=>{ headM.color.setHex(lightsOn()?0xfffbe6:0xf4f8ff); tailOff.color.setHex(lightsOn()?0xc01820:0x8a1216); });
+    if(!AT.beams) safe('beams',()=>{ AT.beams=makeBeams(); }); updateBeams(); dirty=true; } };
+function updateBeams(){ let b=AT.beams; if(!b) return; const on=lightsOn()&&(mode==='car'||mode==='tractor');
   const ck=!!(window.COCKPIT&&COCKPIT.on&&COCKPIT.lamps);
   if(!!b.userData.ck!==ck||ck&&b.userData.key!==COCKPIT.lamps().key){   // into / out of the cockpit, or another car: the other kind of beam
     car.remove(b); b.geometry.dispose(); b.material.map.dispose(); b.material.dispose(); b=AT.beams=makeBeams(); if(ck) b.userData.key=COCKPIT.lamps().key; }

@@ -12,7 +12,11 @@
    2nd = 14, counting from 1). No shifter used yet: D; press both paddles together to switch between D and R.
    Paddles (owner 2026-11-21, issue #1): the turn signals — left paddle left, right paddle right, again to cancel
    (js/enh/signals.js). A press of both together within 0.25 s is the D/R switch instead (without a shifter).
-   read() → {st, gas (pedal 0…1), brake (0…1), sel ('D','R','N'), ok}. */
+   read() → {st, gas (pedal 0…1), brake (0…1), sel ('D','R','N'), ok}.
+   Buttons (2026-11-22): every button that does something (engine, signals, wipers, horn, …) is in the layouts in
+   js/enh/controls.js, shown on the Controls screen (js/enh/controls-view.js); this file passes the wheel / controller to
+   CTRL.poll each frame and keeps the analog parts: steering, pedals and their setup, the D-pad hat / right stick look,
+   and the gear selector (shifter slots come from the layout, or the ones learned in ⚙️). */
 (function(){
   'use strict';
   if(!navigator.getGamepads) return;
@@ -57,27 +61,22 @@
      View (⧉) = chase / cockpit; D-pad or right stick = look around. Standard Gamepad layout, so no setup. */
   const isPad=g=>g&&g.connected&&g.mapping==='standard'&&!isWheel(g)&&g.axes&&g.axes.length>=4;
   function findPad(){ for(const g of navigator.getGamepads()) if(isPad(g)) return g; return null; }
-  let padId=null, prevP=[], psel='D', bumpT=null;
+  let padId=null, prevP=[], psel='D', active=null;
   function readPad(g,dt){
-    if(padId!==g.id){ padId=g.id; prevP=[]; showRow(); say('🎮 Controller connected — RT gas · LT brake · left stick steers · Y Drive / Reverse · LB / RB signals · View = cockpit',5200); }
+    if(padId!==g.id){ padId=g.id; prevP=[]; showRow(); say('🎮 Controller connected — RT gas · LT brake · left stick steers · A horn · Y Drive / Reverse · all buttons: ⚙️ → Controls or the / key',5200); }
     const bs=g.buttons||[], val=i=>bs[i]?(+bs[i].value||(bs[i].pressed?1:0)):0, down=i=>val(i)>.5, hit=i=>down(i)&&!prevP[i];
-    if(hit(3)){ psel=psel==='R'?'D':'R'; say(psel==='R'?'⏪ Reverse':'⏩ Drive',1400); if(window.SOUND&&SOUND.click) try{ SOUND.click(); }catch(e){} }
-    if(hit(2)&&window.IGN) IGN.button();
-    if(hit(8)&&window.COCKPIT) COCKPIT.toggle();
-    const now=performance.now();
-    for(const [b,d] of [[4,-1],[5,1]]) if(hit(b)){
-      if(bumpT&&now-bumpT.t<250&&bumpT.d!==d){ if(window.SIG){ SIG.press(bumpT.d); SIG.hazard(); } bumpT=null; }   // both bumpers: hazards (undo the first one's signal)
-      else { bumpT={t:now,d}; if(window.SIG) SIG.press(d); } }
-    // look around: D-pad (held) or the right stick
-    let hx=(down(15)?1:0)-(down(14)?1:0), hy=(down(12)?1:0)-(down(13)?1:0);
+    // buttons (engine, signals, horn, view, …): the controller layout in js/enh/controls.js; both bumpers = hazards there
+    active='pad'; if(window.CTRL) CTRL.poll(g,'pad');
+    // look around: the right stick (the D-pad has its own jobs now: wipers, washer, previous / next)
+    let hx=0, hy=0;
     const rx=g.axes[2]||0, ry=g.axes[3]||0; if(Math.abs(rx)>.2) hx+=rx*1.2; if(Math.abs(ry)>.2) hy-=ry;
-    if((hx||hy)&&typeof LOOK!=='undefined'){ const ck=window.COCKPIT&&COCKPIT.on, dY=hx*90*dt;
+    if((hx||hy)&&typeof LOOK!=='undefined'&&!(window.CTRL&&CTRL.paused)){ const ck=window.COCKPIT&&COCKPIT.on, dY=hx*90*dt;
       LOOK.yaw=((LOOK.yaw+dY)%360+540)%360-180; S.camB=((S.camB+dY)%360+360)%360;
       LOOK.pitch=Math.max(-55,Math.min(ck?135:12,LOOK.pitch+hy*(ck?70:45)*dt)); dirty=true;
       const c=document.getElementById('compass'); if(c) c.classList.add('look'); }
     prevP=bs.map((b,i)=>down(i));
     let st=g.axes[0]||0; const D=.12; st=Math.abs(st)<D?0:Math.sign(st)*Math.pow((Math.abs(st)-D)/(1-D),1.5);
-    const gp=val(7), bp=val(6), G=gp<.04?0:gp, B=bp<.04?0:bp;
+    const off=window.CTRL&&CTRL.paused, gp=off?0:val(7), bp=off?0:val(6), G=gp<.04?0:gp, B=bp<.04?0:bp;
     return {st:Math.max(-1,Math.min(1,st)), gas:G-B, pedal:G, brake:B, sel:psel, ok:true, pad:true}; }
   // which axis is the hat: the one sitting outside -1..1 when nothing's pressed (G29 ~1.29); remembered per wheel
   const hats={};
@@ -93,49 +92,41 @@
       const bs=g.buttons||[], down=i=>!!(bs[i]&&(bs[i].pressed||bs[i].value>.5));
       if(shLearn){ for(let i=0;i<bs.length;i++) if(down(i)&&!prevB[i]){ shLearn[shLearn.step]=i;
           if(shLearn.step==='d'){ shLearn.step='r'; say('Now move the shifter to 2nd (that will be Reverse)',6000); }
-          else { cfg[g.id]=Object.assign(cfg[g.id]||{},{shift:{d:shLearn.d,r:shLearn.r}}); save(); shLearn=null; shUsed=true; showRow(); say('⚙️ Shifter ready: 1st = Drive · 2nd = Reverse · middle = Neutral',4200); }
+          else { cfg[g.id]=Object.assign(cfg[g.id]||{},{shift:{d:shLearn.d,r:shLearn.r}}); save(); if(window.CTRL) CTRL.relayout(); shLearn=null; shUsed=true; showRow(); say('⚙️ Shifter ready: 1st = Drive · 2nd = Reverse · middle = Neutral',4200); }
           break; } }
-      else if(learn){ for(let i=0;i<bs.length;i++) if(down(i)&&!prevB[i]){ const o={}; o[learn]=i; cfg[g.id]=Object.assign(cfg[g.id]||{},o); save();
+      else if(learn){ for(let i=0;i<bs.length;i++) if(down(i)&&!prevB[i]){ const o={}; o[learn]=i; cfg[g.id]=Object.assign(cfg[g.id]||{},o); save(); if(window.CTRL) CTRL.relayout();
           say(learn==='start'?'🔑 Wheel button '+(i+1)+' now starts and stops the engine':'🎥 Wheel button '+(i+1)+' now switches chase / cockpit view',3600); learn=false; showRow(); break; } }
-      else { if(cfg[g.id]&&cfg[g.id].view!=null){ const v=cfg[g.id].view; if(down(v)&&!prevB[v]&&window.COCKPIT) COCKPIT.toggle(); }
-        // engine start / stop (owner 2026-11-21): the Enter button in the middle of the G29's red dial — button 24 counting
-        // from 1 on the G29's usual numbering — or whichever button was set in ⚙️ (Start button). js/enh/ignition.js
-        const sb=cfg[g.id]&&cfg[g.id].start!=null?cfg[g.id].start:23; if(down(sb)&&!prevB[sb]&&window.IGN) IGN.button();
-        // wipers on / off (owner 2026-11-22): the blue R2 button on the G29's right spoke — button 7 counting from 1
-        if(g.mapping!=='standard'&&down(6)&&!prevB[6]&&window.COCKPIT&&COCKPIT.wiper) COCKPIT.wiper();
-        // voice commands (owner 2026-11-22): the ≡ Options button on the G29's right side — button 10 counting from 1 (9 here)
-        if(down(9)&&!prevB[9]&&window.VOICE) VOICE.listen();
-        // Music panel open / close (owner 2026-11-22): the L2 button on the G29's left spoke — button 8 counting from 1.
-        // Opened this way it doesn't take the keyboard (js/enh/music.js)
-        if(g.mapping!=='standard'&&down(7)&&!prevB[7]&&window.MUSIC&&MUSIC.toggle) MUSIC.toggle(false); }
+      // every other button (engine on the red dial's Enter, wipers R2, music L2, voice ≡, horn ✕, …): the wheel layout in
+      // js/enh/controls.js, with the buttons learned in ⚙️ on top. Both paddles together = Drive / Reverse there.
+      else { active='wheel'; if(window.CTRL) CTRL.poll(g,'wheel'); }
       // gear selector: the shifter when it's been used (otherwise D, or R after both paddles together)
-      if(!shLearn&&!learn){ const sh=(cfg[g.id]&&cfg[g.id].shift)||{d:12,r:13};
-        if(down(sh.d)||down(sh.r)) shUsed=true;
-        if(shUsed){ const s2=down(sh.d)?'D':down(sh.r)?'R':'N'; if(s2!==sel){ sel=s2; if(window.SOUND&&SOUND.click) try{ SOUND.click(); }catch(e){} } }
+      if(!shLearn&&!learn){ const C=window.CTRL, sd=C?C.buttonsFor('wheel','gearD'):[12], sr=C?C.buttonsFor('wheel','gearR'):[13];
+        const dD=sd.some(down), dR=sr.some(down);
+        if(dD||dR) shUsed=true;
+        if(shUsed){ const s2=dD?'D':dR?'R':'N'; if(s2!==sel){ sel=s2; if(window.SOUND&&SOUND.click) try{ SOUND.click(); }catch(e){} } }
       }
-      // paddles: right = button 5, left = button 6 (counting from 1) — turn signals; both together = D/R without a shifter
-      if(!shLearn&&!learn){ const now2=performance.now();
-        for(const [b,d] of [[4,1],[5,-1]]) if(down(b)&&!prevB[b]){
-          if(paddleT&&now2-paddleT.t<250&&paddleT.d!==d){            // the other paddle just went: both together
-            if(window.SIG&&paddleT.did) SIG.press(paddleT.d);         // undo the signal the first press switched
-            if(!shUsed){ sel=sel==='R'?'D':'R'; say(sel==='R'?'⏪ Reverse':'⏩ Drive',1400); } paddleT=null; }
-          else { paddleT={t:now2,d,did:!!window.SIG}; if(window.SIG) SIG.press(d); } } }
+      // paddles (right = button 5, left = button 6 counting from 1): turn signals, in js/enh/controls.js
       // D-pad (owner 2026-11-21: "make those buttons move the camera angle"): held, it turns the view — up / down look
       // higher / lower, left / right look round — in chase and cockpit view, like dragging on the screen. The G29 reports
       // its D-pad as one "hat" axis (a value in 8 steps from -1 to 1, ~1.29 when let go); on the standard layout it's buttons 12-15.
       if(!shLearn&&!learn){ let hx=0, hy=0;
         if(g.mapping==='standard'){ hx=(down(15)?1:0)-(down(14)?1:0); hy=(down(12)?1:0)-(down(13)?1:0); }
         else { const hi=hatAxis(g); if(hi>=0){ const v=g.axes[hi]; if(v>=-1.05&&v<=1.05){ const k=Math.round((v+1)*3.5)&7, a=k*Math.PI/4; hx=Math.round(Math.sin(a)); hy=Math.round(Math.cos(a)); } } }
-        if((hx||hy)&&typeof LOOK!=="undefined"){ const ck=window.COCKPIT&&COCKPIT.on, dY=hx*90*dt;
+        if((hx||hy)&&typeof LOOK!=="undefined"&&!(window.CTRL&&CTRL.paused)){ const ck=window.COCKPIT&&COCKPIT.on, dY=hx*90*dt;
           LOOK.yaw=((LOOK.yaw+dY)%360+540)%360-180; S.camB=((S.camB+dY)%360+360)%360;
           LOOK.pitch=Math.max(-55,Math.min(ck?135:12,LOOK.pitch+hy*(ck?70:45)*dt)); dirty=true;
           const c=document.getElementById('compass'); if(c) c.classList.add('look'); } }
       prevB=bs.map((b,i)=>down(i));
       if(cal){ runCal(g,dt); return {st:0,gas:0,cal:true}; }
       let st=g.axes[ST]||0; st=Math.abs(st)<DEAD?0:(st-Math.sign(st)*DEAD)/(1-DEAD);
-      const c=cfg[g.id], gp=c&&c.gas?pedal(g,c.gas):0, bp=c&&c.brake?pedal(g,c.brake):0;
+      const c=cfg[g.id], off=window.CTRL&&CTRL.paused, gp=c&&c.gas&&!off?pedal(g,c.gas):0, bp=c&&c.brake&&!off?pedal(g,c.brake):0;
       return {st:Math.max(-1,Math.min(1,st)), gas:gp-bp, pedal:gp, brake:bp, sel, ok:!!(c&&c.gas)};
     },
+    // Drive / Reverse without a shifter (wheel: both paddles; controller: Y) — js/enh/controls.js
+    toggleGear(){ const click=()=>{ if(window.SOUND&&SOUND.click) try{ SOUND.click(); }catch(e){} };
+      if(active==='pad'){ psel=psel==='R'?'D':'R'; say(psel==='R'?'⏪ Reverse':'⏩ Drive',1400); click(); return; }
+      if(!shUsed){ sel=sel==='R'?'D':'R'; say(sel==='R'?'⏪ Reverse':'⏩ Drive',1400); } },
+    learned:id=>cfg[id||pad]||null, device:()=>{ const g=find(); if(g) return {kind:'wheel',id:g.id}; const p=findPad(); return p?{kind:'pad',id:p.id}:null; },
     setup:startCal, connected:()=>!!(find()||findPad()), gear:()=>find()&&cfg[pad]&&cfg[pad].gas?sel:(!find()&&findPad()?psel:null)
   };
 
@@ -145,7 +136,7 @@
     const row=document.getElementById('wheelRow'); if(!row) return; const g=g0;
     if(g) seen=true; row.style.display=seen?'':'none';
     const s=document.getElementById('wheelStat'); if(s) s.textContent=!g?'Not connected':cal?'Setting up…':shLearn?'Move the shifter to '+(shLearn.step==='d'?'1st (Drive)':'2nd (Reverse)'):learn?(learn==='start'?'Press the wheel button you want to start / stop the engine':'Press the wheel button you want for the view'):cfg[g.id]&&cfg[g.id].gas?'Ready · gear '+sel+(cfg[g.id].shift?' · shifter set':'')+(cfg[g.id].view!=null?' · view button '+(cfg[g.id].view+1):'')+' · start button '+((cfg[g.id].start!=null?cfg[g.id].start:23)+1):'Pedals not set up';
-    if(!g0){ const p=findPad(); if(p){ row.style.display=''; if(s) s.textContent='🎮 Controller · RT gas · LT brake · Y Drive / Reverse · X engine · LB / RB signals · View = cockpit'; } } }
+    if(!g0){ const p=findPad(); if(p){ row.style.display=''; if(s) s.textContent='🎮 Controller connected · every button: Driving → Controls'; } } }
   addEventListener('gamepadconnected',showRow); addEventListener('gamepaddisconnected',showRow);
   const btn=document.getElementById('wheelBtn'); if(btn) btn.addEventListener('click',e=>{ e.stopPropagation(); startCal(); });
   const vb=document.getElementById('wheelViewBtn'); if(vb) vb.addEventListener('click',e=>{ e.stopPropagation(); if(!find()){ say('Turn the wheel or press a pedal so the browser sees it, then try again'); return; } learn='view'; prevB=[]; showRow(); say('Press the button on the wheel you want to switch the view',5000); });

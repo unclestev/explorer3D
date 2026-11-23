@@ -124,7 +124,7 @@ FRAME_HOOKS.push(function engineSound(dt){
     if(Math.abs(g-A.gainNow[k])>.001){ P.get('gain').setTargetAtTime(g,t,g>A.gainNow[k]?.15:.25); A.gainNow[k]=g; }
   }
   // let the phone rest when there's nothing to play
-  if(!want&&A.ctx.state==='running'){ clearTimeout(A.sus); A.sus=setTimeout(()=>{ if(!wanted()&&A.ctx) A.ctx.suspend().catch(()=>{}); },800); }
+  if(!want&&!H.on&&A.ctx.state==='running'){ clearTimeout(A.sus); A.sus=setTimeout(()=>{ if(!wanted()&&A.ctx) A.ctx.suspend().catch(()=>{}); },800); }
   else if(want&&A.ctx.state==='suspended'){ clearTimeout(A.sus); A.ctx.resume().catch(()=>{}); }
   return false;
 });
@@ -136,5 +136,31 @@ const prev=window.onCarChange;
 window.onCarChange=(k)=>{ if(prev) prev(k); if(wanted()) unlock(); };
 function cabin(inside,tractor){ if(!A.bus) return; const t=A.ctx.currentTime;
   A.bus.frequency.setTargetAtTime(inside?(tractor?2600:1700):20000,t,.15); A.boom.gain.setTargetAtTime(inside?(tractor?2:3.5):0,t,.15); }
-window.SOUND={duck:on=>{ try{ if(A.duck) A.duck.gain.setTargetAtTime(on?.25:1,A.ctx.currentTime,.12); }catch(e){} },setOn,get on(){ return on; },state:A,ENG,cabin};
+/* horn (owner 2026-11-22, Controls): held while the key / button is held (js/enh/controls.js 'horn'). Synthesized, no
+   recordings: a car horn is two disc horns a musical third or so apart, each a buzzy tone (rich in harmonics) that the
+   horn's trumpet narrows round 2-3 kHz. Ford / Lincoln: the usual low-high pair (~410 + 510 Hz); Javelin: an older, lower
+   pair; Model Y: one brighter tone; tractor: a single low one. It works with the engine off, like a real car. */
+const HORN={explorer:[410,510],expedition:[410,510],navigator:[400,500],tesla:[500],javelin:[350,440],tractor:[300]};
+const H={on:false,nodes:null};
+function hornTones(){ const k=mode==='tractor'?'tractor':(typeof CARKEY!=='undefined'&&/javelin/.test(CARKEY))?'javelin':(typeof CARSPEC!=='undefined'&&CARSPEC&&CARSPEC.sound==='tesla')?'tesla':(typeof CARKEY!=='undefined'&&HORN[CARKEY])?CARKEY:'explorer'; return HORN[k]; }
+function horn(v){ v=!!v&&on&&(mode==='car'||mode==='tractor'); if(v===H.on) return; H.on=v;
+  if(v){ start(); if(!A.ctx||A.failed&&!A.ctx) return; if(A.ctx.state!=='running') A.ctx.resume().catch(()=>{}); clearTimeout(A.sus);
+    const c=A.ctx, t=c.currentTime, out=c.createGain(); out.gain.setValueAtTime(0,t); out.gain.linearRampToValueAtTime(.16,t+.025);
+    const bp=c.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=2400; bp.Q.value=.7;
+    const lp=c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=5000; bp.connect(lp); lp.connect(out); out.connect(A.bus||c.destination);
+    const osc=hornTones().map(f=>{ const o=c.createOscillator(); o.type='sawtooth'; o.frequency.value=f; o.detune.value=(Math.random()-.5)*8;
+      const g=c.createGain(); g.gain.value=.6; o.connect(g); g.connect(bp); const body=c.createGain(); body.gain.value=.25; o.connect(body); body.connect(lp); o.start(t); return o; });
+    H.nodes={out,osc}; }
+  else if(H.nodes){ const {out,osc}=H.nodes, t=A.ctx.currentTime; out.gain.cancelScheduledValues(t); out.gain.setValueAtTime(out.gain.value,t); out.gain.linearRampToValueAtTime(0,t+.05);
+    for(const o of osc) o.stop(t+.08); setTimeout(()=>out.disconnect(),200); H.nodes=null; } }
+// washer pump: a short whirr and the hiss of the jets (js/enh/cockpit.js CK.washer)
+function squirt(){ if(!on) return; start(); const c=A.ctx; if(!c) return; if(c.state!=='running') c.resume().catch(()=>{});
+  const t=c.currentTime, n=Math.floor(c.sampleRate*.9), buf=c.createBuffer(1,n,c.sampleRate), d=buf.getChannelData(0); for(let i=0;i<n;i++) d[i]=Math.random()*2-1;
+  const src=c.createBufferSource(); src.buffer=buf; const bp=c.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=3200; bp.Q.value=.8;
+  const g=c.createGain(); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.05,t+.08); g.gain.setValueAtTime(.05,t+.55); g.gain.linearRampToValueAtTime(0,t+.85);
+  const m=c.createOscillator(); m.type='triangle'; m.frequency.value=180; const mg=c.createGain(); mg.gain.setValueAtTime(0,t); mg.gain.linearRampToValueAtTime(.025,t+.05); mg.gain.linearRampToValueAtTime(0,t+.7);
+  src.connect(bp); bp.connect(g); m.connect(mg); const out=A.bus||c.destination; g.connect(out); mg.connect(out); src.start(t); m.start(t); src.stop(t+.9); m.stop(t+.75); }
+// a timer (not a frame hook), so it works parked and in every view
+setInterval(()=>horn(window.CTRL&&CTRL.held('horn')),30);
+window.SOUND={duck:on=>{ try{ if(A.duck) A.duck.gain.setTargetAtTime(on?.25:1,A.ctx.currentTime,.12); }catch(e){} },setOn,get on(){ return on; },state:A,ENG,cabin,horn,squirt,get honking(){ return H.on; }};
 })();
