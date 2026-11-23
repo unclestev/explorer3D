@@ -88,14 +88,27 @@ for x0, y0, w, h in ((0, 1.67, 1.36, .08), (0, .89, 1.36, .07), (.65, 1.28, .07,
     box(trim, 'Chrome', (x0, y0, 3.55), (w, h, .05))                                   # tall chrome surround
 for k in range(11): box(trim, 'Chrome', (-.55+k*.11, 1.28, 3.555), (.04, .72, .04))    # vertical chrome bars
 box(trim, 'Frame', (0, 1.75, 3.47), (.10, .06, .04))                                  # the badge spot left plain
-box(body, 'Paint', (0, 1.85, 1.38), (2.40, 1.70, 1.50))                               # cab
-loft(body, 'Paint', [rring(0, 1.18, 2.60, 2.78, z, 4, 8) for z in (.64, 2.12)])      # rounded cab roof
+# cab: rounded roof edges and front corners (sections narrow a little at the front and back edges)
+CZS = [.62, .66, .72, 1.0, 1.6, 1.98, 2.06, 2.12, 2.15]
+CWS = [1.12, 1.17, 1.20, 1.20, 1.20, 1.20, 1.19, 1.16, 1.11]
+loft(body, 'Paint', [rring(0, w, 1.00, 2.78 if .66 <= z <= 2.10 else 2.74, z, 9, 14) for z, w in zip(CZS, CWS)])
+# door seams, window frames and the drip rail on both sides
+for sx in (1, -1):
+    X = sx*1.207
+    for a, b in (((1.03, 1.05), (1.03, 2.62)), ((2.03, 1.05), (2.03, 2.62)), ((1.03, 1.05), (2.03, 1.05))):
+        box(trim, 'Seam', (X, (a[1]+b[1])/2, (a[0]+b[0])/2), (.01, abs(b[1]-a[1])+.012, abs(b[0]-a[0])+.012))
+    for z0, z1 in ((1.02, 2.02), (.70, .94)):                                         # window frames
+        for y in (1.95, 2.57): box(trim, 'Trim', (X, y, (z0+z1)/2), (.012, .03, z1-z0+.03))
+        for z in (z0, z1): box(trim, 'Trim', (X, 2.26, z), (.012, .64, .03))
+    box(trim, 'Trim', (X*.99, 2.70, 1.38), (.03, .03, 1.48))                           # drip rail
 # one-piece windshield, raked, and side windows
-slab(glass, 'Glass', [(-1.12, 1.94, 2.155), (1.12, 1.94, 2.155), (1.08, 2.62, 2.065), (-1.08, 2.62, 2.065)], .02)
+slab(glass, 'Glass', [(-1.06, 1.96, 2.165), (1.06, 1.96, 2.165), (1.03, 2.62, 2.162), (-1.03, 2.62, 2.162)], .012)
+for x0, y0, w, h in ((0, 1.95, 2.16, .04), (0, 2.63, 2.10, .04), (1.065, 2.29, .04, .70), (-1.065, 2.29, .04, .70)):
+    box(trim, 'Trim', (x0, y0, 2.166), (w, h, .02))                                    # windshield frame
+box(trim, 'Trim', (.0, 2.60, 2.17), (.02, .02, .01))
 for sx in (1, -1):
     slab(glass, 'Glass', [(sx*1.205, 1.96, 2.02), (sx*1.205, 1.96, 1.02), (sx*1.205, 2.56, 1.06), (sx*1.205, 2.56, 1.96)], .02)
     slab(glass, 'Glass', [(sx*1.205, 1.96, .94), (sx*1.205, 1.96, .70), (sx*1.205, 2.56, .70), (sx*1.205, 2.56, .94)], .02)
-box(trim, 'Trim', (0, 1.90, 2.14), (2.36, .07, .04))                                  # cowl
 box(body, 'Paint', (0, 1.04, 1.38), (2.40, .12, 1.50))                                # cab floor / sill
 box(trim, 'Step', (1.16, .80, 1.55), (.18, .06, .55), both=True)                      # steps
 box(trim, 'Trim', (1.21, 1.75, 1.55), (.03, .05, .30), both=True)                     # door handles
@@ -110,11 +123,13 @@ cyl(trim, 'Chrome', (-1.08, 1.05, .52), (-1.08, 3.05, .52), .075, 16)
 cyl(trim, 'Tank', (.98, .95, .30), (.98, .95, -.35), .19, 18)
 # ---------- amber lights on the cab roof, as in the photo: one at each front corner and a beacon in the middle ----------
 for sx in (1, -1):
-    box(trim, 'Trim', (sx*1.00, 2.80, 2.00), (.22, .05, .18))
-    box(lamps, 'BeaconB', (sx*1.00, 2.87, 2.00), (.18, .10, .14))                    # flash in turn with the beacon
-    box(lamps, 'Amber', (sx*.42, 2.80, 2.10), (.10, .05, .05))                         # small roof marker lamps
-box(trim, 'Trim', (0, 2.80, 1.75), (.70, .05, .30))                                   # the number plate on the roof
-box(trim, 'Plate', (0, 2.80, 1.92), (.62, .10, .02))
+    cyl(trim, 'Trim', (sx*.98, 2.76, 1.98), (sx*.98, 2.82, 1.98), .10, 16)
+    cyl(lamps, 'BeaconB', (sx*.98, 2.82, 1.98), (sx*.98, 2.95, 1.98), .08, 16)        # flash in turn with the beacon
+    ellipsoid_top = (sx*.98, 2.95, 1.98)
+    cyl(lamps, 'BeaconB', ellipsoid_top, (sx*.98, 2.98, 1.98), .05, 12)
+    for x in (.20, .45): cyl(lamps, 'Amber', (sx*x, 2.77, 2.11), (sx*x, 2.77, 2.15), .035, 10)   # small roof marker lamps
+box(trim, 'Trim', (0, 2.80, 1.80), (.70, .05, .30))                                   # the number plate on the roof
+box(trim, 'Plate', (0, 2.86, 1.95), (.62, .12, .02))
 cyl(trim, 'Trim', (0, 2.79, 1.55), (0, 2.85, 1.55), .12, 18)
 cyl(lamps, 'Beacon', (0, 2.85, 1.55), (0, 3.00, 1.55), .10, 18)                       # beacon dome
 # ---------- dump body with cab shield, tailgate, salt spreader ----------
@@ -138,49 +153,66 @@ for sx in (1, -1):
     box(lamps, 'Taillight', (sx*1.10, .82, -3.47), (.20, .16, .05))                    # tail / brake lights
     box(lamps, 'Amber', (sx*.84, .82, -3.47), (.16, .16, .05))
     box(trim, 'Fender', (sx*.95, 1.08, (ZA_R+ZA_R2)/2), (.80, .04, 2.60))               # one long fender over both rear axles
-# ---------- the plow: an A-frame from the bumper, a curved moldboard angled to the right, a steel cutting edge ----------
-ANG = math.radians(21)                           # blade angled: left end ahead, right end back (snow goes to the curb)
-# after the owner's photo: a long, low blade that reaches well past the truck's left side, close to the ground
-BW, BH, CX, CZ = 4.00, .80, .42, 4.22            # blade width, height, centre (shifted toward the left end)
-def bpt(u, v):                                   # u -1..1 across, v 0..1 up: the moldboard curls forward toward the top
-    x = u*BW/2; y = .10+v*BH; zc = -.16*math.sin(v*math.pi*.85)+.09*v*v
-    return (CX+x*math.cos(ANG), y, CZ+zc+x*math.sin(ANG))
-NU, NV = 24, 10
-G = [[blade.v(bpt(-1+2*i/NU, j/NV)) for j in range(NV+1)] for i in range(NU+1)]
-Gb = [[blade.v(np.array(bpt(-1+2*i/NU, j/NV))-np.array((math.sin(ANG)*.0, 0, .04))) for j in range(NV+1)] for i in range(NU+1)]
+# ---------- the plow (owner 2026-11-23, after the photo: "make the plow the same as the picture … step up your game") ----
+# A long, low, smoothly curved moldboard, angled so its left end leads, black, with an orange top rail and orange end
+# plates cut to the blade's own profile, a steel cutting edge, an orange curb guard at the leading end, ribs and a
+# frame on the back, tall orange markers; carried on a push frame (A-frame arms to a pivot), lifted by a ram from a tower
+# on the bumper mount and swung by two angle rams.
+ANG = math.radians(21)
+BW, BH, CX, CZ = 4.00, .82, .42, 4.22
+AX = np.array((math.cos(ANG), 0, math.sin(ANG)))                 # along the blade (toward its left, leading end)
+NF = np.array((-math.sin(ANG), 0, math.cos(ANG)))                # its forward face normal
+UP = np.array((0, 1., 0))
+def curl(v): return -.20*math.sin(v*math.pi*.80)+.11*v*v        # the moldboard's curve: hollow low down, lip forward at the top
+def bp(u, v, back=0.):                                           # a point on the moldboard (back: metres behind the face)
+    return np.array((CX, .08, CZ))+AX*(u*BW/2)+UP*(v*BH)+NF*(curl(v)-back)
+def prism(m, mat, outline, d, t):                                # a flat outline (3D points in a plane) extruded +-t/2 along d
+    d = np.asarray(d, float)*t/2; A = [m.v(p+d) for p in outline]; B = [m.v(p-d) for p in outline]; n = len(outline)
+    for k in range(1, n-1): m.tri(mat, A[0], A[k], A[k+1]); m.tri(mat, B[0], B[k+1], B[k])
+    for k in range(n): j = (k+1) % n; m.quad(mat, A[k], B[k], B[j], A[j])
+NU, NV, TH = 30, 14, .03
+G = [[blade.v(bp(-1+2*i/NU, j/NV)) for j in range(NV+1)] for i in range(NU+1)]
+Gb = [[blade.v(bp(-1+2*i/NU, j/NV, TH)) for j in range(NV+1)] for i in range(NU+1)]
 for i in range(NU):
     for j in range(NV):
         blade.quad('Blade', G[i][j], G[i+1][j], G[i+1][j+1], G[i][j+1])
         blade.quad('BladeBack', Gb[i][j], Gb[i][j+1], Gb[i+1][j+1], Gb[i+1][j])
-for j in range(NV):                                                                    # blade ends
-    blade.quad('BladeBack', G[0][j], G[0][j+1], Gb[0][j+1], Gb[0][j]); blade.quad('BladeBack', G[NU][j], Gb[NU][j], Gb[NU][j+1], G[NU][j+1])
-for i in range(NU):                                                                    # top and bottom edges
-    blade.quad('BladeBack', G[i][NV], G[i+1][NV], Gb[i+1][NV], Gb[i][NV]); blade.quad('Edge', G[i][0], Gb[i][0], Gb[i+1][0], G[i+1][0])
-E0, E1 = np.array(bpt(-1, 0)), np.array(bpt(1, 0))                                     # steel cutting edge
-slab(blade, 'Edge', [E0+(0, 0, .03), E1+(0, 0, .03), E1+(0, .12, .02), E0+(0, .12, .02)], .03)
-for u in (-.78, -.26, .26, .78):                                                       # ribs on the back of the blade
-    a, b = np.array(bpt(u, .05)), np.array(bpt(u, .95))
-    slab(blade, 'BladeBack', [a-(0, 0, .05), a-(0, 0, .17), b-(0, 0, .14), b-(0, 0, .05)], .05)
-T0, T1 = np.array(bpt(-1, 1)), np.array(bpt(1, 1))                                     # orange rail along the top
-slab(blade, 'PlowPaint', [T0+(0, -.045, -.02), T1+(0, -.045, -.02), T1+(0, .02, -.045), T0+(0, .02, -.045)], .06)
-L0 = np.array(bpt(1, 0))                                                              # the far (left) end: an orange curb guard / shoe
-slab(blade, 'PlowPaint', [L0+(.03, .02, .04), L0+(.03, .02, -.42), L0+(.03, .46, -.34), L0+(.03, .46, .02)], .08)
-box(blade, 'Edge', tuple(L0+(.02, -.04, -.18)), (.12, .06, .36))                      # its skid
-for i0 in (0, NU):                                                                     # orange end plates
-    for j in range(NV):
-        a, b = np.array(bpt(-1+2*i0/NU, j/NV)), np.array(bpt(-1+2*i0/NU, (j+1)/NV)); o = (.03 if i0 else -.03)*np.array((math.cos(ANG), 0, math.sin(ANG)))
-        slab(blade, 'PlowPaint', [a+o, b+o, b+o-(0, 0, .16), a+o-(0, 0, .16)], .02)
-for u in (-.97, .97):                                                                  # tall orange snow markers at the ends
-    a = np.array(bpt(u, 1.)); cyl(blade, 'MarkerTip', a-(0, .2, .08), a+(0, 1.15, -.10), .014, 6, False)
-PIV = np.array((0, .50, CZ-.62))                                                      # the pivot, behind the middle of the blade
-for sx in (1, -1):                                                                     # A-frame push arms
-    cyl(trim, 'Frame', (sx*.55, .62, 3.70), PIV, .05, 10)
-box(trim, 'Frame', tuple(PIV), (.40, .14, .30))
-box(trim, 'Frame', (0, .95, 3.80), (1.70, .52, .14))                                   # hitch / lift frame on the bumper
-cyl(trim, 'Chrome', (0, 1.12, 3.86), PIV+(0, .16, 0), .045, 10)                         # lift cylinder
-for u in (-.45, .45):                                                                  # angle cylinders, from the pivot to the back of the blade
-    e = np.array(bpt(u, .25))-np.array((0, 0, .16))
-    cyl(trim, 'Chrome', PIV+(0, .06, 0), e, .035, 8)
+for i in range(NU): blade.quad('BladeBack', G[i][NV], G[i+1][NV], Gb[i+1][NV], Gb[i][NV]); blade.quad('Edge', G[i][0], Gb[i][0], Gb[i+1][0], G[i+1][0])
+# orange end plates following the profile: the face curve in front, a straight back edge .22 m behind
+for u, sg in ((-1, -1), (1, 1)):
+    face = [bp(u, j/NV)+NF*.01 for j in range(NV+1)]
+    backl = [bp(u, 1)-NF*.20+UP*.0, bp(u, .55)-NF*.26, bp(u, 0)-NF*.24]
+    prism(blade, 'PlowPaint', face+backl, AX*sg, .035)
+# steel cutting edge along the bottom, a little proud of the face
+for i in range(NU):
+    a, b = bp(-1+2*i/NU, 0)+NF*.012, bp(-1+2*(i+1)/NU, 0)+NF*.012
+    prism(blade, 'Edge', [a-UP*.05, b-UP*.05, b+UP*.13, a+UP*.13], NF, .03)
+# orange top rail with a lip
+for i in range(NU):
+    a, b = bp(-1+2*i/NU, 1), bp(-1+2*(i+1)/NU, 1)
+    prism(blade, 'PlowPaint', [a-UP*.06, b-UP*.06, b+UP*.02-NF*.02, a+UP*.02-NF*.02], NF, .05)
+# ribs and a frame on the back
+for u in np.linspace(-.85, .85, 7):
+    face = [bp(u, j/NV, TH) for j in range(NV+1)]
+    prism(blade, 'BladeBack', face+[bp(u, .92, TH+.12), bp(u, .5, TH+.22), bp(u, .05, TH+.18)], AX, .035)
+for v in (.18, .70):                                             # two horizontal stiffeners
+    a, b = bp(-.95, v, TH+.10), bp(.95, v, TH+.10); cyl(blade, 'BladeBack', a, b, .045, 8)
+# the curb guard: an orange shoe at the leading end, with a steel skid under it
+L = bp(1, 0); prism(blade, 'PlowPaint', [L+NF*.05, L-NF*.40, L-NF*.36+UP*.42, L+NF*.02+UP*.50], AX, .09)
+prism(blade, 'Edge', [L+NF*.06-UP*.06, L-NF*.42-UP*.06, L-NF*.40-UP*.0, L+NF*.05-UP*.0], AX, .12)
+for u in (-.985, .985):                                          # tall orange markers
+    a = bp(u, 1, .06); cyl(blade, 'MarkerTip', a-UP*.15, a+UP*1.15, .013, 6, False)
+    cyl(blade, 'Marker', a+UP*1.05, a+UP*1.17, .02, 6)
+# push frame: a mount plate on the bumper, A-frame arms to a pivot behind the blade, a lift tower with a ram, angle rams
+box(trim, 'Frame', (0, .74, 3.79), (1.12, .38, .10))                                   # mount plate
+PIV = np.array((CX*.5, .42, 0))+np.array((0, 0, CZ-.62))
+for sx in (1, -1): cyl(trim, 'Frame', (sx*.50, .58, 3.80), PIV, .055, 10)              # A-frame arms
+cyl(trim, 'Frame', PIV-UP*.04, PIV+UP*.10, .12, 14)                                    # pivot
+for sx in (1, -1): box(trim, 'Frame', (sx*.22, 1.02, 3.82), (.10, .60, .10))           # lift tower
+box(trim, 'Frame', (0, 1.32, 3.82), (.54, .10, .12))
+cyl(trim, 'Chrome', (0, 1.28, 3.86), bp(0, .78, TH+.10)+UP*.02, .04, 10)              # lift ram to the back of the blade
+for u in (-.40, .40): cyl(trim, 'Chrome', PIV+UP*.05, bp(u, .22, TH+.10), .033, 8)     # angle rams
+for sx in (1, -1): cyl(trim, 'Frame', (sx*.40, .60, 3.80), bp(sx*.30, .12, TH+.12), .05, 8)   # struts down to the blade
 
 # ---------- wheels: singles in front, duals at the back ----------
 def wheel_mesh(name, outward, dual):
@@ -249,6 +281,7 @@ MATS = {
  'Reflect':   dict(c=[.60, .03, .03, 1], m=.1, r=.3),
  'ReflectW':  dict(c=[.85, .85, .85, 1], m=.1, r=.3),
  'Plate':     dict(c=[.80, .80, .78, 1], m=.1, r=.5),
+ 'Seam':      dict(c=[.08, .03, .005, 1], m=.1, r=.6),
  'Spreader':  dict(c=[.30, .31, .33, 1], m=.7, r=.5),
  'Spinner':   dict(c=[.10, .10, .11, 1], m=.5, r=.5),
  'Flap':      dict(c=[.012, .012, .013, 1], m=0, r=.9),
