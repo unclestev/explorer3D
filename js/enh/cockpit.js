@@ -458,6 +458,12 @@ const powered=()=>!window.IGN||IGN.state==='on'||IGN.state==='crank';   // the c
 CK.scrUser=null; let scrWas=null;
 CK.screenOn=()=>{ const pw=powered(); if(pw!==scrWas){ scrWas=pw; CK.scrUser=null; } return pw?CK.scrUser!==false:CK.scrUser===true; };
 CK.accessory=()=>!powered()&&CK.screenOn();
+// the red hazard triangle under the centre screen (owner 2026-11-22): a tap target over it, and a red glow on it that flashes
+// with the hazards
+function hazKey(g,x,y,z,w,h){ const t=mesh(new THREE.BoxGeometry(w+.006,h+.006,.014),new THREE.MeshBasicMaterial({visible:false}),g,false,false); t.position.set(x,y,z); CK.hazKeys.push(t);
+  const T=canvasTex(64,64), c=T.x; c.clearRect(0,0,64,64); c.fillStyle='#ff2a2a'; c.beginPath(); c.moveTo(32,8); c.lineTo(58,54); c.lineTo(6,54); c.closePath(); c.fill();
+  const m=new THREE.MeshBasicMaterial({map:T.t,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false});
+  const l=mesh(new THREE.PlaneGeometry(w,h),m,g,false,false); l.position.set(x,y,z+.0015); CK.hazLamps.push(m); }
 CK.powerKey=()=>{ const on=CK.screenOn(); CK.scrUser=!on; toast(!on?(powered()?'Screen on':'Screen on — car off'):'Screen off',1300); };
 CK.powerKeys=[];
 const bcCar=()=>mode==='car'&&['explorer','navigator','modely','expedition'].includes(typeof CARKEY==='string'?CARKEY:'');
@@ -1167,7 +1173,8 @@ function expeditionDash(G,P,parts,fz,xd){
     x.fillStyle='#d6dadf'; x.textAlign='center'; x.textBaseline='middle'; x.font='700 17px system-ui,Arial'; x.fillText('ENGINE',64,52); x.fillText('START',64,72); x.font='600 13px system-ui,Arial'; x.fillText('STOP',64,90);
     mesh(new THREE.TorusGeometry(.0165,.0028,10,40),M({color:0xdfe3e7,metalness:.9,roughness:.18,env:1.8}),b);
     mesh(new THREE.CircleGeometry(.0155,40),M({map:T.t,roughness:.35,metalness:.2}),b).position.z=.001;
-    const cup=mesh(new THREE.CylinderGeometry(.021,.021,.012,40,1,true),M({color:0x111214,roughness:.4}),b); cup.rotation.x=Math.PI/2; cup.position.z=-.004; }
+    const cup=mesh(new THREE.CylinderGeometry(.021,.021,.012,40,1,true),M({color:0x111214,roughness:.4}),b); cup.rotation.x=Math.PI/2; cup.position.z=-.004;
+    const tk=mesh(new THREE.CylinderGeometry(.024,.024,.02,20),new THREE.MeshBasicMaterial({visible:false}),b,false,false); tk.rotation.x=Math.PI/2; CK.startKeys.push(tk); }   // tap it to start / stop the engine (owner 2026-11-22)
   // the recessed stack panel inside the dip, with the big rotary dial and a row of keys (the generic button row sits on it)
   mesh(grid(10,6,(u,v)=>{ const x=lerp(-sx+.03,sx-.03,u), y=lerp(yd+.02,yb-.02,v); return [x,y,fz(y)+.008]; }),xpTrimMat(2*sx-.06,yb-yd-.04),G);
   // the controls under the screen (owner 2026-11-22, "put all of the buttons and knobs under the screen" as in the photo):
@@ -1183,6 +1190,7 @@ function expeditionDash(G,P,parts,fz,xd){
     [['❄',470],['A/C',552],['⊟',634],['⊞',716],['AUTO',798],['',880]].forEach(([t,X])=>key(X,72,t));
     x.strokeStyle='#d01c24'; x.lineWidth=5; x.beginPath(); x.moveTo(916,30); x.lineTo(936,66); x.lineTo(896,66); x.closePath(); x.stroke();   // red hazard triangle
     const face=mesh(new THREE.PlaneGeometry(W2,H2),new THREE.MeshBasicMaterial({map:T.t}),g,false,false); face.position.z=.001; parts.btns=face.material;
+    hazKey(g,X2(916),(.5-48/96)*H2,.004,48/1024*W2,H2*.42);
     { const pk=mesh(new THREE.BoxGeometry(64/1024*W2+.006,H2*.7,.012),new THREE.MeshBasicMaterial({visible:false}),g,false,false); pk.position.set(X2(60),0,.004); CK.powerKeys.push(pk); }   // ⏻: tap target
     const plate=mesh(rbox(W2+.012,H2+.036,.006,.002,.004),M({color:0x0b0b0c,roughness:.2,metalness:.2}),g); plate.position.set(0,.012,-.003);   // tall enough for the gear letters over the dial
     const chrome=M({map:rep(textures().alu,2,1),color:0xe0e4e8,metalness:.75,roughness:.22,env:1.6});
@@ -1341,6 +1349,7 @@ function explorerStack(G,P,parts,fz,xd,upM,loM){
     [['⏻',122],['⏮',178],['⏭',334],['◉',390]].forEach(([t,X])=>x.fillText(t,X,32));
     x.lineWidth=5; x.strokeStyle='#d01c24'; x.beginPath(); x.moveTo(256,14); x.lineTo(278,50); x.lineTo(234,50); x.closePath(); x.stroke();
     const lab=mesh(new THREE.PlaneGeometry(.17,.0215),new THREE.MeshBasicMaterial({map:T3.t}),g,false,false); lab.position.z=.0065; parts.btns=lab.material;
+    hazKey(g,0,(.5-32/64)*.0215,.0072,46/512*.17,.0215*.62);
     { const pk=mesh(new THREE.BoxGeometry(.024,.026,.014),new THREE.MeshBasicMaterial({visible:false}),g,false,false); pk.position.set((122/512-.5)*.17,0,.008); CK.powerKeys.push(pk); }   // ⏻: tap target
     const bar1=mesh(new THREE.BoxGeometry(.17,.002,.003),satin,g,false); bar1.position.set(0,.0125,.007);
     for(const sx of [-1,1]){ const kn=mesh(new THREE.CylinderGeometry(.0165,.0175,.02,40),chrome,g); kn.rotation.x=Math.PI/2; kn.position.set(sx*.105,0,.012);
@@ -1612,7 +1621,7 @@ if(typeof FRAME_HOOKS!=="undefined") FRAME_HOOKS.push(function cockpitAO(){ cons
   if(done){ c.ao=null; return true; } return false; });
 function build(key){
   if(CK.cab&&CK.built===key+'|'+(CARSPEC.paint||0)) return;
-  CK.powerKeys=[];
+  CK.powerKeys=[]; CK.hazKeys=[]; CK.hazLamps=[]; CK.startKeys=[];
   if(CK.cab) dispose();
   const P=SPECS[specKey(key)]; textures(); updateEnv(true);
   const sc=new THREE.Scene(), root=new THREE.Group(), G=new THREE.Group(); sc.add(root); root.add(G);
@@ -1890,6 +1899,7 @@ function update(dt){
   if(p.screen) p.screen.m.color.setScalar((.92*dim+.08)*CK.spw);
   if(p.prnd&&p.prnd.m) p.prnd.m.color.setScalar(pw); if(p.sig&&pw<.5) for(const a of p.sig) a.m.color.setHex(0x0c1a0e);
   if(p.btns) p.btns.color.setScalar(.75+.25*(1-k));
+  for(const m of CK.hazLamps) m.opacity=window.SIG&&SIG.haz&&SIG.left?.95:0;   // the triangle flashes with the hazards
   for(const m of MIR.mats) m.color.setScalar(.85-.2*k); for(const m of MIR.frames) m.color.setScalar(Math.max(.25,hi/.85));
   // body roll/pitch and bumps move the cabin around your head (your eyes stay level with the horizon)
   // same signs as the car body in game.js (owner 2026-11-22: it leaned into turns): the body rolls OUT of a turn (turning
@@ -2120,6 +2130,8 @@ function setHud(v){ CK.hud=v; LSs('ydHud',v?'1':'0'); showPick(); dirty=true; }
     return {pts:out,vis,aspect:g.width/g.height}; };
   CK.tapKey=function(e){ if(!CK.on||!CK.cab) return null; const c=CK.cab;
     c.scene.updateMatrixWorld(); c.cam.updateMatrixWorld(); ray.setFromCamera({x:(e.clientX/innerWidth)*2-1,y:-(e.clientY/innerHeight)*2+1},c.cam);
+    const sk=CK.startKeys.filter(o=>c.scene.getObjectById(o.id)); if(sk.length&&window.IGN&&ray.intersectObjects(sk,false).length){ IGN.button(); return 'start'; }
+    const hz=CK.hazKeys.filter(o=>c.scene.getObjectById(o.id)); if(hz.length&&window.SIG&&ray.intersectObjects(hz,false).length){ SIG.hazard(); return 'hazard'; }
     const live=CK.powerKeys.filter(o=>c.scene.getObjectById(o.id)); if(live.length&&ray.intersectObjects(live,false).length){ CK.powerKey(); return 'power'; }
     // a tap on the centre screen opens Music (owner 2026-11-22: "type a song on the lower screen and play it from the car")
     const scr=c.parts.screen&&c.parts.screen.grp; if(scr&&window.MUSIC&&ray.intersectObject(scr.children[0],false).length){ MUSIC.open(); return 'music'; }
