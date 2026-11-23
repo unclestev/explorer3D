@@ -20,7 +20,7 @@
 <link href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/3.6.2/maplibre-gl.css" rel="stylesheet">
 <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>window.THREE||document.write('<script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"><\/script>')</script>
-<link href="css/style.css?v=39" rel="stylesheet">
+<link href="css/style.css?v=40" rel="stylesheet">
 </head>
 <body>
 <div id="load">Loading map…</div>
@@ -77,6 +77,9 @@ try{ if(localStorage.getItem('ydStartOnce')==='tp'){ const l=document.getElement
     <div class="setRow carRow"><span>3D terrain<small>Real hills on Medium and High graphics · costly in the cockpit view</small></span><div class="seg" id="terrPick"><button data-t="off">Off</button><button data-t="chase">Chase view only</button><button data-t="all">Always</button></div></div>
     <div class="setRow"><span>Sound<small>Engine, tyres, wind and bumps · starts on your first tap</small></span><button id="audioBtn" class="switch" aria-label="Sound"></button></div>
   </div>
+  <div class="setGrp" data-tab="Weather">
+    <div class="setRow carRow"><span>Weather<small id="wxPickStat">Real: the actual weather where you're driving</small></span><div class="seg" id="wxPick"><button data-w="real">🌍 Real</button><button data-w="clear">☀️ Clear</button><button data-w="cloudy">☁️ Cloudy</button><button data-w="rain">🌧️ Rain</button><button data-w="heavy">🌧️ Downpour</button><button data-w="storm">⛈️ Storm</button><button data-w="snow">🌨️ Snow</button><button data-w="blizzard">❄️ Blizzard</button><button data-w="fog">🌫️ Fog</button></div></div>
+  </div>
   <div class="setGrp" data-tab="Places">
     <div class="setRow"><span>Start at<small>When you open the game</small></span><div class="seg" id="startPick"><button data-start="last">Last spot</button><button data-start="random">Random place</button></div></div>
     <div class="setRow"><span>Go to now<small>Leaves where you are</small></span><div class="stepper"><button id="randomBtn" style="width:auto;padding:0 10px;font-size:14px;font-weight:600">Random</button><button id="homeBtn" style="width:auto;padding:0 10px;font-size:14px;font-weight:600">Raging Waves</button></div></div>
@@ -97,7 +100,7 @@ try{ if(localStorage.getItem('ydStartOnce')==='tp'){ const l=document.getElement
 <script src="js/enh/roads.js?v=10"></script>
 <script src="js/enh/signs.js?v=18"></script>
 <script src="js/enh/nav.js?v=12"></script>
-<script src="js/enh/atmos.js?v=23"></script>
+<script src="js/enh/atmos.js?v=24"></script>
 <script src="js/enh/textures.js?v=9"></script>
 <script src="js/enh/parking.js?v=1"></script>
 <script src="js/enh/search.js?v=19"></script>
@@ -127,7 +130,7 @@ try{ if(localStorage.getItem('ydStartOnce')==='tp'){ const l=document.getElement
 <script src="js/enh/music.js?v=12"></script>
 <script src="js/enh/tube.js?v=8"></script>
 <script src="js/enh/phone.js?v=8"></script>
-<script src="js/enh/voice.js?v=13"></script>
+<script src="js/enh/voice.js?v=14"></script>
 <script src="js/enh/signals.js?v=5"></script>
 <script src="js/enh/ignition.js?v=16"></script>
 <script src="js/enh/controls-view.js?v=1"></script>
