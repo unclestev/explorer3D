@@ -3,7 +3,7 @@
      Maps (search, favourites and recents, "Drive me there" on autopilot) · Spotify (paste a link) · YouTube Music (links, or names with the YouTube key; keeps playing in the background) · Music (now playing, songs, radio presets and
      stations, volume) · YouTube (its own player on the phone; pauses while you drive) · Camera (a photo of the game view)
      and Photos (kept on this device, download or delete) · Weather · Clock (with a stopwatch) · Calculator · Notes ·
-     Car (remote start, hazards, headlights, sunroof, wipers, horn — like the FordPass app) · Voice · Settings · Controls.
+     FordPass (your car pictured; lock, unlock, remote start, horn & lights, headlights, sunroof, wipers, hazards, switch cars) · Voice · Settings · Controls.
    It's a pretend phone inside the game: it can't call or text anyone and isn't connected to your real phone.
    window.PHONE = {open, close, toggle, snap(), horn} */
 (()=>{
@@ -338,26 +338,86 @@ app('notes','Notes','📝','linear-gradient(#fef08a,#facc15)',bd=>{
   const t=bd.querySelector('#phNote'); t.value=LSg('ydPhoneNotes',''); t.oninput=()=>LSs('ydPhoneNotes',t.value); bd.style.height='100%';
 });
 
-// Car: remote controls, like the FordPass app
-app('car','Car','🚙','linear-gradient(#1e3a8a,#0f172a)',bd=>{
-  bd.innerHTML='<div style="text-align:center;margin:8px 0"><div style="font-size:54px">🚙</div><b id="phCarN"></b><div class="muted" id="phCarS"></div></div><div class="cgrid">'+
-    '<button class="btn g" data-k="engine"><i>🔑</i><span>Start</span></button><button class="btn g" data-k="hazard"><i>⚠️</i><span>Hazards</span></button>'+
-    '<button class="btn g" data-k="lights"><i>💡</i><span>Lights</span></button><button class="btn g" data-k="roof"><i>☀️</i><span>Sunroof</span></button>'+
-    '<button class="btn g" data-k="wipers"><i>🌧️</i><span>Wipers</span></button><button class="btn g" data-k="horn"><i>📯</i><span>Horn (hold)</span></button></div>';
-  const IG=window.IGN, SG=window.SIG, CK=window.COCKPIT, L=window.LIGHTS;
-  const B=k=>bd.querySelector('[data-k="'+k+'"]');
-  B('engine').onclick=()=>{ if(!IG) return; if((IG.state==='on'||IG.state==='crank')&&mph()>5) return say('Slow down first',1400); IG.button(); };
-  B('hazard').onclick=()=>SG&&SG.hazard(); B('lights').onclick=()=>L&&L.cycle&&L.cycle();
-  B('roof').onclick=()=>{ if(CK&&CK.roof) CK.roof('vent'); }; B('wipers').onclick=()=>{ if(CK&&CK.wiper) CK.wiper(); };
-  const h=B('horn'), up=()=>{ PHONE.horn=false; }; h.onpointerdown=()=>{ PHONE.horn=true; }; h.onpointerup=h.onpointerleave=h.onpointercancel=up;
-  every(300,()=>{ const p=document.querySelector('#carPick .on'); $('phCarN').textContent=p?p.textContent.replace(/[^\w\s]/g,'').trim():'Your car';
-    const on=IG&&(IG.state==='on'||IG.state==='crank'); $('phCarS').textContent=(on?'Engine running':'Engine off')+(mph()>0?' · '+mph()+' mph':'');
-    const e=B('engine'); e.className='btn '+(on?'r':'on'); e.querySelector('span').textContent=on?'Stop':'Start';
-    B('hazard').className='btn '+(SG&&SG.haz?'on':'g');
-    const lm=L?String(L.mode||''):''; B('lights').className='btn '+(L&&L.on&&L.on()?'on':'g'); B('lights').querySelector('span').textContent='Lights'+(lm?': '+lm[0].toUpperCase()+lm.slice(1):'');
-    const R=CK&&CK.roofState?CK.roofState():null; B('roof').className='btn '+(R&&(R.slide||R.vent)?'on':'g');
-    B('wipers').className='btn '+(CK&&CK.wipe?'on':'g'); h.className='btn '+(PHONE.horn?'on':'g'); });
-  return up;
+// FordPass-style car app (owner 2026-11-22, with a photo of the app: "add the FordPass. It controls the car ... shows a
+// picture of a car at the top"). Your car pictured at the top (the photo for the Explorer, Javelin and Navigator; the 3D
+// cars drawn from their own model), miles driven and engine state, then the remote: unlock, start / stop, lock, and a row
+// for horn & lights, headlights, sunroof, wipers and hazards. Tabs: Home, Vehicle (switch cars), Map.
+// Locking works like a real remote: the lights flash and the horn chirps once (twice flashes to unlock).
+const PICS={};
+function carKey(){ return typeof mode!=='undefined'&&mode==='tractor'?'tractor':(typeof CARKEY!=='undefined'?CARKEY:'explorer'); }
+function carPic(k){ if(PICS[k]) return PICS[k];
+  const C=typeof CARS!=='undefined'?CARS[k]:null;
+  if(k==='explorer'&&C&&C.fimg) return PICS[k]=C.fimg;
+  const M=typeof MODELS!=='undefined'?MODELS[k]:null;
+  if(M&&M.g&&window.THREE){ try{
+    const W=640,H=360, cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+    const R=new THREE.WebGLRenderer({canvas:cv,alpha:true,antialias:true,preserveDrawingBuffer:true}); R.setSize(W,H,false);
+    const sc=new THREE.Scene(); sc.add(new THREE.HemisphereLight(0xffffff,0x5a6070,1.15)); const d=new THREE.DirectionalLight(0xffffff,1.1); d.position.set(4,8,6); sc.add(d);
+    const d2=new THREE.DirectionalLight(0xbfd4ff,.5); d2.position.set(-6,3,-4); sc.add(d2);
+    const g=M.g.clone(true); g.visible=true; g.position.set(0,0,0); g.rotation.set(0,0,0); g.scale.set(1,1,1); g.traverse(o=>{ o.visible=o.visible!==false; }); sc.add(g);
+    const box=new THREE.Box3().setFromObject(g), c=box.getCenter(new THREE.Vector3()), sz=box.getSize(new THREE.Vector3());
+    const len=Math.max(sz.x,sz.z), cam=new THREE.PerspectiveCamera(26,W/H,.1,200);
+    const fwd=sz.z>=sz.x?new THREE.Vector3(0,0,1):new THREE.Vector3(1,0,0), side=sz.z>=sz.x?new THREE.Vector3(1,0,0):new THREE.Vector3(0,0,-1);
+    const sgn=(M.front||1);                                               // which end is the front: see the check below
+    const dir=fwd.clone().multiplyScalar(.82*sgn).add(side.clone().multiplyScalar(.58)).normalize();
+    cam.position.copy(c).add(dir.multiplyScalar(len*1.7)).add(new THREE.Vector3(0,sz.y*.55,0)); cam.lookAt(c.x,c.y-sz.y*.08,c.z);
+    R.render(sc,cam); const u=cv.toDataURL('image/png'); R.dispose(); try{ R.forceContextLoss(); }catch(e){} return PICS[k]=u; }catch(e){ console.warn('phone car picture',e); } }
+  return C&&(C.fimg||C.img)||null; }
+app('car','FordPass','🚙','linear-gradient(#2563eb,#0b2a6b)',(bd,w)=>{
+  w.style.background='#f4f6f9'; w.style.color='#10213d'; const hd=w.querySelector('.hd'); hd.style.cssText='justify-content:space-between;color:#10213d;font-size:13px;letter-spacing:.06em;white-space:nowrap'; hd.querySelector('button').textContent='‹';
+  hd.querySelector('span').innerHTML='<span id="fpTitle" style="cursor:pointer">MY CAR ⌄</span>'; const acc=el('span','','👤'); acc.style.cssText='font-size:18px;opacity:.75'; hd.appendChild(acc);
+  bd.style.cssText='padding:0;display:flex;flex-direction:column';
+  bd.innerHTML='<style>#phone .fp{flex:1;overflow-y:auto;padding:0 12px}#phone .fpPic{height:118px;margin:0 -12px;background:linear-gradient(#cfd8e6,#eef1f6 70%,#f4f6f9);display:flex;align-items:flex-end;justify-content:center;overflow:hidden}'+
+    '#phone .fpPic img{max-width:96%;max-height:116px;object-fit:contain;filter:drop-shadow(0 8px 6px rgba(0,0,0,.25))}'+
+    '#phone .fpSt{display:flex;justify-content:space-around;text-align:center;margin:6px 0 0}#phone .fpSt b{font-size:19px;display:block}#phone .fpSt small{font-size:11px;opacity:.7}'+
+    '#phone .fpPill{display:block;margin:5px auto;border:1.5px solid #10213d;border-radius:22px;background:#fff;color:#10213d;padding:7px 18px;font:500 13px system-ui;cursor:pointer}'+
+    '#phone .fpMain{display:flex;justify-content:space-around;align-items:center;margin:4px 0}'+
+    '#phone .fpC{width:48px;height:48px;border-radius:50%;background:#fff;border:0;box-shadow:0 3px 10px rgba(16,33,61,.15);font-size:22px;cursor:pointer;color:#10213d;display:flex;align-items:center;justify-content:center}'+
+    '#phone .fpC.big{width:70px;height:70px;flex-direction:column;font-size:26px}#phone .fpC.big small{font-size:11px;margin-top:2px}#phone .fpC.on{background:#2563eb;color:#fff}#phone .fpC.run{background:#16a34a;color:#fff}'+
+    '#phone .fpRow{display:flex;justify-content:space-between;margin:2px 0 6px}#phone .fpRow div{display:flex;flex-direction:column;align-items:center;width:20%;font-size:10px;text-align:center;gap:4px}'+
+    '#phone .fpRow .fpC{width:40px;height:40px;font-size:17px}#phone .fpNote{text-align:center;font-size:11px;opacity:.6;min-height:14px}'+
+    '#phone .fpTabs{flex:none;display:flex;justify-content:space-around;border-top:1px solid #dde3ec;background:#fff;padding:6px 0 2px}#phone .fpTabs button{background:none;border:0;color:#6b7a90;font-size:10px;display:flex;flex-direction:column;align-items:center;cursor:pointer}'+
+    '#phone .fpTabs button i{font-style:normal;font-size:17px}#phone .fpTabs button.on{color:#10213d;font-weight:600}#phone .fpCars .li{border-color:#dde3ec}</style>'+
+    '<div class="fp" id="fpHome"><div class="fpPic" id="fpPic"></div><div class="fpSt"><div><b id="fpMi">0</b><small>Miles driven</small></div><div><b id="fpEng">Off</b><small>Engine</small></div><div><b id="fpTmp">--</b><small>Outside</small></div></div>'+
+    '<button class="fpPill" id="fpMap">View on map ›</button>'+
+    '<div class="fpMain"><button class="fpC" id="fpUn" aria-label="Unlock">🔓</button><button class="fpC big" id="fpStart"><span>⏻</span><small>Start</small></button><button class="fpC" id="fpLk" aria-label="Lock">🔒</button></div>'+
+    '<div class="fpNote" id="fpNote"></div>'+
+    '<div class="fpRow"><div><button class="fpC" id="fpHL">📯</button>Horn &amp; Lights</div><div><button class="fpC" id="fpLi">💡</button><span id="fpLiT">Lights</span></div><div><button class="fpC" id="fpRoof">☀️</button>Sunroof</div><div><button class="fpC" id="fpWip">🌧️</button>Wipers</div><div><button class="fpC" id="fpHaz">⚠️</button>Hazards</div></div></div>'+
+    '<div class="fp fpCars" id="fpCars" style="display:none"></div>'+
+    '<div class="fpTabs"><button class="on" data-t="home"><i>🏠</i>Home</button><button data-t="cars"><i>🚘</i>Vehicle</button><button data-t="map"><i>📍</i>Map</button></div>';
+  const IG=window.IGN, SG=window.SIG, CK=window.COCKPIT, LT=window.LIGHTS, q=id=>w.querySelector('#'+id);
+  const note=(t)=>{ q('fpNote').textContent=t; clearTimeout(note.t); note.t=setTimeout(()=>{ q('fpNote').textContent=''; },2500); };
+  let shown=null;
+  function pic(){ const k=carKey(); if(k===shown) return; shown=k; const P=q('fpPic'); P.innerHTML=''; const u=carPic(k);
+    if(u){ const i=el('img'); i.alt=''; i.src=u; P.appendChild(i); } else { const s=el('div','','🚜'); s.style.cssText='font-size:80px;line-height:1'; P.appendChild(s); }
+    const b=document.querySelector('#carPick .on'); q('fpTitle').textContent='MY '+(b?b.textContent.replace(/[^\w\s]/g,'').trim().toUpperCase():'CAR')+' ⌄'; }
+  // remote lock / unlock: flash the lights (and chirp the horn to lock)
+  function flash(n,chirp){ if(!SG) return; if(SG.haz) return; let k=0; const tgl=()=>{ SG.hazard(); if(++k<n*2) setTimeout(tgl,420); }; tgl();
+    if(chirp){ PHONE.horn=true; setTimeout(()=>{ PHONE.horn=false; },140); } }
+  q('fpLk').onclick=()=>{ PHONE.locked=true; flash(1,true); note('🔒 Locked'); };
+  q('fpUn').onclick=()=>{ PHONE.locked=false; flash(2,false); note('🔓 Unlocked'); };
+  q('fpStart').onclick=()=>{ if(!IG) return; const on=IG.state==='on'||IG.state==='crank'; if(on&&mph()>5) return note('Slow down first'); IG.button(); note(on?'Engine off':'Starting…'); };
+  q('fpHL').onpointerdown=()=>{ PHONE.horn=true; }; for(const e of ['onpointerup','onpointerleave','onpointercancel']) q('fpHL')[e]=()=>{ PHONE.horn=false; };
+  q('fpHL').onclick=()=>flash(2,false);
+  q('fpLi').onclick=()=>{ if(LT&&LT.cycle) LT.cycle(); }; q('fpRoof').onclick=()=>{ if(CK&&CK.roof) CK.roof('vent'); };
+  q('fpWip').onclick=()=>{ if(CK&&CK.wiper) CK.wiper(); }; q('fpHaz').onclick=()=>SG&&SG.hazard();
+  q('fpMap').onclick=()=>openApp('maps');
+  function cars(){ const L=q('fpCars'); L.innerHTML='<div class="sec" style="color:#10213d">Your vehicles</div>';
+    for(const b of document.querySelectorAll('#carPick button')){ const nm=b.textContent.replace(/[^\w\s]/g,'').trim(), k=b.dataset.car;
+      const r=li(nm,b.classList.contains('on')?'✓ Driving now':'',()=>{ b.click(); shown=null; tab('home'); },null); L.appendChild(r); } }
+  function tab(t){ if(t==='map') return openApp('maps'); for(const b of bd.querySelectorAll('.fpTabs button')) b.classList.toggle('on',b.dataset.t===t);
+    q('fpHome').style.display=t==='home'?'':'none'; q('fpCars').style.display=t==='cars'?'':'none'; if(t==='cars') cars(); }
+  for(const b of bd.querySelectorAll('.fpTabs button')) b.onclick=()=>tab(b.dataset.t);
+  q('fpTitle').onclick=()=>tab('cars');
+  every(300,()=>{ pic(); const on=IG&&(IG.state==='on'||IG.state==='crank');
+    const P=window.YD&&YD.PROG&&YD.PROG.P, mi=P&&P.dist?(P.dist.car||0)+(P.dist.tractor||0):0; q('fpMi').textContent=Math.round(mi).toLocaleString();
+    q('fpEng').textContent=on?'Running':'Off'; const t=(txt('wxl').match(/-?\d+°F/)||[''])[0]; q('fpTmp').textContent=t||'--';
+    const s=q('fpStart'); s.className='fpC big'+(on?' run':''); s.querySelector('small').textContent=on?'Stop':'Start';
+    q('fpLk').className='fpC'+(PHONE.locked?' on':''); q('fpUn').className='fpC'+(PHONE.locked===false?' on':'');
+    q('fpHaz').className='fpC'+(SG&&SG.haz?' on':''); q('fpWip').className='fpC'+(CK&&CK.wipe?' on':'');
+    const R=CK&&CK.roofState?CK.roofState():null; q('fpRoof').className='fpC'+(R&&(R.slide||R.vent)?' on':'');
+    const lm=LT?String(LT.mode||''):''; q('fpLi').className='fpC'+(LT&&LT.on&&LT.on()?' on':''); q('fpLiT').textContent=lm?'Lights: '+lm[0].toUpperCase()+lm.slice(1):'Lights'; });
+  return ()=>{ PHONE.horn=false; };
 });
 
 // Voice, Settings, Controls
@@ -377,6 +437,6 @@ function toggle(){ ph.classList.contains('on')?close():open(); }
 $('phHome').onclick=()=>{ if(cur==null) close(); else home(); };
 setInterval(()=>{ if(ph.classList.contains('on')) status(); },1000);
 addEventListener('keydown',e=>{ if(e.key==='Escape'&&ph.classList.contains('on')&&!(e.target&&/INPUT|TEXTAREA/.test(e.target.tagName))) close(); });
-window.PHONE={get ytm(){ return PHONE_YM; },open,close,toggle,snap,openApp,spotOf:v=>PHONE_SPOT(v),horn:false,get isOpen(){ return ph.classList.contains('on'); }};
+window.PHONE={locked:null,get ytm(){ return PHONE_YM; },open,close,toggle,snap,openApp,spotOf:v=>PHONE_SPOT(v),horn:false,get isOpen(){ return ph.classList.contains('on'); }};
 home();
 })();
