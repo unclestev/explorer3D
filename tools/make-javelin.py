@@ -12,7 +12,10 @@ from scipy.interpolate import PchipInterpolator as Pchip
 
 L = 4.872; ZF, ZR = L/2, -L/2                   # 191.8 in
 WB = 2.794; ZA_F = ZF-.93; ZA_R = ZA_F-WB       # 110 in wheelbase; long rear overhang
-TRACK = 1.52; TYRE_R = .332; TYRE_W = .215      # F70-14 raised-letter tyres on 14" rally wheels
+TYRE_R = .352                                    # (owner 2026-11-23: "big aggressive wheels that fill the wheel well nicely... fat tires")
+WF, WR = .280, .320                              # fat tyres, wider at the back, on 15" deep-dish five-spokes
+XF, XR = 1.02-WF/2, 1.02-WR/2                    # pushed out so the tyre's outer face sits almost flush with the flare
+TRACK = 2*XF
 HW = .955                                       # half the 75.1 in body width
 
 def ease(a, b, t): t = min(1, max(0, t)); return a+(b-a)*t*t*(3-2*t)
@@ -96,7 +99,7 @@ blis = .105*BL(ZA_F, .56)*outer+.055*BL(ZA_R, .58)*outer          # (owner: the 
 up = Y > .70
 Y += np.where(up, crown+scoop, 0)+np.where(Y > .55, blis*np.clip((Y-.55)/.25, 0, 1), 0)
 X += (.036*BL(ZA_F, .60)+.034*BL(ZA_R, .60))*np.clip((Y-TYRE_R)/.15, 0, 1)*np.clip((1.02-Y)/.12, 0, 1)*(X > .5)
-RA = .405; XW = TRACK/2-.035                     # open, round wheel arches; the liner a little inside the tyre's outer face
+RA = .405; XW = min(XF-WF/2, XR-WR/2)-.015       # open, round wheel arches; the liner just inside the tyres' inner faces
 for za in (ZA_F, ZA_R):                          # flared lips: the panel swells ~4.5 cm in a band round each arch
     d = np.hypot(Z-za, Y-TYRE_R)
     band = np.clip((RA+.085-d)/.035, 0, 1)**.7*np.clip((d-RA+.02)/.02, 0, 1)                     # flat band, rounded outer edge
@@ -256,6 +259,18 @@ def side_patch(m, mat, f, nu, nv, push=.003):
                 a, b, c, d = idx[i][j], idx[i+1][j], idx[i][j+1], idx[i+1][j+1]
                 if side > 0: m.tri(mat, a, c, b); m.tri(mat, b, c, d)
                 else: m.tri(mat, a, b, c); m.tri(mat, b, d, c)
+def flare_lip(m):
+    """Round each arch the flare's edge rolls over and curls back in under itself toward the inside of the car
+    (owner: "the big fender flares should wrap back down towards the inside of the car a little")."""
+    for za in (ZA_F, ZA_R):
+        rows = []; A = np.linspace(math.radians(-6), math.radians(186), 64)
+        XE = np.array([xat(za+(RA+.02)*math.cos(a), TYRE_R+(RA+.02)*math.sin(a)) for a in A])
+        XE = np.convolve(np.pad(XE, 3, mode='edge'), np.ones(7)/7, mode='valid')        # smooth along the arch
+        for a, xe in zip(A, XE):
+            ca, sa = math.cos(a), math.sin(a)
+            prof = [(RA+.020, xe+.001), (RA+.008, xe-.002), (RA-.002, xe-.012), (RA-.010, xe-.030), (RA-.016, xe-.058), (RA-.020, xe-.10), (RA-.022, XW+.01)]
+            rows.append([(x, TYRE_R+rr*sa, za+rr*ca) for rr, x in prof])
+        mirror_grid(m, rows, lambda i, j: 'Paint' if j < 5 else 'Well')     # the return then runs on in, dark, to the liner
 def ytop_at(z, x):                               # height of the body's top surface at (z, x), crowns included
     i = int(np.clip(np.searchsorted(zs, z)-1, 0, NZ-2)); f = (z-zs[i])/(zs[i+1]-zs[i])
     def at(col): c = col[NP//2:][::-1]; return float(np.interp(x, c[:, 0], c[:, 1]))
@@ -292,6 +307,7 @@ def torus_ring(m, mat, c, r0, r1, depth, n=28):   # a flat bright ring (bezel) f
             m.tri(mat, inn[k], out[k], inn[k+1]); m.tri(mat, inn[k+1], out[k], out[k+1])
             m.tri(mat, out[k], bk[k], out[k+1]); m.tri(mat, out[k+1], bk[k], bk[k+1])
 
+flare_lip(body)
 # ---------- front: a wide recessed mesh grille across the whole nose in a bright surround, the round headlamps at its
 # outer ends and round amber parking lamps inboard of them (photo); a full-width chrome bumper under it ----------
 trim = Mesh('Details'); heads = Mesh('Headlights'); tails = Mesh('Taillights'); plate = Mesh('Plate')
@@ -346,7 +362,7 @@ patch(trim, 'Trim', lambda u, v: (.90*u*max(halfwidth(2.30, .78), .3), .77+.005*
 # down the front fender behind the wheel and runs back along the lower side to the rear wheel (photo) ----------
 STR = Mesh('Stripe')
 def side_band(z):                                 # centre height of the spear along z: under the fender's shoulder at the front, sweeping down at the door
-    hi = min(.80+.10*math.exp(-((z-ZA_F)/.62)**2), float(section(z)['yt'])-.07+.13*math.exp(-((z-ZA_F)/.56)**2))   # clears the flare's top      # rides up on the blistered fender, above the flare
+    hi = min(.80+.07*math.exp(-((z-ZA_F)/.62)**2), float(section(z)['yt'])-.07+.13*math.exp(-((z-ZA_F)/.56)**2))   # clears the flare's top      # rides up on the blistered fender, above the flare
     return .555+(hi-.555)*ease(0, 1, (z-.45)/.75)
 def band_pt(u, v, z0, z1):
     z = z0+(z1-z0)*u; yc = side_band(z); h = .10-.012*ease(0, 1, (z-.45)/.75); return z, yc-h/2+h*v
@@ -411,9 +427,15 @@ top_patch(trim, 'Trim', lambda u, v: (.90*u*max(halfwidth(-2.0, .95), .3), -1.80
 
 # ---------- wheels: F70-14 tyre with a raised-letter band, 14" rally wheel: grey centre with slots, bright trim ring
 # and centre cap, chrome lug nuts ----------
-def wheel_mesh(name, outward):
-    m = Mesh(name); RIM = .185
-    def lathe(mat, prof, n=40):
+def wheel_mesh(name, outward, W, dish):
+    """A fat tyre (W wide) with tread blocks, rounded shoulders, a bulging sidewall and raised plain letters, on a 15"
+    deep-dish five-spoke wheel: polished lip, machined spokes standing out from a dark barrel, chrome cap and lug nuts."""
+    m = Mesh(name); RIM = .192; w = W/2; Rt = TYRE_R
+    def q(mat, a, b, c, d):                       # quad a-b-c-d facing outward along x (flipped for the inner wheels)
+        i0 = [m.v((outward*p[0], p[1], p[2])) for p in (a, b, c, d)]
+        if outward > 0: m.tri(mat, i0[0], i0[1], i0[2]); m.tri(mat, i0[0], i0[2], i0[3])
+        else: m.tri(mat, i0[0], i0[2], i0[1]); m.tri(mat, i0[0], i0[3], i0[2])
+    def lathe(mat, prof, n=64):
         idx = []
         for i in range(n+1):
             a = i/n*2*math.pi; idx.append([m.v((outward*px, pr*math.cos(a), pr*math.sin(a))) for px, pr in prof])
@@ -422,43 +444,67 @@ def wheel_mesh(name, outward):
                 a_, b_, c_, d_ = idx[i][j], idx[i+1][j], idx[i][j+1], idx[i+1][j+1]
                 if outward > 0: m.tri(mat, a_, b_, c_); m.tri(mat, b_, d_, c_)
                 else: m.tri(mat, a_, c_, b_); m.tri(mat, b_, c_, d_)
-    w = TYRE_W/2
-    lathe('Tyre', [(-w*.92, RIM), (-w, RIM+.03), (-w*.99, TYRE_R-.035), (-w*.85, TYRE_R-.006), (-w*.5, TYRE_R), (w*.5, TYRE_R), (w*.85, TYRE_R-.006), (w*.99, TYRE_R-.035), (w, RIM+.03), (w*.92, RIM)])
-    for k in range(46):                                                                                      # raised white letters: plain blocks in two words' worth of arcs
-        a = k/46*2*math.pi
-        if (k % 23) > 15 or k % 23 in (5, 11): continue
-        for (r0, r1) in ((RIM+.074, RIM+.090),):
-            P = [(outward*w*1.006, rr*math.cos(aa), rr*math.sin(aa)) for rr, aa in ((r0, a), (r1, a), (r0, a+.085), (r1, a+.085))]
-            i0 = [m.v(p) for p in P]
-            if outward > 0: m.tri('Letters', i0[0], i0[1], i0[2]); m.tri('Letters', i0[1], i0[3], i0[2])
-            else: m.tri('Letters', i0[0], i0[2], i0[1]); m.tri('Letters', i0[1], i0[2], i0[3])
-    lathe('Chrome', [(w*.92, RIM), (w*.94, RIM-.006), (w*.80, RIM-.030), (w*.66, RIM-.034)])                 # bright trim ring
-    lathe('Rim', [(w*.66, RIM-.034), (w*.62, .125), (w*.70, .095), (w*.70, .052)])                         # grey centre, dished
-    lathe('Chrome', [(w*.70, .052), (w*.80, .046), (w*.84, .030), (w*.85, 0.)], 24)                         # centre cap
-    lathe('Well', [(w*.0, RIM-.03), (-w*.3, .12), (-w*.3, 0.)], 20)
-    for k in range(5):                                                                                       # five dark slots in the centre
-        a0 = k/5*2*math.pi+.3
-        for q in range(4):
-            a = a0+(q-1.5)*.10; r0, r1 = .102, .118
-            for (ra, rb) in ((r0, r1),):
-                pts = [(outward*(w*.70+.0015), ra*math.cos(a), ra*math.sin(a)), (outward*(w*.70+.0015), rb*math.cos(a), rb*math.sin(a)),
-                       (outward*(w*.70+.0015), ra*math.cos(a+.1), ra*math.sin(a+.1)), (outward*(w*.70+.0015), rb*math.cos(a+.1), rb*math.sin(a+.1))]
-                i0 = [m.v(p) for p in pts]
-                if outward > 0: m.tri('Well', i0[0], i0[1], i0[2]); m.tri('Well', i0[1], i0[3], i0[2])
-                else: m.tri('Well', i0[0], i0[2], i0[1]); m.tri('Well', i0[1], i0[2], i0[3])
-    for k in range(5):                                                                                       # lug nuts
-        a = k/5*2*math.pi; cy, cz = .068*math.cos(a), .068*math.sin(a)
-        prof = [(w*.70, .009), (w*.70+.012, .009), (w*.70+.014, .005), (w*.70+.0145, 0.)]
+    # tyre: bead → bulging sidewall → rounded shoulder → tread with three circumferential grooves → and back
+    side = lambda s_: [(s_*w*.88, RIM), (s_*w*.97, RIM+.03), (s_*w*1.02, RIM+.075), (s_*w*1.01, Rt-.055), (s_*w*.97, Rt-.024), (s_*w*.88, Rt-.006)]
+    tread = []
+    for x0 in (-.80, -.47, -.43, -.02, .02, .43, .47, .80):
+        r = Rt-.009 if x0 in (-.47, -.43, -.02, .02, .43, .47) and False else Rt
+        tread.append((x0*w, r))
+    prof = side(-1)+[(-.80*w, Rt), (-.47*w, Rt), (-.46*w, Rt-.010), (-.44*w, Rt-.010), (-.43*w, Rt), (-.02*w, Rt), (-.01*w, Rt-.008), (.01*w, Rt-.008), (.02*w, Rt),
+                     (.43*w, Rt), (.44*w, Rt-.010), (.46*w, Rt-.010), (.47*w, Rt), (.80*w, Rt)]+side(1)[::-1]
+    lathe('Tyre', prof, 72)
+    # tread blocks: dark lateral grooves across the tread, staggered between the ribs
+    NB = 54
+    for k in range(NB):
+        a = k/NB*2*math.pi; da = .016
+        for (x0, x1), off in (((-.80, -.47), 0.), ((-.43, -.02), .5), ((.02, .43), 0.), ((.47, .80), .5)):
+            aa = a+off*2*math.pi/NB; r = Rt+.0008
+            q('Well', (x0*w, r*math.cos(aa), r*math.sin(aa)), (x1*w, r*math.cos(aa), r*math.sin(aa)),
+              (x1*w, r*math.cos(aa+da), r*math.sin(aa+da)), (x0*w, r*math.cos(aa+da), r*math.sin(aa+da)))
+    # raised white letters on the outer sidewall: plain blocks in two arcs (no words)
+    for k in range(60):
+        a = k/60*2*math.pi
+        if (k % 30) > 21 or k % 30 in (4, 9, 15): continue
+        r0, r1 = RIM+.094, RIM+.114; xx = w*1.028
+        q('Letters', (xx, r0*math.cos(a), r0*math.sin(a)), (xx, r1*math.cos(a), r1*math.sin(a)),
+          (xx, r1*math.cos(a+.075), r1*math.sin(a+.075)), (xx, r0*math.cos(a+.075), r0*math.sin(a+.075)))
+    # wheel: polished lip, then the deep dish down to the spoke face
+    xf = w*.88; xs = xf-dish                      # outer bead plane, spoke face
+    lathe('Chrome', [(xf, RIM), (xf+.010, RIM+.004), (xf+.012, RIM-.006), (xf+.004, RIM-.016), (xs+.006, RIM-.022), (xs, RIM-.026)], 64)
+    lathe('Well', [(xs, RIM-.026), (xs-.012, RIM-.028), (-w*.80, RIM-.028), (-w*.80, .05)], 40)        # dark barrel behind
+    lathe('Bar', [(xs-.075, .155), (xs-.070, .150), (xs-.070, .06)], 40)                               # brake drum face
+    # five spokes: tapered, standing out of the dish toward a raised hub
+    hub = xs+.028
+    for k in range(5):
+        a = k/5*2*math.pi+math.pi/10
+        r0, r1, w0, w1 = .060, RIM-.026, .046, .030
+        def P(r, t, depth):                       # point on a spoke: r along it, t across it, depth back from its face
+            xface = hub+(xs-hub)*(r-r0)/(r1-r0)
+            ca, sa = math.cos(a), math.sin(a)
+            return (xface-depth, r*ca-t*sa, r*sa+t*ca)
+        f = [P(r0, -w0, 0), P(r1, -w1, 0), P(r1, w1, 0), P(r0, w0, 0)]
+        b = [P(r0, -w0, .030), P(r1, -w1, .022), P(r1, w1, .022), P(r0, w0, .030)]
+        q('Rim', f[0], f[1], f[2], f[3])
+        q('Rim', b[1], b[0], f[0], f[1]) if False else q('Rim', f[1], f[0], b[0], b[1])
+        q('Rim', f[3], f[2], b[2], b[3])
+        # a bright machined edge along each side of the spoke face
+        for t0, t1 in ((-1, -.72), (.72, 1)):
+            q('Chrome', P(r0, w0*t0, -.0008), P(r1, w1*t0, -.0008), P(r1, w1*t1, -.0008), P(r0, w0*t1, -.0008))
+    lathe('Rim', [(hub, .085), (hub+.006, .070), (hub+.008, .040)], 40)                                 # hub face
+    lathe('Chrome', [(hub+.008, .040), (hub+.024, .034), (hub+.032, .018), (hub+.034, 0.)], 32)          # centre cap
+    for k in range(5):                                                                                   # lug nuts between the spokes
+        a = k/5*2*math.pi; cy, cz = .060*math.cos(a), .060*math.sin(a)
+        pr = [(hub+.006, .010), (hub+.020, .010), (hub+.024, .006), (hub+.025, 0.)]
         idx = []
         for i in range(7):
-            b_ = i/6*2*math.pi; idx.append([m.v((outward*px, cy+pr*math.cos(b_), cz+pr*math.sin(b_))) for px, pr in prof])
+            b_ = i/6*2*math.pi; idx.append([m.v((outward*px, cy+r*math.cos(b_), cz+r*math.sin(b_))) for px, r in pr])
         for i in range(6):
-            for j in range(len(prof)-1):
+            for j in range(len(pr)-1):
                 a_, b_, c_, d_ = idx[i][j], idx[i+1][j], idx[i][j+1], idx[i+1][j+1]
                 if outward > 0: m.tri('Chrome', a_, b_, c_); m.tri('Chrome', b_, d_, c_)
                 else: m.tri('Chrome', a_, c_, b_); m.tri('Chrome', b_, c_, d_)
     return m
-wheels = [(n, x, ZA) for n, x, ZA in (('Wheel_FL', TRACK/2, ZA_F), ('Wheel_FR', -TRACK/2, ZA_F), ('Wheel_RL', TRACK/2, ZA_R), ('Wheel_RR', -TRACK/2, ZA_R))]
+wheels = [('Wheel_FL', XF, ZA_F, WF, .055), ('Wheel_FR', -XF, ZA_F, WF, .055), ('Wheel_RL', XR, ZA_R, WR, .085), ('Wheel_RR', -XR, ZA_R, WR, .085)]
 
 # ---------- write the .glb ----------
 MATS = {
@@ -476,7 +522,7 @@ MATS = {
  'Plate':     dict(c=[.55, .56, .58, 1], m=0, r=.6),
  'MirrorGlass': dict(c=[.25, .28, .32, 1], m=.9, r=.05),
  'Tyre':      dict(c=[.020, .020, .022, 1], m=0, r=.85),
- 'Letters':   dict(c=[.42, .42, .40, 1], m=0, r=.7),
+ 'Letters':   dict(c=[.13, .13, .125, 1], m=0, r=.8),
  'Rim':       dict(c=[.20, .21, .22, 1], m=.6, r=.35),
  'Well':      dict(c=[.008, .008, .009, 1], m=0, r=.9),
 }
@@ -514,8 +560,8 @@ def put(m, translation=None, parent=0):
     J['nodes'].append(node); J['nodes'][parent]['children'].append(len(J['nodes'])-1)
 for m in (body, gh, gtr, STR, heads, tails, trim, plate, mir):
     if m.prims: put(m)
-for name, x, za in wheels:
-    put(wheel_mesh(name, 1 if x > 0 else -1), translation=(x, TYRE_R, za))
+for name, x, za, W, dish in wheels:
+    put(wheel_mesh(name, 1 if x > 0 else -1, W, dish), translation=(x, TYRE_R, za))
 while len(BIN) % 4: BIN.append(0)
 J['buffers'] = [dict(byteLength=len(BIN))]
 js = json.dumps(J, separators=(',', ':')).encode()
