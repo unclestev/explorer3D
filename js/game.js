@@ -772,7 +772,7 @@ function aimCam3D(H,pitchDeg){ const dist=.5*H/Math.tan(rad(camera.fov)/2), p=ra
 const S={lng:START.lng,lat:START.lat,hdg:START.hdg,v:0,steer:0,camB:START.hdg,zoom:19.3,roll:0,pitch:0,wheel:0,dist:0,sp:0,sr:0};
 let boat=false, waterC=0, landC=0, mode='car', farmC=0, offFarmC=0, terrainOn=false, landIds=[];
 const TERRAIN_X=1.5, TRACTOR=0.75;   // tractor runs at 75% of car speed
-const BOATMAX=48, WB=3.05, MAXV=60, REVMAX=28; let SPEEDUP=3, EXAG=1.6;   // two steps below the largest size (2.5)   // SPEEDUP: world distance per game metre
+const BOATMAX=48, WB=3.05, MAXV=60, REVMAX=28; let SPEEDUP=3, EXAG=1;   // real size (owner 2026-11-23: the car and person looked far too big next to doors and garages; was 1.6)   // SPEEDUP: world distance per game metre
 let last=0,frame=0,onRoad=true,roadName='';
 // world speed per speedometer metre: 3 everywhere, except the cockpit with ⚙️ Real speed (1 — the world goes past at what the
 // speedometer says; owner 2026-11-20). Everything that moves scales with it; traffic's planned road speeds are rescaled.
@@ -810,6 +810,7 @@ function wxGrip(){
   return W.type==='snow' ? .55-.15*i : .9-.2*i;                    // snow .40-.55, rain .70-.90
 }
 const rad=d=>d*Math.PI/180;
+const CAM_IN=Math.log2(1.6);   // ~0.68 zoom levels: the old car size, as camera distance
 const mpp=(lat,z)=>78271.517*Math.cos(rad(lat))/Math.pow(2,z);
 let roadFails=0, miss=0;
 const hitRoad=(x,y,r)=>{ try{ if(!roadIds.length) return null; return map.queryRenderedFeatures([[x-r,y-r],[x+r,y+r]],{layers:roadIds}); }catch(e){ roadFails++; return null; } };
@@ -1525,7 +1526,9 @@ function step(now){
 
   // camera: lagged chase, zooms out with speed
   const dB=((S.hdg+LOOK.yaw-S.camB+540)%360)-180; S.camB+=dB*(1-Math.exp(-dt*7));
-  const tz=19.3+zoomOff-Math.min(Math.abs(S.v)/MAXV,1)*2.0; S.zoom+=(tz-S.zoom)*Math.min(1,dt*3);
+  // the camera sits closer (CAM_IN) so the real-size car looks as big on screen as the old 1.6x one did; the extra closeness
+  // fades out with speed, so at speed you see as far ahead as before
+  const spdF=Math.min(Math.abs(S.v)/MAXV,1), tz=19.3+zoomOff+CAM_IN*(1-spdF)-spdF*2.0; S.zoom+=(tz-S.zoom)*Math.min(1,dt*3);
   let camMoved=true;
   if(window.COCKPIT&&COCKPIT.active()) COCKPIT.view(dt);          // from behind the wheel (js/enh/cockpit.js)
   else{

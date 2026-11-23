@@ -6,7 +6,9 @@
    when you're close enough to get back in; the HUD says where the car is when you've wandered off. You can also take
    off in the hang glider on foot; landing puts you back on foot, with the car still where you parked it.
    Movement uses the same 3x world speed-up as driving, so the mph and miles on foot agree with the rest of the game.
-   The person is a simple original 3D figure drawn in the car layer at the same exaggerated scale as the car (EXAG).
+   The person is a simple original 3D figure drawn in the car layer at real size, and so is the parked car while you're on
+   foot (owner 2026-11-23: at the old 1.6x the person was taller than the doors and the car twice the garage), whatever
+   the car-size setting; the camera comes in closer instead (WX).
    Doors (owner 2026-11-22: "enter buildings through doors, and not just walk through the walls"): the front doors and
    glass entrances that js/enh/buildings.js draws on nearby buildings can be walked through — the door shows open (dark)
    when you're at it, and walking at a wall near a door slides you into the doorway. Inside, that one building is hidden
@@ -93,7 +95,8 @@ function inWater(lat,lng){
   if(QGEO()){ const r=geoRoads(lng,lat,0); return !(r&&r.some(f=>f.properties.brunnel==='bridge')); }
   const p=map.project([lng,lat]); return !hit(p.x,p.y,5,bridgeIds).length; }
 const vehName=()=>PK.mode==='tractor'?'tractor':PK.mode==='boat'?'boat':(CARSPEC&&CARSPEC.name?CARSPEC.name.replace(/^\S+\s/,''):'car');
-const reach=()=>4.2*EXAG;                                          // close enough to get in (world metres, car drawn EXAG x)
+const WX=1;                                                        // on foot everything is drawn real size
+const reach=()=>4.2;                                               // close enough to get in (metres)
 function carInfo(){
   const d=meters(S.lat,S.lng,PK.lat,PK.lng);
   const dy=(PK.lat-S.lat)*111320, dx=(PK.lng-S.lng)*111320*cosLat();
@@ -229,7 +232,7 @@ function getOut(){
   if(window.AUTO&&AUTO.on) AUTO.takeover();
   Object.assign(PK,{mode,lat:S.lat,lng:S.lng,hdg:S.hdg});
   // step out of the driver's door (left); the other side, behind or in front if a building is in the way
-  const EX=window.COCKPIT&&COCKPIT.on?COCKPIT.exag:EXAG;           // cockpit view draws the world real size; the parked car will be drawn at the chase size
+  const EX=WX;                                                     // the parked car is drawn real size while you're on foot
   const h=rad(S.hdg), half=(mode==='tractor'?1.15:((CARSPEC&&CARSPEC.W)||2.35)/2)*EX, side=half+.55*EX, end=3.4*EX;
   const spots=[[-side,0],[side,0],[0,-end],[0,end]];
   let at=offsetPt(S.lat,S.lng,h,spots[0][0],spots[0][1]);
@@ -283,7 +286,7 @@ function walkStep(dt,st,gas,now){
   const recs=safe('doors',()=>recsNear(S.lat,S.lng))||[];
   safe('inside',()=>updInside(recs));
   if(dm){
-    const n=offsetPt(S.lat,S.lng,h,0,dm), probe=offsetPt(n[0],n[1],h,0,Math.sign(dm)*.3*EXAG);
+    const n=offsetPt(S.lat,S.lng,h,0,dm), probe=offsetPt(n[0],n[1],h,0,Math.sign(dm)*.3);
     if(!landCache.at||every('landcache',3)||meters(landCache.at[1],landCache.at[0],S.lat,S.lng)>400) safe('land',rebuildLandCache);
     let thru=null; for(const r of recs){ if(doorCross(r,[S.lat,S.lng],probe)){ thru=r; break; } }   // through a doorway: in or out
     const wall=!thru&&IN.rec&&!inRec(IN.rec,probe[0],probe[1]);                                     // inside: its walls keep you in
@@ -300,7 +303,7 @@ function walkStep(dt,st,gas,now){
     else { S.lat=n[0]; S.lng=n[1]; safe('inside',()=>updInside(recs)); }
   }
   // the door you're at shows open
-  if(window.ROOFS&&ROOFS.openDoor){ const nd=recs.length?nearDoor(recs,S.lat,S.lng):null, dk=nd&&nd.dist<2.2*EXAG?nd.d.dk:null;
+  if(window.ROOFS&&ROOFS.openDoor){ const nd=recs.length?nearDoor(recs,S.lat,S.lng):null, dk=nd&&nd.dist<2.2?nd.d.dk:null;
     if(dk!==IN.open){ IN.open=dk; ROOFS.openDoor(dk); } }
   S.v=W.v; S.dist+=W.v*dt;
   // walk cycle
@@ -329,7 +332,7 @@ function walkStep(dt,st,gas,now){
 
   // camera: closer than driving, follows where you face
   const dB=((S.hdg+LOOK.yaw-S.camB+540)%360)-180; S.camB+=dB*(1-Math.exp(-dt*4));
-  const tz=Math.min(22,20.5+zoomOff+(IN.rec?.4:0)); S.zoom+=(tz-S.zoom)*Math.min(1,dt*2.5);
+  const tz=Math.min(22.4,21.2+zoomOff+(IN.rec?.4:0));                   // closer than before: the person is real size now S.zoom+=(tz-S.zoom)*Math.min(1,dt*2.5);
   IN.ip+=((IN.rec?48:68)-IN.ip)*Math.min(1,dt*3);                   // inside: look down more steeply, over the cut-away walls
   const Wd=innerWidth,H=innerHeight,padTop=H*.34, cm0=step.cam||{}, PIT=viewPitch(Math.round(IN.ip));
   const camMoved=dirty||Wd!==cm0.W||H!==cm0.H||PIT!==cm0.p||Math.abs(S.lng-cm0.lng)>1e-8||Math.abs(S.lat-cm0.lat)>1e-8||Math.abs(S.camB-cm0.b)>.005||Math.abs(S.zoom-cm0.z)>.0003;
@@ -340,14 +343,14 @@ function walkStep(dt,st,gas,now){
     aimCam3D(H,PIT); placeGlider(); }
 
   // car layer: you at the centre, the parked vehicle where you left it (same projection as the traffic)
-  const m=mpp(S.lat,S.zoom), sc=EXAG/m, b=rad(S.camB), sb=Math.sin(b), cb=Math.cos(b);
+  const m=mpp(S.lat,S.zoom), sc=WX/m, b=rad(S.camB), sb=Math.sin(b), cb=Math.cos(b);
   person.scale.setScalar(sc); person.rotation.y=-rad(S.hdg-S.camB);
   const dx=(PK.lng-S.lng)*111320*cosLat(), dy=(PK.lat-S.lat)*111320, f=dx*sb+dy*cb, r=dx*cb-dy*sb;
   car.visible=true; car.position.set(r/m,0,-f/m); car.scale.setScalar(sc); car.rotation.y=-(rad(PK.hdg)-b);
   body.rotation.set(0,0,0); tractorG.rotation.set(0,0,0); debris.scale.setScalar(sc);
   tails.forEach(t=>t.material=tailOff);
   placePhoto(false);
-  setOrder(car.position.z>0&&Math.hypot(r,f)<12*EXAG?9:12);       // the car photo covers you only when it's nearer the camera
+  setOrder(car.position.z>0&&Math.hypot(r,f)<12?9:12);       // the car photo covers you only when it's nearer the camera
   const traffic=(window.TRAFFIC?TRAFFIC.frame(dt):false)|runFrameHooks(dt);
   const live=updateFx(dt,0,0);
   if(camMoved||anim||W.lastAnim||live>0||shake>0||traffic) renderer.render(scene,camera);
