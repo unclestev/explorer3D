@@ -67,7 +67,7 @@ const SW=[[/\breal speed\b/,'rsBtn','Real speed in the cockpit'],[/\brealistic\b
   [/\b(trail|purple line)\b/,'trailBtn','The trail'],[/^(un)?mute\b|\b(game |engine )?(sound|sounds|audio)\b(?!.*start)/,'audioBtn','Sound']];
 const CARN=[[/^javelin ?3 ?d ?(v(ersion)? ?)?2$/,'javelin3d2','the Javelin 3D v2'],[/^javelin ?3 ?d$/,'javelin3d','the Javelin 3D'],[/^(amc )?javelin$/,'javelin','the Javelin'],
   [/^(lincoln )?navigator$|^lincoln$/,'navigator','the Navigator'],[/^(tesla )?model ?y$|^tesla$/,'modely','the Model Y'],[/^(ford )?expedition$/,'expedition','the Expedition'],
-  [/^(ford )?explorer( st)?$|^st$/,'explorer','the Explorer'],[/^tractor$/,'tractor','the tractor'],[/^(speed ?)?boat$/,'boat','the boat']];
+  [/^(ford )?explorer( st)?$|^st$/,'explorer','the Explorer'],[/^(snow ?plow|plow truck|plow|snow truck)$/,'snowplow','the snow plow'],[/^tractor$/,'tractor','the tractor'],[/^(speed ?)?boat$/,'boat','the boat']];
 function carName(q){ for(const [re,k,n] of CARN) if(re.test(q)) return [k,n]; return null; }
 async function radio(q){ showBar('Finding '+q+'…',true); const n=await MUSIC.playRadio(q); return say(n?'Playing '+n+'.':'I couldn\'t find '+q+' on the radio.'); }
 function setVol(v){ const e=$('musicVol'); if(!e) return null; v=Math.max(0,Math.min(1,v)); e.value=v; e.dispatchEvent(new Event('input')); return Math.round(v*100); }
