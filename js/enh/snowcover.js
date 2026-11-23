@@ -9,6 +9,10 @@
    about half an inch a minute, heavy snow 2, a blizzard 5, up to 18 in — shown on the weather line ("6 in of snow"),
    and the plow piles what it clears into white snowbanks beside its lane (on the side the blade throws to, or both
    sides when it's straight; the wing's bank on the far side of its lane), as tall as the snow is deep and then some.
+   Roofs (owner 2026-11-23: "can you make the snow go on the roof of the house?"): the roof colours (flat roof caps, the
+   pitched house roofs near the car, js/enh/buildings.js) are blended toward snow white as it settles — mixed in the
+   map's own expression from each roof's own colour, so every roof keeps a hint of its shingles; walls, windows and doors stay.
+   The snow layer is also kept under the roads even after a layer (satellite view, …) is added later.
    window.SNOWCOVER = {level (0…1, how white), inches, set(level) for testing} */
 (()=>{
 'use strict';
@@ -29,7 +33,22 @@ function layers(){ safe('snow cover',()=>{
   if(!map.getLayer('snow-plowed')) map.addLayer({id:'snow-plowed',type:'line',source:'plowtrack',layout:{'line-cap':'round','line-join':'round',visibility:'none'},
     paint:{'line-color':'#5d6066','line-width':((A,B)=>['interpolate',['exponential',2],['zoom'],14,['match',['get','w'],1,A[4],B[4]],24,['match',['get','w'],1,A[6],B[6]]])(mz(2.4,2),mz(3.4,2)),'line-opacity':0}},under);   // w 1: the wing's lane
   shown=-1; ready=true; }); }
-function paint(){ if(!ready) return; const k=Math.round(lvl*100)/100; if(k===shown) return; shown=k;
+// ---------- snow on the roofs ----------
+const ROOFS=['roof-cap','rebuilt-roof','roof-3d'], ORIG={}; let roofK=-1;
+function whiten(c,k){ const ch=i=>['+',['*',['at',i,['to-rgba',c]],1-k],252*k]; return ['rgba',ch(0),ch(1),['+',['*',['at',2,['to-rgba',c]],1-k],255*k],1]; }
+function roofs(k){ if(Math.abs(k-roofK)<.04&&!(k===0&&roofK>0)) return; roofK=k;
+  for(const id of ROOFS) safe('snow roof',()=>{ if(!map.getLayer(id)) return;
+    if(!(id in ORIG)) ORIG[id]=map.getPaintProperty(id,'fill-extrusion-color');
+    const o=ORIG[id]; if(o==null) return;
+    if(k<.02){ map.setPaintProperty(id,'fill-extrusion-color',o); return; }
+    const w=whiten(o,Math.min(.88,k));
+    map.setPaintProperty(id,'fill-extrusion-color',id==='roof-3d'?['case',['==',['get','rf'],1],w,o]:w); });   // pitched roofs only: walls, windows, doors keep theirs
+  if(typeof dirty!=='undefined') dirty=true; }
+// keep the ground snow just under the roads (a layer added later before the first road would otherwise cover it)
+function keepOrder(){ safe('snow order',()=>{ const all=map.getStyle().layers, ids=all.map(l=>l.id), i=ids.indexOf('snow-ground'); if(i<0) return;
+  const road=(all.find(l=>l['source-layer']==='transportation')||{}).id; if(!road) return; const r=ids.indexOf(road);
+  if(r>=0&&(r!==i+1)) map.moveLayer('snow-ground',road); }); }
+function paint(){ if(!ready) return; roofs(Math.max(0,Math.min(1,(lvl-.15)*1.3))); const k=Math.round(lvl*100)/100; if(k===shown) return; shown=k;
   safe('snow cover paint',()=>{ const vis=k>0?'visible':'none';
     for(const id of ['snow-ground','snow-roads','snow-plowed','snow-banks']) if(map.getLayer(id)) map.setLayoutProperty(id,'visibility',vis);
     map.setPaintProperty('snow-ground','fill-opacity',Math.min(.93,k*1.15));                 // the ground goes first
@@ -49,6 +68,7 @@ onTick(1000,function snowSettle(){
   if(Math.abs(inch-bankH)>.5&&track.length) drawTrack();
   if(lvl===0&&track.length){ track=[]; wtrack=[]; lastPt=null; drawTrack(); }
   if(window.WXHUD) try{ WXHUD(); }catch(e){}
+  if(lvl>0) keepOrder();
   paint();
 });
 // snowbanks: thin strips beside the lanes, extruded as tall as the snow is deep (x1.6, piled), min 15 cm
