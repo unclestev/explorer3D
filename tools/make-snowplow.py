@@ -52,26 +52,50 @@ body, glass, trim, lamps, blade = Mesh('Body'), Mesh('Glass'), Mesh('Trim'), Mes
 box(trim, 'Frame', (.42, .78, .30), (.12, .26, 7.9), both=True)                       # frame rails
 box(trim, 'Frame', (0, .70, 3.62), (2.30, .30, .22))                                  # front bumper
 box(trim, 'Frame', (0, .62, -3.55), (2.30, .16, .16))                                 # rear bumper bar
-# ---------- hood and cab ----------
-box(body, 'Paint', (0, 1.30, 2.83), (2.02, .90, 1.42))                                # hood
-box(body, 'Paint', (0, 1.76, 2.83), (1.86, .06, 1.38))                                # hood top, a little narrower (rounded look)
-box(trim, 'Grille', (0, 1.27, 3.555), (1.36, .78, .04))                               # dark behind the grille
-for x0, y0, w, h in ((0, 1.66, 1.46, .07), (0, .88, 1.46, .07), (.70, 1.27, .07, .85), (-.70, 1.27, .07, .85)):
-    box(trim, 'Chrome', (x0, y0, 3.585), (w, h, .05))                                  # chrome surround
-for k in range(13): box(trim, 'Chrome', (-.60+k*.10, 1.27, 3.585), (.035, .74, .035))  # vertical chrome bars
-box(trim, 'Chrome', (0, 1.27, 3.59), (1.36, .03, .03))                                 # centre bar
-for sx in (1, -1):                                                                    # front fenders over the wheels
-    slab(trim, 'Fender', [(sx*1.02, 1.18, 3.20), (sx*1.18, 1.18, 3.20), (sx*1.18, 1.18, 1.62), (sx*1.02, 1.18, 1.62)], .03)
-    slab(trim, 'Fender', [(sx*1.02, 1.18, 3.20), (sx*1.18, 1.18, 3.20), (sx*1.18, .86, 3.48), (sx*1.02, .86, 3.48)], .03)
+# ---------- hood and cab (shapes after the owner's photo: a long hood that slopes down to a tall chrome grille, fenders
+# rounded over the front wheels with the lamps in their front faces, a one-piece windshield) ----------
+def rring(cx, w, yb, yt, z, n=4, k=20):           # a rounded-rectangle ring (round top corners, flat bottom), right to left
+    pts = []
+    for t in range(k+1):
+        a = -math.pi/2+math.pi*t/k                    # -90..90 degrees: bottom right -> top right... then mirrored
+        c, s_ = math.cos(a), math.sin(a)
+        x = w*(abs(c)**(2/n)); y = (yb+yt)/2+(yt-yb)/2*math.copysign(abs(s_)**(2/n), s_)
+        pts.append((cx+x, max(yb, y), z))
+    return pts+[(cx-p[0]+cx, p[1], p[2]) for p in reversed(pts)]
+def loft(m, mat, rings, cap=True):
+    R = [[m.v(p) for p in r] for r in rings]
+    for a, b in zip(R, R[1:]):
+        for k in range(len(a)-1): m.quad(mat, a[k], b[k], b[k+1], a[k+1])
+        m.quad(mat, a[-1], b[-1], b[0], a[0])
+    if cap:
+        for r, f in ((R[0], 1), (R[-1], -1)):
+            c = m.v(np.mean([m.P[q] for q in r], 0))
+            for k in range(len(r)): j = (k+1) % len(r); (m.tri(mat, c, r[k], r[j]) if f > 0 else m.tri(mat, c, r[j], r[k]))
+HZ = np.linspace(2.10, 3.52, 9)
+loft(body, 'Paint', [rring(0, .97-.08*((z-2.10)/1.42)**2, .95, 1.86-.18*((z-2.10)/1.42)**1.4, z, 7) for z in HZ])   # hood: slopes and narrows to the front
+for sx in (1, -1):                                                                     # fenders, rounded over the wheels
+    FZ = np.linspace(1.72, 3.44, 9)
+    loft(body, 'Paint', [rring(sx*1.02, .21, 1.10, 1.62-.26*((z-1.72)/1.72)**1.3, z, 5, 10) for z in FZ])
+    box(body, 'Paint', (sx*1.02, 1.02, 3.30), (.42, .36, .28))                          # fender front down to the bumper
+    box(trim, 'Fender', (sx*1.02, 1.08, 2.35), (.42, .05, 1.10))                       # black liner over the tyre
+    for k, y in ((0, 1.02), (1, 1.02)):                                                # two round headlights in each fender front
+        cyl(lamps, 'Headlight', (sx*(.96+k*.17), y, 3.445), (sx*(.96+k*.17), y, 3.47), .068, 16)
+        cyl(trim, 'Chrome', (sx*(.96+k*.17), y, 3.44), (sx*(.96+k*.17), y, 3.455), .082, 16)
+    box(lamps, 'Amber', (sx*1.04, 1.24, 3.445), (.30, .09, .04))                       # turn lamps above them
+    box(lamps, 'Amber', (sx*1.02, 1.42, 3.30), (.16, .08, .10))                        # marker lamps on the fender tops
+box(trim, 'Grille', (0, 1.28, 3.53), (1.24, .74, .04))                                # dark behind the grille
+for x0, y0, w, h in ((0, 1.67, 1.36, .08), (0, .89, 1.36, .07), (.65, 1.28, .07, .85), (-.65, 1.28, .07, .85)):
+    box(trim, 'Chrome', (x0, y0, 3.55), (w, h, .05))                                   # tall chrome surround
+for k in range(11): box(trim, 'Chrome', (-.55+k*.11, 1.28, 3.555), (.04, .72, .04))    # vertical chrome bars
+box(trim, 'Frame', (0, 1.75, 3.47), (.10, .06, .04))                                  # the badge spot left plain
 box(body, 'Paint', (0, 1.85, 1.38), (2.40, 1.70, 1.50))                               # cab
-box(body, 'Paint', (0, 2.73, 1.38), (2.30, .08, 1.42))                                # cab roof cap
-# windshield (two panes, slightly raked) and side windows
+loft(body, 'Paint', [rring(0, 1.18, 2.60, 2.78, z, 4, 8) for z in (.64, 2.12)])      # rounded cab roof
+# one-piece windshield, raked, and side windows
+slab(glass, 'Glass', [(-1.12, 1.94, 2.155), (1.12, 1.94, 2.155), (1.08, 2.62, 2.065), (-1.08, 2.62, 2.065)], .02)
 for sx in (1, -1):
-    slab(glass, 'Glass', [(sx*.04, 1.98, 2.15), (sx*1.10, 1.98, 2.15), (sx*1.08, 2.58, 2.06), (sx*.04, 2.58, 2.06)], .02)
     slab(glass, 'Glass', [(sx*1.205, 1.96, 2.02), (sx*1.205, 1.96, 1.02), (sx*1.205, 2.56, 1.06), (sx*1.205, 2.56, 1.96)], .02)
     slab(glass, 'Glass', [(sx*1.205, 1.96, .94), (sx*1.205, 1.96, .70), (sx*1.205, 2.56, .70), (sx*1.205, 2.56, .94)], .02)
-box(trim, 'Trim', (0, 2.28, 2.13), (.06, .64, .05))                                   # centre post
-box(trim, 'Trim', (0, 1.70, 2.13), (2.36, .07, .04))                                  # cowl
+box(trim, 'Trim', (0, 1.90, 2.14), (2.36, .07, .04))                                  # cowl
 box(body, 'Paint', (0, 1.04, 1.38), (2.40, .12, 1.50))                                # cab floor / sill
 box(trim, 'Step', (1.16, .80, 1.55), (.18, .06, .55), both=True)                      # steps
 box(trim, 'Trim', (1.21, 1.75, 1.55), (.03, .05, .30), both=True)                     # door handles
@@ -84,26 +108,28 @@ for sx in (1, -1):
 # exhaust stack behind the cab (driver's side) and the air tank
 cyl(trim, 'Chrome', (-1.08, 1.05, .52), (-1.08, 3.05, .52), .075, 16)
 cyl(trim, 'Tank', (.98, .95, .30), (.98, .95, -.35), .19, 18)
-# ---------- amber light bar on the cab roof ----------
-box(trim, 'Trim', (0, 2.81, 1.50), (1.70, .08, .26))
-for x, mat in ((-.70, 'Beacon'), (-.35, 'BeaconB'), (0., 'Trim'), (.35, 'Beacon'), (.70, 'BeaconB')):   # two sets of lenses that flash in turn
-    box(lamps if mat != 'Trim' else trim, mat, (x, 2.92, 1.50), (.30, .14, .22))
-# ---------- headlights in the bumper corners, plow lights on posts over the hood, turn lamps ----------
+# ---------- amber lights on the cab roof, as in the photo: one at each front corner and a beacon in the middle ----------
 for sx in (1, -1):
-    box(lamps, 'Headlight', (sx*.88, 1.15, 3.555), (.30, .20, .05))
-    box(lamps, 'Amber', (sx*.88, .98, 3.555), (.30, .07, .05))
-    box(lamps, 'Amber', (sx*1.06, 1.34, 3.30), (.16, .10, .10))                        # amber marker lamps on the fender tops
-    box(lamps, 'Amber', (sx*1.05, 2.79, 2.08), (.14, .07, .08))                        # cab roof marker lamps
-    box(lamps, 'Amber', (sx*.35, 2.79, 2.08), (.10, .06, .07))
+    box(trim, 'Trim', (sx*1.00, 2.80, 2.00), (.22, .05, .18))
+    box(lamps, 'BeaconB', (sx*1.00, 2.87, 2.00), (.18, .10, .14))                    # flash in turn with the beacon
+    box(lamps, 'Amber', (sx*.42, 2.80, 2.10), (.10, .05, .05))                         # small roof marker lamps
+box(trim, 'Trim', (0, 2.80, 1.75), (.70, .05, .30))                                   # the number plate on the roof
+box(trim, 'Plate', (0, 2.80, 1.92), (.62, .10, .02))
+cyl(trim, 'Trim', (0, 2.79, 1.55), (0, 2.85, 1.55), .12, 18)
+cyl(lamps, 'Beacon', (0, 2.85, 1.55), (0, 3.00, 1.55), .10, 18)                       # beacon dome
 # ---------- dump body with cab shield, tailgate, salt spreader ----------
 DB0, DB1 = -3.42, .42
-box(body, 'Paint', (0, 1.18, (DB0+DB1)/2), (2.44, .12, DB1-DB0))                     # floor
-box(body, 'Paint', (1.19, 1.82, (DB0+DB1)/2), (.06, 1.16, DB1-DB0), both=True)         # sides
-box(body, 'Paint', (0, 1.82, DB1), (2.44, 1.16, .08))                                 # front wall
-slab(body, 'Paint', [(-1.22, 2.40, DB1), (1.22, 2.40, DB1), (1.22, 2.70, DB1+.70), (-1.22, 2.70, DB1+.70)], .05)   # cab shield
-box(body, 'Paint', (0, 1.82, DB0), (2.40, 1.16, .07))                                 # tailgate
-for z in np.linspace(DB0+.4, DB1-.4, 6): box(trim, 'Rib', (1.235, 1.82, z), (.04, 1.10, .07), both=True)   # side ribs
-box(trim, 'Rib', (1.235, 2.38, (DB0+DB1)/2), (.05, .06, DB1-DB0), both=True)           # top rails
+box(body, 'Steel', (0, 1.18, (DB0+DB1)/2), (2.44, .12, DB1-DB0))                     # floor
+box(body, 'Steel', (1.19, 1.82, (DB0+DB1)/2), (.06, 1.16, DB1-DB0), both=True)         # sides
+box(body, 'Steel', (0, 1.82, DB1), (2.44, 1.16, .08))                                 # front wall
+slab(body, 'Steel', [(-1.22, 2.40, DB1), (1.22, 2.40, DB1), (1.22, 2.70, DB1+.70), (-1.22, 2.70, DB1+.70)], .05)   # cab shield
+box(body, 'Steel', (0, 1.82, DB0), (2.40, 1.16, .07))                                 # tailgate
+for z in np.linspace(DB0+.4, DB1-.4, 6): box(trim, 'SteelRib', (1.235, 1.82, z), (.04, 1.10, .07), both=True)   # side ribs
+box(trim, 'SteelRib', (1.235, 2.38, (DB0+DB1)/2), (.05, .06, DB1-DB0), both=True)      # top rails
+for k, z in enumerate(np.arange(DB0+.05, DB1-.05, .30)):                               # red / white reflective strip
+    box(trim, 'Reflect' if k % 2 else 'ReflectW', (1.258, 1.36, z+.15), (.01, .08, .30), both=True)
+for sx in (1, -1):                                                                     # tarp arm along the side
+    cyl(trim, 'SteelRib', (sx*1.27, 2.36, DB1-.15), (sx*1.27, 1.40, DB1-1.55), .035, 8)
 box(trim, 'Spreader', (0, .98, -3.66), (.90, .36, .40))                                # spreader hopper
 cyl(trim, 'Spreader', (0, .74, -3.74), (0, .62, -3.74), .04, 10)
 cyl(trim, 'Spinner', (0, .60, -3.74), (0, .57, -3.74), .30, 24)                        # spinner disc
@@ -214,6 +240,11 @@ MATS = {
  'MirrorGlass': dict(c=[.25, .28, .32, 1], m=.9, r=.05),
  'Tank':      dict(c=[.40, .42, .44, 1], m=.9, r=.3),
  'Rib':       dict(c=[.66, .09, .004, 1], m=.15, r=.5),
+ 'Steel':     dict(c=[.55, .57, .60, 1], m=.85, r=.32),      # stainless dump body, as in the photo
+ 'SteelRib':  dict(c=[.45, .47, .50, 1], m=.85, r=.30),
+ 'Reflect':   dict(c=[.60, .03, .03, 1], m=.1, r=.3),
+ 'ReflectW':  dict(c=[.85, .85, .85, 1], m=.1, r=.3),
+ 'Plate':     dict(c=[.80, .80, .78, 1], m=.1, r=.5),
  'Spreader':  dict(c=[.30, .31, .33, 1], m=.7, r=.5),
  'Spinner':   dict(c=[.10, .10, .11, 1], m=.5, r=.5),
  'Flap':      dict(c=[.012, .012, .013, 1], m=0, r=.9),
