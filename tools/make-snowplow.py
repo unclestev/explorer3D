@@ -46,6 +46,10 @@ def cyl(m, mat, a, b, r, n=18, caps=True):      # cylinder from point a to point
         ca, cb = m.v(a), m.v(b)
         for k in range(n): j = (k+1) % n; m.tri(mat, ca, A[j], A[k]); m.tri(mat, cb, B[k], B[j])
 
+def prism(m, mat, outline, d, t):                                # a flat outline (3D points in a plane) extruded +-t/2 along d
+    d = np.asarray(d, float)*t/2; A = [m.v(p+d) for p in outline]; B = [m.v(p-d) for p in outline]; n = len(outline)
+    for k in range(1, n-1): m.tri(mat, A[0], A[k], A[k+1]); m.tri(mat, B[0], B[k+1], B[k])
+    for k in range(n): j = (k+1) % n; m.quad(mat, A[k], B[k], B[j], A[j])
 body, glass, trim, lamps, blade = Mesh('Body'), Mesh('Glass'), Mesh('Trim'), Mesh('Lamps'), Mesh('Plow')
 
 # ---------- frame, bumper, fenders ----------
@@ -78,11 +82,29 @@ for sx in (1, -1):                                                              
     loft(body, 'Paint', [rring(sx*1.02, .21, 1.10, 1.62-.26*((z-1.72)/1.72)**1.3, z, 5, 10) for z in FZ])
     box(body, 'Paint', (sx*1.02, 1.02, 3.30), (.42, .36, .28))                          # fender front down to the bumper
     box(trim, 'Fender', (sx*1.02, 1.08, 2.35), (.42, .05, 1.10))                       # black liner over the tyre
-    for k, y in ((0, 1.02), (1, 1.02)):                                                # two round headlights in each fender front
-        cyl(lamps, 'Headlight', (sx*(.96+k*.17), y, 3.445), (sx*(.96+k*.17), y, 3.47), .068, 16)
-        cyl(trim, 'Chrome', (sx*(.96+k*.17), y, 3.44), (sx*(.96+k*.17), y, 3.455), .082, 16)
-    box(lamps, 'Amber', (sx*1.04, 1.24, 3.445), (.30, .09, .04))                       # turn lamps above them
     box(lamps, 'Amber', (sx*1.02, 1.42, 3.30), (.16, .08, .10))                        # marker lamps on the fender tops
+# headlights (owner 2026-11-23: "can you make the headlights the same"): like the photo's, a swept composite
+# housing in each fender corner — a rounded trapezoid lens with a chrome bezel that wraps round onto the side, two round
+# lamps in chrome reflectors side by side, and an amber turn / side-marker lamp at the outer corner
+def hl_outline(sx, z):                                           # front outline, outer end raised (x outward)
+    P = [(.83, .94), (1.17, .93), (1.225, .99), (1.225, 1.12), (1.15, 1.18), (.83, 1.16)]
+    return [np.array((sx*x, y, z)) for x, y in P]
+for sx in (1, -1):
+    O = hl_outline(sx, 3.444); cen = np.mean(O, 0)
+    prism(trim, 'Chrome', [cen+(p-cen)*np.array((1.06, 1.12, 1)) for p in O], (0, 0, 1), .008)   # chrome bezel round the edge
+    prism(lamps, 'Lens', [p+(0, 0, .004) for p in O], (0, 0, 1), .006)                          # the dark housing behind the lamps
+    for k, x in enumerate((.92, 1.07)):                                                # two round lamps
+        c = np.array((sx*x, 1.045, 3.452))
+        cyl(trim, 'Chrome', c-(0, 0, .03), c, .068, 20)                                 # reflector bowl
+        cyl(lamps, 'Headlight', c, c+(0, 0, .006), .052 if k else .058, 20)
+        for r0, r1 in ((.040, .046), (.020, .024)):                                    # chrome rings inside the lens
+            for q in range(20):
+                a0, a1 = q/20*2*math.pi, (q+1)/20*2*math.pi
+                P0 = [c+(math.cos(t)*r, math.sin(t)*r, .0075) for t, r in ((a0, r0), (a1, r0), (a1, r1), (a0, r1))]
+                prism(lamps, 'Headlight', P0, (0, 0, 1), .002) if False else prism(trim, 'Chrome', P0, (0, 0, 1), .002)
+        cyl(trim, 'Chrome', c+(0, 0, .004), c+(0, 0, .011), .012, 12)                  # the bulb
+    prism(lamps, 'Amber', [np.array((sx*1.165, .95, 3.462)), np.array((sx*1.215, 1.0, 3.462)), np.array((sx*1.215, 1.11, 3.462)), np.array((sx*1.165, 1.13, 3.462))], (0, 0, 1), .008)
+    prism(lamps, 'Amber', [np.array((sx*1.236, .99, 3.43)), np.array((sx*1.236, .99, 3.24)), np.array((sx*1.236, 1.10, 3.26)), np.array((sx*1.236, 1.11, 3.43))], (1, 0, 0), .01)   # wraps onto the side
 box(trim, 'Grille', (0, 1.28, 3.53), (1.24, .74, .04))                                # dark behind the grille
 for x0, y0, w, h in ((0, 1.67, 1.36, .08), (0, .89, 1.36, .07), (.65, 1.28, .07, .85), (-.65, 1.28, .07, .85)):
     box(trim, 'Chrome', (x0, y0, 3.55), (w, h, .05))                                   # tall chrome surround
@@ -132,9 +154,6 @@ for sx in (1, -1):
     for A, B in zip(R, R[1:]):
         for k in range(4): q = (k+1) % 4; trim.quad('Flare', A[k], B[k], B[q], A[q])
     for k in range(5): box(trim, 'Grille', (sx*.965, 1.52-k*.07, 2.55), (.02, .035, .48))
-# headlight clusters in black housings (two round lamps each) with the amber turn lamp on top
-for sx in (1, -1):
-    box(trim, 'Grille', (sx*1.04, 1.05, 3.415), (.40, .26, .03))
 # plow lights on brackets above the hood corners: a chrome housing with a clear lamp and an amber turn lamp
 for sx in (1, -1):
     cyl(trim, 'Frame', (sx*.90, 1.66, 3.28), (sx*.90, 1.98, 3.32), .025, 8)
@@ -210,10 +229,6 @@ UP = np.array((0, 1., 0))
 def curl(v): return -.20*math.sin(v*math.pi*.80)+.11*v*v        # the moldboard's curve: hollow low down, lip forward at the top
 def bp(u, v, back=0.):                                           # a point on the moldboard (back: metres behind the face)
     return np.array((CX, .08, CZ))+AX*(u*BW/2)+UP*(v*BH)+NF*(curl(v)-back)
-def prism(m, mat, outline, d, t):                                # a flat outline (3D points in a plane) extruded +-t/2 along d
-    d = np.asarray(d, float)*t/2; A = [m.v(p+d) for p in outline]; B = [m.v(p-d) for p in outline]; n = len(outline)
-    for k in range(1, n-1): m.tri(mat, A[0], A[k], A[k+1]); m.tri(mat, B[0], B[k+1], B[k])
-    for k in range(n): j = (k+1) % n; m.quad(mat, A[k], B[k], B[j], A[j])
 NU, NV, TH = 30, 14, .03
 G = [[blade.v(bp(-1+2*i/NU, j/NV)) for j in range(NV+1)] for i in range(NU+1)]
 Gb = [[blade.v(bp(-1+2*i/NU, j/NV, TH)) for j in range(NV+1)] for i in range(NU+1)]
@@ -359,6 +374,7 @@ MATS = {
  'Marker':    dict(c=[.02, .02, .02, 1], m=0, r=.6),
  'MarkerTip': dict(c=[.90, .16, .01, 1], m=0, r=.45),
  'Headlight': dict(c=[.14, .145, .15, 1], m=.7, r=.1),
+ 'Lens':      dict(c=[.06, .065, .07, 1], m=.6, r=.06),        # the clear headlight lens over the housing
  'Taillight': dict(c=[.25, .02, .02, 1], m=.2, r=.2),
  'Amber':     dict(c=[.60, .26, .02, 1], m=.2, r=.2),
  'Beacon':    dict(c=[.70, .32, .02, 1], m=.1, r=.2),        # light-bar lenses: flash in turn (js/enh/plow.js)
