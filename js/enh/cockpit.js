@@ -1340,8 +1340,10 @@ function drawScreenXp(sc,d){ const x=sc.T.x, W=sc.w, H=sc.h, DH=Math.round(H*.12
   const cx0=mx+mw+12, cw=W-cx0-10, c1=TH, h1=Math.round((H-TH-DH-20)*.52), c2=c1+h1+10, h2=H-DH-8-c2;
   x.fillStyle='#161c25'; rr(x,cx0,c1,cw,h1,14); x.fill(); rr(x,cx0,c2,cw,h2,14); x.fill();
   { const a=Math.round(h1*.56), ax=cx0+16, ay=c1+(h1-a)/2-8, gg=x.createLinearGradient(ax,ay,ax+a,ay+a); gg.addColorStop(0,'#3a6ea8'); gg.addColorStop(1,'#a24f7c');
-    x.fillStyle=gg; rr(x,ax,ay,a,a,8); x.fill(); x.fillStyle='rgba(255,255,255,.85)'; fitText(x,'♪',ax+a/2,ay+a/2,a*.8,Math.round(a*.5),'400','center');
     const mi=window.MUSIC&&MUSIC.info&&MUSIC.info();   /* what's playing (music.js), else the idle card */
+    const im=mi&&mi.art?cover(mi.art):null;            // the album cover (owner 2026-11-23), else the music note
+    if(im){ x.save(); rr(x,ax,ay,a,a,8); x.clip(); x.drawImage(im,ax,ay,a,a); x.restore(); }
+    else { x.fillStyle=gg; rr(x,ax,ay,a,a,8); x.fill(); x.fillStyle='rgba(255,255,255,.85)'; fitText(x,'♪',ax+a/2,ay+a/2,a*.8,Math.round(a*.5),'400','center'); }
     x.fillStyle='#e9edf2'; fitText(x,mi?mi.title:'Radio',ax+a+14,ay+a*.32,cw-a-44,26,'600','left');
     x.fillStyle='#8f98a3'; fitText(x,mi?(mi.artist||(mi.live?'LIVE':'')):'Tap the screen for music',ax+a+14,ay+a*.72,cw-a-44,20,'400','left');
     x.fillStyle='#c9d0d8'; ['⏮',mi&&mi.playing?'⏸':'▶','⏭'].forEach((t,i)=>fitText(x,t,cx0+cw*(.3+i*.2),c1+h1-22,cw*.15,22,'400','center')); }
@@ -1870,6 +1872,11 @@ function drawMap(x,R,th){
   x.fillStyle=th.arrow; x.strokeStyle=th.arrowEdge; x.lineWidth=4; x.beginPath(); x.moveTo(cx,cy-20); x.lineTo(cx+14,cy+14); x.lineTo(cx,cy+6); x.lineTo(cx-14,cy+14); x.closePath(); x.fill(); x.stroke();
   x.restore(); }
 // what's playing, along the bottom of the centre screen (music.js)
+// album covers for the screen: loaded once each, with CORS (a picture without it would spoil the screen's texture, so
+// those just don't load and the note shows instead)
+const COVERS=new Map();
+function cover(u){ let c=COVERS.get(u); if(!c){ if(COVERS.size>40) COVERS.clear(); const i=new Image(); i.crossOrigin='anonymous'; c={i,ok:false};
+    i.onload=()=>{ c.ok=true; dirty=true; }; i.onerror=()=>{ c.ok=false; }; i.src=u; COVERS.set(u,c); } return c.ok?c.i:null; }
 function musicBar(sc){ const n=window.MUSIC&&MUSIC.info&&MUSIC.info(); if(!n) return; const x=sc.T.x, W=sc.w, H=sc.h, bh=Math.round(H*.13), y=H-bh;
   x.fillStyle='rgba(8,10,14,.92)'; x.fillRect(0,y,W,bh); x.fillStyle='#2b3340'; x.fillRect(0,y,W,3);
   if(n.dur) { x.fillStyle='#4f8ef7'; x.fillRect(0,y,W*Math.min(1,n.pos/n.dur),3); }

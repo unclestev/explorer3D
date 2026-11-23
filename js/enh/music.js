@@ -62,7 +62,8 @@ const MU={now:null,queue:[],qi:-1};
    something while the engine is off is remembered and starts when the engine is on. */
 const carOn=()=>!window.IGN||IGN.state==='on'||!!(window.COCKPIT&&COCKPIT.accessory&&COCKPIT.accessory());   // or the screen woken with its ⏻ while the car's off (accessory)
 let wasOn=true, resume=false;
-function setNow(){ const n=MU.now; $('musicNow').textContent=n?(au.paused?'⏸ ':n.radio?'📻 ':'♪ ')+n.title+(n.artist?' — '+n.artist:''):'Nothing playing';
+function setNow(){ const n=MU.now, sg=n&&n.radio&&typeof NP!=='undefined'&&NP.song&&NP.key===ihr(n)?NP.song:null;
+  $('musicNow').textContent=n?(au.paused?'⏸ ':n.radio?'📻 ':'♪ ')+n.title+(sg?' — '+sg.title+(sg.artist?' · '+sg.artist:''):n.artist?' — '+n.artist:''):'Nothing playing';
   for(const el of panel.querySelectorAll('.it,#radioPresets button')) el.classList.toggle('on',!!n&&el.dataset.url===n.url); }
 function play(track){ MU.now=track;
   if(!carOn()){ resume=true; au.pause(); setNow(); say('📻 Turn the engine on to listen',2200); return; }
@@ -183,8 +184,26 @@ $('musicX').onclick=close;
 /* the M key: js/enh/controls.js */
 
 // for the car's centre screen: what's playing and how far along (live radio: no length, live:true)
-MU.info=()=>MU.now?{title:MU.now.title,artist:MU.now.radio?(MU.now.artist?MU.now.artist+' · LIVE':'LIVE'):MU.now.artist,playing:!au.paused,live:!!MU.now.radio,
-  pos:au.currentTime||0,dur:!MU.now.radio&&isFinite(au.duration)?au.duration:0}:null;
+/* what's on the radio right now (owner 2026-11-23, photo of the screen: "put the name and the picture of the songs on the
+   bottom screen"): iHeart stations (streams at stream.revma.ihrhls.com/zcNNN, like 93.9 LITE FM) say what they're playing
+   through iHeart's public now-playing feed, with the album cover; checked every 20 s while the station plays. Other
+   stations don't publish it in a way a web page can read, so they show the station. Songs show their album cover. */
+var NP={key:'',song:null,t:0,busy:false};
+function ihr(n){ const m=n&&n.radio&&String(n.url||'').match(/revma\.ihrhls\.com\/zc(\d+)/); return m?m[1]:null; }
+function nowPlaying(force){ const n=MU.now, id=ihr(n); if(!id){ NP.key=''; NP.song=null; return; }
+  if(NP.key!==id){ NP.key=id; NP.song=null; force=true; }
+  if(NP.busy||au.paused&&!force||Date.now()-NP.t<(force?3000:20000)) return; NP.busy=true; NP.t=Date.now();
+  fetch('https://api.iheart.com/api/v3/live-meta/stream/'+id+'/currentTrackMeta').then(r=>r.ok?r.json():null).then(j=>{
+    if(NP.key!==id) return;
+    if(!j||!j.title){ NP.song=null; return; }
+    const art=/^https?:\/\//.test(j.imagePath||'')?String(j.imagePath).replace(/^http:/,'https:')+'?ops=fit(300,300)':'';
+    NP.song={title:String(j.title).slice(0,120),artist:String(j.artist||'').slice(0,120),art}; setNow(); }).catch(()=>{}).finally(()=>{ NP.busy=false; }); }
+setInterval(()=>nowPlaying(false),2500);
+const big=u=>String(u||'').replace(/\/(\d+)x(\d+)bb\./,'/300x300bb.');           // iTunes covers come small; ask for 300 px
+MU.info=()=>{ const n=MU.now; if(!n) return null; const sg=n.radio&&NP.key&&NP.key===ihr(n)?NP.song:null;
+  return {title:sg?sg.title:n.title, artist:sg?(sg.artist?sg.artist+' · ':'')+n.title:n.radio?(n.artist?n.artist+' · LIVE':'LIVE'):n.artist,
+    station:n.radio?n.title:'', art:sg?sg.art:n.radio?(n.fav||''):big(n.art), playing:!au.paused, live:!!n.radio,
+    pos:au.currentTime||0, dur:!n.radio&&isFinite(au.duration)?au.duration:0}; };
 setInterval(()=>{ const on=carOn(); if(on===wasOn) return; wasOn=on;
   if(!on){ resume=!!MU.now&&!au.paused; if(resume) au.pause(); }
   else if(resume&&MU.now){ const n=MU.now; resume=false; if(n.radio||au.src!==n.url) play(n); else au.play().catch(()=>{}); } },250);
