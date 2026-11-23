@@ -97,6 +97,17 @@ async function handle(raw){
   if((m=t.match(/^(?:say|repeat after me)\s+(.+)$/))) return say(m[1].replace(/^["']|["']$/g,''));
   if(has(t,'thank')) return say('You\'re welcome!');
 
+  // ---- the phone (js/enh/phone.js)
+  if(window.PHONE&&/\b(take|snap)( a| me a)? (picture|photo|pic|selfie|screenshot)\b/.test(t)){ const u=await PHONE.snap(); return say(u?'Got it. It\'s in Photos on your phone.':'I couldn\'t take a photo here.'); }
+  if(window.PHONE&&(m=t.match(/^(?:open|show|pull up|get out|check)( my| the)? phone(?:'s)?(?: (maps|music|youtube|spotify|camera|photos|weather|clock|calculator|notes|car|stopwatch) app| (maps|music|youtube|spotify|camera|photos|weather|clock|calculator|notes))?$/))){
+    const k={maps:'maps',music:'music',youtube:'tube',spotify:'spotify',camera:'camera',photos:'photos',weather:'weather',clock:'clock',stopwatch:'clock',calculator:'calc',notes:'notes',car:'car'}[m[2]||m[3]]; PHONE.open(k); return say('Here\'s your phone.'); }
+  if(window.PHONE&&/^(open|start|launch)( my| the)? (youtube music|you tube music|yt music)$/.test(t)){ PHONE.open('ytmusic'); return say('Here\'s YouTube Music.'); }
+  if(window.PHONE&&PHONE.ytm&&(m=t.match(/^(?:play|put on|listen to)\s+(.+?)\s+on (?:youtube music|you tube music|yt music)$/))){ showBar('Finding '+m[1]+'…',true); const r=await PHONE.ytm.search(m[1]);
+    if(r.err) return say(/key/i.test(r.err)?'To find songs by name I need a YouTube key. Add it in the car\'s video tab.':r.err); if(!r.items.length) return say('I couldn\'t find '+m[1]+'.');
+    PHONE.ytm.play(r.items[0]); return say('Playing '+r.items[0].title+' on YouTube Music.'); }
+  if(window.PHONE&&PHONE.ytm&&PHONE.ytm.on&&/^(stop|pause|turn off)( the)? (youtube music|music|song)$/.test(t)){ PHONE.ytm.stop(); if(window.MUSIC&&MUSIC.stop) MUSIC.stop(); return say('Music stopped.'); }
+  if(window.PHONE&&/^(open|play|start|launch)( my| the)? spotify$/.test(t)){ PHONE.open('spotify'); return say('Here\'s Spotify. Paste a link to play it.'); }
+  if(window.PHONE&&/^(close|hide|put away|put down)( my| the)? phone$/.test(t)){ PHONE.close(); return say('Phone away.'); }
   // ---- YouTube
   if(/^(stop|close|turn off|end|exit|quit)( the)? (video|youtube)/.test(t)){ if(window.TUBE) TUBE.stop(); return say('Video stopped.'); }
   if(/^(play|watch|resume|put on)( my| the)? (last|recent|previous) video|^resume( the)? video/.test(t)){ if(MU&&MU.open) MU.open(false); click('tabVideo');

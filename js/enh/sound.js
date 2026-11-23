@@ -161,6 +161,6 @@ function squirt(){ if(!on) return; start(); const c=A.ctx; if(!c) return; if(c.s
   const m=c.createOscillator(); m.type='triangle'; m.frequency.value=180; const mg=c.createGain(); mg.gain.setValueAtTime(0,t); mg.gain.linearRampToValueAtTime(.025,t+.05); mg.gain.linearRampToValueAtTime(0,t+.7);
   src.connect(bp); bp.connect(g); m.connect(mg); const out=A.bus||c.destination; g.connect(out); mg.connect(out); src.start(t); m.start(t); src.stop(t+.9); m.stop(t+.75); }
 // a timer (not a frame hook), so it works parked and in every view
-setInterval(()=>horn(window.CTRL&&CTRL.held('horn')),30);
+setInterval(()=>horn((window.CTRL&&CTRL.held('horn'))||(window.PHONE&&PHONE.horn)),30);   // the phone's Car app has a horn too
 window.SOUND={duck:on=>{ try{ if(A.duck) A.duck.gain.setTargetAtTime(on?.25:1,A.ctx.currentTime,.12); }catch(e){} },setOn,get on(){ return on; },state:A,ENG,cabin,horn,squirt,get honking(){ return H.on; }};
 })();
