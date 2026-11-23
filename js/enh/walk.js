@@ -240,15 +240,16 @@ function buildRoom(r){
   for(let i=0;i<p.length;i++){ const a=p[i], b=p[(i+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1]); if(L<.05) continue;
     const ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux, at=(t,o)=>[a[0]+ux*t-nx*o,a[1]+uy*t-ny*o];
     const gaps=ways.filter(w=>w.d.ei===i).map(w=>({s0:w.d.s0,s1:w.d.s1,h:w.h})).sort((x,y)=>x.s0-y.s0);
-    const E=TH2+.03;                                                 // walls run on past the corners, so inside corners close up
-    let t=-E; for(const q of gaps){ if(q.s0>t) quad(wall,at(t,TH2),at(q.s0,TH2),0,HC); quad(wall,at(q.s0,TH2),at(q.s1,TH2),q.h,HC);   // wall up to the gap, header over it
+    const E=TH2+.03, rf=k=>{ const A=p[(k+p.length-1)%p.length], B=p[k], C=p[(k+1)%p.length]; return (B[0]-A[0])*(C[1]-B[1])-(B[1]-A[1])*(C[0]-B[0])<0; };   // reflex corner (outline is CCW)
+    const e0=rf(i)?E:0, e1=rf((i+1)%p.length)?E:0;                  // walls run on past reflex corners only, so those close up and nothing pokes outside
+    let t=-e0; for(const q of gaps){ if(q.s0>t) quad(wall,at(t,TH2),at(q.s0,TH2),0,HC); quad(wall,at(q.s0,TH2),at(q.s1,TH2),q.h,HC);   // wall up to the gap, header over it
       quad(wall,at(q.s0,0),at(q.s0,TH2),0,q.h); quad(wall,at(q.s1,0),at(q.s1,TH2),0,q.h);                                   // jambs
       { const P=at(q.s0,0), Q=at(q.s1,0), R2=at(q.s1,TH2), S2=at(q.s0,TH2); const [px,pz]=to3(...P),[qx,qz]=to3(...Q),[rx,rz]=to3(...R2),[sx,sz]=to3(...S2);
         wall.push(px,q.h,pz, qx,q.h,qz, rx,q.h,rz, px,q.h,pz, rx,q.h,rz, sx,q.h,sz); }                                    // underside of the header
       for(const [s0,s1] of [[q.s0-.1,q.s0],[q.s1,q.s1+.1]]) quad(trim,at(s0,TH2+.01),at(s1,TH2+.01),0,q.h+.1);                // casing round the opening
       quad(trim,at(q.s0-.1,TH2+.01),at(q.s1+.1,TH2+.01),q.h,q.h+.1);
       t=Math.max(t,q.s1); }
-    if(L+E>t) quad(wall,at(t,TH2),at(L+E,TH2),0,HC);
+    if(L+e1>t) quad(wall,at(t,TH2),at(L+e1,TH2),0,HC);
     quad(trim,at(0,TH2+.005),at(L,TH2+.005),0,.09);                 // skirting board
   }
   g.add(meshOf(wall,wallM)); g.add(meshOf(trim,trimM));

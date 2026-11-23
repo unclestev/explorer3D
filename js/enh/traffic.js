@@ -178,6 +178,7 @@ function* occJob(){
   const mine=ring=>{ if(!ir) return false; let x=0,y=0; const n=ring.length-1; for(let i=0;i<n;i++){ x+=ring[i][0]; y+=ring[i][1]; } return WALK.inRec(ir,y/n,x/n); };
   for(const [f,hk] of occFeatures()){ if(++n%40===0) yield; const g=f.geometry; if(!g) continue; const polys=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
     const pr=f.properties||{}; let h,h0;
+    if(ir&&hk!=='b'&&pr.bk===ir.key&&+pr.b<(ir.h||3)) continue;                                   // its doors / windows / garage door (they'd block the doorways); its roof stays
     if(hk==='b'){ h=+(pr.render_height??pr.height??6)||6; h0=+(pr.render_min_height??pr.min_height??0)||0; } else { h=+pr.h||0; h0=+pr.b||0; }
     if(h<=h0) continue;
     for(const pl of polys){ const ring=pl[0]; if(!ring||ring.length<4||(ir&&hk!=='h'&&mine(ring))) continue;
