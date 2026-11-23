@@ -233,7 +233,10 @@ function getOut(){
   const h=rad(S.hdg), half=(mode==='tractor'?1.15:((CARSPEC&&CARSPEC.W)||2.35)/2)*EX, side=half+.55*EX, end=3.4*EX;
   const spots=[[-side,0],[side,0],[0,-end],[0,end]];
   let at=offsetPt(S.lat,S.lng,h,spots[0][0],spots[0][1]);
-  for(const [r,f] of spots){ const p=offsetPt(S.lat,S.lng,h,r,f); if(!safe('walk spot',()=>inBuilding(p[0],p[1])||inWater(p[0],p[1]))){ at=p; break; } }
+  const ir=IN.rec&&inRec(IN.rec,S.lat,S.lng)?IN.rec:null;
+  if(ir){ at=[S.lat,S.lng];                                       // parked in a garage (js/enh/garage.js): step out beside the car, still inside
+    for(const [r,f] of [[-1.5,0],[1.5,0],[-1.1,-1],[1.1,-1],[0,-3],[0,3]]){ const p=offsetPt(S.lat,S.lng,h,r,f); if(inRec(ir,p[0],p[1])){ at=p; break; } } }
+  else for(const [r,f] of spots){ const p=offsetPt(S.lat,S.lng,h,r,f); if(!safe('walk spot',()=>inBuilding(p[0],p[1])||inWater(p[0],p[1]))){ at=p; break; } }
   S.lat=at[0]; S.lng=at[1]; S.v=0; S.steer=0; S.roll=S.pitch=0;
   Object.assign(W,{v:0,phase:0,amp:0,run:0,near:true});
   setMode('walk');
@@ -352,7 +355,7 @@ function walkStep(dt,st,gas,now){
   const mph=Math.round(Math.abs(W.v)*2.237); if(mph!==step.mph){ step.mph=mph; mphEl.textContent=mph; }
 }
 window.WALK={step:(dt,st,gas,now)=>{ try{ walkStep(dt,st,gas,now); }catch(e){ console.warn('walk',e); renderer.render(scene,camera); } },
-  parked:()=>PK.mode, getOut:()=>safe('walk',getOut), state:W, person, parkedAt:PK,
+  parked:()=>PK.mode, getOut:()=>safe('walk',getOut), toggle:()=>safe('walk',getOut), state:W, person, parkedAt:PK,   /* toggle: the F key (js/enh/controls.js) */
   insideId:()=>IN.rec?IN.rec.id:null, inside:IN,
   setInside:r=>safe('inside',()=>{ if((r?r.key:null)!==IN.key) setInside(r); }), redrawInside:()=>{ if(IN.rec) safe('inside draw',()=>drawInterior(IN.rec)); }, inRec};
 updateBtn();
