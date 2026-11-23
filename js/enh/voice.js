@@ -30,10 +30,20 @@ function say(t){ showBar(t,true); hideBar(Math.max(2500,t.length*70)); if(typeof
 
 // ---------- what it understands
 const has=(t,...w)=>w.some(x=>t.includes(x));
+// spoken numbers to digits, so a station sounds the same however it's said: "ninety three point nine", "93 point 9" -> "93.9"
+const ONES={zero:0,oh:0,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,seventeen:17,eighteen:18,nineteen:19};
+const TENS={twenty:20,thirty:30,forty:40,fifty:50,sixty:60,seventy:70,eighty:80,ninety:90};
+function nums(t){
+  t=t.replace(/\b(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)[\s-]+(one|two|three|four|five|six|seven|eight|nine)\b/g,(m,a,b)=>String(TENS[a]+ONES[b]))
+     .replace(/\b(one|two|three|four|five|six|seven|eight|nine)\s+hundred(?:\s+and)?\s+(\d+)\b/g,(m,a,b)=>String(ONES[a]*100+ +b))
+     .replace(/\b(zero|oh|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)\b/g,m=>String(ONES[m]??TENS[m]));
+  return t.replace(/(\d+)\s*(?:point|dot)\s*(\d)/g,'$1.$2'); }
+const FREQ=/\b(\d{2,3}\.\d|\d{2,4})\s*(fm|am)?\b/;
 const mph=()=>Math.round(Math.abs((typeof S!=='undefined'&&S.v)||0)*2.237);
 const HELP='You can say: start the car, turn off the car, hazards on, left signal, open the sunroof, wipers on, play a song name, play a radio station, stop the music, navigate to a place, what\'s my speed, what time is it, or cockpit view.';
 async function handle(raw){
   let t=raw.toLowerCase().replace(/^(hey|ok|okay)\s+(expedition|explorer|car|ford)[, ]*/,'').replace(/[.!?]+$/,'').trim();
+  t=nums(t);
   const CK=window.COCKPIT, IG=window.IGN, SG=window.SIG, MU=window.MUSIC;
   if(!t) return say('I didn\'t catch that.');
   if(has(t,'what can you do','help','what can i say')) return say(HELP);
@@ -64,6 +74,8 @@ async function handle(raw){
   if(/^(resume|unpause|keep playing)/.test(t)){ if(MU&&MU.resume) MU.resume(); return say('Playing.'); }
   let m=t.match(/^(?:play|put on|listen to)\s+(?:the\s+)?(?:radio\s+(?:station\s+)?(.+)|(.+?)\s+(?:on the radio|radio station|radio))$/);
   if(m&&MU&&MU.playRadio){ const q=m[1]||m[2]; showBar('Finding '+q+'…',true); const n=await MU.playRadio(q); return say(n?'Playing '+n+'.':'I couldn\'t find a station called '+q+'.'); }
+  m=t.match(/^(?:play|put on|listen to|tune to|turn on|switch to)\s+(.+)$/);
+  if(m&&MU&&MU.playRadio&&(/^\d{2,3}\.\d\b/.test(m[1])||/\b(fm|am)\b/.test(m[1]))){ const q=m[1]; showBar('Finding '+q+'…',true); const n=await MU.playRadio(q); return say(n?'Playing '+n+'.':'I couldn\'t find '+q+' on the radio.'); }
   m=t.match(/^(?:play|put on|listen to)\s+(?:the song\s+|some\s+)?(.+)$/);
   if(m&&MU&&MU.playSong){ const q=m[1]; showBar('Finding '+q+'…',true); const n=await MU.playSong(q); return say(n?'Playing '+n+'.':'I couldn\'t find '+q+'.'); }
   // navigation
