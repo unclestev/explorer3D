@@ -359,18 +359,13 @@ const suv=new THREE.Group(); while(body.children.length) suv.add(body.children[0
 const CARS={
   explorer:{name:'Ford Explorer ST',paint:0x3e4855,img:'img/explorer-rear.webp?v=2',W:2.35,piv:.38,glow:[[.088,.37],[.912,.37]],gw:.26,gh:.3,lamp:.68,front:2.4,sound:'ecoboost30',perf:{t60:5.2,top:143,a0:7.8},
     fimg:'img/explorer-front.webp?v=1',fW:4.4,fpiv:[.525,.141]},     // front: the owner's Explorer ST photo, front-left three-quarter
-  // AMC Javelin (the owner's photo): one full-width tail-light bar low on the tail, reversing light in the middle
-  javelin:{name:'AMC Javelin',paint:0x141518,img:'img/javelin-rear.webp?v=1',W:1.95,piv:.40,glow:[[.15,.2],[.27,.2],[.38,.2],[.62,.2],[.73,.2],[.85,.2]],gw:.15,gh:.12,lamp:.62,front:2.44,sound:'amc401',vmax:120/2.237,perf:{t60:6.8,top:120,a0:6.0}},   // top speed 120 mph
   // 2026 Lincoln Navigator (the owner's photo, white, lit bar): the red full-width light bar and wrap-around corner lamps
   // glow from a mask cut from the photo's own red pixels (img/navigator-lights.webp), so the light covers all of that red
   navigator:{name:'Lincoln Navigator',paint:0xe6e8ea,img:'img/navigator-rear.webp?v=2',lights:'img/navigator-lights.webp?v=1',W:2.4,piv:.40,glow:[],
     gw:.1,gh:.1,lamp:.74,front:2.67,sound:'ecoboost35',perf:{t60:6.1,top:115,a0:7.2}},
-  // 1972 AMC Javelin AMX 401 as a real 3D model (the owner's .glb, 2026-10-02): turns properly from every angle.
-  // Same engine and top speed as the photo Javelin, which stays as its own choice.
-  javelin3d:{name:'AMC Javelin AMX',paint:0x141518,model:'models/javelin-amx.glb?v=1',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237,perf:{t60:6.8,top:120,a0:6.0}},
-  // the owner's second version of that model (2026-10-02), rebuilt 2026-11-23 by tools/make-javelin.py from his photo (black with
-  // the gold stripe, open flared wheel arches, full-width grille with round lamps; the v2 file's body ran across the wheel openings)
-  javelin3d2:{name:'AMC Javelin AMX',paint:0x141518,model:'models/javelin-amx-v3.glb?v=7',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237,perf:{t60:6.8,top:120,a0:6.0}},
+  // AMC Javelin AMX (the only Javelin since 2026-11-23; the photo Javelin and the owner's two .glb versions were removed):
+  // built by tools/make-javelin.py from the owner's photos (black with the gold stripe, open flared wheel arches)
+  javelin3d2:{name:'AMC Javelin AMX',paint:0x141518,model:'models/javelin-amx-v3.glb?v=10',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237,perf:{t60:6.8,top:120,a0:6.0}},
   // "70's Muscle Car" (owner, 2026-11-23): a frozen copy of that first rebuild (tools/make-muscle70.py), which he liked but
   // said doesn't look like a Javelin should; same engine and feel, the Javelin's interior, sounds and signals
   muscle70:{name:"70's Muscle Car",paint:0x141518,model:'models/muscle-70s.glb?v=1',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237,perf:{t60:6.8,top:120,a0:6.0}},
@@ -392,7 +387,7 @@ const CARS={
   // when you enter a farm field"): drives in tractor mode (its 3D model, 75% speed, diesel sound) wherever you take it
   tractor:{name:'Farm tractor',tractor:true,paint:0x367c2b,W:2.3,lamp:.55,front:2.1,sound:'jd68'}
 };
-let CARKEY='explorer'; try{ const k=localStorage.getItem('ydCar'); if(CARS[k]) CARKEY=k; }catch(e){}
+let CARKEY='explorer'; try{ let k=localStorage.getItem('ydCar'); if(k==='javelin'||k==='javelin3d') k='javelin3d2'; if(CARS[k]) CARKEY=k; }catch(e){}
 let CARSPEC=CARS[CARKEY];
 const PHOTO={mesh:null,glow:null,lights:null,fm:null,on:!/[?&]car=3d\b/.test(location.search),key:null};
 function loadPhoto(key){

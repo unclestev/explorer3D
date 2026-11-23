@@ -309,6 +309,24 @@ def torus_ring(m, mat, c, r0, r1, depth, n=28):   # a flat bright ring (bezel) f
             m.tri(mat, out[k], bk[k], out[k+1]); m.tri(mat, out[k+1], bk[k], bk[k+1])
 
 flare_lip(body)
+def arch_bead(m, r=.0085, n=10):
+    """(owner: remove the rivets, "give it a thin chrome accent around the wheel wells") — a thin half-round chrome bead
+    running round the rolled edge of each flare, which also hides the edge's facets."""
+    for za in (ZA_F, ZA_R):
+        A = np.linspace(math.radians(-6), math.radians(186), 96)
+        XE = np.array([xat(za+(RA+.02)*math.cos(a), TYRE_R+(RA+.02)*math.sin(a)) for a in A])
+        XE = np.convolve(np.pad(XE, 5, mode='edge'), np.ones(11)/11, mode='valid')
+        for side in (1, -1):
+            rings = []
+            for a, xe in zip(A, XE):
+                ca, sa = math.cos(a), math.sin(a); rr = RA+.016
+                rings.append([m.v((side*(xe+.004+r*math.cos(t)), TYRE_R+(rr+r*math.sin(t))*sa, za+(rr+r*math.sin(t))*ca))
+                              for t in np.linspace(-math.pi/2, math.pi, n+1)])
+            for i in range(len(rings)-1):
+                for k in range(n):
+                    a_, b_, c_, d_ = rings[i][k], rings[i+1][k], rings[i][k+1], rings[i+1][k+1]
+                    if side > 0: m.tri('Chrome', a_, b_, c_); m.tri('Chrome', b_, d_, c_)
+                    else: m.tri('Chrome', a_, c_, b_); m.tri('Chrome', b_, c_, d_)
 # ---------- front: a wide recessed mesh grille across the whole nose in a bright surround, the round headlamps at its
 # outer ends and round amber parking lamps inboard of them (photo); a full-width chrome bumper under it ----------
 trim = Mesh('Details'); heads = Mesh('Headlights'); tails = Mesh('Taillights'); plate = Mesh('Plate')
@@ -359,41 +377,36 @@ fdeep = lambda y: zfront(0, y) or ZF
 box(trim, 'Grille', (0.0001, .36, ZF-.06), (.55, .06, .06))                                                   # lower intake slot
 patch(trim, 'Trim', lambda u, v: (.90*u*max(halfwidth(2.30, .69), .3), .685+.005*v), 16, 1, push=.003)        # hood's front shut line
 
-# ---------- stripe: the gold "T" — a band across the front of the hood that runs back over each fender crown, sweeps
-# down the front fender behind the wheel and runs back along the lower side to the rear wheel (photo) ----------
+# ---------- stripe: the gold side spear and the gold "T" on the hood ----------
 STR = Mesh('Stripe')
-# (owner's side photo, 2026-11-23: the gold runs along the top of the front fender, sweeps down behind the front wheel
-# to just above the chrome rocker and runs low along the body to the rear wheel, carries on behind the rear wheel, and
-# fills the lower front fender ahead of the front wheel)
-LOW = .365                                        # centre of the low band, just above the rocker moulding
-# (owner: "make sure the gold line is smooth on the fender and accentuates the wheel flare") — the band is one smooth
-# path: straight back from behind the headlamp, then round the front wheel on an arc concentric with the flare (just
-# outside it), then curving down behind the wheel into the low line along the doors
-RS, HS = .565, .085                               # arc radius (the flare ends at RA+.085) and band height over the wheel
-def stripe_path():
-    P = []
-    a0, a1 = math.radians(62), math.radians(158)
-    def herm(p0, t0, p1, t1, k, n):
-        out = []
-        for t in np.linspace(0, 1, n)[:-1]:
-            h00, h10, h01, h11 = 2*t**3-3*t**2+1, t**3-2*t**2+t, -2*t**3+3*t**2, t**3-t**2
-            out.append(tuple(h00*p0+h10*k*t0+h01*p1+h11*k*t1))
-        return out
-    pa = np.array([ZA_F+RS*math.cos(a0), TYRE_R+RS*math.sin(a0)]); ta = np.array([-math.sin(a0), math.cos(a0)])
-    P += herm(np.array([2.21, .685]), np.array([-1., .12]), pa, ta, .45, 30)      # from behind the headlamp, curving up onto the arc
-    for a in np.linspace(a0, a1, 70)[:-1]: P.append((ZA_F+RS*math.cos(a), TYRE_R+RS*math.sin(a)))
-    p0 = np.array([ZA_F+RS*math.cos(a1), TYRE_R+RS*math.sin(a1)]); t0 = np.array([-math.sin(a1), math.cos(a1)])
-    p1 = np.array([.55, LOW]); t1 = np.array([-1., 0.]); k = .55
-    for t in np.linspace(0, 1, 40)[:-1]:          # Hermite blend down into the low line
+# (owner, 2026-11-23 evening: "update the gold line on the side to start at a point in the front and aggressively flow
+# to the back and fade away as it goes towards the back") — a spear: it starts as a point behind the headlamp, rises
+# steeply and widens onto an arc just outside the front flare, then sweeps back along the doors, thinning to nothing
+# ahead of the rear wheel; the low line, the piece behind the rear wheel and the lower-fender panel are gone
+RS, HS = .565, .095                               # arc radius (the flare ends at RA+.085) and the spear's fullest height
+def herm(p0, t0, p1, t1, k, n):
+    out = []
+    for t in np.linspace(0, 1, n)[:-1]:
         h00, h10, h01, h11 = 2*t**3-3*t**2+1, t**3-2*t**2+t, -2*t**3+3*t**2, t**3-t**2
-        P.append(tuple(h00*p0+h10*k*t0+h01*p1+h11*k*t1))
-    for z in np.linspace(.55, ZA_R+.53, 50): P.append((z, LOW))
-    return np.array(P)
-def band_along(m, mat, P, h0, h1, push=.006, nv=3):
+        out.append(tuple(h00*p0+h10*k*t0+h01*p1+h11*k*t1))
+    return out
+def spear_path():
+    a0, a1 = math.radians(58), math.radians(112)
+    arc = lambda a: np.array([ZA_F+RS*math.cos(a), TYRE_R+RS*math.sin(a)])
+    tan = lambda a: np.array([-math.sin(a), math.cos(a)])
+    P = herm(np.array([2.30, .715]), np.array([-1., .30]), arc(a0), tan(a0), .40, 26); n0 = len(P)   # tip: up onto the arc
+    P += [tuple(arc(a)) for a in np.linspace(a0, a1, 40)[:-1]]; n1 = len(P)
+    P += herm(arc(a1), tan(a1)*np.array([1, .35]), np.array([ZA_R+.50, .735]), np.array([-1., -.02]), 1.3, 90)
+    P.append((ZA_R+.50, .735)); P = np.array(P)
+    H = np.empty(len(P))
+    H[:n0] = HS*np.sin(np.linspace(0, 1, n0)*math.pi/2)**.8            # from a point, widening fast
+    H[n0:n1] = HS
+    t = np.linspace(0, 1, len(P)-n1); H[n1:] = HS*(1-t)**1.25+.0          # thinning away toward the back
+    return P, H
+def band_along(m, mat, P, h0, push=.006, nv=3):        # h0: the band height (one value, or one per point)
     T = np.gradient(P, axis=0); T /= np.linalg.norm(T, axis=1, keepdims=True); N = np.stack([-T[:, 1], T[:, 0]], 1)
     N *= np.sign(N[:, 1:2]+1e-9)                  # normals pointing up
-    H = np.interp(np.arange(len(P)), [0, len(P)-1], [h0, h1]) if h1 is not None else np.full(len(P), h0)
-    H = np.where(P[:, 1] < LOW+.02, .095, H)
+    H = np.asarray(h0, float) if np.ndim(h0) else np.full(len(P), h0)
     rows = []
     for (z, y), n, h in zip(P, N, H):
         rows.append([(z+n[0]*h*(v/nv-.5), y+n[1]*h*(v/nv-.5)) for v in range(nv+1)])
@@ -406,9 +419,28 @@ def band_along(m, mat, P, h0, h1, push=.006, nv=3):
                 a, b, c, d = idx[i][j], idx[i+1][j], idx[i][j+1], idx[i+1][j+1]
                 if side > 0: m.tri(mat, a, c, b); m.tri(mat, b, c, d)
                 else: m.tri(mat, a, b, c); m.tri(mat, b, d, c)
-band_along(STR, 'Stripe', stripe_path(), HS, None)
-side_grid(STR, 'Stripe', lambda u, v: (ZR+.14+(ZA_R-.53-(ZR+.14))*u, LOW-.0475+.095*v), 14, 2, push=.006)   # behind the rear wheel
-side_grid(STR, 'Stripe', lambda u, v: (ZA_F+.53+(2.22-(ZA_F+.53))*u, LOW-.0475+(.125-.03*u)*v), 12, 3, push=.006) # lower front fender, ahead of the wheel
+band_along(STR, 'Stripe', *spear_path())
+# the gold "T" on the hood (owner: "add the gold T pattern to the front like the javelin has"): a bar across the front
+# of the hood just behind the shut line, and a stem running back up the middle of the hood over the cowl scoop
+def top_band(m, mat, P, W, push=.006, nv=2):       # a band lying on the hood / fenders along a path of (x, z), widths W
+    T = np.gradient(P, axis=0); T /= np.linalg.norm(T, axis=1, keepdims=True); N = np.stack([-T[:, 1], T[:, 0]], 1)
+    pts = [[(x+n[0]*w*(v/nv-.5), z+n[1]*w*(v/nv-.5)) for v in range(nv+1)] for (x, z), n, w in zip(P, N, W)]
+    pts = [[(x, ytop_at(z, x)+push, z) for x, z in row] for row in pts]
+    for side in (1, -1):
+        idx = [[m.v((side*p[0], p[1], p[2])) for p in row] for row in pts]
+        for i in range(len(pts)-1):
+            for j in range(nv):
+                a, b, c, d = idx[i][j], idx[i+1][j], idx[i][j+1], idx[i+1][j+1]
+                if (side > 0) == (T[i][0]*N[i][1]-T[i][1]*N[i][0] < 0): m.tri(mat, a, b, c); m.tri(mat, b, d, c)
+                else: m.tri(mat, a, c, b); m.tri(mat, b, c, d)
+# (owner: "the edges of the T should curve back towards a point near the wheels") — the cross bar runs straight out from
+# the middle, then each end bends back over the fender and thins to a point above the front wheel
+TB = [(x, 2.19) for x in np.linspace(0, .40, 12)[:-1]]
+TB += herm(np.array([.40, 2.19]), np.array([1., 0.]), np.array([.68, ZA_F+.02]), np.array([.05, -1.]), .55, 40)
+TB.append((.68, ZA_F+.02)); TB = np.array(TB)
+nT = 11; t = np.linspace(0, 1, len(TB)-nT)
+top_band(STR, 'Stripe', TB, np.r_[np.full(nT, .12), .12*(1-t)**1.1])
+top_patch(STR, 'Stripe', lambda u, v: (.075*u, .70+(2.15-.70)*v), 2, 40, push=.007)
 # ---------- sides: chrome rocker moulding, wheel-lip trim, door seams, handle, chrome bullet mirror, side markers ----------
 side_patch(trim, 'Chrome', lambda u, v: (ZA_R+RA+.10+(ZA_F-RA-.10-(ZA_R+RA+.10))*u, .265+.035*v), 40, 1, push=.012)   # rocker moulding
 def vline(z0, z1, y0, y1, w=.005): return lambda u, v: (z0+(z1-z0)*u+(v-.5)*w, y0+(y1-y0)*u)
@@ -435,13 +467,10 @@ def ellipsoid(m, mat, c, r, nu=16, nv=10):
 ellipsoid(mir, 'Chrome', (HW+.07, 1.0, .20), (.045, .040, .075))                                     # bullet mirror on the door
 box(mir, 'MirrorGlass', (HW+.07, 1.0, .126), (.07, .06, .004))
 box(mir, 'Chrome', (HW+.02, .97, .22), (.07, .02, .03))                                               # its stalk
-# ---------- the cowl scoop's open mouth facing the windshield, and the rivets round each bolt-on flare ----------
+arch_bead(trim)
+# ---------- the cowl scoop's open mouth facing the windshield ----------
 ys_ = ytop_at(SC0+.06, 0.)
 box(trim, 'Grille', (0.0001, ys_-.030, SC0+.012), (.64, .042, .016))
-for za in (ZA_F, ZA_R):
-    for a in np.linspace(math.radians(-4), math.radians(184), 15):
-        z, y = za+(RA+.048)*math.cos(a), TYRE_R+(RA+.048)*math.sin(a)
-        ellipsoid(mir, 'Chrome', (xat(z, y)+.002, y, z), (.006, .0075, .0075), 8, 5)
 # ---------- rear (owner's rear photo, style only): a dark recessed panel across the tail under the deck lid's lip, with
 # four rounded-rectangle lamps in bright bezels — red outer pair, inner pair red round a white reversing lamp — and a small
 # plain round emblem in the middle (no badges); a full-width chrome bumper with the plate set into its centre, body-colour

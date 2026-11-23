@@ -65,7 +65,7 @@ const SW=[[/\breal speed\b/,'rsBtn','Real speed in the cockpit'],[/\brealistic\b
   [/\b(hud|heads? ?up( display)?)\b/,'hudBtn','The head-up display'],[/\b(info|information|location|speed) panel\b/,'infoBtn','The location panel'],
   [/\bpop ?-?ups?\b/,'popBtn','Pop-ups'],[/\basphalt\b/,'asphaltBtn','Asphalt roads'],[/\bsatellite\b/,'satBtn','Satellite view'],
   [/\b(trail|purple line)\b/,'trailBtn','The trail'],[/^(un)?mute\b|\b(game |engine )?(sound|sounds|audio)\b(?!.*start)/,'audioBtn','Sound']];
-const CARN=[[/^javelin ?3 ?d ?(v(ersion)? ?)?2$/,'javelin3d2','the Javelin 3D v2'],[/^(the )?(70'?s |seventies )?muscle( car)?$/,'muscle70','the 70\'s muscle car'],[/^javelin ?3 ?d$/,'javelin3d','the Javelin 3D'],[/^(amc )?javelin$/,'javelin','the Javelin'],
+const CARN=[[/^(the )?(70'?s |seventies )?muscle( car)?$/,'muscle70','the 70\'s muscle car'],[/^(amc )?javelin( amx)?( ?3 ?d)?( ?(v(ersion)? ?)?2)?$/,'javelin3d2','the Javelin'],
   [/^(lincoln )?navigator$|^lincoln$/,'navigator','the Navigator'],[/^(tesla )?model ?y$|^tesla$/,'modely','the Model Y'],[/^(ford )?expedition$/,'expedition','the Expedition'],
   [/^(ford )?explorer( st)?$|^st$/,'explorer','the Explorer'],[/^(snow ?plow|plow truck|plow|snow truck)$/,'snowplow','the snow plow'],[/^tractor$/,'tractor','the tractor'],[/^(speed ?)?boat$/,'boat','the boat']];
 function carName(q){ for(const [re,k,n] of CARN) if(re.test(q)) return [k,n]; return null; }
