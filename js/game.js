@@ -526,7 +526,7 @@ function placePhoto(braking){
   // looking at the car from the front (camera panned round, or walking round it): the car's front photo, or the 3D body
   // in roughly the car's colour for cars without one; the rear photo again from behind (a little hysteresis)
   const hd=walk?WALK.parkedAt.hdg:S.hdg, rel=Math.abs(((hd-S.camB)%360+540)%360-180);
-  if(walk&&WALK.near3D&&WALK.near3D()){                             // on foot beside it or indoors: the 3D stand-in, not a photo that turns to face you
+  if((walk&&WALK.near3D&&WALK.near3D())||(!walk&&window.WALK&&WALK.inside&&WALK.inside.rec)){   // on foot beside it / indoors, or parked in a garage: the 3D stand-in (the photo always draws on top, through walls)
     m.visible=false; if(fm) fm.visible=false; body.visible=true; if(paint.color.getHex()!==(CARSPEC.paint||PAINT0)) paint.color.setHex(CARSPEC.paint||PAINT0); return; }
   PHOTO.front=PHOTO.front?rel>95:rel>105;
   const pc=PHOTO.front&&CARSPEC.paint||PAINT0; if(paint.color.getHex()!==pc) paint.color.setHex(pc);
