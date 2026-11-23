@@ -33,6 +33,7 @@ Drive a Ford Explorer over a real map. Play it on GitHub Pages.
   - `buildings.js` — roof caps in roof colours, pitched roofs on nearby houses, rooftop units on stores/offices
   - `signals.js` — turn signals and hazards: G29 paddles, `[` `]` `\` keys, ◀ ⚠ ▶ on screen; each car's own tick-tock (Ford, Lincoln, Tesla, 1970s flasher, tractor), self-cancel, lamps on the car and arrows in every cockpit
   - `music.js` — car music: tap the centre screen in cockpit view (or press M), type a song or artist, and the car plays Apple's free 30-second preview (iTunes Search API, no key; explicit songs left out); 📁 My music plays whole songs from your device; what's playing shows on the centre screen
+  - `tube.js` — YouTube on the centre screen: Music → ▶ Video, paste a YouTube link; it plays in YouTube's embedded player laid over the screen in cockpit view (pauses while the car is moving)
   - `wheel.js` — the G29 / steering wheel: pedals learned in ⚙️, shifter, paddles, start button; the D-pad turns the camera (up / down look higher / lower, left / right look round); R2 switches the wipers on / off
   - `ignition.js` — engine start / stop: the G29's red-dial Enter button (or one set in ⚙️), the I key or ⏻; starter crank, catch and idle in the engine sound, gas off while stopped
   - `boot.js` — starts the modules; must load last
