@@ -35,7 +35,7 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), lerp=(a,b,t)=>a+(b-a)*t, sstep=(
 
 const CK={real:LSg('ydRealSpd','1')!=='0', hud:LSg('ydHud','1')!=='0', want:LSg('ydView','chase')==='cockpit', fov:clamp(+LSg('ydCkFov2',45)||45,30,60), on:false, exag:EXAG,
   cab:null, built:null, pad:.07, look:0, W:0, H:0, eyeWorld:null};
-window.COCKPIT=CK;
+window.COCKPIT=CK; CK.afterRender=[];
 
 /* ---------- per-car cabins (car frame: metres, x right, y up from the ground, z toward the back; car centre = 0) ---------- */
 const SPECS={
@@ -2071,7 +2071,9 @@ CK.view=function(dt){
 CK.render=function(dt){ const c=CK.cab; if(!c) return; update(dt||.016); try{ renderMirror(dt||.016); }catch(e){ console.warn('mirror',e); } try{ backupCam(dt||.016); }catch(e){ console.warn('backup camera',e); }
   const sm=renderer.shadowMap; if(sm.enabled){ sm.autoUpdate=false; const h=S.hdg||0, r=(S.roll||0)+(S.pitch||0)+(S.bz||0)+(S.bx||0);
     c.sf=(c.sf||0)+1; if(c.sf>=3||Math.abs(h-(c.sh||0))>.8||Math.abs(r-(c.sr||0))>.004){ c.sf=0; c.sh=h; c.sr=r; sm.needsUpdate=true; } }
-  renderer.autoClear=false; renderer.clearDepth(); renderer.render(c.scene,c.cam); renderer.autoClear=true; };
+  renderer.autoClear=false; renderer.clearDepth(); renderer.render(c.scene,c.cam); renderer.autoClear=true;
+  for(const f of CK.afterRender) f();   // things laid over the cabin (the YouTube player) line up with this very frame
+};
 CK.toggle=function(v){ CK.want=v==null?!CK.want:!!v; LSs('ydView',CK.want?'cockpit':'chase'); showPick();
   if(!CK.want&&CK.on) leave();
   if(CK.want&&mode!=='car'&&mode!=='tractor') toast('🎥 Cockpit view comes on when you are driving the car or tractor',2600);
