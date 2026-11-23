@@ -205,8 +205,99 @@ function drawInterior(r){
     map.addLayer({id:'interior-3d',type:'fill-extrusion',source:'interior',
       paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-base':['get','b'],'fill-extrusion-height':['get','h'],'fill-extrusion-vertical-gradient':false}},
       map.getLayer('hn-big')?'hn-big':undefined); }
-  map.getSource('interior').setData({type:'FeatureCollection',features:r?interiorFeatures(r):[]});
+  map.getSource('interior').setData({type:'FeatureCollection',features:r&&mode!=='walk'?interiorFeatures(r):[]});   // on foot: the real room (ROOM) instead
+  if(r&&mode==='walk') buildRoom(r); else dropRoom();
 }
+/* ---------- first person indoors (owner 2026-11-23: "could the building stay and the doors just open to let you in, and when
+   you are inside you see the walls and the roof if you look up?") ----------
+   On foot inside a building the camera goes to your eyes (1.62 m) and the room is built in the car layer at real size:
+   full-height walls with the doorways cut through (and their jambs), the ceiling, the floor, the door leaves — they swing
+   open as you come up to them and close behind you — and the garage door, rolling up with the opener. The map building
+   itself stays hidden (you're inside it); through an open doorway you see the street. Drag to look round and up. */
+const ROOM={g:null,key:null,leaves:[],gar:[],r:null};
+const FPV={on:false,fov:58};
+const MATS={};
+function rmat(k,c,emi){ if(!MATS[k]) MATS[k]=new THREE.MeshLambertMaterial({color:c,emissive:emi||0x000000,side:THREE.DoubleSide}); return MATS[k]; }
+const to3=(x,y)=>[x,-y];                                           // local (east, north) metres -> car-layer (x, z)
+function quad(pos,a,b,y0,y1){ const [ax,az]=to3(a[0],a[1]), [bx,bz]=to3(b[0],b[1]); pos.push(ax,y0,az, bx,y0,bz, bx,y1,bz, ax,y0,az, bx,y1,bz, ax,y1,az); }
+function meshOf(pos,mat){ const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.computeVertexNormals(); return new THREE.Mesh(g,mat); }
+function buildRoom(r){
+  if(ROOM.key===r.key&&ROOM.g) return; dropRoom();
+  const g=new THREE.Group(), p=r.p, HC=Math.max(2.4,Math.min(2.7,(r.h||3)-.3)), DH=2.12, TH2=.2;
+  const wallM=rmat('wall',0xeee8dc,0x2a2824), ceilM=rmat('ceil',0xf6f4ef,0x3a3936), trimM=rmat('trim',0xfbfaf7,0x2a2a2a);
+  const floorM=rmat(r.house?'wood':'tile',r.house?0xa97f52:0xd6d3cb,0x1a1510);
+  // floor and ceiling from the outline
+  const sh=new THREE.Shape(p.map(q=>new THREE.Vector2(q[0],q[1])));
+  const fl=new THREE.Mesh(new THREE.ShapeGeometry(sh),floorM); fl.rotation.x=-Math.PI/2; fl.position.y=.01; g.add(fl);   // shape (x, y=north) -> (x, z=-north)
+  const ce=new THREE.Mesh(new THREE.ShapeGeometry(sh),ceilM); ce.rotation.x=-Math.PI/2; ce.position.y=HC; g.add(ce);
+  // walls along the outline, with the doorways (and garage openings) cut out; jambs give them depth
+  const wall=[], trim=[], ways=r.doors.map(d=>({d,h:DH,gar:false})).concat((r.garages||[]).map(d=>({d,h:2.2,gar:true})));
+  for(let i=0;i<p.length;i++){ const a=p[i], b=p[(i+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1]); if(L<.05) continue;
+    const ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux, at=(t,o)=>[a[0]+ux*t-nx*o,a[1]+uy*t-ny*o];
+    const gaps=ways.filter(w=>w.d.ei===i).map(w=>({s0:w.d.s0,s1:w.d.s1,h:w.h})).sort((x,y)=>x.s0-y.s0);
+    let t=0; for(const q of gaps){ if(q.s0>t) quad(wall,at(t,TH2),at(q.s0,TH2),0,HC); quad(wall,at(q.s0,TH2),at(q.s1,TH2),q.h,HC);   // wall up to the gap, header over it
+      quad(wall,at(q.s0,0),at(q.s0,TH2),0,q.h); quad(wall,at(q.s1,0),at(q.s1,TH2),0,q.h);                                   // jambs
+      { const P=at(q.s0,0), Q=at(q.s1,0), R2=at(q.s1,TH2), S2=at(q.s0,TH2); const [px,pz]=to3(...P),[qx,qz]=to3(...Q),[rx,rz]=to3(...R2),[sx,sz]=to3(...S2);
+        wall.push(px,q.h,pz, qx,q.h,qz, rx,q.h,rz, px,q.h,pz, rx,q.h,rz, sx,q.h,sz); }                                    // underside of the header
+      for(const [s0,s1] of [[q.s0-.1,q.s0],[q.s1,q.s1+.1]]) quad(trim,at(s0,TH2+.01),at(s1,TH2+.01),0,q.h+.1);                // casing round the opening
+      quad(trim,at(q.s0-.1,TH2+.01),at(q.s1+.1,TH2+.01),q.h,q.h+.1);
+      t=Math.max(t,q.s1); }
+    if(L>t) quad(wall,at(t,TH2),at(L,TH2),0,HC);
+    quad(trim,at(0,TH2+.005),at(L,TH2+.005),0,.09);                 // skirting board
+  }
+  g.add(meshOf(wall,wallM)); g.add(meshOf(trim,trimM));
+  // door leaves, hinged at the jamb; double doors on the wide glass entrances
+  ROOM.leaves=[];
+  for(const d of r.doors){ const W0=d.s1-d.s0, two=W0>1.5, lw=two?(W0-.06)/2:W0-.04, glass=two;
+    const leafM=glass?rmat('glassdoor',0x2f3e4e,0x0a1420):rmat('door',0x7a5236,0x1a120c);
+    const L=Math.hypot(d.x1-d.x0,d.y1-d.y0)||1, ux=(d.x1-d.x0)/L, uy=(d.y1-d.y0)/L;
+    for(const side of two?[0,1]:[0]){
+      const hx=side?d.x1-ux*.02:d.x0+ux*.02, hy=side?d.y1-uy*.02:d.y0+uy*.02;    // hinge point on the jamb
+      const cdx=side?-ux:ux, cdy=side?-uy:uy;                        // closed: along the wall, from the hinge
+      const pv=new THREE.Group(); const [hx3,hz3]=to3(hx-d.nx*.06,hy-d.ny*.06); pv.position.set(hx3,0,hz3);
+      const leaf=new THREE.Mesh(new THREE.BoxGeometry(lw,2.04,.045),leafM); leaf.position.set(lw/2,1.03,0); pv.add(leaf);
+      const kn=new THREE.Mesh(new THREE.SphereGeometry(.03,8,6),rmat('knob',0xc9a14a,0x30240c)); kn.position.set(lw-.08,1.0,.04); pv.add(kn);
+      const kn2=kn.clone(); kn2.position.z=-.04; pv.add(kn2);
+      const angC=Math.atan2(-to3(cdx,cdy)[1],cdx), angO=Math.atan2(-to3(-d.nx,-d.ny)[1],-d.nx);   // rotation.y for a leaf pointing along / in
+      let dA=angO-angC; dA=((dA+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI;
+      pv.rotation.y=angC; g.add(pv); ROOM.leaves.push({pv,angC,dA,d,o:0}); } }
+  // the garage door: a panel across the opening that rolls up with the opener
+  ROOM.gar=[];
+  for(const q of r.garages||[]){ const [ax,az]=to3(q.x0-q.nx*.08,q.y0-q.ny*.08), [bx,bz]=to3(q.x1-q.nx*.08,q.y1-q.ny*.08), W0=Math.hypot(bx-ax,bz-az);
+    const m=new THREE.Mesh(new THREE.BoxGeometry(W0,1,.05),rmat('gar'+q.col,new THREE.Color(q.col||'#e5dfd3').getHex(),0x202020));
+    m.position.set((ax+bx)/2,0,(az+bz)/2); m.rotation.y=-Math.atan2(bz-az,bx-ax); g.add(m); ROOM.gar.push({m,q}); }
+  for(const o of g.children) o.traverse(c=>{ if(c.isMesh){ c.renderOrder=1; c.frustumCulled=false; } });
+  scene.add(g); ROOM.g=g; ROOM.key=r.key; ROOM.r=r; garUpdate(); }
+function dropRoom(){ if(!ROOM.g) return; scene.remove(ROOM.g); ROOM.g.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); ROOM.g=null; ROOM.key=null; ROOM.r=null; ROOM.leaves=[]; ROOM.gar=[]; }
+function garUpdate(){ for(const G2 of ROOM.gar){ const o=window.GARAGE?GARAGE.openness(G2.q.gk):0, b0=o*1.95, top=2.2, h=Math.max(.15,top-b0);
+  G2.m.scale.y=h; G2.m.position.y=b0+h/2; } }
+// the room sits round the building's middle, turned with the camera, at the map's scale (like the cars)
+function placeRoom(m,b){ const r=ROOM.r; if(!r) return; const kx=111320*cosLat();
+  const dx=(r.cx-S.lng)*kx, dy=(r.cy-S.lat)*111320, sb=Math.sin(b), cb=Math.cos(b), f=dx*sb+dy*cb, rr=dx*cb-dy*sb;
+  ROOM.g.position.set(rr/m,0,-f/m); ROOM.g.scale.setScalar(1/m); ROOM.g.rotation.y=b; }
+// doors swing open when you're within ~1.8 m of them, and shut again behind you
+function doorSwing(dt){ const r=ROOM.r; if(!r) return; const q=loc(r,S.lat,S.lng);
+  for(const L of ROOM.leaves){ const mx=(L.d.x0+L.d.x1)/2, my=(L.d.y0+L.d.y1)/2, near=Math.hypot(q[0]-mx,q[1]-my)<1.8;
+    L.o=Math.max(0,Math.min(1,L.o+(near?1:-1)*dt/.7)); L.pv.rotation.y=L.angC+L.dA*.95*(L.o*L.o*(3-2*L.o)); } }
+function fpCam(dt){
+  if(!FPV.on){ FPV.on=true; step.W=0; LOOK.pitch=0; }
+  const W2=innerWidth, H=innerHeight, fov=FPV.fov, DEGR=Math.PI/180;
+  S.camB=((S.hdg+LOOK.yaw)%360+360)%360;
+  const want=86+LOOK.pitch*.6, p=Math.max(30,Math.min(160,want)), mp=Math.min(p,85), tilt=Math.min(70,Math.max(0,p-85));
+  const Dpx=.5*H/Math.tan(fov*DEGR/2), pr=mp*DEGR, eh=1.62;
+  const z=Math.min(24,Math.log2(78271.517*Math.cos(S.lat*DEGR)/(eh/(Dpx*Math.cos(pr))))), mm=78271.517*Math.cos(S.lat*DEGR)/Math.pow(2,z);
+  S.zoom=z; const b=S.camB*DEGR, camH=Dpx*mm*Math.cos(pr), F=Dpx*mm*Math.sin(pr);
+  try{ if(Math.abs(map.transform.fov-fov)>.01) map.transform.fov=fov; }catch(e){}
+  map.jumpTo({center:[S.lng+F*Math.sin(b)/(111320*cosLat()),S.lat+F*Math.cos(b)/111320],bearing:S.camB,zoom:z,pitch:mp,padding:{top:0,bottom:0,left:0,right:0}});
+  // looking up past the map's 85 degree limit: the room's camera keeps tilting, the map picture slides down to match
+  const drop=Math.round(Dpx*Math.tan(tilt*DEGR)); if(drop!==FPV.drop){ FPV.drop=drop; map.getCanvas().style.transform=drop?'translateY('+drop+'px)':''; }
+  if(W2!==step.W||H!==step.H){ step.W=W2; step.H=H; renderer.setSize(W2,H,false); }
+  camera.clearViewOffset(); camera.fov=fov; camera.aspect=W2/H; camera.near=Math.max(.5,.05/mm); camera.far=4000/mm;
+  camera.position.set(0,camH/mm,0); camera.up.set(0,1,0); camera.lookAt(0,camH/mm-Math.cos(pr)*100,-Math.sin(pr)*100);
+  if(tilt) camera.rotateX(tilt*DEGR); camera.updateProjectionMatrix();
+  step.cam=null; }
+function fpOff(){ FPV.on=false; FPV.drop=0; map.getCanvas().style.transform=''; try{ map.transform.fov=36.87; }catch(e){}
+  camera.fov=36.87; camera.near=10; camera.far=50000; camera.updateProjectionMatrix(); LOOK.pitch=Math.min(LOOK.pitch,12); step.W=0; step.cam=null; dirty=true; }
 function setInside(r){
   IN.rec=r; IN.key=r?r.key:null;
   safe('inside hide',()=>hideBuilding(r));
@@ -265,6 +356,8 @@ const prevMode=window.onModeChange;
 window.onModeChange=(m,was)=>{ if(prevMode) prevMode(m,was);
   person.visible=(m==='walk'); setPedals(m==='walk'||m==='glider'&&!!PK.mode);
   if(m!=='walk'&&m!=='glider') PK.mode=null;                       // back in a vehicle
+  if(m!=='walk'&&FPV.on) fpOff();
+  if(IN.rec&&(m==='walk'||was==='walk')) safe('inside draw',()=>drawInterior(IN.rec));   /* car <-> foot in a garage: cut-away <-> the room */
   if(m!=='walk'){ if(IN.rec&&(m==='glider'||!inRec(IN.rec,S.lat,S.lng))) setInside(null);   /* got back in the car in the garage: stay inside */ if(IN.open!=null&&window.ROOFS){ IN.open=null; ROOFS.openDoor(null); } IN.ip=68; }
   if(m==='walk'){ car.visible=true; W.v=0; S.zoom=Math.max(S.zoom,19.3); }
   updateBtn();
@@ -282,7 +375,7 @@ function walkStep(dt,st,gas,now){
   const sp=Math.abs(W.v);
   S.hdg=(S.hdg+st*(sp>3?110:160)*dt+360)%360;
   // move; buildings and water stop you (unless you're already inside one, e.g. got out in a building)
-  const dm=W.v*dt*SPEEDUP, h=rad(S.hdg);
+  const dm=W.v*dt*(IN.rec?1:SPEEDUP), h=rad(S.hdg);                // indoors at real walking speed (rooms are small)
   const recs=safe('doors',()=>recsNear(S.lat,S.lng))||[];
   safe('inside',()=>updInside(recs));
   if(dm){
@@ -330,21 +423,26 @@ function walkStep(dt,st,gas,now){
     step.near=null; updateBtn();
   }
 
+  let camMoved=true;
+  if(IN.rec) fpCam(dt);                                             // inside: through your own eyes (see fpCam)
+  else {
+  if(FPV.on) fpOff();
   // camera: closer than driving, follows where you face
   const dB=((S.hdg+LOOK.yaw-S.camB+540)%360)-180; S.camB+=dB*(1-Math.exp(-dt*4));
-  const tz=Math.min(22.4,21.2+zoomOff+(IN.rec?.4:0));                   // closer than before: the person is real size now S.zoom+=(tz-S.zoom)*Math.min(1,dt*2.5);
-  IN.ip+=((IN.rec?48:68)-IN.ip)*Math.min(1,dt*3);                   // inside: look down more steeply, over the cut-away walls
-  const Wd=innerWidth,H=innerHeight,padTop=H*.34, cm0=step.cam||{}, PIT=viewPitch(Math.round(IN.ip));
-  const camMoved=dirty||Wd!==cm0.W||H!==cm0.H||PIT!==cm0.p||Math.abs(S.lng-cm0.lng)>1e-8||Math.abs(S.lat-cm0.lat)>1e-8||Math.abs(S.camB-cm0.b)>.005||Math.abs(S.zoom-cm0.z)>.0003;
+  const tz=Math.min(22.4,21.2+zoomOff);   /* closer than before: the person is real size now */ S.zoom+=(tz-S.zoom)*Math.min(1,dt*2.5);
+  const Wd=innerWidth,H=innerHeight,padTop=H*.34, cm0=step.cam||{}, PIT=viewPitch(68);
+  camMoved=dirty||Wd!==cm0.W||H!==cm0.H||PIT!==cm0.p||Math.abs(S.lng-cm0.lng)>1e-8||Math.abs(S.lat-cm0.lat)>1e-8||Math.abs(S.camB-cm0.b)>.005||Math.abs(S.zoom-cm0.z)>.0003;
   if(camMoved){ step.cam={lng:S.lng,lat:S.lat,b:S.camB,z:S.zoom,W:Wd,H,p:PIT};
     map.jumpTo({center:[S.lng,S.lat],bearing:S.camB,zoom:S.zoom,pitch:PIT,padding:{top:padTop,bottom:0,left:0,right:0}}); }
   if(Wd!==step.W||H!==step.H||PIT!==step.pit){ step.W=Wd; step.H=H; step.pit=PIT;
     renderer.setSize(Wd,H,false); camera.aspect=Wd/H; camera.setViewOffset(Wd,H,0,-padTop/2,Wd,H);
     aimCam3D(H,PIT); placeGlider(); }
+  }
 
   // car layer: you at the centre, the parked vehicle where you left it (same projection as the traffic)
   const m=mpp(S.lat,S.zoom), sc=WX/m, b=rad(S.camB), sb=Math.sin(b), cb=Math.cos(b);
-  person.scale.setScalar(sc); person.rotation.y=-rad(S.hdg-S.camB);
+  person.scale.setScalar(sc); person.rotation.y=-rad(S.hdg-S.camB); person.visible=!IN.rec;   /* first person indoors: you're the camera */
+  if(ROOM.g){ placeRoom(m,b); doorSwing(dt); }
   const dx=(PK.lng-S.lng)*111320*cosLat(), dy=(PK.lat-S.lat)*111320, f=dx*sb+dy*cb, r=dx*cb-dy*sb;
   car.visible=true; car.position.set(r/m,0,-f/m); car.scale.setScalar(sc); car.rotation.y=-(rad(PK.hdg)-b);
   body.rotation.set(0,0,0); tractorG.rotation.set(0,0,0); debris.scale.setScalar(sc);
@@ -360,6 +458,6 @@ function walkStep(dt,st,gas,now){
 window.WALK={step:(dt,st,gas,now)=>{ try{ walkStep(dt,st,gas,now); }catch(e){ console.warn('walk',e); renderer.render(scene,camera); } },
   parked:()=>PK.mode, getOut:()=>safe('walk',getOut), toggle:()=>safe('walk',getOut), state:W, person, parkedAt:PK,   /* toggle: the F key (js/enh/controls.js) */
   insideId:()=>IN.rec?IN.rec.id:null, inside:IN,
-  setInside:r=>safe('inside',()=>{ if((r?r.key:null)!==IN.key) setInside(r); }), redrawInside:()=>{ if(IN.rec) safe('inside draw',()=>drawInterior(IN.rec)); }, inRec};
+  setInside:r=>safe('inside',()=>{ if((r?r.key:null)!==IN.key) setInside(r); }), redrawInside:()=>{ if(IN.rec) safe('inside draw',()=>{ if(ROOM.g) garUpdate(); else drawInterior(IN.rec); }); }, inRec};
 updateBtn();
 })();
