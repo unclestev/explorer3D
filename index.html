@@ -20,7 +20,7 @@
 <link href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/3.6.2/maplibre-gl.css" rel="stylesheet">
 <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>window.THREE||document.write('<script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"><\/script>')</script>
-<link href="css/style.css?v=39" rel="stylesheet">
+<link href="css/style.css?v=40" rel="stylesheet">
 </head>
 <body>
 <div id="load">Loading map…</div>
@@ -46,7 +46,7 @@ try{ if(localStorage.getItem('ydStartOnce')==='tp'){ const l=document.getElement
   <div class="setHead"><b>Settings</b><button id="setX" aria-label="Close settings">✕</button></div>
   <div class="setTabs" id="setTabs" role="tablist"></div>
   <div class="setGrp" data-tab="Vehicle">
-    <div class="setRow carRow"><span>Car</span><div class="seg" id="carPick"><button data-car="explorer">Explorer</button><button data-car="javelin">Javelin</button><button data-car="javelin3d">Javelin 3D</button><button data-car="javelin3d2">Javelin 3D v2</button><button data-car="navigator">Navigator</button><button data-car="modely">Model Y</button><button data-car="expedition">Expedition</button><button data-car="snowplow">Snow plow</button><button data-car="tractor">Tractor</button><button data-car="boat">🚤 Boat</button></div></div>
+    <div class="setRow carRow"><span>Car</span><div class="seg" id="carPick"><button data-car="explorer">Explorer</button><button data-car="javelin">Javelin</button><button data-car="javelin3d">Javelin 3D</button><button data-car="javelin3d2">Javelin 3D v2</button><button data-car="muscle70">70's Muscle Car</button><button data-car="navigator">Navigator</button><button data-car="modely">Model Y</button><button data-car="expedition">Expedition</button><button data-car="snowplow">Snow plow</button><button data-car="tractor">Tractor</button><button data-car="boat">🚤 Boat</button></div></div>
     <div class="setRow" id="startSndRow"><span>Start-up sound<small id="startSndStat">None — just the engine</small></span><div class="stepper"><button id="startSndBtn" style="width:auto;padding:0 10px;font-size:14px;font-weight:600">Choose file</button><button id="startSndReset" style="width:auto;padding:0 10px;font-size:14px;font-weight:600">Remove</button></div><input type="file" id="startSndFile" accept="audio/*,video/*" hidden></div>
     <div class="setRow carRow" id="seatRow" style="display:none"><span>Model Y seats<small>Interior colour in the cockpit view</small></span><div class="seg" id="seatPick"><button data-s="white">White</button><button data-s="black">Black</button></div></div>
     <div class="setRow"><span>Car size</span><div class="stepper"><button id="cm" aria-label="Smaller car">−</button><b id="carSize">100%</b><button id="cp" aria-label="Bigger car">+</button></div></div>
@@ -77,6 +77,9 @@ try{ if(localStorage.getItem('ydStartOnce')==='tp'){ const l=document.getElement
     <div class="setRow carRow"><span>3D terrain<small>Real hills on Medium and High graphics · costly in the cockpit view</small></span><div class="seg" id="terrPick"><button data-t="off">Off</button><button data-t="chase">Chase view only</button><button data-t="all">Always</button></div></div>
     <div class="setRow"><span>Sound<small>Engine, tyres, wind and bumps · starts on your first tap</small></span><button id="audioBtn" class="switch" aria-label="Sound"></button></div>
   </div>
+  <div class="setGrp" data-tab="Weather">
+    <div class="setRow carRow"><span>Weather<small id="wxPickStat">Real: the actual weather where you're driving</small></span><div class="seg" id="wxPick"><button data-w="real">🌍 Real</button><button data-w="clear">☀️ Clear</button><button data-w="cloudy">☁️ Cloudy</button><button data-w="rain">🌧️ Rain</button><button data-w="heavy">🌧️ Downpour</button><button data-w="storm">⛈️ Storm</button><button data-w="snow">🌨️ Snow</button><button data-w="blizzard">❄️ Blizzard</button><button data-w="fog">🌫️ Fog</button></div></div>
+  </div>
   <div class="setGrp" data-tab="Places">
     <div class="setRow"><span>Start at<small>When you open the game</small></span><div class="seg" id="startPick"><button data-start="last">Last spot</button><button data-start="random">Random place</button></div></div>
     <div class="setRow"><span>Go to now<small>Leaves where you are</small></span><div class="stepper"><button id="randomBtn" style="width:auto;padding:0 10px;font-size:14px;font-weight:600">Random</button><button id="homeBtn" style="width:auto;padding:0 10px;font-size:14px;font-weight:600">Raging Waves</button></div></div>
@@ -91,13 +94,13 @@ try{ if(localStorage.getItem('ydStartOnce')==='tp'){ const l=document.getElement
 </div>
 <script src="js/errors.js?v=3"></script>
 <script src="js/update.js?v=4"></script>
-<script src="js/game.js?v=87"></script>
+<script src="js/game.js?v=88"></script>
 <script src="js/enh/core.js?v=4"></script>
 <script src="js/enh/controls.js?v=4"></script>
 <script src="js/enh/roads.js?v=10"></script>
 <script src="js/enh/signs.js?v=18"></script>
 <script src="js/enh/nav.js?v=12"></script>
-<script src="js/enh/atmos.js?v=23"></script>
+<script src="js/enh/atmos.js?v=24"></script>
 <script src="js/enh/textures.js?v=9"></script>
 <script src="js/enh/parking.js?v=1"></script>
 <script src="js/enh/search.js?v=19"></script>
@@ -112,7 +115,7 @@ try{ if(localStorage.getItem('ydStartOnce')==='tp'){ const l=document.getElement
 <script src="js/enh/satellite.js?v=2"></script>
 <script src="js/enh/credits.js?v=1"></script>
 <script src="js/enh/towers.js?v=11"></script>
-<script src="js/enh/sound.js?v=11"></script>
+<script src="js/enh/sound.js?v=12"></script>
 <script src="js/enh/walk.js?v=14"></script>
 <script src="js/enh/look.js?v=7"></script>
 <script src="js/enh/wheel.js?v=12"></script>
@@ -122,14 +125,14 @@ try{ if(localStorage.getItem('ydStartOnce')==='tp'){ const l=document.getElement
 <script src="js/enh/savepos.js?v=3"></script>
 <script src="js/enh/quality.js?v=1"></script>
 <script src="js/enh/feel.js?v=3"></script>
-<script src="js/enh/cockpit.js?v=103"></script>
+<script src="js/enh/cockpit.js?v=104"></script>
 <script src="js/enh/roadside.js?v=5"></script>
 <script src="js/enh/music.js?v=12"></script>
 <script src="js/enh/tube.js?v=8"></script>
 <script src="js/enh/phone.js?v=8"></script>
-<script src="js/enh/voice.js?v=15"></script>
-<script src="js/enh/signals.js?v=5"></script>
-<script src="js/enh/ignition.js?v=16"></script>
+<script src="js/enh/voice.js?v=16"></script>
+<script src="js/enh/signals.js?v=6"></script>
+<script src="js/enh/ignition.js?v=17"></script>
 <script src="js/enh/plow.js?v=5"></script>
 <script src="js/enh/controls-view.js?v=1"></script>
 <script src="js/enh/smooth.js?v=1"></script>

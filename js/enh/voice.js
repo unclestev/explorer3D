@@ -65,7 +65,7 @@ const SW=[[/\breal speed\b/,'rsBtn','Real speed in the cockpit'],[/\brealistic\b
   [/\b(hud|heads? ?up( display)?)\b/,'hudBtn','The head-up display'],[/\b(info|information|location|speed) panel\b/,'infoBtn','The location panel'],
   [/\bpop ?-?ups?\b/,'popBtn','Pop-ups'],[/\basphalt\b/,'asphaltBtn','Asphalt roads'],[/\bsatellite\b/,'satBtn','Satellite view'],
   [/\b(trail|purple line)\b/,'trailBtn','The trail'],[/^(un)?mute\b|\b(game |engine )?(sound|sounds|audio)\b(?!.*start)/,'audioBtn','Sound']];
-const CARN=[[/^javelin ?3 ?d ?(v(ersion)? ?)?2$/,'javelin3d2','the Javelin 3D v2'],[/^javelin ?3 ?d$/,'javelin3d','the Javelin 3D'],[/^(amc )?javelin$/,'javelin','the Javelin'],
+const CARN=[[/^javelin ?3 ?d ?(v(ersion)? ?)?2$/,'javelin3d2','the Javelin 3D v2'],[/^(the )?(70'?s |seventies )?muscle( car)?$/,'muscle70','the 70\'s muscle car'],[/^javelin ?3 ?d$/,'javelin3d','the Javelin 3D'],[/^(amc )?javelin$/,'javelin','the Javelin'],
   [/^(lincoln )?navigator$|^lincoln$/,'navigator','the Navigator'],[/^(tesla )?model ?y$|^tesla$/,'modely','the Model Y'],[/^(ford )?expedition$/,'expedition','the Expedition'],
   [/^(ford )?explorer( st)?$|^st$/,'explorer','the Explorer'],[/^(snow ?plow|plow truck|plow|snow truck)$/,'snowplow','the snow plow'],[/^tractor$/,'tractor','the tractor'],[/^(speed ?)?boat$/,'boat','the boat']];
 function carName(q){ for(const [re,k,n] of CARN) if(re.test(q)) return [k,n]; return null; }
@@ -201,6 +201,10 @@ async function handle(raw){
     if(typeof CARKEY!=='undefined'&&CARKEY!=='snowplow') return say('Switch to the snow plow first.');
     if(/straight|center|centre|middle/.test(t)){ PLOW.straight(); return say('Plow straight.'); }
     const d=/left/.test(t)?-1:1; for(let k=0;k<4;k++) PLOW.step(d); return say('Plow angled '+(d<0?'left':'right')+'.'); }
+  // ---- weather (js/enh/atmos.js, ⚙️ Weather)
+  if(window.WEATHER&&((m=t.match(/\b(?:make it|set the weather to|change the weather to|weather to|i want|turn on)\s+(?:a\s+|the\s+)?(real|actual|clear|sunny|cloudy|overcast|rain|raining|rainy|downpour|heavy rain|pouring|storm|stormy|thunderstorm|thunder|snow|snowing|snowy|blizzard|fog|foggy)(?: weather)?$/))||(m=t.match(/^(real|actual) weather$/)))){
+    const k={real:'real',actual:'real',clear:'clear',sunny:'clear',cloudy:'cloudy',overcast:'cloudy',rain:'rain',raining:'rain',rainy:'rain',downpour:'heavy','heavy rain':'heavy',pouring:'heavy',storm:'storm',stormy:'storm',thunderstorm:'storm',thunder:'storm',snow:'snow',snowing:'snow',snowy:'snow',blizzard:'blizzard',fog:'fog',foggy:'fog'}[m[1]];
+    WEATHER.set(k); return say(k==='real'?'Back to the real weather.':'Okay, '+{clear:'clear skies',cloudy:'cloudy',rain:'rain',heavy:'a downpour',storm:'a thunderstorm',snow:'snow',blizzard:'a blizzard',fog:'fog'}[k]+'.'); }
   // ---- engine
   if(/^(start|turn on|switch on|fire up|power on)( up)?\s+(the\s+|my\s+)?(car|engine|truck|suv|vehicle|it|tractor)( up)?$|^start( it)?( up)?$|^(start|crank) (the )?engine$/.test(t)){ if(!IG) return say('I can\'t do that here.');
     if(IG.state==='on'||IG.state==='crank') return say('The engine is already running.'); IG.button(); return say('Starting the engine.'); }
