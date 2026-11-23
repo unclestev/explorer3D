@@ -139,10 +139,11 @@ for sx in (1, -1):
     box(lamps, 'Amber', (sx*.84, .82, -3.47), (.16, .16, .05))
     box(trim, 'Fender', (sx*.95, 1.08, (ZA_R+ZA_R2)/2), (.80, .04, 2.60))               # one long fender over both rear axles
 # ---------- the plow: an A-frame from the bumper, a curved moldboard angled to the right, a steel cutting edge ----------
-ANG = math.radians(16)                           # blade angled: left end ahead, right end back (snow goes to the curb)
-BW, BH, CX, CZ = 3.50, .98, 0., 4.30             # blade width, height, centre
+ANG = math.radians(21)                           # blade angled: left end ahead, right end back (snow goes to the curb)
+# after the owner's photo: a long, low blade that reaches well past the truck's left side, close to the ground
+BW, BH, CX, CZ = 4.00, .80, .42, 4.22            # blade width, height, centre (shifted toward the left end)
 def bpt(u, v):                                   # u -1..1 across, v 0..1 up: the moldboard curls forward toward the top
-    x = u*BW/2; y = .14+v*BH; zc = -.20*math.sin(v*math.pi*.85)+.10*v*v
+    x = u*BW/2; y = .10+v*BH; zc = -.16*math.sin(v*math.pi*.85)+.09*v*v
     return (CX+x*math.cos(ANG), y, CZ+zc+x*math.sin(ANG))
 NU, NV = 24, 10
 G = [[blade.v(bpt(-1+2*i/NU, j/NV)) for j in range(NV+1)] for i in range(NU+1)]
@@ -161,7 +162,10 @@ for u in (-.78, -.26, .26, .78):                                                
     a, b = np.array(bpt(u, .05)), np.array(bpt(u, .95))
     slab(blade, 'BladeBack', [a-(0, 0, .05), a-(0, 0, .17), b-(0, 0, .14), b-(0, 0, .05)], .05)
 T0, T1 = np.array(bpt(-1, 1)), np.array(bpt(1, 1))                                     # orange rail along the top
-slab(blade, 'PlowPaint', [T0+(0, -.07, -.02), T1+(0, -.07, -.02), T1+(0, .02, -.05), T0+(0, .02, -.05)], .07)
+slab(blade, 'PlowPaint', [T0+(0, -.045, -.02), T1+(0, -.045, -.02), T1+(0, .02, -.045), T0+(0, .02, -.045)], .06)
+L0 = np.array(bpt(1, 0))                                                              # the far (left) end: an orange curb guard / shoe
+slab(blade, 'PlowPaint', [L0+(.03, .02, .04), L0+(.03, .02, -.42), L0+(.03, .46, -.34), L0+(.03, .46, .02)], .08)
+box(blade, 'Edge', tuple(L0+(.02, -.04, -.18)), (.12, .06, .36))                      # its skid
 for i0 in (0, NU):                                                                     # orange end plates
     for j in range(NV):
         a, b = np.array(bpt(-1+2*i0/NU, j/NV)), np.array(bpt(-1+2*i0/NU, (j+1)/NV)); o = (.03 if i0 else -.03)*np.array((math.cos(ANG), 0, math.sin(ANG)))
