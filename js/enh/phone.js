@@ -1,6 +1,6 @@
 /* Phone (owner 2026-11-22: "can you make a phone in the game with apps"). A phone you pull up over the game: 📱 in the
    top-right bar, the T key, or say "open my phone". The apps use what the game already has:
-     Maps (search, favourites and recents, "Drive me there" on autopilot) · Spotify (paste a link) · Music (now playing, songs, radio presets and
+     Maps (search, favourites and recents, "Drive me there" on autopilot) · Spotify (paste a link) · YouTube Music (links, or names with the YouTube key; keeps playing in the background) · Music (now playing, songs, radio presets and
      stations, volume) · YouTube (its own player on the phone; pauses while you drive) · Camera (a photo of the game view)
      and Photos (kept on this device, download or delete) · Weather · Clock (with a stopwatch) · Calculator · Notes ·
      Car (remote start, hazards, headlights, sunroof, wipers, horn — like the FordPass app) · Voice · Settings · Controls.
@@ -8,7 +8,7 @@
    window.PHONE = {open, close, toggle, snap(), horn} */
 (()=>{
 'use strict';
-let PHONE_SPOT=null;
+let PHONE_SPOT=null, PHONE_YM=null;
 const $=id=>document.getElementById(id);
 const LSg=(k,d)=>{ try{ const v=localStorage.getItem(k); return v==null?d:v; }catch(e){ return d; } };
 const LSs=(k,v)=>{ try{ localStorage.setItem(k,v); return true; }catch(e){ return false; } };
@@ -67,7 +67,10 @@ const css=document.createElement('style'); css.textContent=`
 #phone .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .35s}
 #phone .drv{position:absolute;left:10px;right:10px;top:4px;z-index:3;background:rgba(220,38,38,.92);border-radius:12px;padding:6px 10px;font-size:12px;display:none}
 #phone.driving .drv{display:block}
-#phoneBtn.on{background:#2563eb}`;
+#phoneBtn.on{background:#2563eb}
+#phYtm{position:absolute;left:-9999px;top:0;width:2px;height:2px;opacity:0;pointer-events:none;overflow:hidden;border-radius:12px;background:#000;z-index:2}
+#phone.ytm #phYtm{opacity:1;pointer-events:auto}
+#phYtm iframe{position:absolute;inset:0;width:100%;height:100%;border:0}`;
 document.head.appendChild(css);
 
 const ph=document.createElement('div'); ph.id='phone';
@@ -169,6 +172,59 @@ app('spotify','Spotify','🎧','linear-gradient(#22c55e,#15803d)',bd=>{
   drawRec(); if(R[0]&&!box.children.length) box.appendChild(el('div','muted','Tap a recent one to play it again.'));
 });
 PHONE_SPOT=spotOf;
+
+// YouTube Music (owner 2026-11-22). YouTube Music's own site won't run inside another page, but its songs and playlists
+// are YouTube videos, so a music.youtube.com link (or a name, with the YouTube key) plays through YouTube's player. It's
+// music, so unlike the YouTube app it keeps playing while you drive, with the phone put away, and in other apps.
+const YM={fr:null,cur:null,title:'',paused:false};
+const ymBox=document.createElement('div'); ymBox.id='phYtm'; ph.querySelector('.scr').appendChild(ymBox);
+const ymCmd=f=>{ try{ YM.fr&&YM.fr.contentWindow.postMessage(JSON.stringify({event:'command',func:f,args:[]}),'*'); }catch(e){} };
+function ymStop(){ if(YM.fr) YM.fr.remove(); YM.fr=null; YM.cur=null; YM.title=''; }
+function ymPlay(o){ ymStop(); if(window.MUSIC&&MUSIC.stop&&MUSIC.now) MUSIC.stop(); if(window.TUBE&&TUBE.stop) TUBE.stop();
+  const q='autoplay=1&playsinline=1&rel=0&enablejsapi=1&origin='+encodeURIComponent(location.origin);
+  const f=document.createElement('iframe'); f.allow='autoplay; encrypted-media'; f.referrerPolicy='strict-origin-when-cross-origin';
+  f.src=o.id?'https://www.youtube-nocookie.com/embed/'+encodeURIComponent(o.id)+'?'+q+(o.list?'&list='+encodeURIComponent(o.list):''):'https://www.youtube-nocookie.com/embed/videoseries?list='+encodeURIComponent(o.list)+'&'+q;
+  ymBox.appendChild(f); YM.fr=f; YM.cur=o; YM.title=o.title||''; YM.paused=false;
+  let R=[]; try{ R=JSON.parse(LSg('ydYtmRecent','[]')); if(!Array.isArray(R)) R=[]; }catch(e){}
+  R=R.filter(x=>x&&!(x.id===o.id&&x.list===o.list)); R.unshift({id:o.id||null,list:o.list||null,title:o.title||'',by:o.by||''}); LSs('ydYtmRecent',JSON.stringify(R.slice(0,20)));
+  if(!o.title&&o.id) fetch('https://www.youtube.com/oembed?format=json&url='+encodeURIComponent('https://www.youtube.com/watch?v='+o.id)).then(r=>r.ok?r.json():null).then(j=>{ if(!j||!j.title||YM.cur!==o) return;
+    YM.title=String(j.title).slice(0,100); try{ const R2=JSON.parse(LSg('ydYtmRecent','[]')); if(R2[0]&&R2[0].id===o.id){ R2[0].title=YM.title; R2[0].by=String(j.author_name||'').replace(/ - Topic$/,''); LSs('ydYtmRecent',JSON.stringify(R2)); } }catch(e){} }).catch(()=>{}); }
+async function ymSearch(q){ const key=LSg('ydTubeKey',''); if(!key) return {err:'To search by name, add your YouTube key in the car\'s Video tab (🔑). Pasted YouTube Music links work without one.'};
+  try{ const r=await fetch('https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&maxResults=15&safeSearch=strict&videoEmbeddable=true&q='+encodeURIComponent(q)+'&key='+encodeURIComponent(key));
+    const j=await r.json(); if(!r.ok) return {err:(j&&j.error&&j.error.message)||'Search failed'};
+    const d=document.createElement('textarea'); const un=h=>{ d.innerHTML=h||''; return d.value; };
+    return {items:(j.items||[]).filter(i=>i.id&&i.id.videoId).map(i=>({id:i.id.videoId,title:un(i.snippet&&i.snippet.title),by:un(i.snippet&&i.snippet.channelTitle).replace(/ - Topic$/,''),img:i.snippet&&i.snippet.thumbnails&&i.snippet.thumbnails.medium&&i.snippet.thumbnails.medium.url}))}; }
+  catch(e){ return {err:'YouTube isn\'t reachable right now.'}; } }
+app('ytmusic','YT Music','🎼','linear-gradient(#f43f5e,#7f1d1d)',(bd,w)=>{
+  ph.classList.add('ytm');
+  bd.innerHTML='<div id="phYmArt" style="aspect-ratio:16/9;border-radius:12px;background:#1a1a1a;display:flex;align-items:center;justify-content:center;font-size:44px;margin-top:2px">🎼</div>'+
+    '<b id="phYmT" style="display:block;text-align:center;margin-top:8px">Nothing playing</b>'+
+    '<div class="row" style="justify-content:center;margin:8px 0"><button class="btn g" data-c="previousVideo">⏮</button><button class="btn" id="phYmP">⏸</button><button class="btn g" data-c="nextVideo">⏭</button><button class="btn g" id="phYmS">⏹</button></div>'+
+    '<form class="row"><input id="phYmQ" placeholder="Paste a YouTube Music link, or a song" autocomplete="off"><button class="btn">Go</button></form><div id="phYmR"></div><div class="sec">Recent</div><div id="phYmRec"></div>';
+  const Tt=bd.querySelector('#phYmT'), P=bd.querySelector('#phYmP'), Rs=bd.querySelector('#phYmR'), T=window.TUBE;
+  for(const b of bd.querySelectorAll('[data-c]')) b.onclick=()=>{ ymCmd(b.dataset.c); YM.paused=false; };
+  P.onclick=()=>{ if(!YM.fr) return; YM.paused=!YM.paused; ymCmd(YM.paused?'pauseVideo':'playVideo'); };
+  bd.querySelector('#phYmS').onclick=()=>{ ymStop(); };
+  function drawRec(){ const L=bd.querySelector('#phYmRec'); L.textContent=''; let R=[]; try{ R=JSON.parse(LSg('ydYtmRecent','[]')); }catch(e){}
+    for(const o of (Array.isArray(R)?R:[]).slice(0,15)) if(o&&(o.id||o.list)) L.appendChild(li(o.title||(o.list&&!o.id?'Playlist':'Song'),o.by||(o.list?'Playlist':''),()=>{ ymPlay(o); drawRec(); },o.id?'https://i.ytimg.com/vi/'+o.id+'/mqdefault.jpg':''));
+    if(!L.children.length) L.appendChild(el('div','muted','In YouTube Music: ⋮ → Share → Copy link, then paste it here.')); }
+  bd.querySelector('form').onsubmit=async e=>{ e.preventDefault(); const inp=bd.querySelector('#phYmQ'), v=inp.value.trim(); if(!v) return; inp.blur();
+    const id=T&&T.idOf?T.idOf(v):null, list=T&&T.listOf?T.listOf(v):null;
+    if(id||list){ inp.value=''; Rs.textContent=''; ymPlay({id,list}); drawRec(); return; }
+    if(/music\.youtube\.com\/browse\//.test(v)){ Rs.innerHTML='<div class="muted">That\'s an album page. Open the album\'s first song in YouTube Music and copy that link instead.</div>'; return; }
+    if(/[\/.]/.test(v)){ Rs.innerHTML='<div class="muted">That doesn\'t look like a YouTube Music link.</div>'; return; }
+    Rs.innerHTML='<div class="muted">Searching…</div>'; const r=await ymSearch(v); Rs.textContent='';
+    if(r.err){ Rs.appendChild(el('div','muted')).textContent=r.err; return; } if(!r.items.length){ Rs.innerHTML='<div class="muted">No songs found.</div>'; return; }
+    for(const o of r.items) Rs.appendChild(li(o.title,o.by,()=>{ ymPlay(o); Rs.textContent=''; drawRec(); },o.img||'')); };
+  drawRec();
+  const art=bd.querySelector('#phYmArt'), scr=ph.querySelector('.scr');
+  const place=()=>{ const a=art.getBoundingClientRect(), c=scr.getBoundingClientRect(), b=bd.getBoundingClientRect(), k=c.width/scr.offsetWidth||1;   // the player sits on the art square
+    const top=(a.top-c.top)/k, cut=a.top<b.top-4; Object.assign(ymBox.style,{left:(a.left-c.left)/k+'px',top:top+'px',width:a.width/k+'px',height:a.height/k+'px',visibility:cut?'hidden':''}); };
+  bd.addEventListener('scroll',place,{passive:true}); requestAnimationFrame(place);
+  every(500,()=>{ place(); bd.querySelector('#phYmArt').style.visibility=YM.fr?'hidden':'visible'; Tt.textContent=YM.fr?(YM.title||'Playing'):'Nothing playing'; P.textContent=YM.paused?'▶':'⏸'; });
+  return ()=>{ ph.classList.remove('ytm'); ymBox.removeAttribute('style'); };
+});
+PHONE_YM={play:ymPlay,stop:ymStop,search:ymSearch,get on(){ return !!YM.fr; }};
 
 // YouTube: its own little player on the phone
 app('tube','YouTube','▶️','#ff0000',bd=>{
@@ -321,6 +377,6 @@ function toggle(){ ph.classList.contains('on')?close():open(); }
 $('phHome').onclick=()=>{ if(cur==null) close(); else home(); };
 setInterval(()=>{ if(ph.classList.contains('on')) status(); },1000);
 addEventListener('keydown',e=>{ if(e.key==='Escape'&&ph.classList.contains('on')&&!(e.target&&/INPUT|TEXTAREA/.test(e.target.tagName))) close(); });
-window.PHONE={open,close,toggle,snap,openApp,spotOf:v=>PHONE_SPOT(v),horn:false,get isOpen(){ return ph.classList.contains('on'); }};
+window.PHONE={get ytm(){ return PHONE_YM; },open,close,toggle,snap,openApp,spotOf:v=>PHONE_SPOT(v),horn:false,get isOpen(){ return ph.classList.contains('on'); }};
 home();
 })();
