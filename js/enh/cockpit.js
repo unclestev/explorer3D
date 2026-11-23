@@ -1583,7 +1583,8 @@ function wipers(G,P,wsP,parts){
   const T=canvasTex(512,256,true), m=new THREE.MeshBasicMaterial({map:T.t,transparent:true,depthWrite:false,side:THREE.DoubleSide});
   const g=mesh(grid(24,12,(u,v)=>{ const p=wsP(u,v); return [p[0],p[1],p[2]+.004]; }),m,G,false,false); g.renderOrder=7;
   const arms=[], am=M({color:0x0a0a0b,roughness:.6,metalness:.3});
-  (P.wipers||[.12,.55]).forEach((pu,i)=>{ const k=(P.wiperK&&P.wiperK[i])||1;                    // k: this blade's length vs the usual
+  const plowK=typeof CARKEY!=='undefined'&&CARKEY==='snowplow'?1.3:1;   // the snow plow's wipers are longer (owner 2026-11-23)
+  (P.wipers||[.12,.55]).forEach((pu,i)=>{ const k=((P.wiperK&&P.wiperK[i])||1)*plowK;                    // k: this blade's length vs the usual
     if(P.ex){ arms.push({o:wiperEx(G,wsP,pu,k),pu,k,ex:true}); return; }
     const a=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),am); a.castShadow=true; G.add(a); arms.push({o:a,pu,k}); });
   parts.rain={T,arms,ang:0,dir:1,on:false,t:0,wsP};
