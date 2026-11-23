@@ -56,18 +56,25 @@ const say=(m,ms)=>{ if(typeof toast==='function') toast(m,ms||1800); };
 const au=new Audio(); au.preload='auto';
 let vol=+LSg('ydMusicVol',.7); if(!(vol>=0&&vol<=1)) vol=.7; au.volume=vol; $('musicVol').value=vol;
 const MU={now:null,queue:[],qi:-1};
+/* the music follows the engine (owner 2026-11-22): it goes quiet when the engine is switched off and comes back, on the
+   same station or song, once the engine has caught (js/enh/ignition.js IGN.state: on / crank / stop / off). Picking
+   something while the engine is off is remembered and starts when the engine is on. */
+const carOn=()=>!window.IGN||IGN.state==='on';
+let wasOn=true, resume=false;
 function setNow(){ const n=MU.now; $('musicNow').textContent=n?(au.paused?'⏸ ':n.radio?'📻 ':'♪ ')+n.title+(n.artist?' — '+n.artist:''):'Nothing playing';
   for(const el of panel.querySelectorAll('.it,#radioPresets button')) el.classList.toggle('on',!!n&&el.dataset.url===n.url); }
-function play(track){ MU.now=track; au.src=track.url; if(!track.radio) au.currentTime=0;
+function play(track){ MU.now=track;
+  if(!carOn()){ resume=true; au.pause(); setNow(); say('📻 Turn the engine on to listen',2200); return; }
+  resume=false; au.src=track.url; if(!track.radio) au.currentTime=0;
   au.play().then(setNow,()=>{ if(MU.now===track) say(track.radio?'That station won\'t play here — try another':'Could not play that song',2200); }); setNow(); }
 function next(){ const n=MU.now; if(n&&n.radio){ const P=presets(); if(!P.length) return; const i=P.findIndex(p=>p.url===n.url); playStation(P[(i+1)%P.length]); return; }
   if(MU.qi>=0&&MU.qi<MU.queue.length-1){ MU.qi++; play(MU.queue[MU.qi]); } else { MU.qi=-1; setNow(); } }
 au.addEventListener('ended',()=>{ if(!(MU.now&&MU.now.radio)) next(); }); au.addEventListener('pause',setNow); au.addEventListener('play',setNow);
 au.addEventListener('error',()=>{ const n=MU.now; if(n&&n.radio&&au.getAttribute('src')) say('Lost '+n.title+' — the station stopped sending',2400); });
 // live radio: after a pause, start again at "now" (not where it stopped)
-$('musicPlay').onclick=()=>{ const n=MU.now; if(!n) return; if(!au.paused){ au.pause(); return; } if(n.radio) play(n); else au.play(); };
+$('musicPlay').onclick=()=>{ const n=MU.now; if(!n) return; if(!carOn()){ say('📻 Turn the engine on to listen',2200); return; } if(!au.paused){ au.pause(); return; } if(n.radio) play(n); else au.play(); };
 $('musicNext').onclick=()=>{ if(MU.queue.length||(MU.now&&MU.now.radio)) next(); };
-$('musicStop').onclick=()=>{ au.pause(); au.removeAttribute('src'); au.load(); MU.now=null; MU.queue=[]; MU.qi=-1; setNow(); };
+$('musicStop').onclick=()=>{ resume=false; au.pause(); au.removeAttribute('src'); au.load(); MU.now=null; MU.queue=[]; MU.qi=-1; setNow(); };
 $('musicVol').oninput=e=>{ vol=+e.target.value; au.volume=vol; LSs('ydMusicVol',vol); };
 
 // ---------- songs: iTunes Search API through JSONP (works from any page, no key)
@@ -167,6 +174,9 @@ addEventListener('keydown',e=>{ if(e.repeat||(e.target&&/INPUT|TEXTAREA/.test(e.
 // for the car's centre screen: what's playing and how far along (live radio: no length, live:true)
 MU.info=()=>MU.now?{title:MU.now.title,artist:MU.now.radio?(MU.now.artist?MU.now.artist+' · LIVE':'LIVE'):MU.now.artist,playing:!au.paused,live:!!MU.now.radio,
   pos:au.currentTime||0,dur:!MU.now.radio&&isFinite(au.duration)?au.duration:0}:null;
+setInterval(()=>{ const on=carOn(); if(on===wasOn) return; wasOn=on;
+  if(!on){ resume=!!MU.now&&!au.paused; if(resume) au.pause(); }
+  else if(resume&&MU.now){ const n=MU.now; resume=false; if(n.radio||au.src!==n.url) play(n); else au.play().catch(()=>{}); } },250);
 MU.open=open; MU.close=close; MU.toggle=toggle; MU.presets=presets; MU.playStation=playStation;
 window.MUSIC=MU;
 })();
