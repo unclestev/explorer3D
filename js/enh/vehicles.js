@@ -146,7 +146,7 @@ function buildPolice(shadowMat){
 }
 /* ---------- the drivable cars' own 3D models in traffic (owner 2026-11-23: "have the drivable cars also be other cars
    we see on the road") ----------
-   About 1 traffic car in 4 is an Expedition (random paint), a Model Y (Pearl White) or the Javelin AMX v2 (black). Each .glb is
+   About 1 traffic car in 4 is an Expedition (random paint), a Model Y (Pearl White) or the Javelin AMX (mostly black, gold stripe). Each .glb is
    loaded once (only when such a car first turns up) and turned into a template: every part merged by kind of surface
    (paint, glass, lamps, shiny, matte; colours kept as vertex colours), so a car is ~6 draw calls plus 2-3 per wheel
    instead of 30-50. No interiors (the cabin is built by cockpit.js for your own car only; the Javelin's "Interior" part is
@@ -158,7 +158,7 @@ const REAL_SHARE=.25;
 const REAL={
   expedition:{share:.3,lo:'big',colors:[0xb4c3d2,0x0f1114,0xeeeeec,0x6e7680,0x1c2b40,0x7a1b1b,0x3a2a22]},
   modely:{share:.3,lo:'luxury',colors:[0xeceeee],photos:true},       // Pearl White only: its front and back are the owner's photos (plain paint there was a blank blob)
-  javelin3d2:{share:.4,lo:'classic',colors:[0x141518]},    // black only, like the owner's: the model's body panels run across the bottom of the wheel arches, which only black hides
+  javelin3d2:{share:.4,lo:'classic',colors:[0x141518,0x141518,0x141518,0xc2410c,0x15803d,0x1e3a8a,0x8b1a1a,0xf1f1ee]},   // mostly black like the owner's; the gold stripe stays
 };
 const RM={};                                        // key -> {parts, wheels, r, wb, paint:{metal,rough}} once loaded; 'loading' / 'fail'
 const RMAT={};
@@ -234,7 +234,9 @@ function template(gl,key){
   const wheelOf=o=>{ for(let p=o;p;p=p.parent) if(wn.includes(p)) return p; return null; };
   const body={}, wb=new Map(), paint={metal:.3,rough:.4}, own={};
   root.traverse(o=>{ if(!o.isMesh) return;
-    const M=new THREE.Matrix4().multiplyMatrices(flip,o.matrixWorld), ms=Array.isArray(o.material)?o.material:[o.material];
+    const ms=Array.isArray(o.material)?o.material:[o.material], M=new THREE.Matrix4().multiplyMatrices(flip,o.matrixWorld);
+    if(ms.some(m=>/tail|head/i.test(m.name||''))&&!ms.some(m=>/photo/i.test(m.name||''))){        // lamps are built 3.5 cm in: push them out as js/game.js does
+      const bb=new THREE.Box3().setFromObject(o); M.multiplyMatrices(flip,new THREE.Matrix4().makeTranslation(0,0,Math.sign((bb.min.z+bb.max.z)/2)*.035).multiply(o.matrixWorld)); }
     const groups=Array.isArray(o.material)&&o.geometry.groups.length?o.geometry.groups:[{start:0,count:null,materialIndex:0}];
     for(const gr of groups){ const m=ms[gr.materialIndex||0]; if(!m) continue; const cls=rclass(m,key); if(!cls) continue;
       if(cls.startsWith('photo')&&!own[cls]){ own[cls]=m; if(m.isMeshStandardMaterial){ m.envMap=rmats().env; m.envMapIntensity=1; } if(m.map){ m.map.encoding=THREE.LinearEncoding; m.map.needsUpdate=true; } m.depthWrite=false; m.polygonOffset=true; m.polygonOffsetFactor=-2; m.polygonOffsetUnits=-4; m.needsUpdate=true; }   // as js/game.js treats them

@@ -368,8 +368,9 @@ const CARS={
   // 1972 AMC Javelin AMX 401 as a real 3D model (the owner's .glb, 2026-10-02): turns properly from every angle.
   // Same engine and top speed as the photo Javelin, which stays as its own choice.
   javelin3d:{name:'AMC Javelin AMX',paint:0x141518,model:'models/javelin-amx.glb?v=1',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237,perf:{t60:6.8,top:120,a0:6.0}},
-  // the owner's second version of that model (2026-10-02): wheel wells, window frames, non-metallic black paint, darker glass
-  javelin3d2:{name:'AMC Javelin AMX',paint:0x141518,model:'models/javelin-amx-v2.glb?v=2',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237,perf:{t60:6.8,top:120,a0:6.0}},
+  // the owner's second version of that model (2026-10-02), rebuilt 2026-11-23 by tools/make-javelin.py from his photo (black with
+  // the gold stripe, open flared wheel arches, full-width grille with round lamps; the v2 file's body ran across the wheel openings)
+  javelin3d2:{name:'AMC Javelin AMX',paint:0x141518,model:'models/javelin-amx-v3.glb?v=1',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237,perf:{t60:6.8,top:120,a0:6.0}},
   // 2023 Tesla Model Y Long Range AWD with Acceleration Boost (the owner's car, 2026-11-21, issue #5): a 3D model built by
   // tools/make-model-y.py from the owner's photos (Pearl White, 20" black aero wheels, glass roof). Electric: one gear,
   // instant torque (0-60 mph in 4.2 s with the Boost), regen braking when you lift (regen m/s^2 at speed), motor whine
