@@ -104,23 +104,25 @@ function build(){
   if(CACHE.size>4000) CACHE.clear();
   // new work is limited by time (not count) per tick, so the phone never stalls; results are only sent to the map
   // when the set of buildings shown actually changed, and at most every 2.5 s while still catching up
-  const out=[], sig=[], t0=performance.now(), tb=POWER?6:10; let nh=0, nb=0, nf=0, budget=1e9; R.pending=false;
+  const out=[], sig=[], reg=[], t0=performance.now(), tb=POWER?6:10; let nh=0, nb=0, nf=0, budget=1e9; R.pending=false;
   for(const P of parts){
     if(P.b0>0||P.holes||crossesTile(P.bb)) continue;              // building parts, courtyards, tile-clipped pieces: flat
     const key=P.cx.toFixed(6)+','+P.cy.toFixed(6)+','+P.h;
     let C=CACHE.get(key);
-    if(!C){ if(performance.now()-t0>tb){ R.pending=true; continue; } C=roofFor(P,kx,ky,slices); CACHE.set(key,C); }   // spread new work over ticks
-    if(!C.fac&&nf<maxFac){ if(performance.now()-t0>tb){ R.pending=true; } else { safe('facades',()=>facades(P,kx,ky,C)); if(!C.fac) C.fac=[]; } }
+    if(!C){ if(performance.now()-t0>tb){ R.pending=true; continue; } C=roofFor(P,kx,ky,slices); tagId(C.feats,P.f.id); CACHE.set(key,C); }   // spread new work over ticks
+    if(!C.fac&&nf<maxFac){ if(performance.now()-t0>tb){ R.pending=true; } else { safe('facades',()=>facades(P,kx,ky,C)); if(!C.fac) C.fac=[]; tagId(C.fac,P.f.id); } }
     if(C.house){ if(nh>=maxHouses) continue; nh++; } else if(C.feats.length||C.fac&&C.fac.length){ if(nb>=maxBig) continue; nb++; }
     for(const f of C.feats) out.push(f);
-    let w=0; if(C.fac&&C.fac.length&&nf<maxFac){ nf++; w=1; for(const f of C.fac) out.push(f); }
+    let w=0; if(C.fac&&C.fac.length&&nf<maxFac){ nf++; w=1; for(const f of C.fac) out.push(f); if(C.bld) reg.push(C.bld); }
     if(C.feats.length||w) sig.push(key+w);
   }
   const now=performance.now(), key=sig.join(';');
   if(key!==R.last&&!(R.pending&&R.count&&now-(R.setT||0)<2500)){
     const s=map.getSource('roofs'); if(s) s.setData({type:'FeatureCollection',features:out}); R.last=key; R.setT=now; R.count=out.length; }
-  R.at=[S.lng,S.lat]; R.t=now; R.n=destroyed.length; R.tiles=false;
+  R.at=[S.lng,S.lat]; R.t=now; R.n=destroyed.length; R.tiles=false; R.reg=reg;
 }
+// every roof / facade piece carries its building's id (prop i), so walking inside one can hide just that building's pieces
+function tagId(fs,id){ if(id==null) return; for(const f of fs) f.properties.i=id; }
 // one building's roof features (cached by position, so each is only worked out once)
 const CACHE=new Map();
 function roofFor(P,kx,ky,slices){ return roofParts(P,kx,ky,slices); }
@@ -209,6 +211,16 @@ function facades(P,kx,ky,res){
   for(let i=0;i<p.length;i++){ const a=p[i], b=p[(i+1)%p.length], ex=b[0]-a[0], ey=b[1]-a[1], L=Math.hypot(ex,ey);
     if(L<2.4) continue; edges.push({a,L,ux:ex/L,uy:ey/L,nx:ey/L,ny:-ex/L}); }   // outward normal (outline runs counter-clockwise)
   if(!edges.length) return;
+  // the doors you can walk through (js/enh/walk.js): local metres around (cx,cy), on the outline p (counter-clockwise)
+  const doors=[]; let dn=0;
+  const door=(E,s0,s1)=>{ const d={ei:p.indexOf(E.a),s0,s1,x0:E.a[0]+E.ux*s0,y0:E.a[1]+E.uy*s0,x1:E.a[0]+E.ux*s1,y1:E.a[1]+E.uy*s1,nx:E.nx,ny:E.ny,dk:seed*8+(dn++)};
+    doors.push(d); return d.dk; };
+  // glass entrance doors (stores, lobbies): dark frame, two glass leaves, push bars
+  const entrance=(E,s)=>{ const dk=door(E,s-.95,s+.95);
+    putD(E,s-.95,s+.95,.085,.105,0,2.45,'#3b4048',dk);
+    for(const z of [-1,1]){ putD(E,z<0?s-.87:s+.05,z<0?s-.05:s+.87,.1,.125,.06,2.37,GLASS,dk); putD(E,z<0?s-.4:s+.1,z<0?s-.1:s+.4,.125,.16,1,1.06,'#c7ccd1'); } };
+  const putD=(E,s0,s1,o0,o1,b,h,c,dk)=>{ put(E,s0,s1,o0,o1,b,h,c); if(dk!=null) out[out.length-1].properties.dk=dk; };
+  if(P.f.id!=null) res.bld={key:P.cx.toFixed(6)+','+P.cy.toFixed(6),id:P.f.id,cx:P.cx,cy:P.cy,kx,ky,p,h:P.h,house,doors,bb:P.bb};
   const sd=streetDir(P);
   let front=edges[0]; for(const E of edges){ const sc=(sd?E.nx*sd[0]+E.ny*sd[1]:0)+.02*Math.min(E.L,12), fs=(sd?front.nx*sd[0]+front.ny*sd[1]:0)+.02*Math.min(front.L,12); if(sc>fs) front=E; }
   let k=0;
@@ -219,8 +231,9 @@ function facades(P,kx,ky,res){
       put(front,s0,s0+gw,.02,.1,0,2.15,GARAGE[seed&3]); busy.push([s0-.5,s0+gw+.5]); }
     { const free=busy.length?(busy[0][0]>front.L/2?[.8,busy[0][0]-.3]:[busy[0][1]+.3,front.L-.8]):[.8,front.L-.8];
       if(free[1]-free[0]>=1.6){ const s=(free[0]+free[1])/2+(busy.length?0:(hash(seed,41)-.5)*front.L*.3);
+        const dk=door(front,s-.6,s+.6);
         if(frames) put(front,s-.6,s+.6,.01,.05,0,2.3,FRAME);
-        put(front,s-.48,s+.48,.02,.09,0,2.1,DOORS[seed%DOORS.length]); busy.push([s-.9,s+.9]); } }
+        putD(front,s-.48,s+.48,.02,.09,0,2.1,DOORS[seed%DOORS.length],dk); busy.push([s-.9,s+.9]); } }
     for(const E of edges) for(let f=0;f<floors;f++){
       const n=Math.floor((E.L-1.2)/2.9); if(n<1) continue; const step=(E.L)/(n+1), big=E===front&&f===0;
       for(let i=1;i<=n;i++){ const s=i*step, w=big?1.4:.95;
@@ -231,7 +244,8 @@ function facades(P,kx,ky,res){
     const E=front, s0=E.L>40?E.L*.2:1, s1=E.L>40?E.L*.8:E.L-1;
     if(s1-s0>2){ put(E,s0,s1,.02,.08,.3,2.9,GLASS,hash(seed,5)<.8?1:0);
       if(frames) for(let s=s0;s<=s1+.01;s+=1.6) put(E,s-.05,s+.05,.08,.12,.3,2.9,'#b9bec4');
-      put(E,s0-.2,s1+.2,.02,.5,2.9,3.2,'#d6d8da'); }               // canopy fascia above the glass
+      put(E,s0-.2,s1+.2,.02,.5,2.9,3.2,'#d6d8da');                 // canopy fascia above the glass
+      if(s1-s0>=2.4) entrance(E,(s0+s1)/2); }                       // the way in, in the middle of the glass
     for(const F of edges){ if(F===E||F.L<12||hash(seed,F.L|0)<.5) continue;   // a few high windows on some side walls
       const n=Math.min(6,Math.floor(F.L/8)); for(let i=1;i<=n;i++) window1(F,i*F.L/(n+1),1.6,P.h*.55,P.h*.55+1,k++); }
   } else {
@@ -239,12 +253,17 @@ function facades(P,kx,ky,res){
     const floors=Math.min(12,Math.max(2,Math.round(P.h/3.6))), fh=P.h/floors;
     for(const E of edges){ if(E.L<3) continue;
       for(let f=0;f<floors;f++) put(E,.6,E.L-.6,.02,.08,f*fh+.9,f*fh+.9+Math.min(1.6,fh-1.2),GLASS,hash(seed+f,E.L|0)<.65?1:0); }
+    if(front.L>=3) entrance(front,front.L/2);                       // a lobby entrance on the street side
   }
 }
 // after dark, the windows marked lit glow warm (a paint switch, nothing is rebuilt)
-let night=null;
-function setNight(on){ if(on===night||!map.getLayer('roof-3d')) return; night=on;
-  safe('lit windows',()=>map.setPaintProperty('roof-3d','fill-extrusion-color',on?['case',['==',['get','lit'],1],'#ffd27f',['get','c']]:['get','c'])); }
+let night=null, openDk=null;
+function paintRoofs(){ if(!map.getLayer('roof-3d')) return;
+  let c=night?['case',['==',['get','lit'],1],'#ffd27f',['get','c']]:['get','c'];
+  if(openDk!=null) c=['case',['==',['coalesce',['get','dk'],-1],openDk],'#16181b',c];          // an open doorway: dark inside
+  safe('roof colours',()=>map.setPaintProperty('roof-3d','fill-extrusion-color',c)); }
+function setNight(on){ if(on===night||!map.getLayer('roof-3d')) return; night=on; paintRoofs(); }
+function openDoor(dk){ dk=dk==null?null:dk; if(dk===openDk) return; openDk=dk; paintRoofs(); }
 onTick(2000,function litTick(){ const A=YD.AT; setNight(!!(A&&A.k>.55)); });
 
 onReady(function buildings(){
@@ -260,5 +279,5 @@ onTick(700,function roofTick(){
 });
 const prev=window.onPowerChange;
 window.onPowerChange=(on)=>{ if(prev) prev(on); R.at=null; R.last=''; R.parts=null; CACHE.clear(); };   // slice count / unit count change
-window.ROOFS={build,state:R};
+window.ROOFS={build,state:R,doorsNear:()=>R.reg||[],openDoor};
 })();

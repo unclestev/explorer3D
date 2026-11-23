@@ -6,7 +6,13 @@
    when you're close enough to get back in; the HUD says where the car is when you've wandered off. You can also take
    off in the hang glider on foot; landing puts you back on foot, with the car still where you parked it.
    Movement uses the same 3x world speed-up as driving, so the mph and miles on foot agree with the rest of the game.
-   The person is a simple original 3D figure drawn in the car layer at the same exaggerated scale as the car (EXAG). */
+   The person is a simple original 3D figure drawn in the car layer at the same exaggerated scale as the car (EXAG).
+   Doors (owner 2026-11-22: "enter buildings through doors, and not just walk through the walls"): the front doors and
+   glass entrances that js/enh/buildings.js draws on nearby buildings can be walked through — the door shows open (dark)
+   when you're at it, and walking at a wall near a door slides you into the doorway. Inside, that one building is hidden
+   and drawn cut away instead — a floor, waist-high walls with the doorways and their frames — and the camera looks
+   down more steeply, so you can see the inside (empty for now). Its walls keep you in; leave through a door. Only the
+   ground floor; buildings without a drawn door (sheds, buildings split across map tiles, far away) stay solid. */
 (()=>{
 'use strict';
 const {safe}=YD;
@@ -108,6 +114,80 @@ function updateBtn(){
   btn.classList.toggle('on',mode==='walk'&&W.near);
 }
 
+/* ---------- doors and insides ---------- */
+const IN={rec:null,key:null,ip:68,told:false,open:null};
+const WALL=1.05, TH=.18;                                            // cut-away wall height and thickness (m)
+const loc=(r,lat,lng)=>[(lng-r.cx)*r.kx,(lat-r.cy)*r.ky];
+function inP(p,x,y){ let c=false; for(let i=0,j=p.length-1;i<p.length;j=i++){ const a=p[i],b=p[j]; if(((a[1]>y)!==(b[1]>y))&&(x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0])) c=!c; } return c; }
+const inRec=(r,lat,lng)=>{ const q=loc(r,lat,lng); return inP(r.p,q[0],q[1]); };
+function recsNear(lat,lng){                                       // buildings with walk-in doors around you
+  const out=[]; if(!window.ROOFS||!ROOFS.doorsNear) return out;
+  const mlat=14/111320, mlng=14/(111320*cosLat());
+  for(const r of ROOFS.doorsNear()){ const b=r.bb; if(lng<b[0]-mlng||lng>b[2]+mlng||lat<b[1]-mlat||lat>b[3]+mlat) continue; out.push(r); }
+  if(IN.rec&&!out.includes(IN.rec)) out.push(IN.rec);
+  return out; }
+// does the step from a to b (lat,lng) pass through one of r's doorways? (a little wider than the frame, for comfort)
+function doorCross(r,a,b){ const A=loc(r,a[0],a[1]), B=loc(r,b[0],b[1]);
+  for(const d of r.doors){ const L=Math.hypot(d.x1-d.x0,d.y1-d.y0)||1, ux=(d.x1-d.x0)/L, uy=(d.y1-d.y0)/L, w=.15;
+    const cx=d.x0-ux*w, cy=d.y0-uy*w, ex=d.x1+ux*w-cx, ey=d.y1+uy*w-cy, rx=B[0]-A[0], ry=B[1]-A[1], den=rx*ey-ry*ex;
+    if(Math.abs(den)<1e-9) continue;
+    const t=((cx-A[0])*ey-(cy-A[1])*ex)/den, u=((cx-A[0])*ry-(cy-A[1])*rx)/den;
+    if(t>=0&&t<=1&&u>=0&&u<=1) return d; }
+  return null; }
+// the nearest doorway to where you stand: {r,d,lat (along the wall from its middle), off (out from the wall)}
+function nearDoor(recs,lat,lng){ let best=null;
+  for(const r of recs){ const q=loc(r,lat,lng);
+    for(const d of r.doors){ const L=Math.hypot(d.x1-d.x0,d.y1-d.y0)||1, ux=(d.x1-d.x0)/L, uy=(d.y1-d.y0)/L, mx=(d.x0+d.x1)/2, my=(d.y0+d.y1)/2;
+      const al=(q[0]-mx)*ux+(q[1]-my)*uy, off=(q[0]-mx)*d.nx+(q[1]-my)*d.ny, dist=Math.hypot(Math.max(0,Math.abs(al)-L/2),off);
+      if(!best||dist<best.dist) best={r,d,al,off,dist,ux,uy,half:L/2}; } }
+  return best; }
+// hide the building you're in (its extrusion, roof cap, pitched roof, windows and doors); null = show it again
+function hideBuilding(id){
+  const ids=id==null?destroyed.slice():destroyed.concat([id]), f=ids.length?['!',['in',['id'],['literal',ids]]]:null;
+  for(const lid of hideIds){ if(!map.getLayer(lid)) continue;
+    const of=origFilters[lid], nf=f?(of?['all',of,f]:f):(of||null);
+    try{ map.setFilter(lid,nf); if(f&&of&&JSON.stringify(map.getFilter(lid))!==JSON.stringify(nf)) map.setFilter(lid,f); }catch(e){ console.warn('inside filter',e); } }
+  if(map.getLayer('roof-3d')) safe('inside roofs',()=>map.setFilter('roof-3d',id==null?null:['!=',['coalesce',['get','i'],-1],id]));
+}
+// the cut-away inside: floor, waist-high walls with gaps at the doors, door frames
+function interiorFeatures(r){
+  const out=[], toLL=q=>[+(r.cx+q[0]/r.kx).toFixed(7),+(r.cy+q[1]/r.ky).toFixed(7)];
+  const poly=(pts,c,b,h)=>{ const ring=pts.map(toLL); ring.push(ring[0]); out.push({type:'Feature',properties:{c,b,h},geometry:{type:'Polygon',coordinates:[ring]}}); };
+  poly(r.p,r.house?'#b48a5c':'#d9d6cf',0,.05);                                                    // wood floor in houses, pale tile elsewhere
+  const p=r.p;
+  for(let i=0;i<p.length;i++){ const a=p[i], b=p[(i+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1]); if(L<.05) continue;
+    const ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux;                                     // outward normal (counter-clockwise outline)
+    const at=(s,o)=>[a[0]+ux*s-nx*o,a[1]+uy*s-ny*o];                                               // s along the wall, o in from it
+    const strip=(s0,s1,o0,o1,c,b0,h)=>{ if(s1-s0>.01) poly([at(s0,o0),at(s1,o0),at(s1,o1),at(s0,o1)],c,b0,h); };
+    const gaps=r.doors.filter(d=>d.ei===i).map(d=>[d.s0,d.s1]).sort((x,y)=>x[0]-y[0]);
+    let s=0; for(const g of gaps.concat([[L,L]])){ strip(s,Math.max(s,g[0]),0,TH,'#ece6da',.05,WALL); strip(s,Math.max(s,g[0]),0,TH,'#8f877c',WALL,WALL+.04); s=Math.max(s,g[1]); }
+    for(const g of gaps){                                                                          // door frame: two posts, a head, a sill
+      strip(g[0]-.12,g[0],-.02,TH+.02,'#f4f1ea',.05,2.2); strip(g[1],g[1]+.12,-.02,TH+.02,'#f4f1ea',.05,2.2);
+      strip(g[0]-.12,g[1]+.12,-.02,TH+.02,'#f4f1ea',2.05,2.2); strip(g[0],g[1],0,TH,'#7a6a58',.05,.07); } }
+  return out; }
+function drawInterior(r){
+  if(!map.getSource('interior')){
+    map.addSource('interior',{type:'geojson',data:{type:'FeatureCollection',features:[]},maxzoom:20,tolerance:0,buffer:8});
+    map.addLayer({id:'interior-3d',type:'fill-extrusion',source:'interior',
+      paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-base':['get','b'],'fill-extrusion-height':['get','h'],'fill-extrusion-vertical-gradient':false}},
+      map.getLayer('hn-big')?'hn-big':undefined); }
+  map.getSource('interior').setData({type:'FeatureCollection',features:r?interiorFeatures(r):[]});
+}
+function setInside(r){
+  IN.rec=r; IN.key=r?r.key:null;
+  safe('inside hide',()=>hideBuilding(r?r.id:null));
+  safe('inside draw',()=>drawInterior(r));
+  person.traverse(o=>{ if(o.isMesh&&o.material!==shadow.material) o.material.depthTest=!r; });   // never hidden by the walls round you
+  if(window.TRAFFIC&&TRAFFIC.occRebuild) TRAFFIC.occRebuild();                                    // and drop it from the car layer's building blockers
+  step.cam=null; dirty=true; step.surf=null;
+  if(r&&!IN.told){ IN.told=true; toast('Inside: the walls are cut away so you can see in. Walk out through a door to leave',3800); }
+}
+// work out which building you're in (if any), from where you stand
+function updInside(recs){
+  let r=null; if(IN.rec&&inRec(IN.rec,S.lat,S.lng)) r=IN.rec; else for(const q of recs) if(inRec(q,S.lat,S.lng)){ r=q; break; }
+  if((r?r.key:null)!==IN.key) setInside(r);
+}
+
 /* ---------- getting out and back in ---------- */
 function getOut(){
   if(mode==='walk') return getIn();
@@ -130,6 +210,7 @@ function getOut(){
   toast('On foot: steer to turn · WALK to walk, press higher to run · tap 🚗 by the '+vehName()+' to get back in',4500);
 }
 function getIn(){
+  if(IN.rec){ toast('Walk out through a door first, then back to your '+vehName(),2600); return; }
   const c=carInfo();
   if(c.d>reach()){ toast('Your '+vehName()+' is '+c.dist+' '+c.where+'. Walk back to it to get in',2800); return; }
   S.lat=PK.lat; S.lng=PK.lng; S.hdg=PK.hdg; S.v=0; S.steer=0; S.roll=S.pitch=0;
@@ -147,6 +228,7 @@ const prevMode=window.onModeChange;
 window.onModeChange=(m,was)=>{ if(prevMode) prevMode(m,was);
   person.visible=(m==='walk'); setPedals(m==='walk'||m==='glider'&&!!PK.mode);
   if(m!=='walk'&&m!=='glider') PK.mode=null;                       // back in a vehicle
+  if(m!=='walk'){ if(IN.rec) setInside(null); if(IN.open!=null&&window.ROOFS){ IN.open=null; ROOFS.openDoor(null); } IN.ip=68; }
   if(m==='walk'){ car.visible=true; W.v=0; S.zoom=Math.max(S.zoom,19.3); }
   updateBtn();
 };
@@ -164,13 +246,28 @@ function walkStep(dt,st,gas,now){
   S.hdg=(S.hdg+st*(sp>3?110:160)*dt+360)%360;
   // move; buildings and water stop you (unless you're already inside one, e.g. got out in a building)
   const dm=W.v*dt*SPEEDUP, h=rad(S.hdg);
+  const recs=safe('doors',()=>recsNear(S.lat,S.lng))||[];
+  safe('inside',()=>updInside(recs));
   if(dm){
     const n=offsetPt(S.lat,S.lng,h,0,dm), probe=offsetPt(n[0],n[1],h,0,Math.sign(dm)*.3*EXAG);
     if(!landCache.at||every('landcache',3)||meters(landCache.at[1],landCache.at[0],S.lat,S.lng)>400) safe('land',rebuildLandCache);
-    const block=safe('walk block',()=>(inBuilding(probe[0],probe[1])&&!inBuilding(S.lat,S.lng))||(inWater(probe[0],probe[1])&&!inWater(S.lat,S.lng)));
-    if(block){ W.v=0; if(now-W.blockT>4000){ W.blockT=now; toast(inAny(landCache.water,probe[1],probe[0])?"Water ahead: you can't swim here":'A building is in the way',1600); } }
-    else { S.lat=n[0]; S.lng=n[1]; }
+    let thru=null; for(const r of recs){ if(doorCross(r,[S.lat,S.lng],probe)){ thru=r; break; } }   // through a doorway: in or out
+    const wall=!thru&&IN.rec&&!inRec(IN.rec,probe[0],probe[1]);                                     // inside: its walls keep you in
+    const block=!thru&&(wall||safe('walk block',()=>(inBuilding(probe[0],probe[1])&&!inBuilding(S.lat,S.lng))||(inWater(probe[0],probe[1])&&!inWater(S.lat,S.lng))));
+    if(block){
+      // walking at a wall right by a door: slide along it into the doorway
+      const nd=wall||!inAny(landCache.water,probe[1],probe[0])?nearDoor(recs,S.lat,S.lng):null;
+      if(nd&&Math.abs(nd.off)<1.3&&Math.abs(nd.al)<nd.half+1.4&&Math.abs(nd.al)>.05){
+        const sl=-Math.sign(nd.al)*Math.min(Math.abs(nd.al),1.2*dt*SPEEDUP), ex=nd.ux*sl/nd.r.kx, ey=nd.uy*sl/nd.r.ky;
+        S.lng+=ex; S.lat+=ey; W.v*=.9;
+      } else {
+        W.v=0; if(now-W.blockT>4000){ W.blockT=now; toast(wall?'A wall: walk out through a door':inAny(landCache.water,probe[1],probe[0])?"Water ahead: you can't swim here":'A building is in the way: walk in through a door',1600); } }
+    }
+    else { S.lat=n[0]; S.lng=n[1]; safe('inside',()=>updInside(recs)); }
   }
+  // the door you're at shows open
+  if(window.ROOFS&&ROOFS.openDoor){ const nd=recs.length?nearDoor(recs,S.lat,S.lng):null, dk=nd&&nd.dist<2.2*EXAG?nd.d.dk:null;
+    if(dk!==IN.open){ IN.open=dk; ROOFS.openDoor(dk); } }
   S.v=W.v; S.dist+=W.v*dt;
   // walk cycle
   const moving=Math.abs(W.v)>.05, run=Math.max(0,Math.min(1,(Math.abs(W.v)-1.8)/2.6));
@@ -188,18 +285,19 @@ function walkStep(dt,st,gas,now){
   if(every('walkhud',.3)){
     if(styleReady){ const p=map.project([S.lng,S.lat]), f=QGEO()?geoRoads(S.lng,S.lat,4):hitRoad(p.x,p.y,8);
 
-      roadEl.textContent='On foot'; roadEl.className=''; /* the street shows next to it: game.js updateRoadX */ }
+      roadEl.textContent=IN.rec?'Indoors':'On foot'; roadEl.className=''; /* the street shows next to it: game.js updateRoadX */ }
     const st2=Math.abs(W.v)<.05?'Standing':W.v<0?'Stepping back':W.run>.6?'Running':W.run>.15?'Jogging':'Walking';
     if(st2!==step.surf){ step.surf=st2; surfEl.textContent=st2; surfEl.style.color=''; }
-    const c=carInfo(); W.near=c.d<=reach();
-    nearEl.textContent=W.near?'Tap 🚗 to get back in':(PK.mode==='tractor'?'🚜':'🚗')+' Your '+vehName()+': '+c.dist+' '+c.where;
+    const c=carInfo(); W.near=c.d<=reach()&&!IN.rec;
+    nearEl.textContent=IN.rec?'Inside · walk out through a door to leave':W.near?'Tap 🚗 to get back in':(PK.mode==='tractor'?'🚜':'🚗')+' Your '+vehName()+': '+c.dist+' '+c.where;
     step.near=null; updateBtn();
   }
 
   // camera: closer than driving, follows where you face
   const dB=((S.hdg+LOOK.yaw-S.camB+540)%360)-180; S.camB+=dB*(1-Math.exp(-dt*4));
-  const tz=Math.min(22,20.5+zoomOff); S.zoom+=(tz-S.zoom)*Math.min(1,dt*2.5);
-  const Wd=innerWidth,H=innerHeight,padTop=H*.34, cm0=step.cam||{}, PIT=viewPitch(68);
+  const tz=Math.min(22,20.5+zoomOff+(IN.rec?.4:0)); S.zoom+=(tz-S.zoom)*Math.min(1,dt*2.5);
+  IN.ip+=((IN.rec?48:68)-IN.ip)*Math.min(1,dt*3);                   // inside: look down more steeply, over the cut-away walls
+  const Wd=innerWidth,H=innerHeight,padTop=H*.34, cm0=step.cam||{}, PIT=viewPitch(Math.round(IN.ip));
   const camMoved=dirty||Wd!==cm0.W||H!==cm0.H||PIT!==cm0.p||Math.abs(S.lng-cm0.lng)>1e-8||Math.abs(S.lat-cm0.lat)>1e-8||Math.abs(S.camB-cm0.b)>.005||Math.abs(S.zoom-cm0.z)>.0003;
   if(camMoved){ step.cam={lng:S.lng,lat:S.lat,b:S.camB,z:S.zoom,W:Wd,H,p:PIT};
     map.jumpTo({center:[S.lng,S.lat],bearing:S.camB,zoom:S.zoom,pitch:PIT,padding:{top:padTop,bottom:0,left:0,right:0}}); }
@@ -223,6 +321,7 @@ function walkStep(dt,st,gas,now){
   const mph=Math.round(Math.abs(W.v)*2.237); if(mph!==step.mph){ step.mph=mph; mphEl.textContent=mph; }
 }
 window.WALK={step:(dt,st,gas,now)=>{ try{ walkStep(dt,st,gas,now); }catch(e){ console.warn('walk',e); renderer.render(scene,camera); } },
-  parked:()=>PK.mode, getOut:()=>safe('walk',getOut), state:W, person, parkedAt:PK};
+  parked:()=>PK.mode, getOut:()=>safe('walk',getOut), state:W, person, parkedAt:PK,
+  insideId:()=>IN.rec?IN.rec.id:null, inside:IN};
 updateBtn();
 })();

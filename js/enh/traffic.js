@@ -174,8 +174,10 @@ function occFeatures(){ const out=[]; const add=(src,sl,hk,bk)=>{ let fs=[]; try
 function buildOcc(){ OCC.t=performance.now(); OCC.at=[S.lng,S.lat]; OCC.dirty=false; OCC.ter=terrainOn; OCC.job=occJob(); }
 function* occJob(){
   const ox=S.lng*MLNG, oy=S.lat*MLAT, R=700, pos=[], idx=[], seen=new Set(), e0=terrainOn?(map.transform.elevation||0):0; let n=0;
+  const hid=window.WALK&&WALK.insideId?WALK.insideId():null;
   for(const [f,hk] of occFeatures()){ if(++n%40===0) yield; const g=f.geometry; if(!g) continue; const polys=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
     const pr=f.properties||{}; let h,h0;
+    if(hid!=null&&(hk==='b'?f.id===hid:pr.i===hid)) continue;                                      // the building you're walking around inside (js/enh/walk.js)
     if(hk==='b'){ h=+(pr.render_height??pr.height??6)||6; h0=+(pr.render_min_height??pr.min_height??0)||0; } else { h=+pr.h||0; h0=+pr.b||0; }
     if(h<=h0) continue;
     for(const pl of polys){ const ring=pl[0]; if(!ring||ring.length<4) continue;
@@ -258,5 +260,5 @@ function hiddenGeo(a,camX,camY,camH){ const dx=camX-a.px, dy=camY-a.py, D=Math.h
   for(let s=4;s<Math.min(D,260);s+=7){ const qx=a.px+ux*s, qy=a.py+uy*s, lng=qx/MLNG, lat=qy/MLAT, line=1+(camH-1)*s/D;
     for(const f of geoBlocks(lng,lat)){ const pr=f.properties||{}, h=+(pr.render_height??pr.height??6)||6; if(h>line&&contains(f.geometry,lng,lat)) return true; } }
   return false; }
-window.TRAFFIC={occMesh:()=>OCC.mesh,rescale:(r)=>{ for(const sg of T.segs||[]) sg.v*=r; for(const a of T.agents||[]) a.v*=r; },hidden:(o,x,y,h)=>{ try{ return hiddenByBuilding(o,x,y,h); }catch(e){ return false; } }, frame:(dt)=>{ try{ return frame(dt); }catch(e){ console.warn('traffic',e); return false; } }, state:T, setOn};
+window.TRAFFIC={occMesh:()=>OCC.mesh,occRebuild:()=>{ OCC.dirty=true; OCC.job=null; safe('building blockers',buildOcc); },rescale:(r)=>{ for(const sg of T.segs||[]) sg.v*=r; for(const a of T.agents||[]) a.v*=r; },hidden:(o,x,y,h)=>{ try{ return hiddenByBuilding(o,x,y,h); }catch(e){ return false; } }, frame:(dt)=>{ try{ return frame(dt); }catch(e){ console.warn('traffic',e); return false; } }, state:T, setOn};
 })();
