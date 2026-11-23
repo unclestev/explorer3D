@@ -97,7 +97,7 @@ function corner(s1,s2){
   const c=Math.max(-1,Math.min(1,s1.ux*s2.ux+s1.uy*s2.uy)), cr=s1.ux*s2.uy-s1.uy*s2.ux, th=Math.acos(c);
   if(th>MIN_TURN&&th<Math.PI*.97&&Math.hypot(s1.b.x-s2.a.x,s1.b.y-s2.a.y)<1.5){
     const sn=Math.sin(th/2), turn=s1.b.deg>=3&&c<.9;
-    const d=Math.min(.5*s1.len,.5*s2.len,turn?Math.max(8,2*DEV/sn):2*DEV/sn);
+    const d=Math.min(.5*s1.len,.5*s2.len,turn?Math.max(10,2*DEV/sn):2*DEV/sn);
     const o1=s1.off*sd, o2=s2.off*sd, Cx=s1.b.x, Cy=s1.b.y;
     const n1x=s1.uy, n1y=-s1.ux, n2x=s2.uy, n2y=-s2.ux;           // right-hand normals
     let a1=null;                                                  // where the two lane lines cross, along piece 1 from its lane point at the corner
