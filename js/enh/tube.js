@@ -64,6 +64,7 @@ function watch(id,list){ stop(); T.id=id||null; T.list=list||null; if(window.MUS
   const q='autoplay=1&playsinline=1&rel=0&enablejsapi=1&origin='+encodeURIComponent(location.origin);
   f.src=list&&!id?'https://www.youtube-nocookie.com/embed/videoseries?list='+list+'&'+q:'https://www.youtube-nocookie.com/embed/'+id+'?'+(list?'list='+list+'&':'')+q;   // a playlist plays through, ⏮ ⏭ move along it
   box.prepend(f); T.frame=f; box.style.display='block'; remember(id,list);
+  f.addEventListener('load',()=>{ for(const ms of [800,2000,4500]) setTimeout(()=>{ if(T.frame===f) vol(); },ms); });   // the player is ready a moment after it loads
   if(!(window.COCKPIT&&COCKPIT.on)) toast('The video plays on the centre screen — switch to cockpit view (C)',2600);
   if(window.MUSIC&&MUSIC.close) MUSIC.close(); }
 function stop(){ if(T.frame){ T.frame.remove(); T.frame=null; } T.id=null; T.list=null; box.style.display='none'; box.classList.remove('moving'); T.moving=false; }
@@ -121,5 +122,7 @@ function frame(){ requestAnimationFrame(frame); if(!T.frame) return; if(!(window
   const st=window.IGN&&IGN.state, off=window.COCKPIT&&COCKPIT.screenOn?!COCKPIT.screenOn():(st==='off'||st==='stop');   // the screen's own ⏻ (or the car) switched it off
   if(off!==!!T.off){ T.off=off; box.classList.toggle('off',off); if(off) cmd('pauseVideo'); } }
 requestAnimationFrame(frame);
-window.TUBE={watch,stop,idOf,listOf,state:T,duck:on=>cmd('setVolume',[on?15:100])};
+const vol=()=>cmd('setVolume',[window.MUSIC&&MUSIC.ytVol?MUSIC.ytVol():100]);
+addEventListener('ydvolume',vol);                                     // the wheel's + / −, the slider, the voice ducking
+window.TUBE={watch,stop,idOf,listOf,state:T,duck:()=>vol()};
 })();
