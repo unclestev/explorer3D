@@ -22,7 +22,8 @@ def ease(a, b, t): t = min(1, max(0, t)); return a+(b-a)*t*t*(3-2*t)
 # ---------- side profile (z, y): low nose, long hood, short fastback roof, flat deck with a lip ----------
 ZW = .42                                         # foot of the windshield
 top = Pchip([ZR, -2.42, -2.37, -2.31, -2.22, -2.13, -2.02, -1.80, -1.52, -1.24, -.75, -.15, .05, .25, ZW, .60, 1.20, 1.90, 2.25, 2.38, ZF],
-            [.80, .950, .995, .975, .966, .975, 1.030, 1.140, 1.230, 1.290, 1.305, 1.305, 1.270, 1.120, .940, .905, .880, .850, .825, .80, .74])
+            [.80, .950, .995, .975, .966, .975, 1.030, 1.140, 1.230, 1.290, 1.305, 1.305, 1.270, 1.120, .940, .905, .878, .826, .770, .728, .675])
+# (owner: "the nose of the car comes down more towards the headlights" — the front now drops ~6 cm more over the last 60 cm)
 # (2026-11-23 owner: the real car's trunk is much shorter, then "still a little smaller and/or shorter" — the fastback glass
 # runs down to z -2.13, the deck is ~22 cm long, a little lower, and ends in a ducktail lip)
 belt = Pchip([ZR, -2.25, -1.85, -1.50, -1.18, -.92, 0., ZW, .6, ZF], [.92, .968, .992, .990, .945, .925, .915, .925, .93, .90])   # the waist kicks up sharply over the rear wheels
@@ -88,7 +89,7 @@ G = np.array([[[*sec_pt(S, float(ph)), S['z']] for ph in phis] for S in SECS])
 X, Y, Z = G[:, :, 0], G[:, :, 1], G[:, :, 2]
 # the hood sits low between raised front fender crowns that run from the nose back to the windshield (photo), with a
 # raised centre bulge toward the cowl; behind the doors the rear fenders rise in a hump over the wheels
-crown = .062*np.exp(-((X-.79)/.075)**2)*np.clip((Z-ZW)/.20, 0, 1)*np.clip((ZF-.03-Z)/.12, 0, 1)    # peaked front fenders, hood well below
+crown = .062*np.exp(-((X-.79)/.075)**2)*np.clip((Z-ZW)/.20, 0, 1)*np.clip((ZF-.03-Z)/.55, 0, 1)**.8    # peaked front fenders, hood well below
 SC0, SC1 = .62, 1.62                                                                                # cowl scoop: open face at SC0 (toward the windshield)
 scoop = .058*np.clip(1-(np.abs(X)/.36)**6, 0, 1)*np.clip((Z-SC0)/.03, 0, 1)*np.clip((SC1-Z)/.75, 0, 1)**.6
 # blistered fenders: over each wheel the fender swells up and out (owner: "the very pronounced wheel fender flares are
@@ -311,20 +312,20 @@ flare_lip(body)
 # ---------- front: a wide recessed mesh grille across the whole nose in a bright surround, the round headlamps at its
 # outer ends and round amber parking lamps inboard of them (photo); a full-width chrome bumper under it ----------
 trim = Mesh('Details'); heads = Mesh('Headlights'); tails = Mesh('Taillights'); plate = Mesh('Plate')
-GY0, GY1 = .505, .715
+GY0, GY1 = .485, .650
 gz = lambda y: zfront(0, y)
 gx = lambda y: .93*max(halfwidth(2.36, y), .3)
 patch(trim, 'Grille', lambda u, v: (gx(GY0+(GY1-GY0)*v)*u, GY0+(GY1-GY0)*v), 20, 6, push=-.03)               # the mesh, set back
 for k in range(9):                                                                                            # its horizontal bars
     y = GY0+.02+k*(GY1-GY0-.04)/8; patch(trim, 'Bar', lambda u, v, y=y: (gx(y)*u, y+.006*v), 20, 1, push=-.024)
 for k in range(28):
-    x = (k+.5)/28*gx(.61); patch(trim, 'Bar', lambda u, v, x=x: (x+.005*u, GY0+(GY1-GY0)*v), 1, 6, push=-.026)
+    x = (k+.5)/28*gx(.57); patch(trim, 'Bar', lambda u, v, x=x: (x+.005*u, GY0+(GY1-GY0)*v), 1, 6, push=-.026)
 patch(trim, 'Chrome', lambda u, v: ((gx(GY1)+.012)*u, GY1+.004+.016*v), 20, 1, push=.003)                    # bright surround: top
 patch(trim, 'Chrome', lambda u, v: ((gx(GY0)+.012)*u, GY0-.016+.014*v), 20, 1, push=.003)                    # bottom
 patch(trim, 'Chrome', lambda u, v: (gx(GY0+(GY1-GY0)*u)+.012*v, GY0+(GY1-GY0)*u), 6, 1, push=.003)          # ends
 patch(trim, 'Trim', lambda u, v: ((gx(GY0+(GY1-GY0)*u)-.003)+.016*v, GY0+(GY1-GY0)*u), 6, 1, push=-.012)    # the recess wall at the ends
-HL = (.74, .615)                                                                                              # headlamp centre (x, y)
-for (x, y), r, lens, bz in ((HL, .088, 'Headlight', .016), ((.50, .615), .052, 'Amber', .010)):
+HL = (.74, .567)                                                                                              # headlamp centre (x, y)
+for (x, y), r, lens, bz in ((HL, .080, 'Headlight', .016), ((.50, .567), .048, 'Amber', .010)):
     z = zfront(x, y) or ZF-.05
     disc(trim, 'Trim', (x, y, z-.03), r+.012, depth=.0)                                                       # dark cup behind
     torus_ring(trim, 'Chrome', (x, y, z+.004), r, r+bz, .03)                                                  # bright bezel
@@ -352,11 +353,11 @@ def bumper(m, mat, yc, h, out, front=True, back=.20):
                 a_, b_, c_, d_ = idx[i][j], idx[i+1][j], idx[i][j+1], idx[i+1][j+1]
                 if flip: m.tri(mat, a_, b_, c_); m.tri(mat, b_, d_, c_)
                 else: m.tri(mat, a_, c_, b_); m.tri(mat, b_, c_, d_)
-bumper(trim, 'Chrome', .42, .12, .045, True, .22)
+bumper(trim, 'Chrome', .40, .12, .045, True, .22)
 patch(trim, 'Trim', lambda u, v: (.80*u*max(halfwidth(2.25, .30+.06*v), .3), .30+.06*v), 16, 1, push=.004)    # dark valance under it
 fdeep = lambda y: zfront(0, y) or ZF
 box(trim, 'Grille', (0.0001, .36, ZF-.06), (.55, .06, .06))                                                   # lower intake slot
-patch(trim, 'Trim', lambda u, v: (.90*u*max(halfwidth(2.30, .78), .3), .77+.005*v), 16, 1, push=.003)        # hood's front shut line
+patch(trim, 'Trim', lambda u, v: (.90*u*max(halfwidth(2.30, .69), .3), .685+.005*v), 16, 1, push=.003)        # hood's front shut line
 
 # ---------- stripe: the gold "T" — a band across the front of the hood that runs back over each fender crown, sweeps
 # down the front fender behind the wheel and runs back along the lower side to the rear wheel (photo) ----------
@@ -406,29 +407,54 @@ for za in (ZA_F, ZA_R):
     for a in np.linspace(math.radians(-4), math.radians(184), 15):
         z, y = za+(RA+.048)*math.cos(a), TYRE_R+(RA+.048)*math.sin(a)
         ellipsoid(mir, 'Chrome', (xat(z, y)+.002, y, z), (.006, .0075, .0075), 8, 5)
-# ---------- rear: a red full-width tail lamp panel between the lamps' bright frame, chrome bumper below, plate,
-# and the deck's ducktail lip ----------
+# ---------- rear (owner's rear photo, style only): a dark recessed panel across the tail under the deck lid's lip, with
+# four rounded-rectangle lamps in bright bezels — red outer pair, inner pair red round a white reversing lamp — and a small
+# plain round emblem in the middle (no badges); a full-width chrome bumper with the plate set into its centre, body-colour
+# valance under it, and two big exhaust tips (owner: "make the exhaust bigger and more aggressive") ----------
 Wr = lambda y: max(halfwidth(-2.36, y), .1)
-TY0, TY1 = .64, .80
-patch(trim, 'Chrome', lambda u, v: (.94*u*Wr(TY1), TY1+.004+.014*v), 20, 1, push=.004, zfn=zrear, sgn=-1)
-patch(trim, 'Chrome', lambda u, v: (.94*u*Wr(TY0), TY0-.018+.014*v), 20, 1, push=.004, zfn=zrear, sgn=-1)
-patch(trim, 'RedLens', lambda u, v: (.93*u*Wr(TY0+(TY1-TY0)*v), TY0+(TY1-TY0)*v), 20, 4, push=.003, zfn=zrear, sgn=-1)
-for x0, x1 in ((.40, .90),):                                                                          # the lit lamps at each end
-    patch(tails, 'Taillight', lambda u, v: ((x0+(x1-x0)*u)*Wr(.72), TY0+.02+(TY1-TY0-.04)*v), 8, 2, push=.006, zfn=zrear, sgn=-1, shift=.035)
-patch(trim, 'Trim', lambda u, v: (.13*u, TY0+.03+(TY1-TY0-.06)*v), 3, 2, push=.005, zfn=zrear, sgn=-1)   # dark centre
-def rbump(m, mat, yc, h, out):
-    pts = []
-    for x in np.linspace(0, .975*HW, 26):
-        zb = (zrear(x, yc) or ZR+.05)-out+.25*max(0, x-.70)**2*4
-        pts.append([(x, yc-h/2, zb+.04), (x, yc-h/2+.01, zb), (x, yc+h/2, zb), (x, yc+h/2, zb+.03)])
-    R = [[m.v(p) for p in row] for row in pts]; Lf = [[m.v((-p[0], p[1], p[2])) for p in row] for row in pts]
-    for i in range(len(pts)-1):
-        for j in range(3):
-            a, b, c, d = R[i][j], R[i+1][j], R[i][j+1], R[i+1][j+1]; m.tri(mat, a, c, b); m.tri(mat, b, c, d)
-            a, b, c, d = Lf[i][j], Lf[i+1][j], Lf[i][j+1], Lf[i+1][j+1]; m.tri(mat, a, b, c); m.tri(mat, b, d, c)
-bumper(trim, 'Chrome', .46, .11, .04, False, .24)
-patch(plate, 'Plate', lambda u, v: (.16*u, .52+.10*v), 4, 2, push=.007, zfn=zrear, sgn=-1)
-patch(trim, 'Trim', lambda u, v: (.80*u*max(halfwidth(-2.25, .33+.06*v), .3), .33+.06*v), 16, 1, push=.004, zfn=zrear, sgn=-1)   # dark valance
+PY0, PY1 = .535, .755                                                                                 # the dark panel
+patch(trim, 'Panel', lambda u, v: (.955*u*Wr(PY0+(PY1-PY0)*v), PY0+(PY1-PY0)*v), 24, 4, push=.003, zfn=zrear, sgn=-1)
+bumper(trim, 'Paint', .775, .05, .030, False, .10)                                                    # the deck lid's lip, standing out over the panel
+def rrect(cx, cy, a, b, k=1.):                    # a rounded rectangle (superellipse) as a patch: u round it, v from centre (0) to edge (1)
+    def f(u, v):
+        t = 2*math.pi*u; c, s_ = math.cos(t), math.sin(t)
+        return (cx+a*k*math.copysign(abs(c)**(2/4.5), c)*v, cy+b*k*math.copysign(abs(s_)**(2/4.5), s_)*v)
+    return f
+def ring(m, mat, cx, cy, a, b, k0, k1, push, shift=0.):   # a band between two rounded rectangles
+    def f(u, v):
+        t = 2*math.pi*u; c, s_ = math.cos(t), math.sin(t); k = k0+(k1-k0)*v
+        return (cx+a*k*math.copysign(abs(c)**(2/4.5), c), cy+b*k*math.copysign(abs(s_)**(2/4.5), s_))
+    patch(m, mat, f, 40, 1, push=push, zfn=zrear, sgn=-1, shift=shift)
+LY = .645
+for cx, a in ((.665, .118), (.405, .112)):                                                            # outer, inner lamp
+    ring(trim, 'Chrome', cx, LY, a, .068, 1.0, 1.16, .010)                                            # bright bezel
+    ring(trim, 'Trim', cx, LY, a, .068, .97, 1.0, .006)
+    if cx > .6:
+        patch(tails, 'Taillight', rrect(cx, LY, a, .068, .97), 40, 2, push=.007, zfn=zrear, sgn=-1, shift=.035)
+    else:
+        ring(tails, 'Taillight', cx, LY, a, .068, .55, .97, .007, shift=.035)                        # red round the edge (built 3.5 cm in like every lamp)
+        patch(trim, 'Backup', rrect(cx, LY, a, .068, .56), 40, 2, push=.008, zfn=zrear, sgn=-1)     # white reversing lamp in the middle
+disc(trim, 'Chrome', (0.0001, LY, (zrear(0, LY) or ZR)-.006), .024, both=False)                     # plain round emblem
+bumper(trim, 'Chrome', .445, .115, .045, False, .24)
+pz = (zrear(0, .445) or ZR)-.045-.012
+box(trim, 'Trim', (0.0001, .435, pz+.006), (.34, .165, .02))                                          # the plate's recess in the bumper
+box(plate, 'Plate', (0.0001, .435, pz-.006), (.30, .15, .006))
+patch(trim, 'Paint', lambda u, v: (.84*u*max(halfwidth(-2.25, .30+.07*v), .3), .30+.07*v), 16, 1, push=.004, zfn=zrear, sgn=-1)   # body-colour valance
+def tailpipe(m, x, y, r, z0, length):             # a big rolled-edge chrome tip with a dark bore, along -z
+    for side in (1, -1):
+        cx = side*x; A = np.linspace(0, 2*math.pi, 33)
+        def ringv(rr, z): return [m.v((cx+rr*math.cos(a), y+rr*math.sin(a), z)) for a in A]
+        rows = [ringv(r*.80, z0+.55), ringv(r*.80, z0+.02), ringv(r*.96, z0), ringv(r, z0-length+.02), ringv(r*1.06, z0-length+.008), ringv(r*1.02, z0-length-.004), ringv(r*.86, z0-length+.002)]
+        mats = ['Bar', 'Chrome', 'Chrome', 'Chrome', 'Chrome', 'Chrome']   # a dark pipe runs forward under the car to the chrome tip
+        for k in range(len(rows)-1):
+            for i in range(32):
+                a_, b_, c_, d_ = rows[k][i], rows[k][i+1], rows[k+1][i], rows[k+1][i+1]
+                m.tri(mats[k], a_, c_, b_); m.tri(mats[k], b_, c_, d_)
+        inner = [ringv(r*.86, z0-length+.002), ringv(r*.86, z0-length+.14)]
+        for i in range(32):
+            a_, b_, c_, d_ = inner[0][i], inner[0][i+1], inner[1][i], inner[1][i+1]; m.tri('Well', a_, b_, c_); m.tri('Well', b_, d_, c_)
+        disc(m, 'Well', (cx, y, z0-length+.14), r*.86, both=False)
+tailpipe(trim, .56, .262, .066, ZR+.14, .19)                                                          # 13 cm rolled-edge tips, ending just past the bumper
 top_patch(trim, 'Trim', lambda u, v: (.90*u*max(halfwidth(-2.0, .95), .3), -1.80+.004*v), 16, 1, push=.003)   # trunk shut line
 
 # ---------- wheels: F70-14 tyre with a raised-letter band, 14" rally wheel: grey centre with slots, bright trim ring
@@ -525,6 +551,8 @@ MATS = {
  'Letters':   dict(c=[.13, .13, .125, 1], m=0, r=.8),
  'Rim':       dict(c=[.20, .21, .22, 1], m=.6, r=.35),
  'Steel':     dict(c=[.50, .51, .53, 1], m=.55, r=.30),        # silver-painted steel wheel face
+ 'Panel':     dict(c=[.025, .026, .028, 1], m=.2, r=.55),       # the dark tail panel
+ 'Backup':    dict(c=[.80, .80, .78, 1], m=.1, r=.25),          # white reversing lamps
  'Well':      dict(c=[.008, .008, .009, 1], m=0, r=.9),
 }
 matnames = list(MATS)
