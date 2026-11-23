@@ -1076,7 +1076,7 @@ function dashModern(G,P,parts){
     for(let k=0;k<5;k++){ const s=mesh(new THREE.BoxGeometry(w-.006,.0035,.014),M({color:0x1a1a1b,roughness:.5,metalness:.3}),g); s.position.set(0,-h/2+(k+.5)*h/5,.008); s.rotation.x=-.25; } };
   const fz=(y)=>{ let best=P.dash[4][1]; for(let i=0;i<P.dash.length-1;i++){ const A=P.dash[i],B=P.dash[i+1]; if((A[0]-y)*(B[0]-y)<=0&&A[0]!==B[0]) best=lerp(A[1],B[1],(y-A[0])/(B[0]-A[0])); } return best; };
   const vy=P.ex?P.dash[4][0]-.025:P.dash[4][0]-.06, vw=P.ex?.125:lux?.12:.14, vh=P.ex?.066:lux?.055:.05;
-  const ey=P.ex||P.xp?0:.55, ew=P.xp?.075:vw, eh=P.xp?.15:vh, ey2=P.xp?P.screen.c[1]-.005:vy;
+  const ey=P.ex?0:P.xp?.38:.55, ew=P.xp?.075:vw, eh=P.xp?.15:vh, ey2=P.xp?P.screen.c[1]-.005:vy;
   vent(-xd+.13,ey2,fz(ey2)+.13,ew,eh,[0,ey]); vent(xd-.13,ey2,fz(ey2)+.13,ew,eh,[0,-ey]);   // Explorer: facing straight back (owner: "make the vents straight")
   if(P.ex){ for(const s of [-1,1]) vent(s*.215,vy,fz(vy)+.024,.17,vh,[0,0]); }     // the two big ones either side of the screen
   else if(P.xp){ const S=P.screen; for(const s of [-1,1]) vent(S.c[0]+s*(S.w/2+.074),S.c[1],S.c[2]-.012,.08,S.h-.004,[-S.tilt*DEG,0]); }   // owner 2026-11-22: the screen centred between them, all three flush in one plane (photo)
