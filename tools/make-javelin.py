@@ -404,7 +404,24 @@ def band_along(m, mat, P, h0, push=.006, nv=3):        # h0: the band height (on
 band_along(STR, 'Stripe', *spear_path())
 # the gold "T" on the hood (owner: "add the gold T pattern to the front like the javelin has"): a bar across the front
 # of the hood just behind the shut line, and a stem running back up the middle of the hood over the cowl scoop
-top_patch(STR, 'Stripe', lambda u, v: (.64*u, 2.13+.12*v), 24, 2, push=.006)
+def top_band(m, mat, P, W, push=.006, nv=2):       # a band lying on the hood / fenders along a path of (x, z), widths W
+    T = np.gradient(P, axis=0); T /= np.linalg.norm(T, axis=1, keepdims=True); N = np.stack([-T[:, 1], T[:, 0]], 1)
+    pts = [[(x+n[0]*w*(v/nv-.5), z+n[1]*w*(v/nv-.5)) for v in range(nv+1)] for (x, z), n, w in zip(P, N, W)]
+    pts = [[(x, ytop_at(z, x)+push, z) for x, z in row] for row in pts]
+    for side in (1, -1):
+        idx = [[m.v((side*p[0], p[1], p[2])) for p in row] for row in pts]
+        for i in range(len(pts)-1):
+            for j in range(nv):
+                a, b, c, d = idx[i][j], idx[i+1][j], idx[i][j+1], idx[i+1][j+1]
+                if (side > 0) == (T[i][0]*N[i][1]-T[i][1]*N[i][0] < 0): m.tri(mat, a, b, c); m.tri(mat, b, d, c)
+                else: m.tri(mat, a, c, b); m.tri(mat, b, c, d)
+# (owner: "the edges of the T should curve back towards a point near the wheels") — the cross bar runs straight out from
+# the middle, then each end bends back over the fender and thins to a point above the front wheel
+TB = [(x, 2.19) for x in np.linspace(0, .40, 12)[:-1]]
+TB += herm(np.array([.40, 2.19]), np.array([1., 0.]), np.array([.68, ZA_F+.02]), np.array([.05, -1.]), .55, 40)
+TB.append((.68, ZA_F+.02)); TB = np.array(TB)
+nT = 11; t = np.linspace(0, 1, len(TB)-nT)
+top_band(STR, 'Stripe', TB, np.r_[np.full(nT, .12), .12*(1-t)**1.1])
 top_patch(STR, 'Stripe', lambda u, v: (.075*u, .70+(2.15-.70)*v), 2, 40, push=.007)
 # ---------- sides: chrome rocker moulding, wheel-lip trim, door seams, handle, chrome bullet mirror, side markers ----------
 side_patch(trim, 'Chrome', lambda u, v: (ZA_R+RA+.10+(ZA_F-RA-.10-(ZA_R+RA+.10))*u, .265+.035*v), 40, 1, push=.012)   # rocker moulding
