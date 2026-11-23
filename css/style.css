@@ -36,6 +36,7 @@ button{font-family:inherit;cursor:pointer}
 #wxl{color:#fde68a}
 #surf{color:#bef264;font-size:11px}
 #near{color:#7dd3fc;font-size:11px}
+#xnext{margin-top:2px;font-size:14px;font-weight:600;color:#fde68a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}   /* the next cross street ahead (game.js nextCross) */
 
 /* ---------- tool buttons (top-right: a column in portrait, a row in landscape) ---------- */
 #zoom{position:absolute;top:var(--st);right:var(--sr);z-index:20;display:flex;flex-direction:column;gap:calc(var(--gap)*.6)}

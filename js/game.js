@@ -842,13 +842,25 @@ function rebuildRoadGeo(){
   roadGeo.segs=segs;
   // street names live in the map's separate 'transportation_name' layer, not on the road lines above (so roadName was
   // always empty): keep its named lines too, for the panel's "· NE · Main St" (streetHere) and the cockpit
-  const names=[], Rn=400; let nf=[]; try{ nf=map.querySourceFeatures(roadGeo.src,{sourceLayer:'transportation_name'}); }catch(e){}
+  const names=[], Rn=650;   /* far enough for the next cross street (nextCross) */ let nf=[]; try{ nf=map.querySourceFeatures(roadGeo.src,{sourceLayer:'transportation_name'}); }catch(e){}
   for(const f of nf){ const pr=f.properties||{}, nm=pr['name:en']||pr.name||(pr.ref?String(pr.ref).replace(/;.*/,''):''); if(!nm) continue;
     const g=f.geometry, lines=g&&(g.type==='LineString'?[g.coordinates]:g.type==='MultiLineString'?g.coordinates:null); if(!lines) continue;
     for(const L of lines) for(let i=1;i<L.length;i++){ const x1=(L[i-1][0]-S.lng)*kx, y1=(L[i-1][1]-S.lat)*111320, x2=(L[i][0]-S.lng)*kx, y2=(L[i][1]-S.lat)*111320;
       if(Math.max(x1,x2)<-Rn||Math.min(x1,x2)>Rn||Math.max(y1,y2)<-Rn||Math.min(y1,y2)>Rn) continue; names.push([x1,y1,x2,y2,nm]); } }
   roadGeo.names=names;
 }
+// the next street crossing the one you're on (owner 2026-11-23: "identifying the upcoming crossroads from further away"):
+// look straight ahead up to ~450 m for a named line crossing (or meeting) your path that isn't your own street
+function nextCross(cur){ const N=roadGeo.names; if(!N||!N.length) return null;
+  const kx=111320*Math.cos(rad(roadGeo.lat)), x=(S.lng-roadGeo.lng)*kx, y=(S.lat-roadGeo.lat)*111320, h=rad(S.hdg), hx=Math.sin(h), hy=Math.cos(h), LA=450;
+  let best=null, bd=1e9;
+  for(const s of N){ if(!s[4]||s[4]===cur) continue;
+    const dx=s[2]-s[0], dy=s[3]-s[1], L=Math.hypot(dx,dy); if(L<.5) continue;
+    const den=hx*dy-hy*dx; if(Math.abs(den)/L<.35) continue;                       // running alongside, not across
+    const t=((s[0]-x)*dy-(s[1]-y)*dx)/den, u=((s[0]-x)*hy-(s[1]-y)*hx)/den, slack=6/L; // t: metres ahead; u: along the cross street
+    if(t<8||t>LA||u<-slack||u>1+slack) continue;
+    if(t<bd){ bd=t; best={name:s[4],d:t}; } }
+  return best; }
 // the street under the car: the nearest named line within 14 m, preferring one that runs the way you're heading
 function streetHere(){ const N=roadGeo.names; if(!N||!N.length) return '';
   const kx=111320*Math.cos(rad(roadGeo.lat)), x=(S.lng-roadGeo.lng)*kx, y=(S.lat-roadGeo.lat)*111320, h=rad(S.hdg), hx=Math.sin(h), hy=Math.cos(h);
@@ -1339,7 +1351,11 @@ const roadxEl=document.getElementById('roadx');
 function updateRoadX(){ if(!roadxEl) return; const H=['N','NE','E','SE','S','SW','W','NW'][Math.round((((S.hdg%360)+360)%360)/45)%8];
   let st=''; if(mode!=='glider'&&mode!=='boat'&&(onRoad||mode==='walk')&&roadEl.className!=='off'){ if(!roadGeo.segs||meters(roadGeo.lat,roadGeo.lng,S.lat,S.lng)>300) rebuildRoadGeo(); st=streetHere(); }
   roadName=st;                                                        /* the cockpit's cluster and speed-limit signs read this too */
-  const t='\u00a0· '+H+(st?' · '+st:'');   /* non-breaking: a flex item drops a plain leading space */ if(roadxEl.textContent!==t) roadxEl.textContent=t; }
+  const t='\u00a0· '+H+(st?' · '+st:'');   /* non-breaking: a flex item drops a plain leading space */ if(roadxEl.textContent!==t) roadxEl.textContent=t;
+  if(xnextEl){ const nx=mode!=='glider'&&mode!=='boat'&&st?nextCross(st):null;           /* the next cross street ahead */
+    const ft=nx?nx.d*3.281:0, tx=nx?'Next: '+nx.name+' · '+(ft<1000?Math.max(50,Math.round(ft/50)*50)+' ft':(nx.d/1609).toFixed(1)+' mi'):'';
+    if(xnextEl.textContent!==tx){ xnextEl.textContent=tx; xnextEl.style.display=tx?'':'none'; } } }
+const xnextEl=document.getElementById('xnext');
 function every(k,sec){ const t=last/1000; if(tick[k]===undefined||t-tick[k]>=sec){ tick[k]=t; return true; } return false; }
 let lastStep=0;
 function loop(now){

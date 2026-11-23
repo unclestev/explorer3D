@@ -219,8 +219,11 @@ FRAME_HOOKS.push(function streetSigns(dt){
   if(SG.dirty){ syncSigns(); changed=true; }
   if(!signs3.size) return changed;
   G3.visible=true;
-  const px=S.lng*MLNG, py=S.lat*MLAT, m=mpp(S.lat,S.zoom), b=rad(S.camB), sb=Math.sin(b), cb=Math.cos(b), sc=EXAG/m;
+  const px=S.lng*MLNG, py=S.lat*MLAT, m=mpp(S.lat,S.zoom), b=rad(S.camB), sb=Math.sin(b), cb=Math.cos(b);
   const H=innerHeight, dist=.5*H/Math.tan(rad(camera.fov)/2)*m, tp=rad(map.getPitch()), CE=window.COCKPIT&&COCKPIT.on&&COCKPIT.eyeWorld, FP=!!CE;
+  // chase view: the street-name signs stay at the old 1.6x (easy to read) now that the cars are real size (2026-11-23);
+  // the cockpit draws them real size as before
+  const sc=(FP?EXAG:Math.max(EXAG,1.6))/m;
   const camX=CE?CE.x:px-sb*dist*Math.sin(tp), camY=CE?CE.y:py-cb*dist*Math.sin(tp), camH=CE?CE.h:dist*Math.cos(tp);
   const now=performance.now(), doOcc=now-occT>(POWER?700:300), hid=window.TRAFFIC&&TRAFFIC.hidden; if(doOcc) occT=now;
   // a little dimmer after dark (they're reflective, so not much)
