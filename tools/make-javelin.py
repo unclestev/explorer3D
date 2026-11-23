@@ -361,12 +361,18 @@ patch(trim, 'Trim', lambda u, v: (.90*u*max(halfwidth(2.30, .78), .3), .77+.005*
 # ---------- stripe: the gold "T" — a band across the front of the hood that runs back over each fender crown, sweeps
 # down the front fender behind the wheel and runs back along the lower side to the rear wheel (photo) ----------
 STR = Mesh('Stripe')
-def side_band(z):                                 # centre height of the spear along z: under the fender's shoulder at the front, sweeping down at the door
-    hi = min(.80+.07*math.exp(-((z-ZA_F)/.62)**2), float(section(z)['yt'])-.07+.13*math.exp(-((z-ZA_F)/.56)**2))   # clears the flare's top      # rides up on the blistered fender, above the flare
-    return .555+(hi-.555)*ease(0, 1, (z-.45)/.75)
+# (owner's side photo, 2026-11-23: the gold runs along the top of the front fender, sweeps down behind the front wheel
+# to just above the chrome rocker and runs low along the body to the rear wheel, carries on behind the rear wheel, and
+# fills the lower front fender ahead of the front wheel)
+LOW = .365                                        # centre of the low band, just above the rocker moulding
+def side_band(z):
+    hi = min(.80+.07*math.exp(-((z-ZA_F)/.62)**2), float(section(z)['yt'])-.07+.13*math.exp(-((z-ZA_F)/.56)**2))   # clears the flare's top
+    return LOW+(hi-LOW)*ease(0, 1, (z-.60)/.48)
 def band_pt(u, v, z0, z1):
-    z = z0+(z1-z0)*u; yc = side_band(z); h = .10-.012*ease(0, 1, (z-.45)/.75); return z, yc-h/2+h*v
-side_grid(STR, 'Stripe', lambda u, v: band_pt(u, v, ZA_R+RA+.10, 2.22), 140, 3, push=.006)
+    z = z0+(z1-z0)*u; yc = side_band(z); h = .095+.010*ease(0, 1, (z-.60)/.48); return z, yc-h/2+h*v
+side_grid(STR, 'Stripe', lambda u, v: band_pt(u, v, ZA_R+.53, 2.22), 160, 3, push=.006)          # front fender → down → low along the doors
+side_grid(STR, 'Stripe', lambda u, v: (ZR+.14+(ZA_R-.53-(ZR+.14))*u, LOW-.0475+.095*v), 14, 2, push=.006)   # behind the rear wheel
+side_grid(STR, 'Stripe', lambda u, v: (ZA_F+.53+(2.22-(ZA_F+.53))*u, LOW-.0475+(.125-.03*u)*v), 12, 3, push=.006) # lower front fender, ahead of the wheel
 # ---------- sides: chrome rocker moulding, wheel-lip trim, door seams, handle, chrome bullet mirror, side markers ----------
 side_patch(trim, 'Chrome', lambda u, v: (ZA_R+RA+.10+(ZA_F-RA-.10-(ZA_R+RA+.10))*u, .265+.035*v), 40, 1, push=.012)   # rocker moulding
 def vline(z0, z1, y0, y1, w=.005): return lambda u, v: (z0+(z1-z0)*u+(v-.5)*w, y0+(y1-y0)*u)
@@ -429,7 +435,7 @@ top_patch(trim, 'Trim', lambda u, v: (.90*u*max(halfwidth(-2.0, .95), .3), -1.80
 # and centre cap, chrome lug nuts ----------
 def wheel_mesh(name, outward, W, dish):
     """A fat tyre (W wide) with tread blocks, rounded shoulders, a bulging sidewall and raised plain letters, on a 15"
-    deep-dish five-spoke wheel: polished lip, machined spokes standing out from a dark barrel, chrome cap and lug nuts."""
+    styled steel wheel like the owner's photo: a chrome trim ring, a silver coned face with five slots, small chrome cap and lug nuts."""
     m = Mesh(name); RIM = .192; w = W/2; Rt = TYRE_R
     def q(mat, a, b, c, d):                       # quad a-b-c-d facing outward along x (flipped for the inner wheels)
         i0 = [m.v((outward*p[0], p[1], p[2])) for p in (a, b, c, d)]
@@ -473,27 +479,21 @@ def wheel_mesh(name, outward, W, dish):
     lathe('Chrome', [(xf, RIM), (xf+.010, RIM+.004), (xf+.012, RIM-.006), (xf+.004, RIM-.016), (xs+.006, RIM-.022), (xs, RIM-.026)], 64)
     lathe('Well', [(xs, RIM-.026), (xs-.012, RIM-.028), (-w*.80, RIM-.028), (-w*.80, .05)], 40)        # dark barrel behind
     lathe('Bar', [(xs-.075, .155), (xs-.070, .150), (xs-.070, .06)], 40)                               # brake drum face
-    # five spokes: tapered, standing out of the dish toward a raised hub
-    hub = xs+.028
-    for k in range(5):
-        a = k/5*2*math.pi+math.pi/10
-        r0, r1, w0, w1 = .060, RIM-.026, .046, .030
-        def P(r, t, depth):                       # point on a spoke: r along it, t across it, depth back from its face
-            xface = hub+(xs-hub)*(r-r0)/(r1-r0)
-            ca, sa = math.cos(a), math.sin(a)
-            return (xface-depth, r*ca-t*sa, r*sa+t*ca)
-        f = [P(r0, -w0, 0), P(r1, -w1, 0), P(r1, w1, 0), P(r0, w0, 0)]
-        b = [P(r0, -w0, .030), P(r1, -w1, .022), P(r1, w1, .022), P(r0, w0, .030)]
-        q('Rim', f[0], f[1], f[2], f[3])
-        q('Rim', b[1], b[0], f[0], f[1]) if False else q('Rim', f[1], f[0], b[0], b[1])
-        q('Rim', f[3], f[2], b[2], b[3])
-        # a bright machined edge along each side of the spoke face
-        for t0, t1 in ((-1, -.72), (.72, 1)):
-            q('Chrome', P(r0, w0*t0, -.0008), P(r1, w1*t0, -.0008), P(r1, w1*t1, -.0008), P(r0, w0*t1, -.0008))
-    lathe('Rim', [(hub, .085), (hub+.006, .070), (hub+.008, .040)], 40)                                 # hub face
-    lathe('Chrome', [(hub+.008, .040), (hub+.024, .034), (hub+.032, .018), (hub+.034, 0.)], 32)          # centre cap
-    for k in range(5):                                                                                   # lug nuts between the spokes
-        a = k/5*2*math.pi; cy, cz = .060*math.cos(a), .060*math.sin(a)
+    # styled steel wheel (photo): a silver face, gently coned, with five slots; small chrome cap; lug nuts round it
+    hub = xs+.022
+    face = [(xs, RIM-.026), (xs+.004, .165), (xs+.010, .150), (xs+.012, .100), (hub, .080), (hub+.004, .056)]
+    lathe('Steel', face, 64)
+    for k in range(5):                            # the slots: dark openings through the face
+        a0 = k/5*2*math.pi+math.pi/5
+        for t in range(6):
+            a = a0-.24+t*.08; r0, r1 = .108, .148
+            def xo(r): return xs+.010+(.012-.010)*(.150-r)/.05+.0015
+            q('Well', (xo(r0), r0*math.cos(a), r0*math.sin(a)), (xo(r1), r1*math.cos(a), r1*math.sin(a)),
+              (xo(r1), r1*math.cos(a+.08), r1*math.sin(a+.08)), (xo(r0), r0*math.cos(a+.08), r0*math.sin(a+.08)))
+    lathe('Steel', [(hub+.004, .056), (hub+.006, .044)], 40)
+    lathe('Chrome', [(hub+.006, .044), (hub+.020, .040), (hub+.028, .026), (hub+.030, 0.)], 32)                # small centre cap
+    for k in range(5):                                                                                   # lug nuts round the cap
+        a = k/5*2*math.pi; cy, cz = .064*math.cos(a), .064*math.sin(a)
         pr = [(hub+.006, .010), (hub+.020, .010), (hub+.024, .006), (hub+.025, 0.)]
         idx = []
         for i in range(7):
@@ -504,7 +504,7 @@ def wheel_mesh(name, outward, W, dish):
                 if outward > 0: m.tri('Chrome', a_, b_, c_); m.tri('Chrome', b_, d_, c_)
                 else: m.tri('Chrome', a_, c_, b_); m.tri('Chrome', b_, c_, d_)
     return m
-wheels = [('Wheel_FL', XF, ZA_F, WF, .055), ('Wheel_FR', -XF, ZA_F, WF, .055), ('Wheel_RL', XR, ZA_R, WR, .085), ('Wheel_RR', -XR, ZA_R, WR, .085)]
+wheels = [('Wheel_FL', XF, ZA_F, WF, .045), ('Wheel_FR', -XF, ZA_F, WF, .045), ('Wheel_RL', XR, ZA_R, WR, .065), ('Wheel_RR', -XR, ZA_R, WR, .065)]
 
 # ---------- write the .glb ----------
 MATS = {
@@ -524,6 +524,7 @@ MATS = {
  'Tyre':      dict(c=[.020, .020, .022, 1], m=0, r=.85),
  'Letters':   dict(c=[.13, .13, .125, 1], m=0, r=.8),
  'Rim':       dict(c=[.20, .21, .22, 1], m=.6, r=.35),
+ 'Steel':     dict(c=[.50, .51, .53, 1], m=.55, r=.30),        # silver-painted steel wheel face
  'Well':      dict(c=[.008, .008, .009, 1], m=0, r=.9),
 }
 matnames = list(MATS)

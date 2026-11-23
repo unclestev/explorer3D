@@ -370,7 +370,7 @@ const CARS={
   javelin3d:{name:'AMC Javelin AMX',paint:0x141518,model:'models/javelin-amx.glb?v=1',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237,perf:{t60:6.8,top:120,a0:6.0}},
   // the owner's second version of that model (2026-10-02), rebuilt 2026-11-23 by tools/make-javelin.py from his photo (black with
   // the gold stripe, open flared wheel arches, full-width grille with round lamps; the v2 file's body ran across the wheel openings)
-  javelin3d2:{name:'AMC Javelin AMX',paint:0x141518,model:'models/javelin-amx-v3.glb?v=4',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237,perf:{t60:6.8,top:120,a0:6.0}},
+  javelin3d2:{name:'AMC Javelin AMX',paint:0x141518,model:'models/javelin-amx-v3.glb?v=5',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237,perf:{t60:6.8,top:120,a0:6.0}},
   // "70's Muscle Car" (owner, 2026-11-23): a frozen copy of that first rebuild (tools/make-muscle70.py), which he liked but
   // said doesn't look like a Javelin should; same engine and feel, the Javelin's interior, sounds and signals
   muscle70:{name:"70's Muscle Car",paint:0x141518,model:'models/muscle-70s.glb?v=1',W:1.96,lamp:.5,front:2.67,sound:'amc401',vmax:120/2.237,perf:{t60:6.8,top:120,a0:6.0}},
