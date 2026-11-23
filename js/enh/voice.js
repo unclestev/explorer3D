@@ -54,11 +54,11 @@ const wait=ms=>new Promise(r=>setTimeout(r,ms));
 async function until(f,ms){ const t0=Date.now(); while(Date.now()-t0<ms){ const v=f(); if(v) return v; await wait(150); } return null; }
 const OFF=/^no\b|\b(off|disable|hide|deactivate|no more|turn off|switch off|shut off|kill)\b/;
 const driving=()=>typeof mode!=='undefined'&&(mode==='car'||mode==='tractor');
-const HELP='You can ask me to: start or turn off the car, hazards, left or right signal, wipers, the sunroof or its cover, the map or dome lights, the screen, '+
-  'play a song, play 93.9 or any radio station, next, volume up or down, stop the music, play a video on YouTube, '+
+const HELP='You can ask me to: start or turn off the car, lock or unlock it, honk, headlights on, off or auto, hazards, left or right signal, wipers, washer fluid, the sunroof or its cover, the map or dome lights, the screen, '+
+  'play a song, play 93.9 or any radio station, next or previous, volume up or down, stop the music, play a video on YouTube, '+
   'navigate to a place, drive me to a place on autopilot, cancel the route, how far is it, '+
   'cockpit or outside view, look left, right, up or back, switch to the Expedition or another car, traffic on or off, '+
-  'satellite view, head-up display, sound on or off, make the car bigger, zoom in, hang glider, get out and walk, a random place, '+
+  'satellite view, head-up display, sound on or off, make the car bigger, zoom in, hang glider, get out and walk, a random place, open my phone, take a picture, open FordPass, Spotify or YouTube Music, show the controls, '+
   'or ask what\'s my speed, the speed limit, where am I, the weather and the time.';
 // settings switches: [what you say, button, name]
 const SW=[[/\breal speed\b/,'rsBtn','Real speed in the cockpit'],[/\brealistic\b|\breal driving\b/,'realBtn','Realistic driving'],[/\btraffic\b/,'trafficBtn','Traffic'],
@@ -175,6 +175,24 @@ async function handle(raw){
   if(/\b(challenges?|progress|achievements|my stats)\b/.test(t)&&!/\b(stop|end|quit)\b/.test(t)){ click('prog'); return say('Here\'s your progress.'); }
   if(/^(stop|end|quit|cancel)( the)? challenge/.test(t)){ if(!click('chalX')) return say('There\'s no challenge going.'); return say('Challenge stopped.'); }
 
+  // ---- horn, washer, headlights, locks (owner 2026-11-22: "make the voice recognition do all the functions in the car")
+  if(/\b(honk|beep|horn)\b/.test(t)){ if(!driving()) return say('Get in a car first.'); const n=/\b(twice|2 times|two times)\b/.test(t)?2:/\b(3 times|three times)\b/.test(t)?3:1, long=/\blong|lay on|hold\b/.test(t);
+    let k=0; const beep=()=>{ if(window.PHONE) PHONE.horn=true; setTimeout(()=>{ if(window.PHONE) PHONE.horn=false; if(++k<n) setTimeout(beep,180); },long?1200:260); }; beep(); return say(n>1?'Beep beep!':'Beep!'); }
+  if(/\b(washer|washer fluid|wash(ing)? the (windshield|windscreen|window)|clean the (windshield|windscreen))\b/.test(t)){ if(!CK||!CK.washer) return say('I can\'t do that here.'); CK.washer(); return say('Washing the windshield.'); }
+  if(/\b(head ?lights?|high beams?|low beams?|lights on|lights off|turn on the lights|turn off the lights|auto(matic)? lights)\b|\blights?\b.*\bauto/.test(t)&&!/\b(map|dome|interior|cabin|reading|hazard)\b/.test(t)){
+    const LT=window.LIGHTS; if(!LT||!LT.cycle) return say('I can\'t work the headlights here.');
+    const want=/\bauto/.test(t)?'auto':OFF.test(t)?'off':'on'; if(LT.mode===want) return say('The headlights are already '+(want==='auto'?'on auto':want)+'.');
+    for(let k=0;k<3&&LT.mode!==want;k++) LT.cycle(); return say(want==='auto'?'Headlights on auto.':'Headlights '+want+'.'); }
+  if(/^(lock|unlock)( the| my)? (car|doors?|truck|suv)$|^(lock|unlock) it$/.test(t)){ const un=/^unlock/.test(t); if(window.PHONE) PHONE.locked=!un;
+    if(SG&&!SG.haz){ let k=0; const n=un?2:1, tgl=()=>{ SG.hazard(); if(++k<n*2) setTimeout(tgl,420); }; tgl(); }
+    if(!un&&window.PHONE){ PHONE.horn=true; setTimeout(()=>{ PHONE.horn=false; },140); } return say(un?'Doors unlocked.':'Doors locked.'); }
+  if(/^(previous|last|go back)( song| station| track)?$|^(play )?(the )?(previous|last) (song|station|track)$|^go back a (song|track)$/.test(t)){ if(!MU||!MU.now||!MU.prev) return say('Nothing is playing.'); MU.prev(); await wait(600); const n=MU.info&&MU.info(); return say(n&&n.title?'Playing '+n.title+'.':'Previous.'); }
+  if(/^(open|show)( the)? (controls|control screen|key ?map|button map|buttons)$|^what (do|does) (the|my) (buttons|keys|controls) do$/.test(t)){ if(window.CTRLVIEW&&CTRLVIEW.toggle){ CTRLVIEW.toggle(); return say('Here are the controls.'); } return say('I can\'t show that here.'); }
+  if(/^(glance|peek) (left|right)$/.test(t)){ const L=window.LOOKAROUND, d=/left/.test(t)?-1:1; if(!L||!L.ease) return say('I can\'t move the view here.'); L.ease(75*d,0); setTimeout(()=>L.reset(),1400); return say('Glancing '+(d<0?'left':'right')+'.'); }
+  if(/\b(drive|reverse|neutral|park)\b.*\bgear\b|^(put it in|shift (in)?to|go in(to)?) (drive|reverse|neutral|park)$/.test(t)) return say('Shift with your wheel\'s shifter or paddles. On the keyboard, hold the brake when you\'re stopped to back up.');
+  if(/\b(handbrake|hand brake|parking brake|e-?brake|emergency brake)\b/.test(t)) return say('Hold space for the handbrake, or the handbrake on your controller.');
+  if(/\b(air conditioning|a\/?c|heat|heater|climate|fan|defrost|seat heat|heated seats?|temperature to|warmer|cooler)\b/.test(t)&&!/\b(what|how)\b/.test(t)) return say('The climate controls aren\'t working in the game yet.');
+  if(/\b(window|windows)\b/.test(t)&&/\b(open|close|roll|up|down)\b/.test(t)) return say('The windows don\'t open in the game yet. I can open the sunroof.');
   // ---- engine
   if(/^(start|turn on|switch on|fire up|power on)( up)?\s+(the\s+|my\s+)?(car|engine|truck|suv|vehicle|it|tractor)( up)?$|^start( it)?( up)?$|^(start|crank) (the )?engine$/.test(t)){ if(!IG) return say('I can\'t do that here.');
     if(IG.state==='on'||IG.state==='crank') return say('The engine is already running.'); IG.button(); return say('Starting the engine.'); }
