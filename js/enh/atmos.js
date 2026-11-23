@@ -58,7 +58,7 @@ async function loadWeather(){
     AT.rate=rate;
     if(c.visibility!=null&&c.visibility<3000) AT.wx.fog=Math.max(AT.wx.fog,Math.min(.9,(3000-c.visibility)/2500));
     AT.temp=c.temperature_2m!=null?Math.round(c.temperature_2m):null; AT.tzOff=j.utc_offset_seconds!=null?j.utc_offset_seconds:null;
-    AT.wxAt=[lng,lat]; AT.lastKey=''; applyAtmos(); startWx();
+    AT.real={wx:AT.wx,cloud:AT.cloud}; AT.wxAt=[lng,lat]; usePick(false);
   }catch(e){ console.warn('weather',e&&e.message||e); AT.wxAt=[lng,lat]; }
   finally{ clearTimeout(to); AT.wxBusy=false; }
 }
@@ -75,7 +75,7 @@ function clock(){
   return (h%12||12)+':'+String(m).padStart(2,'0')+(h<12?' AM':' PM');
 }
 function hudLine(){
-  if(!wxlEl) return; const W=AT.wx, known=FIX_WX!=null||AT.temp!=null;
+  if(!wxlEl) return; const W=AT.wx, known=FIX_WX!=null||AT.temp!=null||pick!=='real';
   const t=(known?W.icon+' '+(AT.temp!=null?AT.temp+'°F · ':'')+W.text+' · ':(AT.k>.5?'🌙 ':'')) + clock();
   if(wxlEl.textContent!==t) wxlEl.textContent=t;
 }
@@ -240,7 +240,22 @@ function wxFrame(now){
   else if(flashEl.style.opacity!=='0') flashEl.style.opacity='0';
   requestAnimationFrame(wxFrame);
 }
-onReady(function atmosInit(){ windowImage(); applyAtmos(); startWx(); loadWeather(); });
+/* pick the weather (owner 2026-11-23: "make a tab so I can pick the weather and you can use the actual weather"):
+   ⚙️ Weather — Real (the actual weather where you're driving, from Open-Meteo, as before) or one you choose. The real
+   temperature and clock still show; only the sky, rain / snow, fog and lightning follow the pick. Kept on this device.
+   window.WEATHER = {set(name), get pick} — names: real clear cloudy rain heavy storm snow blizzard fog */
+const PICKS={clear:[0,0],cloudy:[3,1],rain:[63,.9],heavy:[65,1],storm:[95,1],snow:[73,.9],blizzard:[75,1],fog:[45,.9]};
+var pick='real'; try{ const v=localStorage.getItem('ydWxPick'); if(v&&(v==='real'||PICKS[v])) pick=v; }catch(e){}
+function usePick(save){
+  if(FIX_WX==null){ if(pick!=='real'){ const [c,cl]=PICKS[pick]; AT.wx=wxFrom(c); AT.cloud=cl; } else if(AT.real){ AT.wx=AT.real.wx; AT.cloud=AT.real.cloud; } }
+  if(save) try{ localStorage.setItem('ydWxPick',pick); }catch(e){}
+  for(const b of document.querySelectorAll('#wxPick button')) b.classList.toggle('on',b.dataset.w===pick);
+  const st=document.getElementById('wxPickStat'); if(st) st.textContent=pick==='real'?'Real: the actual weather where you\'re driving':'Your pick · the real temperature still shows';
+  AT.lastKey=''; safe('wx pick',applyAtmos); safe('wx pick',startWx); safe('wx pick',hudLine); }
+for(const b of document.querySelectorAll('#wxPick button')) b.addEventListener('click',e=>{ e.stopPropagation(); setPick(b.dataset.w); });
+function setPick(k){ if(k!=='real'&&!PICKS[k]) return false; pick=k; usePick(true); return true; }
+window.WEATHER={set:setPick,get pick(){ return pick; },names:['real',...Object.keys(PICKS)]};
+onReady(function atmosInit(){ windowImage(); usePick(false); loadWeather(); });
 // battery saver toggled: redo the look right away
 window.onPowerChange=()=>{ AT.lastKey=''; safe('power',applyAtmos); safe('power',startWx); };
 Object.assign(YD,{AT});

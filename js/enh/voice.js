@@ -196,6 +196,10 @@ async function handle(raw){
   if(/\b(handbrake|hand brake|parking brake|e-?brake|emergency brake)\b/.test(t)) return say('Hold space for the handbrake, or the handbrake on your controller.');
   if(/\b(air conditioning|a\/?c|heat|heater|climate|fan|defrost|seat heat|heated seats?|temperature to|warmer|cooler)\b/.test(t)&&!/\b(what|how)\b/.test(t)) return say('The climate controls aren\'t working in the game yet.');
   if(/\b(window|windows)\b/.test(t)&&/\b(open|close|roll|up|down)\b/.test(t)) return say('The windows don\'t open in the game yet. I can open the sunroof.');
+  // ---- weather (js/enh/atmos.js, ⚙️ Weather)
+  if(window.WEATHER&&((m=t.match(/\b(?:make it|set the weather to|change the weather to|weather to|i want|turn on)\s+(?:a\s+|the\s+)?(real|actual|clear|sunny|cloudy|overcast|rain|raining|rainy|downpour|heavy rain|pouring|storm|stormy|thunderstorm|thunder|snow|snowing|snowy|blizzard|fog|foggy)(?: weather)?$/))||(m=t.match(/^(real|actual) weather$/)))){
+    const k={real:'real',actual:'real',clear:'clear',sunny:'clear',cloudy:'cloudy',overcast:'cloudy',rain:'rain',raining:'rain',rainy:'rain',downpour:'heavy','heavy rain':'heavy',pouring:'heavy',storm:'storm',stormy:'storm',thunderstorm:'storm',thunder:'storm',snow:'snow',snowing:'snow',snowy:'snow',blizzard:'blizzard',fog:'fog',foggy:'fog'}[m[1]];
+    WEATHER.set(k); return say(k==='real'?'Back to the real weather.':'Okay, '+{clear:'clear skies',cloudy:'cloudy',rain:'rain',heavy:'a downpour',storm:'a thunderstorm',snow:'snow',blizzard:'a blizzard',fog:'fog'}[k]+'.'); }
   // ---- engine
   if(/^(start|turn on|switch on|fire up|power on)( up)?\s+(the\s+|my\s+)?(car|engine|truck|suv|vehicle|it|tractor)( up)?$|^start( it)?( up)?$|^(start|crank) (the )?engine$/.test(t)){ if(!IG) return say('I can\'t do that here.');
     if(IG.state==='on'||IG.state==='crank') return say('The engine is already running.'); IG.button(); return say('Starting the engine.'); }
