@@ -231,8 +231,8 @@ body.wheel #ctl{display:none}
 /* engine start / stop (js/enh/ignition.js): ⏻ beside the turn-signal buttons; red ring while the engine is off */
 #sigBtns #ignBtn.off{background:#7f1d1d;box-shadow:0 0 0 2px #fca5a5 inset}
 /* ⚙️ settings in tabs (owner 2026-11-21: "make the groupings tabs at the top and only show the settings for the selected tab") */
-.setTabs{display:flex;gap:4px;margin:2px 0 4px;padding:3px;background:rgba(255,255,255,.06);border-radius:10px}
-.setTabs button{flex:1 1 0;min-width:0;background:none;border:0;border-radius:7px;padding:7px 2px;font:inherit;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;white-space:nowrap}
+.setTabs{display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 4px;padding:3px;background:rgba(255,255,255,.06);border-radius:10px}   /* wraps to two rows when the tabs don't fit */
+.setTabs button{flex:1 1 auto;padding-left:6px!important;padding-right:6px!important;min-width:0;background:none;border:0;border-radius:7px;padding:7px 2px;font:inherit;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;white-space:nowrap}
 .setTabs button.on{background:rgba(255,255,255,.14);color:#fff}
 .setGrp{display:none}.setGrp.on{display:block}
 .setGrp .setRow:first-of-type{border-top:0}
