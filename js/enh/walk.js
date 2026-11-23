@@ -127,8 +127,10 @@ function recsNear(lat,lng){                                       // buildings w
   if(IN.rec&&!out.includes(IN.rec)) out.push(IN.rec);
   return out; }
 // does the step from a to b (lat,lng) pass through one of r's doorways? (a little wider than the frame, for comfort)
+const gOpen=g=>!!(window.GARAGE&&GARAGE.openness(g.gk)>.85);                 // an open garage door is a way in too
+const ways=r=>r.garages&&r.garages.length?r.doors.concat(r.garages.filter(gOpen)):r.doors;
 function doorCross(r,a,b){ const A=loc(r,a[0],a[1]), B=loc(r,b[0],b[1]);
-  for(const d of r.doors){ const L=Math.hypot(d.x1-d.x0,d.y1-d.y0)||1, ux=(d.x1-d.x0)/L, uy=(d.y1-d.y0)/L, w=.15;
+  for(const d of ways(r)){ const L=Math.hypot(d.x1-d.x0,d.y1-d.y0)||1, ux=(d.x1-d.x0)/L, uy=(d.y1-d.y0)/L, w=.15;
     const cx=d.x0-ux*w, cy=d.y0-uy*w, ex=d.x1+ux*w-cx, ey=d.y1+uy*w-cy, rx=B[0]-A[0], ry=B[1]-A[1], den=rx*ey-ry*ex;
     if(Math.abs(den)<1e-9) continue;
     const t=((cx-A[0])*ey-(cy-A[1])*ex)/den, u=((cx-A[0])*ry-(cy-A[1])*rx)/den;
@@ -137,7 +139,7 @@ function doorCross(r,a,b){ const A=loc(r,a[0],a[1]), B=loc(r,b[0],b[1]);
 // the nearest doorway to where you stand: {r,d,lat (along the wall from its middle), off (out from the wall)}
 function nearDoor(recs,lat,lng){ let best=null;
   for(const r of recs){ const q=loc(r,lat,lng);
-    for(const d of r.doors){ const L=Math.hypot(d.x1-d.x0,d.y1-d.y0)||1, ux=(d.x1-d.x0)/L, uy=(d.y1-d.y0)/L, mx=(d.x0+d.x1)/2, my=(d.y0+d.y1)/2;
+    for(const d of ways(r)){ const L=Math.hypot(d.x1-d.x0,d.y1-d.y0)||1, ux=(d.x1-d.x0)/L, uy=(d.y1-d.y0)/L, mx=(d.x0+d.x1)/2, my=(d.y0+d.y1)/2;
       const al=(q[0]-mx)*ux+(q[1]-my)*uy, off=(q[0]-mx)*d.nx+(q[1]-my)*d.ny, dist=Math.hypot(Math.max(0,Math.abs(al)-L/2),off);
       if(!best||dist<best.dist) best={r,d,al,off,dist,ux,uy,half:L/2}; } }
   return best; }
@@ -159,7 +161,10 @@ function interiorFeatures(r){
     const ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux;                                     // outward normal (counter-clockwise outline)
     const at=(s,o)=>[a[0]+ux*s-nx*o,a[1]+uy*s-ny*o];                                               // s along the wall, o in from it
     const strip=(s0,s1,o0,o1,c,b0,h)=>{ if(s1-s0>.01) poly([at(s0,o0),at(s1,o0),at(s1,o1),at(s0,o1)],c,b0,h); };
-    const gaps=r.doors.filter(d=>d.ei===i).map(d=>[d.s0,d.s1]).sort((x,y)=>x[0]-y[0]);
+    const gar=(r.garages||[]).filter(d=>d.ei===i);
+    const gaps=r.doors.concat(gar).filter(d=>d.ei===i).map(d=>[d.s0,d.s1]).sort((x,y)=>x[0]-y[0]);
+    for(const g of gar){ const o=window.GARAGE?GARAGE.openness(g.gk):0, b0=.05+o*1.95;      // the garage door, cut away like the walls; it rolls up
+      strip(g.s0,g.s1,.02,.1,g.col||'#ece6da',b0,Math.max(WALL,b0+.15)); }
     let s=0; for(const g of gaps.concat([[L,L]])){ strip(s,Math.max(s,g[0]),0,TH,'#ece6da',.05,WALL); strip(s,Math.max(s,g[0]),0,TH,'#8f877c',WALL,WALL+.04); s=Math.max(s,g[1]); }
     for(const g of gaps){                                                                          // door frame: two posts, a head, a sill
       strip(g[0]-.12,g[0],-.02,TH+.02,'#f4f1ea',.05,2.2); strip(g[1],g[1]+.12,-.02,TH+.02,'#f4f1ea',.05,2.2);
@@ -180,7 +185,7 @@ function setInside(r){
   person.traverse(o=>{ if(o.isMesh&&o.material!==shadow.material) o.material.depthTest=!r; });   // never hidden by the walls round you
   if(window.TRAFFIC&&TRAFFIC.occRebuild) TRAFFIC.occRebuild();                                    // and drop it from the car layer's building blockers
   step.cam=null; dirty=true; step.surf=null;
-  if(r&&!IN.told){ IN.told=true; toast('Inside: the walls are cut away so you can see in. Walk out through a door to leave',3800); }
+  if(r&&!IN.told){ IN.told=true; toast('Inside: the walls are cut away so you can see in'+(mode==='walk'?'. Walk out through a door to leave':''),3800); }
 }
 // work out which building you're in (if any), from where you stand
 function updInside(recs){
@@ -210,7 +215,7 @@ function getOut(){
   toast('On foot: steer to turn · WALK to walk, press higher to run · tap 🚗 by the '+vehName()+' to get back in',4500);
 }
 function getIn(){
-  if(IN.rec){ toast('Walk out through a door first, then back to your '+vehName(),2600); return; }
+  if(IN.rec&&!inRec(IN.rec,PK.lat,PK.lng)){ toast('Walk out through a door first, then back to your '+vehName(),2600); return; }
   const c=carInfo();
   if(c.d>reach()){ toast('Your '+vehName()+' is '+c.dist+' '+c.where+'. Walk back to it to get in',2800); return; }
   S.lat=PK.lat; S.lng=PK.lng; S.hdg=PK.hdg; S.v=0; S.steer=0; S.roll=S.pitch=0;
@@ -228,7 +233,7 @@ const prevMode=window.onModeChange;
 window.onModeChange=(m,was)=>{ if(prevMode) prevMode(m,was);
   person.visible=(m==='walk'); setPedals(m==='walk'||m==='glider'&&!!PK.mode);
   if(m!=='walk'&&m!=='glider') PK.mode=null;                       // back in a vehicle
-  if(m!=='walk'){ if(IN.rec) setInside(null); if(IN.open!=null&&window.ROOFS){ IN.open=null; ROOFS.openDoor(null); } IN.ip=68; }
+  if(m!=='walk'){ if(IN.rec&&(m==='glider'||!inRec(IN.rec,S.lat,S.lng))) setInside(null);   /* got back in the car in the garage: stay inside */ if(IN.open!=null&&window.ROOFS){ IN.open=null; ROOFS.openDoor(null); } IN.ip=68; }
   if(m==='walk'){ car.visible=true; W.v=0; S.zoom=Math.max(S.zoom,19.3); }
   updateBtn();
 };
@@ -322,6 +327,7 @@ function walkStep(dt,st,gas,now){
 }
 window.WALK={step:(dt,st,gas,now)=>{ try{ walkStep(dt,st,gas,now); }catch(e){ console.warn('walk',e); renderer.render(scene,camera); } },
   parked:()=>PK.mode, getOut:()=>safe('walk',getOut), state:W, person, parkedAt:PK,
-  insideId:()=>IN.rec?IN.rec.id:null, inside:IN};
+  insideId:()=>IN.rec?IN.rec.id:null, inside:IN,
+  setInside:r=>safe('inside',()=>{ if((r?r.key:null)!==IN.key) setInside(r); }), redrawInside:()=>{ if(IN.rec) safe('inside draw',()=>drawInterior(IN.rec)); }, inRec};
 updateBtn();
 })();

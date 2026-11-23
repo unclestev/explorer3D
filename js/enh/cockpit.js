@@ -201,6 +201,19 @@ function canvasTex(w,h,dyn){ const c=cnv(w,h), t=new THREE.CanvasTexture(c);
   else { t.minFilter=THREE.LinearMipmapLinearFilter; t.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy()); } return {c,x:c.getContext('2d'),t}; }
 
 /* ---------- the shared body shell: hood and fenders, cowl, windshield, pillars, roof, doors, mirrors ---------- */
+/* garage door opener (owner 2026-11-22; js/enh/garage.js): the Navigator and Expedition have three buttons under the
+   rear-view mirror; the others a clip-on remote on the driver's sun visor. Tap either (or press K) to work the garage. */
+const hlMirror=P=>P.style==='lux'||!!P.xp;
+function hlLed(par,x,y,z){ const m=new THREE.MeshBasicMaterial({color:0x2a1d0c}); const l=mesh(new THREE.CircleGeometry(.0022,10),m,par,false,false); l.position.set(x,y,z); CK.hlLeds.push(m); return l; }
+function visorOpener(v){                                          // in the visor's frame: local -z faces down at the driver, +y toward the windshield
+  const body=mesh(rbox(.078,.05,.02,.006,.012),new THREE.MeshStandardMaterial({color:0x5c6066,roughness:.55,metalness:.15}),v); body.position.set(-.085,.01,-.012-.01); CK.garageKeys.push(body);
+  const b=mesh(new THREE.CylinderGeometry(.013,.014,.006,24),new THREE.MeshStandardMaterial({color:0x2b2d31,roughness:.4}),v,false,false); b.rotation.x=Math.PI/2; b.position.set(-.092,.01,-.012-.02-.003); CK.garageKeys.push(b);
+  const clip=mesh(new THREE.BoxGeometry(.05,.006,.03),new THREE.MeshStandardMaterial({color:0x9ea3a8,metalness:.8,roughness:.3}),v,false,false); clip.position.set(-.085,.01,.014);
+  const led=hlLed(v,-.06,.02,-.012-.0205); led.rotation.x=Math.PI; }
+function mirrorHL(grp,mw,mh){                                     // three buttons and a lamp on a strip under the glass
+  const y=-(mh/2+.012)-.009, pod=mesh(rbox(mw*.52,.018,.03,.006,.008),new THREE.MeshStandardMaterial({color:0x111112,roughness:.5}),grp); pod.position.set(-mw*.18,y,-.012); CK.garageKeys.push(pod);
+  for(let i=0;i<3;i++){ const b=mesh(rbox(.022,.0085,.006,.002,.003),new THREE.MeshStandardMaterial({color:0x2c2e33,roughness:.35}),grp,false,false); b.position.set(-mw*.18-.03+i*.03,y,.004); CK.garageKeys.push(b); }
+  hlLed(grp,-mw*.18+.058,y,.0035); }
 function shell(G,P,mats){
   const ws=P.ws, hd=P.hood, eyeX=P.eye[0];
   // hood + fender tops: one painted surface across the car with the panel gaps (and the Javelin's stripes) painted on
@@ -278,7 +291,8 @@ function shell(G,P,mats){
       const zb=(P.zBp||.3)+.05; mesh(bar([[-R.hw,R.y-.035,zb],[0,R.y-.005,zb],[R.hw,R.y-.035,zb]],.07,.035,[0,-1,0],16,8),trimM,G); }
     for(const s of [-1,1]) mesh(bar([[s*(ws.hwT+.01),ws.yT+.005,ws.zT+.03],[s*(R.hw+.01),P.winTop+.04,ws.zT+.5],[s*(R.hw+.015),P.winTop+.04,R.zR-.1]],.07,.06,[-s,-.3,0]),trimM,G); }
   // sun visors folded up against the headliner
-  for(const s of [-1,1]){ const v=mesh(rbox(.36,.18,.024,.01,.03),trimM,G); v.position.set(s<0?eyeX:-eyeX,P.roof.y-.035,ws.zT+.14); v.rotation.x=-Math.PI/2+.08; }
+  for(const s of [-1,1]){ const v=mesh(rbox(.36,.18,.024,.01,.03),trimM,G); v.position.set(s<0?eyeX:-eyeX,P.roof.y-.035,ws.zT+.14); v.rotation.x=-Math.PI/2+.08;
+    if(s<0&&!hlMirror(P)&&P.style!=='tractor') visorOpener(v); }
   // Explorer overhead console (owner 2026-11-21, a photo of the real one: "put this at the top by the mirror")
   if(P.ex||P.xp) overheadEx(G,P,ws);
   // rear-view mirror
@@ -295,6 +309,7 @@ function shell(G,P,mats){
     const g=mesh(MIR.uv(gg(),.30,.70),new THREE.MeshBasicMaterial({map:MIR.tex(),toneMapped:false}),grp,false,false); g.position.z=.0062; MIR.mats.push(g.material);
     const fr=canvasTex(512,128); drawRearFrame(fr.x,P); const fo=mesh(gg(),new THREE.MeshBasicMaterial({map:fr.t,transparent:true}),grp,false,false); fo.position.z=.0066; MIR.frames.push(fo.material);
     mesh(gg(),M({color:0,metalness:1,roughness:.05,transparent:true,opacity:.12,depthWrite:false,out:true}),grp,false,false).position.z=.007;
+    if(hlMirror(P)) mirrorHL(grp,mw,mh);
     grp.lookAt(new V3(...P.eye).add(new V3(0,0,.3)));               // aimed back at the driver (and a little behind)
     const stalk=mesh(bar([[cx,cy+.025,cz-.015],[cx,cy+.05,zg+.012]],.016,.016,[0,1,0],4,8),hm,G); const ft=mesh(rbox(.05,.035,.012,.004,.008),hm,G); ft.position.set(cx,cy+.055,zg+.008); ft.rotation.x=-Math.atan2(ws.zT-ws.zB,ws.yT-ws.yB)+Math.PI/2*0; }
   // doors: inner panels with armrest, pull, window sill cap, switch pack (driver), speaker
@@ -1716,7 +1731,7 @@ if(typeof FRAME_HOOKS!=="undefined") FRAME_HOOKS.push(function cockpitAO(){ cons
   if(done){ c.ao=null; return true; } return false; });
 function build(key){
   if(CK.cab&&CK.built===key+'|'+(CARSPEC.paint||0)) return;
-  CK.powerKeys=[]; CK.hazKeys=[]; CK.hazLamps=[]; CK.startKeys=[]; CK.cabLamps=null;
+  CK.powerKeys=[]; CK.hazKeys=[]; CK.hazLamps=[]; CK.startKeys=[]; CK.cabLamps=null; CK.garageKeys=[]; CK.hlLeds=[];
   if(CK.cab) dispose();
   const P=SPECS[specKey(key)]; textures(); updateEnv(true);
   const sc=new THREE.Scene(), root=new THREE.Group(), G=new THREE.Group(); sc.add(root); root.add(G);
@@ -2244,6 +2259,8 @@ function setHud(v){ CK.hud=v; LSs('ydHud',v?'1':'0'); showPick(); dirty=true; }
     c.scene.updateMatrixWorld(); c.cam.updateMatrixWorld(); ray.setFromCamera({x:(e.clientX/innerWidth)*2-1,y:-(e.clientY/innerHeight)*2+1},c.cam);
     const sk=CK.startKeys.filter(o=>c.scene.getObjectById(o.id)); if(sk.length&&window.IGN&&ray.intersectObjects(sk,false).length){ IGN.button(); return 'start'; }
     const hz=CK.hazKeys.filter(o=>c.scene.getObjectById(o.id)); if(hz.length&&window.SIG&&ray.intersectObjects(hz,false).length){ SIG.hazard(); return 'hazard'; }
+    const gk=(CK.garageKeys||[]).filter(o=>c.scene.getObjectById(o.id));
+    if(gk.length&&window.GARAGE&&ray.intersectObjects(gk,false).length){ GARAGE.press('cockpit'); CK.hlFlash(); return 'garage'; }
     const live=CK.powerKeys.filter(o=>c.scene.getObjectById(o.id)); if(live.length&&ray.intersectObjects(live,false).length){ CK.powerKey(); return 'power'; }
     // a tap on the centre screen opens Music (owner 2026-11-22: "type a song on the lower screen and play it from the car")
     const scr=c.parts.screen&&c.parts.screen.grp; if(scr&&window.MUSIC&&ray.intersectObject(scr.children[0],false).length){ MUSIC.open(); return 'music'; }
@@ -2253,6 +2270,9 @@ function setHud(v){ CK.hud=v; LSs('ydHud',v?'1':'0'); showPick(); dirty=true; }
     if(Math.abs(d.y)<1e-4) return null; const q=o.addScaledVector(d,(-.0012-o.y)/d.y);   // where the tap meets the console's face, not the target box's underside
     let best=null,bd=1e9; for(const s of CK.roofSpots){ const d=Math.hypot(q.x-s.x,q.z-s.z); if(d<bd){ bd=d; best=s; } }
     if(!best) return null; best.flash.material.opacity=.55; CK.roof(best.k); return best.k; }; }
+// the opener's lamp blinks when it sends (the K key and the phone too, if you're in the car)
+CK.hlFlash=function(){ const L=CK.hlLeds||[]; for(const m of L) m.color.setHex(0xffb22e); dirty=true;
+  clearTimeout(CK.hlT); CK.hlT=setTimeout(()=>{ for(const m of L) m.color.setHex(0x2a1d0c); dirty=true; },650); };
 /* C and H keys: js/enh/controls.js */
 CK.hudToggle=function(){ if(!CK.on) return; setHud(!CK.hud); toast(CK.hud?'Head-up display on':'Head-up display off',1400); };
 CK.recenter=function(){ CK.look=0; dirty=true; };

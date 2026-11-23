@@ -176,6 +176,9 @@ async function handle(raw){
   if(/^(stop|end|quit|cancel)( the)? challenge/.test(t)){ if(!click('chalX')) return say('There\'s no challenge going.'); return say('Challenge stopped.'); }
 
   // ---- horn, washer, headlights, locks (owner 2026-11-22: "make the voice recognition do all the functions in the car")
+  if(/\bgarage\b/.test(t)&&window.GARAGE){ const w=/\b(close|shut|lower|down)\b/.test(t)?'close':/\b(open|raise|lift|up)\b/.test(t)?'open':null;
+    const r=GARAGE.press('voice',w); if(window.COCKPIT&&COCKPIT.on&&COCKPIT.hlFlash&&r!=='none') COCKPIT.hlFlash();
+    return say(r==='open'?'Opening the garage.':r==='close'?'Closing the garage.':r==='already'?'It\'s already '+(w==='open'?'open.':'closed.'):'There\'s no garage in range. Pull into the driveway in front of one.'); }
   if(/\b(honk|beep|horn)\b/.test(t)){ if(!driving()) return say('Get in a car first.'); const n=/\b(twice|2 times|two times)\b/.test(t)?2:/\b(3 times|three times)\b/.test(t)?3:1, long=/\blong|lay on|hold\b/.test(t);
     let k=0; const beep=()=>{ if(window.PHONE) PHONE.horn=true; setTimeout(()=>{ if(window.PHONE) PHONE.horn=false; if(++k<n) setTimeout(beep,180); },long?1200:260); }; beep(); return say(n>1?'Beep beep!':'Beep!'); }
   if(/\b(washer|washer fluid|wash(ing)? the (windshield|windscreen|window)|clean the (windshield|windscreen))\b/.test(t)){ if(!CK||!CK.washer) return say('I can\'t do that here.'); CK.washer(); return say('Washing the windshield.'); }

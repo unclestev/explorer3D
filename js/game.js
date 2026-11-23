@@ -1428,11 +1428,14 @@ function step(now){
   const SOLID=REAL&&(mode==='car'||mode==='tractor'), NOSE=2.4*(SOLID?Math.max(1,EXAG*.85):1);
   if(Math.abs(S.v)>(SOLID?.05:.5) && styleReady && blockIds.length){
     const ahead=[nLng+Math.sin(h)*NOSE/(111320*Math.cos(rad(S.lat)))*Math.sign(S.v), nLat+Math.cos(h)*NOSE/111320*Math.sign(S.v)];
-    const p=map.project(ahead);
+    // garages (js/enh/garage.js): through an open door and around inside one, its walls rule instead of the house's
+    const gg=mode==='car'&&window.GARAGE?GARAGE.gate(S.lat,S.lng,nLat,nLng,ahead):null;
+    const p=gg?null:map.project(ahead);
     // tall extrusions overlap the car on screen, so candidates are filtered by real footprint under the car's nose.
     // A small box is enough: fill-extrusion queries hit the whole projected prism, including its base footprint.
-    const bh=(QG?geoBlocks(ahead[0],ahead[1]):hit(p.x,p.y,6,blockIds)).filter(f=>contains(f.geometry,ahead[0],ahead[1]));   // cockpit: the nose can be off screen
-    if(bh.length&&SOLID&&!bh.some(f=>contains(f.geometry,S.lng,S.lat))){ blocked=true; step.bid=null; }   // a wall stops you
+    const bh=gg?[]:(QG?geoBlocks(ahead[0],ahead[1]):hit(p.x,p.y,6,blockIds)).filter(f=>contains(f.geometry,ahead[0],ahead[1]));   /* cockpit: the nose can be off screen */
+    if(gg==='wall'){ blocked=true; step.bid=null; }
+    else if(bh.length&&SOLID&&!bh.some(f=>contains(f.geometry,S.lng,S.lat))){ blocked=true; step.bid=null; }   // a wall stops you
     else if(bh.length){ inBuilding=true;                            // realistic driving off (or already inside one): you plow through
       const b0=bh[0], bid=b0.id!=null?b0.id:JSON.stringify(bboxOf(partsOf(b0.geometry)[0]?.[0]||[[0,0]]));
       if(bid!==step.bid){ step.bid=bid; step.newHit=true; } }

@@ -40,6 +40,7 @@ const A=[
   {id:'sigL',    g:'Lights & signals', label:'Left turn signal',  t:'press', run:()=>window.SIG&&SIG.press(-1), undo:()=>window.SIG&&SIG.press(-1)},
   {id:'sigR',    g:'Lights & signals', label:'Right turn signal', t:'press', run:()=>window.SIG&&SIG.press(1),  undo:()=>window.SIG&&SIG.press(1)},
   {id:'hazard',  g:'Lights & signals', label:'Hazard lights',     t:'press', run:()=>window.SIG&&SIG.hazard()},
+  {id:'garage',  g:'Car',     label:'Garage door opener',   t:'press', run:()=>{ if(window.GARAGE) GARAGE.press('key'); if(window.COCKPIT&&COCKPIT.on&&COCKPIT.hlFlash) COCKPIT.hlFlash(); }, note:'In the driveway in front of a garage, or inside it; in a car or on foot'},
   {id:'view',    g:'View',    label:'Chase / cockpit view', t:'press', run:()=>window.COCKPIT&&COCKPIT.toggle()},
   {id:'hud',     g:'View',    label:'Head-up display',      t:'press', run:()=>window.COCKPIT&&COCKPIT.hudToggle&&COCKPIT.hudToggle()},
   {id:'lookL',   g:'View',    label:'Glance left',          t:'hold', note:'Cockpit view'},
@@ -66,7 +67,7 @@ const ACT={}; for(const a of A) ACT[a.id]=a;
 const DEFAULTS={
   keyboard:{
     steerL:['KeyA','ArrowLeft'], steerR:['KeyD','ArrowRight'], gas:['KeyW','ArrowUp'], brake:['KeyS','ArrowDown'], handbrake:['Space'],
-    engine:['KeyI'], horn:['KeyB'], wipers:['KeyP'], washer:['KeyO'], lights:['KeyL'],
+    engine:['KeyI'], horn:['KeyB'], wipers:['KeyP'], washer:['KeyO'], lights:['KeyL'], garage:['KeyK'],
     sigL:['BracketLeft'], sigR:['BracketRight'], hazard:['Backslash'],
     view:['KeyC'], hud:['KeyH'], lookL:['KeyQ'], lookR:['KeyE'], recenter:['KeyR'],
     music:['KeyM'], next:['Period'], prev:['Comma'], volUp:['Equal'], volDn:['Minus'], voice:['KeyV'],

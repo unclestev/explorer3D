@@ -37,9 +37,10 @@ function addCaps(){
     map.addLayer({id:'rebuilt-roof',type:'fill-extrusion',source:'rebuilt',
       paint:{'fill-extrusion-color':capColour(['get','h']),'fill-extrusion-base':['get','h'],'fill-extrusion-height':['+',['get','h'],.35],'fill-extrusion-vertical-gradient':false}},before);
   if(!map.getSource('roofs')){
-    map.addSource('roofs',{type:'geojson',data:{type:'FeatureCollection',features:[]},maxzoom:19,tolerance:0,buffer:16});
+    map.addSource('roofs',{type:'geojson',data:{type:'FeatureCollection',features:[]},maxzoom:19,tolerance:0,buffer:16,promoteId:'gk'});
+    // garage doors (prop gk) roll up by feature state o (0 shut .. 1 open, js/enh/garage.js): the panel's bottom rises gr metres
     map.addLayer({id:'roof-3d',type:'fill-extrusion',source:'roofs',
-      paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-base':['get','b'],'fill-extrusion-height':['get','h'],'fill-extrusion-vertical-gradient':false}},before);
+      paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-base':['+',['get','b'],['*',['coalesce',['feature-state','o'],0],['coalesce',['get','gr'],0]]],'fill-extrusion-height':['get','h'],'fill-extrusion-vertical-gradient':false}},before);
   }
 }
 
@@ -212,7 +213,7 @@ function facades(P,kx,ky,res){
     if(L<2.4) continue; edges.push({a,L,ux:ex/L,uy:ey/L,nx:ey/L,ny:-ex/L}); }   // outward normal (outline runs counter-clockwise)
   if(!edges.length) return;
   // the doors you can walk through (js/enh/walk.js): local metres around (cx,cy), on the outline p (counter-clockwise)
-  const doors=[]; let dn=0;
+  const doors=[], garages=[]; let dn=0;
   const door=(E,s0,s1)=>{ const d={ei:p.indexOf(E.a),s0,s1,x0:E.a[0]+E.ux*s0,y0:E.a[1]+E.uy*s0,x1:E.a[0]+E.ux*s1,y1:E.a[1]+E.uy*s1,nx:E.nx,ny:E.ny,dk:seed*8+(dn++)};
     doors.push(d); return d.dk; };
   // glass entrance doors (stores, lobbies): dark frame, two glass leaves, push bars
@@ -220,7 +221,7 @@ function facades(P,kx,ky,res){
     putD(E,s-.95,s+.95,.085,.105,0,2.45,'#3b4048',dk);
     for(const z of [-1,1]){ putD(E,z<0?s-.87:s+.05,z<0?s-.05:s+.87,.1,.125,.06,2.37,GLASS,dk); putD(E,z<0?s-.4:s+.1,z<0?s-.1:s+.4,.125,.16,1,1.06,'#c7ccd1'); } };
   const putD=(E,s0,s1,o0,o1,b,h,c,dk)=>{ put(E,s0,s1,o0,o1,b,h,c); if(dk!=null) out[out.length-1].properties.dk=dk; };
-  if(P.f.id!=null) res.bld={key:P.cx.toFixed(6)+','+P.cy.toFixed(6),id:P.f.id,cx:P.cx,cy:P.cy,kx,ky,p,h:P.h,house,doors,bb:P.bb};
+  if(P.f.id!=null) res.bld={key:P.cx.toFixed(6)+','+P.cy.toFixed(6),id:P.f.id,cx:P.cx,cy:P.cy,kx,ky,p,h:P.h,house,doors,garages,bb:P.bb};
   const sd=streetDir(P);
   let front=edges[0]; for(const E of edges){ const sc=(sd?E.nx*sd[0]+E.ny*sd[1]:0)+.02*Math.min(E.L,12), fs=(sd?front.nx*sd[0]+front.ny*sd[1]:0)+.02*Math.min(front.L,12); if(sc>fs) front=E; }
   let k=0;
@@ -228,7 +229,12 @@ function facades(P,kx,ky,res){
     const floors=P.h<5.2?1:P.h<8.6?2:3, fh=Math.min(3.1,(P.h-.4)/floors), busy=[];
     // garage door at one end of the street side, front door in what's left
     if(front.L>=9&&hash(seed,31)<.75){ const gw=front.L>=13?4.9:2.7, left=hash(seed,37)<.5, s0=left?.7:front.L-.7-gw;
-      put(front,s0,s0+gw,.02,.1,0,2.15,GARAGE[seed&3]); busy.push([s0-.5,s0+gw+.5]); }
+      // a garage you can open (js/enh/garage.js): the dark inside shows behind the panel as it rolls up
+      const gk=seed*4+1, a=[front.a[0]+front.ux*s0,front.a[1]+front.uy*s0], mx=a[0]+front.ux*gw/2, my=a[1]+front.uy*gw/2;
+      let depth=0; for(const q of p) depth=Math.max(depth,-((q[0]-mx)*front.nx+(q[1]-my)*front.ny));
+      garages.push({ei:p.indexOf(front.a),s0,s1:s0+gw,x0:a[0],y0:a[1],x1:a[0]+front.ux*gw,y1:a[1]+front.uy*gw,nx:front.nx,ny:front.ny,gk,col:GARAGE[seed&3],D:Math.max(4,Math.min(7.5,depth-.3))});
+      put(front,s0+.05,s0+gw-.05,.004,.016,0,2.1,'#141518');
+      put(front,s0,s0+gw,.02,.1,0,2.15,GARAGE[seed&3]); Object.assign(out[out.length-1].properties,{gk,gr:1.95}); busy.push([s0-.5,s0+gw+.5]); }
     { const free=busy.length?(busy[0][0]>front.L/2?[.8,busy[0][0]-.3]:[busy[0][1]+.3,front.L-.8]):[.8,front.L-.8];
       if(free[1]-free[0]>=1.6){ const s=(free[0]+free[1])/2+(busy.length?0:(hash(seed,41)-.5)*front.L*.3);
         const dk=door(front,s-.6,s+.6);
