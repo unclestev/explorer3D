@@ -112,39 +112,83 @@ for sx in (1, -1):
 box(body, 'Paint', (0, 1.04, 1.38), (2.40, .12, 1.50))                                # cab floor / sill
 box(trim, 'Step', (1.16, .80, 1.55), (.18, .06, .55), both=True)                      # steps
 box(trim, 'Trim', (1.21, 1.75, 1.55), (.03, .05, .30), both=True)                     # door handles
-# big mirrors on arms
+# ---------- details after the owner's photo of a working plow truck (2026-11-23: "make the lights and the body, and all
+# the details the same") ----------
+# west-coast mirrors on chrome arms from the door, with an amber lamp on each arm; round convex mirrors on stalks on the
+# fenders
 for sx in (1, -1):
-    cyl(trim, 'Chrome', (sx*1.20, 2.30, 2.05), (sx*1.48, 2.42, 2.10), .018, 8)
-    cyl(trim, 'Chrome', (sx*1.20, 1.80, 2.05), (sx*1.48, 1.95, 2.10), .018, 8)
-    box(trim, 'Trim', (sx*1.52, 2.15, 2.10), (.07, .62, .22))
-    box(trim, 'MirrorGlass', (sx*1.52, 2.15, 2.02), (.05, .56, .02))
-# exhaust stack behind the cab (driver's side) and the air tank
-cyl(trim, 'Chrome', (-1.08, 1.05, .52), (-1.08, 3.05, .52), .075, 16)
-cyl(trim, 'Tank', (.98, .95, .30), (.98, .95, -.35), .19, 18)
-# ---------- amber lights on the cab roof, as in the photo: one at each front corner and a beacon in the middle ----------
+    for y0, y1 in ((2.42, 2.44), (1.86, 1.95)): cyl(trim, 'Chrome', (sx*1.21, y0, 2.02), (sx*1.50, y1, 2.06), .016, 8)
+    cyl(trim, 'Chrome', (sx*1.50, 1.92, 2.06), (sx*1.50, 2.46, 2.06), .016, 8)
+    box(trim, 'Chrome', (sx*1.56, 2.18, 2.06), (.10, .58, .22))
+    box(trim, 'MirrorGlass', (sx*1.56, 2.20, 1.94), (.08, .52, .02))
+    box(lamps, 'Amber', (sx*1.56, 2.50, 2.06), (.07, .05, .14))
+    a = np.array((sx*1.10, 1.40, 3.12)); cyl(trim, 'Chrome', a, a+(sx*.10, .42, .14), .014, 6)   # hood mirror stalk
+    c = a+(sx*.12, .46, .16); cyl(trim, 'Chrome', c-(0, 0, .03), c+(0, 0, .02), .10, 18)
+    cyl(trim, 'MirrorGlass', c+(0, 0, .02), c+(0, 0, .03), .088, 18)
+# black flares over the front wheel arches, a black louvred vent in each side of the hood
 for sx in (1, -1):
-    cyl(trim, 'Trim', (sx*.98, 2.76, 1.98), (sx*.98, 2.82, 1.98), .10, 16)
-    cyl(lamps, 'BeaconB', (sx*.98, 2.82, 1.98), (sx*.98, 2.95, 1.98), .08, 16)        # flash in turn with the beacon
-    ellipsoid_top = (sx*.98, 2.95, 1.98)
-    cyl(lamps, 'BeaconB', ellipsoid_top, (sx*.98, 2.98, 1.98), .05, 12)
-    for x in (.20, .45): cyl(lamps, 'Amber', (sx*x, 2.77, 2.11), (sx*x, 2.77, 2.15), .035, 10)   # small roof marker lamps
-box(trim, 'Trim', (0, 2.80, 1.80), (.70, .05, .30))                                   # the number plate on the roof
-box(trim, 'Plate', (0, 2.86, 1.95), (.62, .12, .02))
-cyl(trim, 'Trim', (0, 2.79, 1.55), (0, 2.85, 1.55), .12, 18)
-cyl(lamps, 'Beacon', (0, 2.85, 1.55), (0, 3.00, 1.55), .10, 18)                       # beacon dome
-# ---------- dump body with cab shield, tailgate, salt spreader ----------
+    R = [[trim.v((sx*(1.04+dx), TYRE_R+math.cos(a)*(.64+dr), ZA_F+math.sin(a)*(.64+dr))) for dx, dr in ((-.03, .0), (.21, .0), (.21, .10), (-.03, .10))]
+         for a in np.linspace(-1.45, 1.45, 17)]
+    for A, B in zip(R, R[1:]):
+        for k in range(4): q = (k+1) % 4; trim.quad('Flare', A[k], B[k], B[q], A[q])
+    for k in range(5): box(trim, 'Grille', (sx*.965, 1.52-k*.07, 2.55), (.02, .035, .48))
+# headlight clusters in black housings (two round lamps each) with the amber turn lamp on top
+for sx in (1, -1):
+    box(trim, 'Grille', (sx*1.04, 1.05, 3.415), (.40, .26, .03))
+# plow lights on brackets above the hood corners: a chrome housing with a clear lamp and an amber turn lamp
+for sx in (1, -1):
+    cyl(trim, 'Frame', (sx*.90, 1.66, 3.28), (sx*.90, 1.98, 3.32), .025, 8)
+    box(trim, 'Chrome', (sx*.90, 2.04, 3.34), (.44, .17, .16))
+    box(lamps, 'Headlight', (sx*.97, 2.04, 3.425), (.22, .12, .02))
+    box(lamps, 'Amber', (sx*.78, 2.04, 3.425), (.12, .10, .02))
+# fuel tank and air tank under the doors, diamond-plate steps
+cyl(trim, 'Tank', (1.02, .74, 1.95), (1.02, .74, .95), .26, 22)                      # aluminium fuel tank (driver's side)
+for z in (1.10, 1.80): cyl(trim, 'Frame', (1.02, .74, z), (1.02, .74, z+.04), .275, 22)  # its straps
+cyl(trim, 'Tank', (-1.02, .72, 1.75), (-1.02, .72, 1.05), .17, 18)                   # air tank
+for y in (.52, .84): box(trim, 'Step', (1.10, y, 1.45), (.30, .03, .55), both=True)
+# exhaust stack behind the cab (passenger side)
+cyl(trim, 'Chrome', (-1.08, 1.05, .56), (-1.08, 3.05, .56), .075, 16)
+# amber marker lamps along the front edge of the cab roof (five of them)
+for x in (-.70, -.35, 0., .35, .70): cyl(lamps, 'Amber', (x, 2.74, 2.10), (x, 2.74, 2.16), .035, 10)
+box(trim, 'Trim', (0, 2.80, 1.60), (.70, .05, .30))                                   # truck number plate on the roof
+box(trim, 'Plate', (0, 2.86, 1.75), (.62, .12, .02))
+# ---------- the dump body: a rounded stainless tub with a cab shield, as in the photo ----------
 DB0, DB1 = -3.42, .42
-box(body, 'Steel', (0, 1.18, (DB0+DB1)/2), (2.44, .12, DB1-DB0))                     # floor
-box(body, 'Steel', (1.19, 1.82, (DB0+DB1)/2), (.06, 1.16, DB1-DB0), both=True)         # sides
-box(body, 'Steel', (0, 1.82, DB1), (2.44, 1.16, .08))                                 # front wall
-slab(body, 'Steel', [(-1.22, 2.40, DB1), (1.22, 2.40, DB1), (1.22, 2.70, DB1+.70), (-1.22, 2.70, DB1+.70)], .05)   # cab shield
-box(body, 'Steel', (0, 1.82, DB0), (2.40, 1.16, .07))                                 # tailgate
-for z in np.linspace(DB0+.4, DB1-.4, 6): box(trim, 'SteelRib', (1.235, 1.82, z), (.04, 1.10, .07), both=True)   # side ribs
-box(trim, 'SteelRib', (1.235, 2.38, (DB0+DB1)/2), (.05, .06, DB1-DB0), both=True)      # top rails
+def tub(z, inset=0.):                                            # cross-section: straight sides, big round bottom corners
+    pts = []; hw, top, bot, r = 1.22-inset, 2.40, 1.18+inset, .55
+    pts.append((hw, top))
+    for a in np.linspace(0, math.pi/2, 9): pts.append((hw-r+r*math.cos(a), bot+r-r*math.sin(a)))
+    for a in np.linspace(math.pi/2, math.pi, 9): pts.append((-hw+r+r*math.cos(a), bot+r-r*math.sin(a)))
+    pts.append((-hw, top)); return [(x, y, z) for x, y in pts]
+TZ = np.linspace(DB0, DB1, 12)
+TR = [[body.v(p) for p in tub(z)] for z in TZ]
+for A, B in zip(TR, TR[1:]):
+    for k in range(len(A)-1): body.quad('Steel', A[k], A[k+1], B[k+1], B[k])
+for zz, R_ in ((DB1, TR[-1]), (DB0, TR[0])):                     # front wall and tailgate
+    c = body.v((0, 1.80, zz))
+    for k in range(len(R_)-1): body.tri('Steel', c, R_[k], R_[k+1])
+    body.tri('Steel', c, R_[-1], R_[0])
+for z in np.linspace(DB0+.3, DB1-.3, 7):                                               # stiffening hoops
+    hp = tub(z, -.02); H = [trim.v(p) for p in hp]; H2 = [trim.v((x, y, z+.06)) for x, y, _ in hp]
+    for k in range(len(H)-1): trim.quad('SteelRib', H[k], H[k+1], H2[k+1], H2[k])
+box(trim, 'SteelRib', (1.235, 2.40, (DB0+DB1)/2), (.06, .07, DB1-DB0), both=True)      # top rails
+slab(body, 'Steel', [(-1.22, 2.40, DB1), (1.22, 2.40, DB1), (1.22, 2.66, DB1+.62), (-1.22, 2.66, DB1+.62)], .05)   # cab shield
 for k, z in enumerate(np.arange(DB0+.05, DB1-.05, .30)):                               # red / white reflective strip
-    box(trim, 'Reflect' if k % 2 else 'ReflectW', (1.258, 1.36, z+.15), (.01, .08, .30), both=True)
-for sx in (1, -1):                                                                     # tarp arm along the side
-    cyl(trim, 'SteelRib', (sx*1.27, 2.36, DB1-.15), (sx*1.27, 1.40, DB1-1.55), .035, 8)
+    box(trim, 'Reflect' if k % 2 else 'ReflectW', (1.235, 1.95, z+.15), (.01, .08, .30), both=True)
+for sx in (1, -1): box(lamps, 'BeaconB', (sx*1.05, 2.74, DB1+.55), (.22, .10, .12))   # amber strobes on the shield corners
+# ---------- the wing plow: a mast behind the cab (beacon on top) and a long stainless wing blade, raised and folded
+# against the driver's side of the body as in the photo ----------
+MX, MZ = 1.30, .40
+box(trim, 'Frame', (MX, 1.75, MZ), (.14, 2.10, .14))                                   # mast
+box(trim, 'Frame', (MX-.15, 1.0, MZ), (.30, .14, .30))
+cyl(trim, 'Trim', (MX, 2.80, MZ), (MX, 2.86, MZ), .10, 16); cyl(lamps, 'Beacon', (MX, 2.86, MZ), (MX, 3.02, MZ), .085, 16)   # beacon
+WA, WB = np.array((MX+.16, 2.55, MZ-.12)), np.array((MX+.42, .62, -2.30))              # the wing: top front to low back
+wd = (WB-WA)/np.linalg.norm(WB-WA); wn = np.array((1, 0, 0.)); ww = np.cross(wd, wn); ww /= np.linalg.norm(ww)
+slab(trim, 'Steel', [WA-ww*.30, WB-ww*.30, WB+ww*.30, WA+ww*.30], .03)                 # the wing blade, about 0.6 m tall
+slab(trim, 'Frame', [WA-ww*.33+wn*.03, WB-ww*.33+wn*.03, WB-ww*.24+wn*.03, WA-ww*.24+wn*.03], .03)   # its edges
+slab(trim, 'Frame', [WA+ww*.24+wn*.03, WB+ww*.24+wn*.03, WB+ww*.33+wn*.03, WA+ww*.33+wn*.03], .03)
+cyl(trim, 'Chrome', (MX, 2.30, MZ), WA+wd*.6-wn*.02, .03, 8)                           # lift ram from the mast
+cyl(trim, 'Frame', (MX+.05, .78, -1.90), WB-wd*.30, .05, 8)                            # rear support
 box(trim, 'Spreader', (0, .98, -3.66), (.90, .36, .40))                                # spreader hopper
 cyl(trim, 'Spreader', (0, .74, -3.74), (0, .62, -3.74), .04, 10)
 cyl(trim, 'Spinner', (0, .60, -3.74), (0, .57, -3.74), .30, 24)                        # spinner disc
@@ -210,6 +254,12 @@ for i in range(NU):
     up0, up1 = tp0+UP*.22+NF*.06, tp1+UP*.22+NF*.06
     prism(flap, 'Rubber', [p-HINGE for p in (tp0, tp1, up1, up0)], NF*.4+UP*-.6, .018)
 bolts(.90, .026, 22)
+for u in (-.66, -.22, .22, .66):                                 # seams between the stainless panels of the face
+    for j in range(NV):
+        v0, v1 = j/NV, (j+1)/NV
+        if v1 < EB or v0 > DV: continue
+        f0, f1 = bp(u, max(v0, EB))+NF*.006, bp(u, min(v1, DV))+NF*.006
+        prism(blade, 'BladeSeam', [f0-AX*.008, f0+AX*.008, f1+AX*.008, f1-AX*.008], NF, .006)
 # ribs and a frame on the back
 for u in np.linspace(-.85, .85, 7): profile(blade, 'BladeBack', u, lambda v: .14+.08*math.sin(v*math.pi), .035, TH)
 for v in (.18, .70):                                             # two horizontal stiffeners
@@ -299,7 +349,8 @@ MATS = {
  'Spreader':  dict(c=[.30, .31, .33, 1], m=.7, r=.5),
  'Spinner':   dict(c=[.10, .10, .11, 1], m=.5, r=.5),
  'Flap':      dict(c=[.012, .012, .013, 1], m=0, r=.9),
- 'Blade':     dict(c=[.20, .036, .011, 1], m=.25, r=.40),    # rust-red moldboard, as in the owner's close-up
+ 'Blade':     dict(c=[.58, .60, .62, 1], m=.85, r=.28),      # stainless moldboard, as in the owner's photo of the truck
+ 'BladeSeam': dict(c=[.20, .21, .22, 1], m=.8, r=.4),
  'EdgeBlack': dict(c=[.014, .014, .016, 1], m=.5, r=.45),
  'Rubber':    dict(c=[.012, .012, .014, 1], m=0, r=.75),
  'Bolt':      dict(c=[.35, .36, .38, 1], m=.9, r=.35),
@@ -313,10 +364,11 @@ MATS = {
  'Beacon':    dict(c=[.70, .32, .02, 1], m=.1, r=.2),        # light-bar lenses: flash in turn (js/enh/plow.js)
  'BeaconB':   dict(c=[.70, .32, .02, 1], m=.1, r=.2),
  'Tyre':      dict(c=[.022, .022, .024, 1], m=0, r=.88),
- 'Rim':       dict(c=[.55, .56, .58, 1], m=.8, r=.3),
+ 'Rim':       dict(c=[.82, .82, .80, 1], m=.2, r=.35),      # white steel wheels, as in the photo
+ 'Flare':     dict(c=[.016, .016, .018, 1], m=0, r=.8),
  'Hole':      dict(c=[.02, .02, .02, 1], m=0, r=.8),
  'Lug':       dict(c=[.60, .61, .63, 1], m=1, r=.25),
- 'Hub':       dict(c=[.25, .26, .27, 1], m=.8, r=.35),
+ 'Hub':       dict(c=[.75, .77, .80, 1], m=1, r=.15),        # chrome hub caps
 }
 matnames = list(MATS)
 J = dict(asset=dict(version='2.0', generator='explorer3d tools/make-snowplow.py'), scene=0, scenes=[dict(nodes=[0])],
