@@ -18,9 +18,11 @@ HW = .955                                       # half the 75.1 in body width
 def ease(a, b, t): t = min(1, max(0, t)); return a+(b-a)*t*t*(3-2*t)
 # ---------- side profile (z, y): low nose, long hood, short fastback roof, flat deck with a lip ----------
 ZW = .42                                         # foot of the windshield
-top = Pchip([ZR, -2.40, -2.33, -2.20, -1.80, -1.62, -1.30, -.95, -.55, -.15, .05, .25, ZW, .60, 1.20, 1.90, 2.25, 2.38, ZF],
-            [.80, .935, .975, .968, .962, .995, 1.150, 1.270, 1.300, 1.305, 1.270, 1.120, .940, .905, .880, .850, .825, .80, .74])
-belt = Pchip([ZR, -2.2, -1.75, -1.35, -.9, 0., ZW, .6, ZF], [.92, .960, .975, .955, .925, .915, .925, .93, .90])   # the waist kicks up over the rear wheels
+top = Pchip([ZR, -2.42, -2.365, -2.29, -2.12, -1.99, -1.86, -1.62, -1.38, -1.12, -.70, -.15, .05, .25, ZW, .60, 1.20, 1.90, 2.25, 2.38, ZF],
+            [.80, .955, 1.008, .988, .978, .988, 1.040, 1.150, 1.235, 1.290, 1.305, 1.305, 1.270, 1.120, .940, .905, .880, .850, .825, .80, .74])
+# (2026-11-23 owner: the real car's trunk is much shorter — the fastback glass now runs down to z -1.99, the deck is ~35 cm
+# long and ends in a ducktail lip)
+belt = Pchip([ZR, -2.25, -1.85, -1.50, -1.18, -.92, 0., ZW, .6, ZF], [.92, .968, .992, .990, .945, .925, .915, .925, .93, .90])   # the waist kicks up sharply over the rear wheels
 bot = Pchip([ZR, -2.3, -2.0, -1.7, 1.75, 2.1, 2.35, ZF], [.36, .30, .25, .22, .22, .25, .30, .36])
 
 def hw(z):
@@ -83,15 +85,22 @@ G = np.array([[[*sec_pt(S, float(ph)), S['z']] for ph in phis] for S in SECS])
 X, Y, Z = G[:, :, 0], G[:, :, 1], G[:, :, 2]
 # the hood sits low between raised front fender crowns that run from the nose back to the windshield (photo), with a
 # raised centre bulge toward the cowl; behind the doors the rear fenders rise in a hump over the wheels
-crown = .040*np.exp(-((X-.80)/.10)**2)*np.clip((Z-ZW)/.25, 0, 1)*np.clip((ZF-.02-Z)/.25, 0, 1)
-bulge = .028*np.clip(1-(np.abs(X)/.30)**4, 0, 1)*np.exp(-((Z-1.05)/.55)**2)*np.clip((Z-ZW-.05)/.2, 0, 1)
-hump = .030*np.exp(-((X-.86)/.09)**2)*np.exp(-((Z+1.75)/.45)**2)
-up = Y > .75
-Y += np.where(up, crown+bulge+hump, 0)
+crown = .062*np.exp(-((X-.79)/.075)**2)*np.clip((Z-ZW)/.20, 0, 1)*np.clip((ZF-.03-Z)/.12, 0, 1)    # peaked front fenders, hood well below
+SC0, SC1 = .62, 1.62                                                                                # cowl scoop: open face at SC0 (toward the windshield)
+scoop = .058*np.clip(1-(np.abs(X)/.36)**6, 0, 1)*np.clip((Z-SC0)/.03, 0, 1)*np.clip((SC1-Z)/.75, 0, 1)**.6
+# blistered fenders: over each wheel the fender swells up and out (owner: "the very pronounced wheel fender flares are
+# the trademark of the Javelin's appearance")
+BL = lambda za, w: np.exp(-((Z-za)/w)**2)
+outer = np.clip((X-.52)/.30, 0, 1)**1.5
+blis = .060*BL(ZA_F, .60)*outer+.055*BL(ZA_R, .58)*outer
+up = Y > .70
+Y += np.where(up, crown+scoop, 0)+np.where(Y > .55, blis*np.clip((Y-.55)/.25, 0, 1), 0)
+X += (.030*BL(ZA_F, .62)+.034*BL(ZA_R, .60))*np.clip((Y-TYRE_R)/.15, 0, 1)*np.clip((1.02-Y)/.12, 0, 1)*(X > .5)
 RA = .405; XW = TRACK/2-.035                     # open, round wheel arches; the liner a little inside the tyre's outer face
 for za in (ZA_F, ZA_R):                          # flared lips: the panel swells ~4.5 cm in a band round each arch
     d = np.hypot(Z-za, Y-TYRE_R)
-    X += .075*np.exp(-((d-RA-.03)/.055)**2)*(Y > TYRE_R-.15)*(X > .5)+.02*np.exp(-((d-RA-.005)/.012)**2)*(Y > TYRE_R-.15)*(X > .5)
+    band = np.clip((RA+.085-d)/.035, 0, 1)**.7*np.clip((d-RA+.02)/.02, 0, 1)                     # flat band, rounded outer edge
+    X += (.062*band+.015*np.exp(-((d-RA-.004)/.010)**2))*(Y > TYRE_R-.16)*(X > .5)
 well = np.zeros(G.shape[:2], bool)
 for za in (ZA_F, ZA_R):
     dz, dy = Z-za, Y-TYRE_R; d = np.hypot(dz, dy)
@@ -130,7 +139,9 @@ def gpt(z, u):
     x0 = GB*S['hw']*.995; y0 = S['yw']+(S['yt']-S['yw'])*S['frac'] - .004
     CR = .028; H = max(0., S['ytop']-CR-y0); r = min(.075, .45*H); rw = max(x0-.40*(H-r), .55*x0)   # side glass leans in ~22 degrees
     if u <= .5: q = u/.5; return [x0+(rw-x0)*q, y0+(H-r)*q, z]
-    a = (u-.5)/.5*math.pi/2; x = rw*math.cos(a)**(2/3.4); return [x, y0+(H-r)+r*math.sin(a)**(2/2.2)+CR*(1-(x/rw)**2)*min(1, max(0, (H-.10)/.2)), z]
+    a = (u-.5)/.5*math.pi/2; x = rw*math.cos(a)**(2/3.4)
+    dip = .032*math.exp(-(x/.14)**2)*ease(0, 1, (z-ZRG+.30)/.35)*ease(0, 1, (.02-z)/.22)               # twin-canopy roof: a dip down the middle
+    return [x, y0+(H-r)+r*math.sin(a)**(2/2.2)+CR*(1-(x/rw)**2)*min(1, max(0, (H-.10)/.2))-dip, z]
 zz = np.linspace(-2.2, 1.0, 900)
 def gh_h(z): S = section(float(z)); return float(top(z))-(S['yw']+(S['yt']-S['yw'])*S['frac'])
 hasH = [gh_h(z) > .006 for z in zz]
@@ -139,15 +150,15 @@ def ggrid(u0, u1, z0f, z1f, nz, nu, mat):
     G_ = [[gpt(z0f(u)+(z1f(u)-z0f(u))*i/nz, u) for u in np.linspace(u0, u1, nu+1)] for i in range(nz+1)]
     mirror_grid(gh, G_, lambda i, j: mat)
 zA = lambda u: ZW-.02-.50*min(u, .5)/.5          # front of the door glass along the raked A pillar
-zQ = lambda u: -1.02-.10*min(u, .5)/.5           # back of the door glass (a thin seam, no B pillar)
-zS = lambda u: -1.50+.42*min(u, .5)/.5           # back of the quarter window: its rear edge slants forward up the sail
+zQ = lambda u: -1.00-.12*min(u, .5)/.5           # back of the door glass (a thin seam, no B pillar)
+zS = lambda u: -1.66+.44*min(u, .5)/.5           # back of the quarter window: its rear edge slants forward up the sail
 cz0 = lambda u: ZG0
 ggrid(0, .5, cz0, zS, 10, 14, 'Paint')           # sail panel (C pillar), wide and body colour
 ggrid(0, .5, zS, lambda u: zQ(u)-.008, 30, 14, 'Glass')   # quarter window
 ggrid(0, .5, lambda u: zQ(u)-.008, zQ, 1, 14, 'Chrome')   # the seam between the two glasses
 ggrid(0, .5, zQ, zA, 60, 14, 'Glass')            # door glass
 ggrid(0, .5, zA, lambda u: ZW, 6, 14, 'Paint')   # A pillar, body colour
-ZRG = -.88                                        # back edge of the roof: the fastback glass from here down to the deck
+ZRG = -1.12                                       # back edge of the roof: the fastback glass from here down to the deck
 ggrid(.5, .54, cz0, lambda u: ZW, 160, 1, 'Paint')        # roof edge
 ggrid(.54, 1, lambda u: ZRG, lambda u: -.12, 40, 12, 'Paint')   # roof
 ggrid(.54, 1, cz0, lambda u: ZRG, 40, 12, 'Glass')        # fastback rear glass
@@ -331,7 +342,7 @@ patch(trim, 'Trim', lambda u, v: (.90*u*max(halfwidth(2.30, .78), .3), .77+.005*
 # down the front fender behind the wheel and runs back along the lower side to the rear wheel (photo) ----------
 STR = Mesh('Stripe')
 def side_band(z):                                 # centre height of the spear along z: under the fender's shoulder at the front, sweeping down at the door
-    hi = min(.835, float(section(z)['yt'])-.065)
+    hi = min(.875, float(section(z)['yt'])-.065+.060*math.exp(-((z-ZA_F)/.60)**2))      # rides up on the blistered fender, above the flare
     return .555+(hi-.555)*ease(0, 1, (z-.45)/.75)
 def band_pt(u, v, z0, z1):
     z = z0+(z1-z0)*u; yc = side_band(z); h = .10-.012*ease(0, 1, (z-.45)/.75); return z, yc-h/2+h*v
@@ -362,6 +373,13 @@ def ellipsoid(m, mat, c, r, nu=16, nv=10):
 ellipsoid(mir, 'Chrome', (HW+.07, 1.0, .20), (.045, .040, .075))                                     # bullet mirror on the door
 box(mir, 'MirrorGlass', (HW+.07, 1.0, .126), (.07, .06, .004))
 box(mir, 'Chrome', (HW+.02, .97, .22), (.07, .02, .03))                                               # its stalk
+# ---------- the cowl scoop's open mouth facing the windshield, and the rivets round each bolt-on flare ----------
+ys_ = ytop_at(SC0+.06, 0.)
+box(trim, 'Grille', (0.0001, ys_-.030, SC0+.012), (.64, .042, .016))
+for za in (ZA_F, ZA_R):
+    for a in np.linspace(math.radians(-4), math.radians(184), 15):
+        z, y = za+(RA+.048)*math.cos(a), TYRE_R+(RA+.048)*math.sin(a)
+        ellipsoid(mir, 'Chrome', (xat(z, y)+.002, y, z), (.006, .0075, .0075), 8, 5)
 # ---------- rear: a red full-width tail lamp panel between the lamps' bright frame, chrome bumper below, plate,
 # and the deck's ducktail lip ----------
 Wr = lambda y: max(halfwidth(-2.36, y), .1)
