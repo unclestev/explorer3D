@@ -42,14 +42,9 @@ function makeTextures(){
     speckle(x,s,r,w,700,['#a9a49a','#cfcac0','#9c978d','#d8d3c9'],.4,1.1,.6);
     x.strokeStyle='rgba(80,75,68,.6)'; x.lineWidth=1.5; for(let i=0;i<=2;i++){ x.beginPath(); x.moveTo(0,i*s/2+.5); x.lineTo(s,i*s/2+.5); x.moveTo(i*s/2+.5,0); x.lineTo(i*s/2+.5,s); x.stroke(); }   // slab joints
     speckle(x,s,r,w,4,['#8f8a80'],4,9,.18); });                                                                              // oil stains
-  tex('tx-parking',128,21,(x,s,r,w)=>{ x.fillStyle='#62666b'; x.fillRect(0,0,s,s);          // dark asphalt, painted stalls
+  tex('tx-parking',128,21,(x,s,r,w)=>{ x.fillStyle='#62666b'; x.fillRect(0,0,s,s);          // dark asphalt; the stall lines are drawn per lot (js/enh/parking.js)
     speckle(x,s,r,w,520,['#55595e','#70747a','#4a4e53','#7c8085'],.4,1.2,.6);
     speckle(x,s,r,w,3,['#3d4046'],4,9,.22);                                                    // oil stains
-    x.strokeStyle='rgba(255,255,255,.88)'; x.lineWidth=1.6; x.lineCap='butt';
-    // two rows of 16 px stalls, back to back (rows touch the tile edge, so they join up the next tile), 60 px drive aisle between bays
-    for(let i=0;i<=8;i++){ const px=i*16; w(()=>{ x.beginPath(); x.moveTo(px,0); x.lineTo(px,34); x.moveTo(px,94); x.lineTo(px,128); x.stroke(); }); }
-    x.lineWidth=1.2; x.beginPath(); x.moveTo(0,.6); x.lineTo(s,.6); x.moveTo(0,s-.6); x.lineTo(s,s-.6); x.stroke();   // the shared back line
-    x.strokeStyle='rgba(255,255,255,.35)'; x.setLineDash([6,8]); x.lineWidth=1; x.beginPath(); x.moveTo(0,64); x.lineTo(s,64); x.stroke(); x.setLineDash([]);   // faint aisle centre mark
   });
   tex('tx-pitch',128,17,(x,s,r,w)=>{ for(let i=0;i<4;i++){ x.fillStyle=i%2?'#62a53f':'#82c25a'; x.fillRect(0,i*s/4,s,s/4); }
     blades(x,s,r,w,200,['#5f9c3d','#95cb6d'],3); });

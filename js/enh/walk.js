@@ -161,10 +161,8 @@ function restLayers(){
   const cp=pp('roof-cap'); if(cp) map.addLayer({id:'inrest-cap',type:'fill-extrusion',source:'inrest',paint:cp},before);
 }
 function hideBuilding(r){
-  const id=r?r.id:null, ids=id==null||destroyed.includes(id)?destroyed.slice():destroyed.concat([id]), f=ids.length?['!',['in',['id'],['literal',ids]]]:null;
-  for(const lid of hideIds){ if(!map.getLayer(lid)) continue;
-    const of=origFilters[lid], nf=f?(of?['all',of,f]:f):(of||null);
-    try{ map.setFilter(lid,nf); if(f&&of&&JSON.stringify(map.getFilter(lid))!==JSON.stringify(nf)) map.setFilter(lid,f); }catch(e){ console.warn('inside filter',e); } }
+  const id=r?r.id:null;
+  HIDE.walk=id; applyHides();                                       // js/game.js: with the smashed ones and the redrawn groups
   if(map.getLayer('roof-3d')) safe('inside roofs',()=>map.setFilter('roof-3d',r?['!=',['coalesce',['get','bk'],''],r.key]:null));
   // the rest of the group
   REST.features=[];
