@@ -20,7 +20,7 @@ const css=document.createElement('style'); css.textContent=`
 document.head.appendChild(css);
 pane.innerHTML=`<form id="tubeForm" style="margin-top:8px"><input id="tubeQ" type="search" placeholder="Type a video name or paste a link" autocomplete="off" enterkeyhint="search"><button type="submit">Go</button></form>
 <div id="tubeResults"></div>
-<div class="row"><button type="button" id="tubeStop">⏹ Stop video</button></div>
+<div class="row"><button type="button" id="tubePrev" aria-label="Previous video">⏮</button><button type="button" id="tubeNext" aria-label="Next video">⏭</button><button type="button" id="tubeStop">⏹ Stop video</button></div>
 <div class="hd">Recent</div><div id="tubeRecent"></div>
 <details id="tubeKeyBox" style="margin-top:8px"><summary style="cursor:pointer;opacity:.75;font-size:12px">🔑 YouTube search key</summary>
 <div class="note" style="opacity:.8">Searching by name needs a free key from Google: console.cloud.google.com → new project → enable "YouTube Data API v3" → Credentials → Create API key (limit it to this website). Paste it here; it stays on this device.</div>
@@ -31,6 +31,9 @@ const box=document.createElement('div'); box.id='tubeBox'; box.innerHTML='<div c
 for(const t of ['pointerdown','touchstart','wheel']) box.addEventListener(t,e=>e.stopPropagation(),{passive:true});   // taps on the video don't steer the view
 
 // a video id from any YouTube link (watch, youtu.be, shorts, embed, live, music) or a bare 11-character id
+// a playlist id from a link's list= (owner 2026-11-22: share a YouTube playlist once, the car plays all of it)
+function listOf(s){ s=(s||'').trim(); try{ const u=new URL(s.includes('://')?s:'https://'+s); if(!/(^|\.)(youtube\.com|youtube-nocookie\.com|youtu\.be)$/.test(u.hostname)) return null;
+  const l=u.searchParams.get('list'); return l&&/^[\w-]{10,64}$/.test(l)?l:null; }catch(e){ return null; } }
 function idOf(s){ s=(s||'').trim(); if(/^[\w-]{11}$/.test(s)) return s;
   try{ const u=new URL(s.includes('://')?s:'https://'+s); if(!/(^|\.)(youtube\.com|youtube-nocookie\.com|youtu\.be)$/.test(u.hostname)) return null;
     if(u.hostname.endsWith('youtu.be')) return (u.pathname.slice(1).match(/^[\w-]{11}/)||[])[0]||null;
@@ -38,25 +41,31 @@ function idOf(s){ s=(s||'').trim(); if(/^[\w-]{11}$/.test(s)) return s;
     const m=u.pathname.match(/\/(?:shorts|embed|live|v)\/([\w-]{11})/); return m?m[1]:null; }catch(e){ return null; } }
 
 const T={id:null,frame:null,moving:false,warned:false};
-let recent=[]; try{ recent=JSON.parse(localStorage.getItem('ydTubeRecent')||'[]').filter(o=>o&&/^[\w-]{11}$/.test(o.id)); }catch(e){}
+let recent=[]; try{ recent=JSON.parse(localStorage.getItem('ydTubeRecent')||'[]').filter(o=>o&&(/^[\w-]{11}$/.test(o.id)||/^[\w-]{10,64}$/.test(o.list||''))); }catch(e){}
+const keyOf=(id,list)=>(list||'')+'|'+(id||'');
 function drawRecent(){ const L=$('tubeRecent'); L.textContent=''; if(!recent.length){ L.innerHTML='<div style="opacity:.5;padding:6px;font-size:12px">Nothing yet</div>'; return; }
-  for(const o of recent){ const el=document.createElement('div'); el.className='it'; const img=document.createElement('img'); img.alt=''; img.src='https://i.ytimg.com/vi/'+o.id+'/mqdefault.jpg';
-    const t=document.createElement('div'); t.textContent=o.title||('Video '+o.id); t.style.cssText='min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
-    el.append(img,t); el.onclick=()=>watch(o.id); L.append(el); } }
-function remember(id){ recent=[{id,title:(recent.find(o=>o.id===id)||{}).title||''}].concat(recent.filter(o=>o.id!==id)).slice(0,8);
+  for(const o of recent){ const el=document.createElement('div'); el.className='it'; let th;
+    if(o.id){ th=document.createElement('img'); th.alt=''; th.src='https://i.ytimg.com/vi/'+o.id+'/mqdefault.jpg'; }
+    else { th=document.createElement('div'); th.textContent='▤'; th.style.cssText='width:64px;height:36px;border-radius:5px;flex:none;background:#223;display:flex;align-items:center;justify-content:center;font-size:20px'; }
+    const t=document.createElement('div'); t.textContent=(o.list?'▤ ':'')+(o.title||(o.list?'Playlist':'Video '+o.id)); t.style.cssText='min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+    el.append(th,t); el.onclick=()=>watch(o.id,o.list); L.append(el); } }
+function remember(id,list){ const k=keyOf(id,list), old=recent.find(o=>keyOf(o.id,o.list)===k)||{};
+  recent=[{id:id||null,list:list||null,title:old.title||''}].concat(recent.filter(o=>keyOf(o.id,o.list)!==k)).slice(0,8);
   try{ localStorage.setItem('ydTubeRecent',JSON.stringify(recent)); }catch(e){} drawRecent();
-  // the title, from YouTube's public oEmbed (no key); fine if it can't be reached
-  fetch('https://www.youtube.com/oembed?format=json&url='+encodeURIComponent('https://www.youtube.com/watch?v='+id)).then(r=>r.ok?r.json():null).then(j=>{
-    if(!j||!j.title) return; const o=recent.find(o=>o.id===id); if(o){ o.title=j.title; try{ localStorage.setItem('ydTubeRecent',JSON.stringify(recent)); }catch(e){} drawRecent(); } }).catch(()=>{}); }
+  // the title, from YouTube's public oEmbed (no key; playlists too); fine if it can't be reached
+  const url=list&&!id?'https://www.youtube.com/playlist?list='+list:'https://www.youtube.com/watch?v='+id;
+  fetch('https://www.youtube.com/oembed?format=json&url='+encodeURIComponent(url)).then(r=>r.ok?r.json():null).then(j=>{
+    if(!j||!j.title) return; const o=recent.find(o=>keyOf(o.id,o.list)===k); if(o){ o.title=j.title; try{ localStorage.setItem('ydTubeRecent',JSON.stringify(recent)); }catch(e){} drawRecent(); } }).catch(()=>{}); }
 const cmd=(func,args)=>{ try{ T.frame&&T.frame.contentWindow.postMessage(JSON.stringify({event:'command',func,args:args||[]}),'*'); }catch(e){} };
 
-function watch(id){ stop(); T.id=id; if(window.MUSIC&&MUSIC.pause) MUSIC.pause();
+function watch(id,list){ stop(); T.id=id||null; T.list=list||null; if(window.MUSIC&&MUSIC.pause) MUSIC.pause();
   const f=document.createElement('iframe'); f.allow='autoplay; encrypted-media; picture-in-picture; fullscreen'; f.referrerPolicy='strict-origin-when-cross-origin';
-  f.src='https://www.youtube-nocookie.com/embed/'+id+'?autoplay=1&playsinline=1&rel=0&enablejsapi=1&origin='+encodeURIComponent(location.origin);
-  box.prepend(f); T.frame=f; box.style.display='block'; remember(id);
+  const q='autoplay=1&playsinline=1&rel=0&enablejsapi=1&origin='+encodeURIComponent(location.origin);
+  f.src=list&&!id?'https://www.youtube-nocookie.com/embed/videoseries?list='+list+'&'+q:'https://www.youtube-nocookie.com/embed/'+id+'?'+(list?'list='+list+'&':'')+q;   // a playlist plays through, ⏮ ⏭ move along it
+  box.prepend(f); T.frame=f; box.style.display='block'; remember(id,list);
   if(!(window.COCKPIT&&COCKPIT.on)) toast('The video plays on the centre screen — switch to cockpit view (C)',2600);
   if(window.MUSIC&&MUSIC.close) MUSIC.close(); }
-function stop(){ if(T.frame){ T.frame.remove(); T.frame=null; } T.id=null; box.style.display='none'; box.classList.remove('moving'); T.moving=false; }
+function stop(){ if(T.frame){ T.frame.remove(); T.frame=null; } T.id=null; T.list=null; box.style.display='none'; box.classList.remove('moving'); T.moving=false; }
 // search by name (owner 2026-11-22: "make it so I can type the name"): YouTube Data API v3 with the key saved on this
 // device (localStorage ydTubeKey); safe search on, only videos that can play outside YouTube
 const KEY=()=>{ try{ return localStorage.getItem('ydTubeKey')||''; }catch(e){ return ''; } };
@@ -76,8 +85,10 @@ function searchTube(q){ const R=$('tubeResults'), key=KEY();
         const c=document.createElement('div'); c.className='ch'; c.textContent=esc(sn.channelTitle); t.append(b,c); el.append(img,t);
         el.onclick=()=>{ const o=recent.find(o=>o.id===id); if(!o) recent.unshift({id,title}); else o.title=title; watch(id); }; R.append(el); } })
     .catch(()=>{ R.innerHTML='<div style="opacity:.6;padding:6px">YouTube search isn\'t reachable right now.</div>'; }); }
-$('tubeForm').onsubmit=e=>{ e.preventDefault(); const v=$('tubeQ').value.trim(); if(!v) return; const id=/[\/.]/.test(v)||/^[\w-]{11}$/.test(v)&&!/\s/.test(v)&&/\d|[A-Z]/.test(v)?idOf(v):null;
-  $('tubeQ').blur(); if(id){ $('tubeQ').value=''; watch(id); } else searchTube(v); };
+$('tubeForm').onsubmit=e=>{ e.preventDefault(); const v=$('tubeQ').value.trim(); if(!v) return; const link=/[\/.]/.test(v);
+  const id=link||/^[\w-]{11}$/.test(v)&&!/\s/.test(v)&&/\d|[A-Z]/.test(v)?idOf(v):null, list=link?listOf(v):null;
+  $('tubeQ').blur(); if(id||list){ $('tubeQ').value=''; watch(id,list); } else if(link) toast("That doesn't look like a YouTube link",1800); else searchTube(v); };
+$('tubePrev').onclick=()=>cmd('previousVideo'); $('tubeNext').onclick=()=>cmd('nextVideo');
 $('tubeKeyForm').onsubmit=e=>{ e.preventDefault(); const k=$('tubeKey').value.trim(); try{ k?localStorage.setItem('ydTubeKey',k):localStorage.removeItem('ydTubeKey'); }catch(_){ }
   $('tubeKey').value=''; $('tubeKeyBox').open=false; toast(k?'YouTube key saved on this device':'YouTube key removed',1600); const q=$('tubeQ').value.trim(); if(k&&q) searchTube(q); };
 $('tubeStop').onclick=stop;
@@ -101,5 +112,5 @@ function frame(){ requestAnimationFrame(frame); if(!T.frame) return;
   if(moving!==T.moving){ T.moving=moving; box.classList.toggle('moving',moving);
     if(moving){ cmd('pauseVideo'); if(!T.warned){ T.warned=true; toast('Video pauses while the car is moving',2000); } } } }
 requestAnimationFrame(frame);
-window.TUBE={watch,stop,idOf,state:T};
+window.TUBE={watch,stop,idOf,listOf,state:T};
 })();
