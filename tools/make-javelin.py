@@ -309,6 +309,24 @@ def torus_ring(m, mat, c, r0, r1, depth, n=28):   # a flat bright ring (bezel) f
             m.tri(mat, out[k], bk[k], out[k+1]); m.tri(mat, out[k+1], bk[k], bk[k+1])
 
 flare_lip(body)
+def arch_bead(m, r=.0085, n=10):
+    """(owner: remove the rivets, "give it a thin chrome accent around the wheel wells") — a thin half-round chrome bead
+    running round the rolled edge of each flare, which also hides the edge's facets."""
+    for za in (ZA_F, ZA_R):
+        A = np.linspace(math.radians(-6), math.radians(186), 96)
+        XE = np.array([xat(za+(RA+.02)*math.cos(a), TYRE_R+(RA+.02)*math.sin(a)) for a in A])
+        XE = np.convolve(np.pad(XE, 5, mode='edge'), np.ones(11)/11, mode='valid')
+        for side in (1, -1):
+            rings = []
+            for a, xe in zip(A, XE):
+                ca, sa = math.cos(a), math.sin(a); rr = RA+.016
+                rings.append([m.v((side*(xe+.004+r*math.cos(t)), TYRE_R+(rr+r*math.sin(t))*sa, za+(rr+r*math.sin(t))*ca))
+                              for t in np.linspace(-math.pi/2, math.pi, n+1)])
+            for i in range(len(rings)-1):
+                for k in range(n):
+                    a_, b_, c_, d_ = rings[i][k], rings[i+1][k], rings[i][k+1], rings[i+1][k+1]
+                    if side > 0: m.tri('Chrome', a_, b_, c_); m.tri('Chrome', b_, d_, c_)
+                    else: m.tri('Chrome', a_, c_, b_); m.tri('Chrome', b_, c_, d_)
 # ---------- front: a wide recessed mesh grille across the whole nose in a bright surround, the round headlamps at its
 # outer ends and round amber parking lamps inboard of them (photo); a full-width chrome bumper under it ----------
 trim = Mesh('Details'); heads = Mesh('Headlights'); tails = Mesh('Taillights'); plate = Mesh('Plate')
@@ -449,13 +467,10 @@ def ellipsoid(m, mat, c, r, nu=16, nv=10):
 ellipsoid(mir, 'Chrome', (HW+.07, 1.0, .20), (.045, .040, .075))                                     # bullet mirror on the door
 box(mir, 'MirrorGlass', (HW+.07, 1.0, .126), (.07, .06, .004))
 box(mir, 'Chrome', (HW+.02, .97, .22), (.07, .02, .03))                                               # its stalk
-# ---------- the cowl scoop's open mouth facing the windshield, and the rivets round each bolt-on flare ----------
+arch_bead(trim)
+# ---------- the cowl scoop's open mouth facing the windshield ----------
 ys_ = ytop_at(SC0+.06, 0.)
 box(trim, 'Grille', (0.0001, ys_-.030, SC0+.012), (.64, .042, .016))
-for za in (ZA_F, ZA_R):
-    for a in np.linspace(math.radians(-4), math.radians(184), 15):
-        z, y = za+(RA+.048)*math.cos(a), TYRE_R+(RA+.048)*math.sin(a)
-        ellipsoid(mir, 'Chrome', (xat(z, y)+.002, y, z), (.006, .0075, .0075), 8, 5)
 # ---------- rear (owner's rear photo, style only): a dark recessed panel across the tail under the deck lid's lip, with
 # four rounded-rectangle lamps in bright bezels — red outer pair, inner pair red round a white reversing lamp — and a small
 # plain round emblem in the middle (no badges); a full-width chrome bumper with the plate set into its centre, body-colour
