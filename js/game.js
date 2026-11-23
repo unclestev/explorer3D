@@ -144,15 +144,25 @@ function smashFeature(f,pt){
 function destroyBuilding(id){
   // Features with no stable id can't be targeted by filter: skip hiding (the smash effect still plays).
   if(id==null||destroyed.includes(id)) return; destroyed.push(id);
-  const f=['!',['in',['id'],['literal',destroyed.slice()]]];   // same id across tiles => split buildings vanish together
-  for(const lid of hideIds){
+  applyHides();
+}
+/* Which buildings each building layer leaves out, by map id (same id across tiles => split buildings vanish together):
+   smashed ones (destroyed), the one you've walked into (HIDE.walk, js/enh/walk.js), and — only on the map's own
+   building layers — the groups js/enh/buildings.js redraws house by house near you (HIDE.vec; its 'walls' source). */
+const HIDE={walk:null,vec:[]}; window.HIDE=HIDE;
+const VEC_HIDE=new Set(['building-3d','roof-cap']);
+function applyHides(lids){
+  const base=HIDE.walk!=null&&!destroyed.includes(HIDE.walk)?destroyed.concat([HIDE.walk]):destroyed.slice();
+  for(const lid of lids||hideIds){
     if(!map.getLayer(lid)) continue;
-    const of=origFilters[lid], nf=of?['all',of,f]:f;
+    const ids=VEC_HIDE.has(lid)&&HIDE.vec.length?base.concat(HIDE.vec):base;
+    const f=ids.length?['!',['in',['id'],['literal',ids]]]:null, of=origFilters[lid], nf=f?(of?['all',of,f]:f):(of||null);
     try{ map.setFilter(lid,nf);
-      if(of && JSON.stringify(map.getFilter(lid))!==JSON.stringify(nf)) map.setFilter(lid,f); // rejected: drop original
-    }catch(e){ console.warn('destroyBuilding',e); }
+      if(f&&of && JSON.stringify(map.getFilter(lid))!==JSON.stringify(nf)) map.setFilter(lid,f); // rejected: drop original
+    }catch(e){ console.warn('building filter',e); }
   }
 }
+window.applyHides=applyHides;
 const seen={}; let nSeen=0;
 map.on('error',e=>{ const m=((e&&e.error&&(e.error.message||e.error.status))||'unknown map error')+((e&&e.error&&e.error.stack)?'\n'+e.error.stack.split('\n').slice(0,4).join('\n'):''); const k=String(m).slice(0,60);
   console.warn('MAP:',m); if(seen[k]||nSeen>=6)return; seen[k]=1; nSeen++;
@@ -1168,10 +1178,19 @@ const towerSeen=new Set();
 // one and kumi failed or timed out from the owner's connection while mail.ru answered (slowly), so: four mirrors, 40 s each,
 // starting with the one that answered last time (remembered).
 const OVERPASS=['https://overpass-api.de/api/interpreter','https://maps.mail.ru/osm/tools/overpass/api/interpreter','https://overpass.kumi.systems/api/interpreter','https://overpass.private.coffee/api/interpreter'];
-async function ovFetch(q){ let first=0; try{ first=Math.max(0,OVERPASS.indexOf(localStorage.getItem('ydOvp'))); }catch(e){}
-  for(let n=0;n<OVERPASS.length;n++){ const url=OVERPASS[(first+n)%OVERPASS.length], c=new AbortController(), to=setTimeout(()=>c.abort(),40000);
-    try{ const r=await fetch(url,{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'},signal:c.signal});
-      if(r.ok){ const j=await r.json(); try{ localStorage.setItem('ydOvp',url); }catch(e){} return j; } }catch(e){} finally{ clearTimeout(to); } }
+// One question at a time (2026-11-23: at start-up the signs, water towers and parking lots all asked at once; the mirrors
+// turn away several questions at once from one address (429), so the parking lots and stop signs often never came).
+// A mirror that says "busy" (429 / 503 / 504) is asked again once after a short wait before moving on to the next.
+let ovQ=Promise.resolve();
+function ovFetch(q){ const run=ovQ.then(()=>ovOne(q)); ovQ=run.catch(()=>{}); return run; }
+async function ovOne(q){ let first=0; try{ first=Math.max(0,OVERPASS.indexOf(localStorage.getItem('ydOvp'))); }catch(e){}
+  for(let n=0;n<OVERPASS.length;n++){ const url=OVERPASS[(first+n)%OVERPASS.length];
+    for(let tryN=0;tryN<2;tryN++){ const c=new AbortController(), to=setTimeout(()=>c.abort(),40000);
+      try{ const r=await fetch(url,{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'},signal:c.signal});
+        if(r.ok){ const j=await r.json(); try{ localStorage.setItem('ydOvp',url); }catch(e){} return j; }
+        if(tryN===0&&(r.status===429||r.status===503||r.status===504)){ await new Promise(ok=>setTimeout(ok,4000)); continue; } }
+      catch(e){} finally{ clearTimeout(to); }
+      break; } }
   throw new Error('no Overpass server answered'); }
 function loadTowers(){
   if(towerBusy) return; towerBusy=true;

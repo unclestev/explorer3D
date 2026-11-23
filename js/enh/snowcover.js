@@ -44,7 +44,7 @@ function layers(){ safe('snow cover',()=>{
     paint:{'line-color':'#5d6066','line-width':((A,B)=>['interpolate',['exponential',2],['zoom'],14,['match',['get','w'],1,A[4],B[4]],24,['match',['get','w'],1,A[6],B[6]]])(mz(2.4,2),mz(3.4,2)),'line-opacity':0}},under);   // w 1: the wing's lane
   shown=-1; ready=true; }); }
 // ---------- snow on the roofs ----------
-const ROOFS=['roof-cap','rebuilt-roof','roof-3d'], ORIG={}; let roofK=-1;
+const ROOFS=['roof-cap','rebuilt-roof','roof-3d','wall-cap'], ORIG={}; let roofK=-1;
 function whiten(c,k){ const ch=i=>['+',['*',['at',i,['to-rgba',c]],1-k],252*k]; return ['rgba',ch(0),ch(1),['+',['*',['at',2,['to-rgba',c]],1-k],255*k],1]; }
 function roofs(k){ if(Math.abs(k-roofK)<.04&&!(k===0&&roofK>0)) return; roofK=k;
   for(const id of ROOFS) safe('snow roof',()=>{ if(!map.getLayer(id)) return;

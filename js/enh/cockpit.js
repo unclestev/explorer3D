@@ -2180,7 +2180,7 @@ function labels(show){ try{
 /* test switch to find what else is heavy: add ?hide=buildings,roofs,trees,roadside,roads,water,landuse,signs,traffic to the
    address — those layer groups are hidden (in every view) so ?fps=1 can show what each one costs */
 { const q=(new URLSearchParams(location.search).get('hide')||'').split(',').filter(Boolean);
-  const G={buildings:/^(building|rebuilt|roof-cap|rebuilt-roof)/,roofs:/^roof-3d$/,trees:/^tree-/,roadside:/^rs-/,roads:/^(road|bridge|tunnel)_|^tx-asph|^mk-/,
+  const G={buildings:/^(building|rebuilt|roof-cap|rebuilt-roof|wall-)/,roofs:/^roof-3d$/,trees:/^tree-/,roadside:/^rs-/,roads:/^(road|bridge|tunnel)_|^tx-asph|^mk-/,
     water:/^water|^waterway|^tx-water/,landuse:/^(landuse|landcover|park|lu-|lc-|tx-)/,signs:/^sg-/};
   if(q.length) onReadyHide(()=>{ for(const l of map.getStyle().layers) for(const g of q) if(G[g]&&G[g].test(l.id)) try{ map.setLayoutProperty(l.id,'visibility','none'); }catch(e){}
     if(q.includes('traffic')&&window.TRAFFIC&&TRAFFIC.state) TRAFFIC.state.on=false; /* this visit only, not saved */ toast('Hidden for testing: '+q.join(', '),4000); }); }
