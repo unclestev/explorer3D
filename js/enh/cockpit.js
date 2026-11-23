@@ -2095,6 +2095,14 @@ function setHud(v){ CK.hud=v; LSs('ydHud',v?'1':'0'); showPick(); dirty=true; }
 // tap the overhead console's sunroof keys: look.js asks on every tap (one that isn't a drag-to-look); a key tap is used up here
 // and doesn't count toward its double-tap "look straight ahead" (tapping VENT twice used to throw your view forward)
 { const ray=new THREE.Raycaster(), v=new V3();
+  // the centre screen's four corners in page pixels (top-left, top-right, bottom-left, bottom-right) and whether it's in
+  // view, for the YouTube player laid over it (tube.js); null outside cockpit view
+  CK.screenQuad=function(){ if(!CK.on||!CK.cab) return null; const c=CK.cab, sc=c.parts.screen; if(!sc) return null;
+    const pl=sc.grp.children[0], g=pl.geometry.parameters, v=new V3(); c.scene.updateMatrixWorld(); c.cam.updateMatrixWorld();
+    const out=[]; let vis=true;
+    for(const [u,w] of [[-1,1],[1,1],[-1,-1],[1,-1]]){ v.set(u*g.width/2,w*g.height/2,0); pl.localToWorld(v); v.project(c.cam); if(v.z>1||v.z<-1) vis=false;
+      out.push([(v.x+1)/2*innerWidth,(1-v.y)/2*innerHeight]); }
+    return {pts:out,vis,aspect:g.width/g.height}; };
   CK.tapKey=function(e){ if(!CK.on||!CK.cab) return null; const c=CK.cab;
     c.scene.updateMatrixWorld(); c.cam.updateMatrixWorld(); ray.setFromCamera({x:(e.clientX/innerWidth)*2-1,y:-(e.clientY/innerHeight)*2+1},c.cam);
     // a tap on the centre screen opens Music (owner 2026-11-22: "type a song on the lower screen and play it from the car")

@@ -38,14 +38,15 @@ const css=document.createElement('style'); css.textContent=`
 #musicPanel input[type=range]{width:90px}`;
 document.head.appendChild(css);
 const panel=document.createElement('div'); panel.id='musicPanel';
-panel.innerHTML=`<div class="tabs"><button type="button" id="tabSongs">🎵 Songs</button><button type="button" id="tabRadio">📻 Radio</button><button type="button" id="musicX" aria-label="Close" style="flex:none">✕</button></div>
+panel.innerHTML=`<div class="tabs"><button type="button" id="tabSongs">🎵 Songs</button><button type="button" id="tabRadio">📻 Radio</button><button type="button" id="tabVideo">▶ Video</button><button type="button" id="musicX" aria-label="Close" style="flex:none">✕</button></div>
 <div class="row" style="margin-top:0"><button type="button" id="musicPlay">⏯</button><button type="button" id="musicNext">⏭</button><button type="button" id="musicStop">⏹</button><span class="now" id="musicNow">Nothing playing</span><input type="range" id="musicVol" min="0" max="1" step="0.05" aria-label="Volume"></div>
 <div id="paneSongs"><form id="musicForm" style="margin-top:8px"><input id="musicQ" type="search" placeholder="Type a song or artist" autocomplete="off" enterkeyhint="search"><button type="submit">Search</button></form>
 <div class="row"><button type="button" id="musicMine">📁 My music…</button><input type="file" id="musicFiles" accept="audio/*" multiple hidden></div>
 <div id="musicList"></div><div class="note">Search results play Apple's 30-second previews. "My music" plays whole songs from your device.</div></div>
 <div id="paneRadio" style="display:none"><form id="radioForm" style="margin-top:8px"><input id="radioQ" type="search" placeholder="Station name, e.g. 93.9 Lite FM" autocomplete="off" enterkeyhint="search"><button type="submit">Search</button></form>
 <div class="hd">Presets</div><div id="radioPresets"></div>
-<div id="radioList"></div><div class="note">Live stations from the free Radio Browser directory. ☆ saves a station to your presets.</div></div>`;
+<div id="radioList"></div><div class="note">Live stations from the free Radio Browser directory. ☆ saves a station to your presets.</div></div>
+<div id="paneVideo" style="display:none"></div>`;
 document.body.appendChild(panel);
 const $=id=>document.getElementById(id), input=$('musicQ'), list=$('musicList'), rInput=$('radioQ'), rList=$('radioList');
 for(const t of ['keydown','keyup','keypress']) panel.addEventListener(t,e=>{ e.stopPropagation(); if(t==='keydown'&&e.key==='Escape') close(); });   // typing here doesn't drive the car
@@ -160,12 +161,12 @@ $('radioForm').onsubmit=e=>{ e.preventDefault(); rInput.blur(); radioSearch(rInp
 drawPre();
 
 // ---------- tabs, open / close
-let tab=LSg('ydMusicTab','songs')==='radio'?'radio':'songs';
-function setTab(t){ tab=t; LSs('ydMusicTab',t); $('paneSongs').style.display=t==='songs'?'':'none'; $('paneRadio').style.display=t==='radio'?'':'none';
-  $('tabSongs').classList.toggle('on',t==='songs'); $('tabRadio').classList.toggle('on',t==='radio'); }
-$('tabSongs').onclick=()=>setTab('songs'); $('tabRadio').onclick=()=>setTab('radio'); setTab(tab);
+let tab=LSg('ydMusicTab','songs'); if(!['songs','radio','video'].includes(tab)) tab='songs';
+function setTab(t){ tab=t; LSs('ydMusicTab',t); for(const k of ['songs','radio','video']){ const P=k[0].toUpperCase()+k.slice(1);
+    $('pane'+P).style.display=t===k?'':'none'; $('tab'+P).classList.toggle('on',t===k); } }
+$('tabSongs').onclick=()=>setTab('songs'); $('tabRadio').onclick=()=>setTab('radio'); $('tabVideo').onclick=()=>setTab('video'); setTab(tab);
 // focus: false when opened from the wheel, so the keyboard keeps driving
-function open(focus){ panel.classList.add('on'); if(focus!==false) setTimeout(()=>(tab==='radio'?rInput:input).focus(),50); }
+function open(focus){ panel.classList.add('on'); if(focus!==false) setTimeout(()=>{ const f=tab==='radio'?rInput:tab==='video'?$('tubeQ'):input; if(f) f.focus(); },50); }
 function close(){ panel.classList.remove('on'); input.blur(); rInput.blur(); }
 const toggle=focus=>panel.classList.contains('on')?close():open(focus);
 $('musicX').onclick=close;
@@ -177,6 +178,6 @@ MU.info=()=>MU.now?{title:MU.now.title,artist:MU.now.radio?(MU.now.artist?MU.now
 setInterval(()=>{ const on=carOn(); if(on===wasOn) return; wasOn=on;
   if(!on){ resume=!!MU.now&&!au.paused; if(resume) au.pause(); }
   else if(resume&&MU.now){ const n=MU.now; resume=false; if(n.radio||au.src!==n.url) play(n); else au.play().catch(()=>{}); } },250);
-MU.open=open; MU.close=close; MU.toggle=toggle; MU.presets=presets; MU.playStation=playStation;
+MU.open=open; MU.close=close; MU.pause=()=>{ if(!au.paused) au.pause(); }; MU.toggle=toggle; MU.presets=presets; MU.playStation=playStation;
 window.MUSIC=MU;
 })();
