@@ -110,8 +110,8 @@ function build(){
     if(P.b0>0||P.holes||crossesTile(P.bb)) continue;              // building parts, courtyards, tile-clipped pieces: flat
     const key=P.cx.toFixed(6)+','+P.cy.toFixed(6)+','+P.h;
     let C=CACHE.get(key);
-    if(!C){ if(performance.now()-t0>tb){ R.pending=true; continue; } C=roofFor(P,kx,ky,slices); tagId(C.feats,P.f.id); CACHE.set(key,C); }   // spread new work over ticks
-    if(!C.fac&&nf<maxFac){ if(performance.now()-t0>tb){ R.pending=true; } else { safe('facades',()=>facades(P,kx,ky,C)); if(!C.fac) C.fac=[]; tagId(C.fac,P.f.id); } }
+    if(!C){ if(performance.now()-t0>tb){ R.pending=true; continue; } C=roofFor(P,kx,ky,slices); tagId(C.feats,P); CACHE.set(key,C); }   // spread new work over ticks
+    if(!C.fac&&nf<maxFac){ if(performance.now()-t0>tb){ R.pending=true; } else { safe('facades',()=>facades(P,kx,ky,C)); if(!C.fac) C.fac=[]; tagId(C.fac,P); } }
     if(C.house){ if(nh>=maxHouses) continue; nh++; } else if(C.feats.length||C.fac&&C.fac.length){ if(nb>=maxBig) continue; nb++; }
     for(const f of C.feats) out.push(f);
     let w=0; if(C.fac&&C.fac.length&&nf<maxFac){ nf++; w=1; for(const f of C.fac) out.push(f); if(C.bld) reg.push(C.bld); }
@@ -122,8 +122,9 @@ function build(){
     const s=map.getSource('roofs'); if(s) s.setData({type:'FeatureCollection',features:out}); R.last=key; R.setT=now; R.count=out.length; }
   R.at=[S.lng,S.lat]; R.t=now; R.n=destroyed.length; R.tiles=false; R.reg=reg;
 }
-// every roof / facade piece carries its building's id (prop i), so walking inside one can hide just that building's pieces
-function tagId(fs,id){ if(id==null) return; for(const f of fs) f.properties.i=id; }
+// every roof / facade piece carries its own building's key (prop bk, its middle), so walking inside one can hide just
+// that building's pieces (not by id: OpenFreeMap gives a whole group of neighbouring buildings one id)
+function tagId(fs,P){ const bk=P.cx.toFixed(6)+','+P.cy.toFixed(6); for(const f of fs) f.properties.bk=bk; }
 // one building's roof features (cached by position, so each is only worked out once)
 const CACHE=new Map();
 function roofFor(P,kx,ky,slices){ return roofParts(P,kx,ky,slices); }

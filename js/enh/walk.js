@@ -143,13 +143,39 @@ function nearDoor(recs,lat,lng){ let best=null;
       const al=(q[0]-mx)*ux+(q[1]-my)*uy, off=(q[0]-mx)*d.nx+(q[1]-my)*d.ny, dist=Math.hypot(Math.max(0,Math.abs(al)-L/2),off);
       if(!best||dist<best.dist) best={r,d,al,off,dist,ux,uy,half:L/2}; } }
   return best; }
-// hide the building you're in (its extrusion, roof cap, pitched roof, windows and doors); null = show it again
-function hideBuilding(id){
-  const ids=id==null?destroyed.slice():destroyed.concat([id]), f=ids.length?['!',['in',['id'],['literal',ids]]]:null;
+// hide the building you're in (its extrusion, roof cap, pitched roof, windows and doors); null = show it again.
+// OpenFreeMap gives a whole group of neighbouring buildings one id (often a whole subdivision), and the map can only hide
+// by id — so, like smashing (js/game.js addSurvivors), the group is hidden and every other building of it within ~800 m
+// is redrawn from its own outline (layers 'inrest-3d' + its roof cap), leaving out only the one you're in.
+const REST={type:'FeatureCollection',features:[]};
+function restLayers(){
+  if(map.getSource('inrest')) return;
+  map.addSource('inrest',{type:'geojson',data:REST,tolerance:0});
+  const before=map.getLayer('hn-big')?'hn-big':undefined, pp=id=>{ const L=map.getStyle().layers.find(l=>l.id===id); return L&&L.paint?JSON.parse(JSON.stringify(L.paint)):null; };
+  const bp=pp('building-3d')||{'fill-extrusion-color':'#d6dbe2','fill-extrusion-height':['coalesce',['get','render_height'],6],'fill-extrusion-base':['coalesce',['get','render_min_height'],0]};
+  bp['fill-extrusion-opacity']=1;
+  map.addLayer({id:'inrest-3d',type:'fill-extrusion',source:'inrest',paint:bp},before);
+  const cp=pp('roof-cap'); if(cp) map.addLayer({id:'inrest-cap',type:'fill-extrusion',source:'inrest',paint:cp},before);
+}
+function hideBuilding(r){
+  const id=r?r.id:null, ids=id==null||destroyed.includes(id)?destroyed.slice():destroyed.concat([id]), f=ids.length?['!',['in',['id'],['literal',ids]]]:null;
   for(const lid of hideIds){ if(!map.getLayer(lid)) continue;
     const of=origFilters[lid], nf=f?(of?['all',of,f]:f):(of||null);
     try{ map.setFilter(lid,nf); if(f&&of&&JSON.stringify(map.getFilter(lid))!==JSON.stringify(nf)) map.setFilter(lid,f); }catch(e){ console.warn('inside filter',e); } }
-  if(map.getLayer('roof-3d')) safe('inside roofs',()=>map.setFilter('roof-3d',id==null?null:['!=',['coalesce',['get','i'],-1],id]));
+  if(map.getLayer('roof-3d')) safe('inside roofs',()=>map.setFilter('roof-3d',r?['!=',['coalesce',['get','bk'],''],r.key]:null));
+  // the rest of the group
+  REST.features=[];
+  if(r&&!destroyed.includes(id)){ const seen=new Set(), lim=800/111320, kx=Math.cos(rad(S.lat));
+    let fs=[]; try{ fs=map.querySourceFeatures(bSrc,{sourceLayer:'building'}); }catch(e){}
+    for(const q of fs){ if(q.id!==id) continue; const g=q.geometry, pls=!g?[]:g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
+      for(const pl of pls){ const ring=pl[0]; if(!ring||ring.length<4) continue;
+        let x=0,y=0; const n=ring.length-1; for(let i=0;i<n;i++){ x+=ring[i][0]; y+=ring[i][1]; } x/=n; y/=n;
+        if(Math.abs(y-S.lat)>lim||Math.abs(x-S.lng)*kx>lim) continue;
+        const key=ring.length+':'+ring[0][0].toFixed(6)+','+ring[0][1].toFixed(6); if(seen.has(key)) continue; seen.add(key);   // the same piece from two tiles
+        if(inRec(r,y,x)) continue;                                                               // the one you're in
+        REST.features.push({type:'Feature',properties:q.properties||{},geometry:{type:'Polygon',coordinates:pl}}); } } }
+  safe('inside rest',()=>{ restLayers(); map.getSource('inrest').setData(REST); });
+  for(const lid of ['inrest-3d']) if(r&&!blockIds.includes(lid)) blockIds.push(lid);              // the redrawn ones still stop you (and the car)
 }
 // the cut-away inside: floor, waist-high walls with gaps at the doors, door frames
 function interiorFeatures(r){
@@ -180,7 +206,7 @@ function drawInterior(r){
 }
 function setInside(r){
   IN.rec=r; IN.key=r?r.key:null;
-  safe('inside hide',()=>hideBuilding(r?r.id:null));
+  safe('inside hide',()=>hideBuilding(r));
   safe('inside draw',()=>drawInterior(r));
   person.traverse(o=>{ if(o.isMesh&&o.material!==shadow.material) o.material.depthTest=!r; });   // never hidden by the walls round you
   if(window.TRAFFIC&&TRAFFIC.occRebuild) TRAFFIC.occRebuild();                                    // and drop it from the car layer's building blockers
