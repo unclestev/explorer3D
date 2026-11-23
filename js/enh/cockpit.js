@@ -723,11 +723,23 @@ function overheadEx(G,P,ws){
   const lid=mesh(rbox(W*.86,D*.40,.004,.008,.012),M({color:0x1c1d20,roughness:.6,transparent:true,opacity:0}),g,false,false); lid.visible=false;
   // the four sunroof keys: invisible targets you can tap (canvas px -> pod: x right, z toward the driver)
   const Wf=W-.004, kp=(px,py)=>[(px/1024-.5)*Wf,(.5-py/1024)*Wf], hm=new THREE.MeshBasicMaterial({visible:false}); CK.roofKeys=[]; CK.roofSpots=[];
-  for(const [k,px,py,w,h] of [['close',464,654,88,84],['vent',464,748,88,96],['open',560,654,88,84],['shut',560,748,88,96]]){ const q=kp(px,py);
+  // the light keys (owner 2026-11-22): top ☼ left / right = driver's / passenger's map light (or tap the lens itself),
+  // bottom ☼ = the dome light
+  for(const [k,px,py,w,h] of [['close',464,654,88,84],['vent',464,748,88,96],['open',560,654,88,84],['shut',560,748,88,96],
+      ['mapL',364,644,68,64],['mapR',660,644,68,64],['dome',364,764,68,64],['dome',660,764,68,64],['mapL',216,690,132,150],['mapR',808,690,132,150]]){ const q=kp(px,py);
     const f=mesh(new THREE.PlaneGeometry(w/1024*Wf,h/1024*Wf),new THREE.MeshBasicMaterial({color:0xffe2a8,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false}),g,false,false);
     f.rotation.x=Math.PI/2; f.position.set(q[0],-.0012,q[1]); CK.roofSpots.push({k,x:q[0],z:q[1],flash:f}); }
-  { const a=kp(380,570), b=kp(644,840), t=mesh(new THREE.BoxGeometry(b[0]-a[0],.014,a[1]-b[1]),hm,g,false,false); t.position.set((a[0]+b[0])/2,-.006,(a[1]+b[1])/2); CK.roofKeys.push(t); }   // generous: a fat finger still gets the nearest key
-  const lit=new THREE.MeshBasicMaterial({color:0xfff4dc,transparent:true,opacity:0}); for(const s of [-1,1]){ const l=mesh(new THREE.PlaneGeometry(.016,.02),lit,g,false,false); l.rotation.x=Math.PI/2; l.position.set(s*.083,-.001,.0); }
+  { const a=kp(110,570), b=kp(914,840), t=mesh(new THREE.BoxGeometry(b[0]-a[0],.014,a[1]-b[1]),hm,g,false,false); t.position.set((a[0]+b[0])/2,-.006,(a[1]+b[1])/2); CK.roofKeys.push(t); }   // generous: a fat finger still gets the nearest key
+  // the lamps: a warm spot out of each map-light lens aimed at that seat's lap, and the dome light — a soft point light
+  // just under the console that fills the cabin. Built dark; lampStep fades them (they show most after dark)
+  const glowM=()=>new THREE.MeshBasicMaterial({color:0xfff1d6,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false});
+  const L={spots:{},glows:{mapL:[],mapR:[]},dome:null,cur:{mapL:0,mapR:0,dome:0}};
+  for(const [k,px,sx] of [['mapL',216,P.eye[0]],['mapR',808,-P.eye[0]]]){ const q=kp(px,690);
+    for(const [sz,op] of [[1,1],[1.9,.35]]){ const m=glowM(); m.userData.op=op; const l=mesh(new THREE.PlaneGeometry(64/1024*Wf*sz,80/1024*Wf*sz,1,1),m,g,false,false); l.rotation.x=Math.PI/2; l.position.set(q[0],-.0016-sz*.0002,q[1]); l.renderOrder=9; L.glows[k].push(m); }
+    const sp=new THREE.SpotLight(0xffe6c2,0,2.2,.6,.7,2); sp.castShadow=false; sp.position.set(q[0],-.006,q[1]); g.add(sp);
+    sp.target.position.set(sx,P.belt-.38,P.eye[2]-.05); G.add(sp.target); L.spots[k]=sp; }
+  { const d=new THREE.PointLight(0xffe6c4,0,2.7,2); d.castShadow=false; d.position.set(0,-.06,.02); g.add(d); L.dome=d; }
+  CK.cabLamps=L;
 }
 function steeringWheel(G,P){
   const W=P.wheel, grp=new THREE.Group(); grp.position.set(...W.c); grp.rotation.x=-W.tilt*DEG; G.add(grp);
@@ -1704,7 +1716,7 @@ if(typeof FRAME_HOOKS!=="undefined") FRAME_HOOKS.push(function cockpitAO(){ cons
   if(done){ c.ao=null; return true; } return false; });
 function build(key){
   if(CK.cab&&CK.built===key+'|'+(CARSPEC.paint||0)) return;
-  CK.powerKeys=[]; CK.hazKeys=[]; CK.hazLamps=[]; CK.startKeys=[];
+  CK.powerKeys=[]; CK.hazKeys=[]; CK.hazLamps=[]; CK.startKeys=[]; CK.cabLamps=null;
   if(CK.cab) dispose();
   const P=SPECS[specKey(key)]; textures(); updateEnv(true);
   const sc=new THREE.Scene(), root=new THREE.Group(), G=new THREE.Group(); sc.add(root); root.add(G);
@@ -1935,7 +1947,22 @@ let lastHash='';
 // with it, as in the real car) and pressed again close it; the cover keys open / close the cover.
 const ROOF={vent:false,slide:false,cover:false};
 CK.roofState=()=>({...ROOF});
+// cabin lights (owner 2026-11-22): the map lights and the dome light, from the overhead keys or the voice assistant;
+// they light the cabin in a realistic way — warm, local, and only really noticeable once it's dark out
+const CABL={mapL:false,mapR:false,dome:false};
+CK.cabinLights=()=>({...CABL});
+CK.hasCabinLights=()=>{ const P=SPECS[specKey(typeof CARKEY==='string'?CARKEY:'')]; return !!(P&&(P.ex||P.xp)); };
+CK.cabinLight=function(k,on,quiet){ const ks=k==='map'?['mapL','mapR']:k==='all'?['mapL','mapR','dome']:[k]; if(!ks.every(q=>q in CABL)) return;
+  const v=on==null?!ks.some(q=>CABL[q]):!!on; for(const q of ks) CABL[q]=v;
+  const name={mapL:'Driver\'s map light',mapR:'Passenger\'s map light',dome:'Dome light',map:'Map lights',all:'Interior lights'}[k];
+  if(!quiet) toast(name+(v?' on':' off'),1200); dirty=true; return v; };
+function lampStep(c,dt,k){ const L=CK.cabLamps; if(!L||!L.dome) return;
+  const m=.18+.82*k;                                                     // the same bulbs; against daylight they hardly show
+  for(const q of ['mapL','mapR','dome']) L.cur[q]+=clamp((CABL[q]?1:0)-L.cur[q],-dt/.35,dt/.25);   // a quick soft fade, like the real LEDs
+  for(const q of ['mapL','mapR']){ L.spots[q].intensity=2.6*m*L.cur[q]; const g=Math.max(L.cur[q],.55*L.cur.dome); for(const gm of L.glows[q]) gm.opacity=g*gm.userData.op; }
+  L.dome.intensity=1.25*m*L.cur.dome; }
 CK.roof=function(k){ let t;
+  if(k in CABL){ CK.cabinLight(k); return; }
   if(k==='vent'||k==='close'){ if(ROOF.slide||ROOF.vent){ ROOF.slide=ROOF.vent=false; t='Sunroof: closing'; } else { ROOF.slide=true; ROOF.cover=true; t='Sunroof: opening'; } }
   else if(k==='open'){ ROOF.cover=true; t='Sunroof cover: open'; }
   else if(k==='shut'){ ROOF.cover=false; t='Sunroof cover: closed'; }   // the cover keys only ever move the cover (owner 2026-11-21)
@@ -1972,6 +1999,7 @@ function update(dt){
     c.sunL.target.position.set(0,0,0); c.sunL.intensity=sp.alt>0?sun.intensity*(c.sunL.castShadow?1.35:.45):0; c.sunL.color.copy(sun.color); }
   else c.sunL.intensity=sun.intensity*.5;
   c.glow.intensity=k*.35;
+  lampStep(c,dt,k);
   if(p.gauges) for(const g of p.gauges){ g.face.material.emissiveIntensity=.22+k*.7; g.nm.emissiveIntensity=.25+k*.9; }
   if(p.radio) p.radio.emissiveIntensity=k*.8;
   if(p.sig) for(const a of p.sig){ const lit=a.dir<0?(window.SIG&&SIG.left):(window.SIG&&SIG.right); a.m.color.setHex(lit?0x40ff66:0x0c1a0e); }

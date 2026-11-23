@@ -54,7 +54,7 @@ const wait=ms=>new Promise(r=>setTimeout(r,ms));
 async function until(f,ms){ const t0=Date.now(); while(Date.now()-t0<ms){ const v=f(); if(v) return v; await wait(150); } return null; }
 const OFF=/^no\b|\b(off|disable|hide|deactivate|no more|turn off|switch off|shut off|kill)\b/;
 const driving=()=>typeof mode!=='undefined'&&(mode==='car'||mode==='tractor');
-const HELP='You can ask me to: start or turn off the car, hazards, left or right signal, wipers, the sunroof or its cover, the screen, '+
+const HELP='You can ask me to: start or turn off the car, hazards, left or right signal, wipers, the sunroof or its cover, the map or dome lights, the screen, '+
   'play a song, play 93.9 or any radio station, next, volume up or down, stop the music, play a video on YouTube, '+
   'navigate to a place, drive me to a place on autopilot, cancel the route, how far is it, '+
   'cockpit or outside view, look left, right, up or back, switch to the Expedition or another car, traffic on or off, '+
@@ -97,6 +97,15 @@ async function handle(raw){
   if((m=t.match(/^(?:say|repeat after me)\s+(.+)$/))) return say(m[1].replace(/^["']|["']$/g,''));
   if(has(t,'thank')) return say('You\'re welcome!');
 
+  // ---- cabin lights (the overhead console's map and dome lights; cockpit.js)
+  if(/\b(map|reading|dome|interior|cabin|inside|courtesy|overhead|ceiling|roof) lights?\b|\blights? (inside|in here|in the (car|cabin))\b/.test(t)){
+    if(!CK||!CK.cabinLight||!CK.hasCabinLights()) return say('I can\'t work the interior lights in this car.');
+    const off=OFF.test(t)||has(t,'dim'), L=CK.cabinLights();
+    const k=/\b(map|reading)\b/.test(t)?(/\b(driver|my|mine|left)\b/.test(t)?'mapL':/\b(passenger|right)\b/.test(t)?'mapR':'map'):/\b(dome|overhead|ceiling|roof|courtesy)\b/.test(t)&&!/\b(all|every)\b/.test(t)?'dome':'all';
+    const name={mapL:'Driver\'s map light',mapR:'Passenger\'s map light',map:'Map lights',dome:'Dome light',all:'Interior lights'}[k];
+    const ks=k==='map'?['mapL','mapR']:k==='all'?['mapL','mapR','dome']:[k];
+    if(ks.every(q=>L[q]===!off)) return say('The '+name.toLowerCase()+(k==='map'||k==='all'?' are':' is')+' already '+(off?'off.':'on.'));
+    CK.cabinLight(k,!off,true); return say(name+(off?' off.':' on.')); }
   // ---- the phone (js/enh/phone.js)
   if(window.PHONE&&/\b(take|snap)( a| me a)? (picture|photo|pic|selfie|screenshot)\b/.test(t)){ const u=await PHONE.snap(); return say(u?'Got it. It\'s in Photos on your phone.':'I couldn\'t take a photo here.'); }
   if(window.PHONE&&(m=t.match(/^(?:open|show|pull up|get out|check)( my| the)? phone(?:'s)?(?: (maps|music|youtube|spotify|camera|photos|weather|clock|calculator|notes|car|stopwatch) app| (maps|music|youtube|spotify|camera|photos|weather|clock|calculator|notes))?$/))){
