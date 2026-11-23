@@ -199,10 +199,18 @@ function nowPlaying(force){ const n=MU.now, id=ihr(n); if(!id){ NP.key=''; NP.so
     const art=/^https?:\/\//.test(j.imagePath||'')?String(j.imagePath).replace(/^http:/,'https:')+'?ops=fit(300,300)':'';
     NP.song={title:String(j.title).slice(0,120),artist:String(j.artist||'').slice(0,120),art}; setNow(); }).catch(()=>{}).finally(()=>{ NP.busy=false; }); }
 setInterval(()=>nowPlaying(false),2500);
+// the station's own logo (owner 2026-11-23, with 93.9 LITE FM's Santa-hat logo: "for the picture, make the 93.9 LITE FM
+// like that when I play 93.9"): iHeart stations' current logo from iHeart's station listing — loaded from iHeart, not
+// copied into the game, so a seasonal logo changes when theirs does. It's the picture on the music card for that station.
+const LOGO={};
+function stationLogo(id){ if(id in LOGO) return LOGO[id]; LOGO[id]='';
+  fetch('https://api.iheart.com/api/v2/content/liveStations/'+id).then(r=>r.ok?r.json():null).then(j=>{ const h=j&&j.hits&&j.hits[0], u=h&&(h.logo||h.newlogo)||'';
+    if(/^https:\/\/i\.iheart\.com\//.test(u)){ LOGO[id]=u.split('?')[0]+'?ops=fit(300,300)'; setNow(); } })
+    .catch(()=>{}).finally(()=>{ if(!LOGO[id]) setTimeout(()=>{ if(!LOGO[id]) delete LOGO[id]; },60000); }); return ''; }   // no logo: ask again in a minute
 const big=u=>String(u||'').replace(/\/(\d+)x(\d+)bb\./,'/300x300bb.');           // iTunes covers come small; ask for 300 px
 MU.info=()=>{ const n=MU.now; if(!n) return null; const sg=n.radio&&NP.key&&NP.key===ihr(n)?NP.song:null;
   return {title:sg?sg.title:n.title, artist:sg?(sg.artist?sg.artist+' · ':'')+n.title:n.radio?(n.artist?n.artist+' · LIVE':'LIVE'):n.artist,
-    station:n.radio?n.title:'', art:sg?sg.art:n.radio?(n.fav||''):big(n.art), playing:!au.paused, live:!!n.radio,
+    station:n.radio?n.title:'', art:n.radio?((ihr(n)&&stationLogo(ihr(n)))||(sg&&sg.art)||n.fav||''):big(n.art), cover:sg?sg.art:'', playing:!au.paused, live:!!n.radio,
     pos:au.currentTime||0, dur:!n.radio&&isFinite(au.duration)?au.duration:0}; };
 setInterval(()=>{ const on=carOn(); if(on===wasOn) return; wasOn=on;
   if(!on){ resume=!!MU.now&&!au.paused; if(resume) au.pause(); }

@@ -1342,7 +1342,10 @@ function drawScreenXp(sc,d){ const x=sc.T.x, W=sc.w, H=sc.h, DH=Math.round(H*.12
   { const a=Math.round(h1*.56), ax=cx0+16, ay=c1+(h1-a)/2-8, gg=x.createLinearGradient(ax,ay,ax+a,ay+a); gg.addColorStop(0,'#3a6ea8'); gg.addColorStop(1,'#a24f7c');
     const mi=window.MUSIC&&MUSIC.info&&MUSIC.info();   /* what's playing (music.js), else the idle card */
     const im=mi&&mi.art?cover(mi.art):null;            // the album cover (owner 2026-11-23), else the music note
-    if(im){ x.save(); rr(x,ax,ay,a,a,8); x.clip(); x.drawImage(im,ax,ay,a,a); x.restore(); }
+    if(im){ x.save(); rr(x,ax,ay,a,a,8); x.clip(); const r=im.naturalWidth/Math.max(1,im.naturalHeight);
+      if(Math.abs(r-1)<.04) x.drawImage(im,ax,ay,a,a);                 // an album cover fills the square
+      else { x.fillStyle='#0b0e13'; x.fillRect(ax,ay,a,a); const w=r>1?a*.94:a*.94*r, h=r>1?a*.94/r:a*.94; x.drawImage(im,ax+(a-w)/2,ay+(a-h)/2,w,h); }   // a logo fits inside
+      x.restore(); }
     else { x.fillStyle=gg; rr(x,ax,ay,a,a,8); x.fill(); x.fillStyle='rgba(255,255,255,.85)'; fitText(x,'♪',ax+a/2,ay+a/2,a*.8,Math.round(a*.5),'400','center'); }
     x.fillStyle='#e9edf2'; fitText(x,mi?mi.title:'Radio',ax+a+14,ay+a*.32,cw-a-44,26,'600','left');
     x.fillStyle='#8f98a3'; fitText(x,mi?(mi.artist||(mi.live?'LIVE':'')):'Tap the screen for music',ax+a+14,ay+a*.72,cw-a-44,20,'400','left');

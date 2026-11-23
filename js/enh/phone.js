@@ -144,7 +144,7 @@ app('music','Music','🎵','linear-gradient(#fb7185,#e11d48)',bd=>{
   const pre=bd.querySelector('#phPre'), P=MU.presets?MU.presets():[]; for(const p of P) pre.appendChild(li('📻 '+p.title,p.artist,()=>MU.playStation(p)));
   if(!P.length) pre.appendChild(el('div','muted','Save stations with ☆ in the car\'s Radio tab.'));
   const art=bd.querySelector('div[style*="font-size:64px"]');
-  every(1000,()=>{ const n=MU.info&&MU.info(); if(art){ const u=n&&n.art; if(u!==art.dataset.u){ art.dataset.u=u||''; art.innerHTML=u?'<img src="'+esc(u)+'" alt="" style="width:120px;height:120px;border-radius:12px;object-fit:cover" onerror="this.replaceWith(\'🎶\')">':'🎶'; } }
+  every(1000,()=>{ const n=MU.info&&MU.info(); if(art){ const u=n&&n.art; if(u!==art.dataset.u){ art.dataset.u=u||''; art.innerHTML=u?'<img src="'+esc(u)+'" alt="" style="width:120px;height:120px;border-radius:12px;object-fit:contain;background:#0b0e13" onerror="this.replaceWith(\'🎶\')">':'🎶'; } }
     if(n&&n.title){ $('phNow').textContent=n.title; $('phNowA').textContent=n.artist||''; } else if(!/^Finding|^Couldn/.test($('phNow').textContent)){ $('phNow').textContent='Nothing playing'; $('phNowA').textContent=''; } });
 },true);
 
