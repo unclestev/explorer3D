@@ -54,9 +54,13 @@ FRAME_HOOKS.push(function ignition(dt){
   else if(IGN.state==='stop'){ IGN.t+=dt; if(IGN.t>.8){ IGN.state='off'; show(); } }
   return false;
 });
-// a new car or the tractor arrives running
-{ const prev=window.onCarChange; window.onCarChange=k=>{ if(prev) prev(k); IGN.state='on'; show(); }; }
-{ const prev=window.onModeChange; window.onModeChange=(m,was)=>{ if(prev) prev(m,was); IGN.state='on'; show(); }; }
+/* getting in (owner 2026-11-22: "when I get in the car, can the car be off?"): climbing back in after a walk, or picking
+   another car or the tractor, you find it switched off — press start. The game still opens with the engine running, and
+   the boat and the hang glider are always "on". */
+let ready=false; setTimeout(()=>{ ready=true; },4000);             // the car chosen while the game loads doesn't count
+const parked=()=>{ if(!(mode==='car'||mode==='tractor')) return false; IGN.state='off'; IGN.t=0; show(); return true; };
+{ const prev=window.onCarChange; window.onCarChange=k=>{ if(prev) prev(k); if(!(ready&&parked())){ IGN.state='on'; show(); } }; }
+{ const prev=window.onModeChange; window.onModeChange=(m,was)=>{ if(prev) prev(m,was); if(!(ready&&was==='walk'&&parked())){ IGN.state='on'; show(); } }; }
 
 /* Explorer start-up layer (owner 2026-11-21: "make it sound like the one I sent you" — a 2022 Explorer starting). The game's
    engine sound is the smooth note of the exhaust; the video also has the starter's low groan and the engine's mechanical

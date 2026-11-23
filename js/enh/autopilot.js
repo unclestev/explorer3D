@@ -174,6 +174,7 @@ function start(){
   const N=YD.NAV;
   if(!N.pts){ toast('Set a destination first: tap 🔍',2200); return; }
   if(!CAN()){ toast('Autopilot only drives the SUV and tractor',2200); return; }
+  if(window.IGN&&(IGN.state==='off'||IGN.state==='stop')) IGN.button();   // parked with the engine off: start it first
   A.on=true; A.sig=0; A.sigDone=-1; A.sigT=0; A.i=0; A.route=null; A.waitT=0; A.pass=0; A.passCar=null; A.blockT=0; A.off=0; A.laneT=0; paint(); dirty=true; wakeOn();
   toast('Autopilot on · touch the controls to take over',2600);
 }
