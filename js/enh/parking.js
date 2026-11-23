@@ -51,7 +51,13 @@ function stalls(){
       const k=a[0].toFixed(1)+','+a[1].toFixed(1)+','+b[0].toFixed(1)+','+b[1].toFixed(1); if(seen.has(k)) continue; seen.add(k);
       const s={a,b,len:Math.hypot(b[0]-a[0],b[1]-a[1]),half:isA?AH:cl==='service'?2.6:cl==='minor'?4.5:6}; if(s.len<.3) continue;
       (isA?aisles:roads).push(s); } }
-  const near=(list,x,y,pad,skip)=>{ for(const s of list){ if(s===skip) continue; const dx=s.b[0]-s.a[0], dy=s.b[1]-s.a[1], t=Math.max(0,Math.min(1,((x-s.a[0])*dx+(y-s.a[1])*dy)/(s.len*s.len)));
+  // road pieces on a 20 m grid (each in every cell its strip touches), so a stall only checks the roads beside it
+  const seg=(list)=>{ const g=new Map(); for(const s of list){ const m=s.half+1;
+      for(let gx=Math.floor((Math.min(s.a[0],s.b[0])-m)/20);gx<=Math.floor((Math.max(s.a[0],s.b[0])+m)/20);gx++)
+        for(let gy=Math.floor((Math.min(s.a[1],s.b[1])-m)/20);gy<=Math.floor((Math.max(s.a[1],s.b[1])+m)/20);gy++){ const k=gx+','+gy; let a=g.get(k); if(!a) g.set(k,a=[]); a.push(s); } }
+    return g; };
+  const RG=seg(roads), AG=seg(aisles);
+  const near=(G,x,y,pad,skip)=>{ for(const s of G.get(Math.floor(x/20)+','+Math.floor(y/20))||[]){ if(s===skip) continue; const dx=s.b[0]-s.a[0], dy=s.b[1]-s.a[1], t=Math.max(0,Math.min(1,((x-s.a[0])*dx+(y-s.a[1])*dy)/(s.len*s.len)));
       if(Math.hypot(s.a[0]+dx*t-x,s.a[1]+dy*t-y)<s.half+pad) return true; } return false; };
   // buildings on a 25 m grid
   const grid=new Map(), gk=(x,y)=>Math.floor(x/25)+','+Math.floor(y/25);
@@ -69,7 +75,7 @@ function stalls(){
   const out=[], pads=[], line=(p,q)=>out.push({type:'Feature',properties:{},geometry:{type:'LineString',coordinates:[G(p[0],p[1]),G(q[0],q[1])]}});
   const ok=(p,q,lot)=>{ const m=[(p[0]+q[0])/2,(p[1]+q[1])/2];
     if(lot){ if(lotAt(p[0],p[1])!==lot||lotAt(q[0],q[1])!==lot) return false; }
-    return !inBld(p[0],p[1])&&!inBld(q[0],q[1])&&!inBld(m[0],m[1])&&!near(roads,q[0],q[1],.6)&&!near(roads,m[0],m[1],.6); };
+    return !inBld(p[0],p[1])&&!inBld(q[0],q[1])&&!inBld(m[0],m[1])&&!near(RG,q[0],q[1],.6)&&!near(RG,m[0],m[1],.6); };
   // 1. along the aisles
   for(const s of aisles){ if(s.len<SW*2+1||Math.hypot((s.a[0]+s.b[0])/2,(s.a[1]+s.b[1])/2)>R) continue;
     const ux=(s.b[0]-s.a[0])/s.len, uy=(s.b[1]-s.a[1])/s.len, nx=uy, ny=-ux, mid=[(s.a[0]+s.b[0])/2,(s.a[1]+s.b[1])/2];
@@ -77,7 +83,7 @@ function stalls(){
     const n=Math.floor((s.len-2)/SW), st=(s.len-n*SW)/2; let any=false;
     for(const side of [1,-1]) for(let k=0;k<=n;k++){ const t=st+k*SW, bx=s.a[0]+ux*t, by=s.a[1]+uy*t;
       const p=[bx+nx*side*AH,by+ny*side*AH], q=[bx+nx*side*(AH+SD),by+ny*side*(AH+SD)];
-      if(near(aisles,(p[0]+q[0])/2,(p[1]+q[1])/2,.3,s)) continue;   // where another aisle crosses
+      if(near(AG,(p[0]+q[0])/2,(p[1]+q[1])/2,.3,s)) continue;   // where another aisle crosses
       if(ok(p,q,lot)){ line(p,q); any=true; } }
     if(any&&!lot){ const w=AH+SD+.3, c=[[-w,-.4],[w,-.4],[w,s.len+.4],[-w,s.len+.4]].map(([o,t])=>G(s.a[0]+ux*t+nx*o,s.a[1]+uy*t+ny*o)); c.push(c[0]);
       pads.push({type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[c]}}); } }
