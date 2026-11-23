@@ -8,7 +8,7 @@
    window.PHONE = {open, close, toggle, snap(), horn} */
 (()=>{
 'use strict';
-let PHONE_SPOT=null, PHONE_YM=null;
+let PHONE_SPOT=null, PHONE_YM=null, TUBE_PAUSE=null, SPOT_STOP=null;
 const $=id=>document.getElementById(id);
 const LSg=(k,d)=>{ try{ const v=localStorage.getItem(k); return v==null?d:v; }catch(e){ return d; } };
 const LSs=(k,v)=>{ try{ localStorage.setItem(k,v); return true; }catch(e){ return false; } };
@@ -157,6 +157,7 @@ app('spotify','Spotify','🎧','linear-gradient(#22c55e,#15803d)',bd=>{
     '<div class="muted">In Spotify: ⋯ → Share → Copy link, then paste it here. Signed in to Spotify in this browser = whole songs; otherwise 30-second previews.</div>'+
     '<div class="sec">Recent</div><div id="phSpotRec"></div>';
   const box=bd.querySelector('#phSpot'), rec=bd.querySelector('#phSpotRec');
+  SPOT_STOP=()=>{ if(box.querySelector('iframe')){ box.innerHTML=''; box.appendChild(el('div','muted','Stopped: the car was turned off. Tap a recent one to play it again.')); } };
   let R=[]; try{ R=JSON.parse(LSg('ydSpotRecent','[]')); if(!Array.isArray(R)) R=[]; }catch(e){ R=[]; } R=R.filter(o=>o&&spotOf('spotify:'+o.type+':'+o.id));
   const kinds={track:'Song',album:'Album',playlist:'Playlist',artist:'Artist',episode:'Podcast episode',show:'Podcast'};
   function drawRec(){ rec.textContent=''; for(const o of R) rec.appendChild(li(o.title||kinds[o.type],kinds[o.type],()=>play(o),o.img||''));
@@ -176,7 +177,7 @@ PHONE_SPOT=spotOf;
 // YouTube Music (owner 2026-11-22). YouTube Music's own site won't run inside another page, but its songs and playlists
 // are YouTube videos, so a music.youtube.com link (or a name, with the YouTube key) plays through YouTube's player. It's
 // music, so unlike the YouTube app it keeps playing while you drive, with the phone put away, and in other apps.
-const YM={fr:null,cur:null,title:'',paused:false};
+const YM={fr:null,cur:null,title:'',paused:false,byCar:false};
 const ymBox=document.createElement('div'); ymBox.id='phYtm'; ph.querySelector('.scr').appendChild(ymBox);
 const ymCmd=f=>{ try{ YM.fr&&YM.fr.contentWindow.postMessage(JSON.stringify({event:'command',func:f,args:[]}),'*'); }catch(e){} };
 function ymStop(){ if(YM.fr) YM.fr.remove(); YM.fr=null; YM.cur=null; YM.title=''; }
@@ -184,7 +185,7 @@ function ymPlay(o){ ymStop(); if(window.MUSIC&&MUSIC.stop&&MUSIC.now) MUSIC.stop
   const q='autoplay=1&playsinline=1&rel=0&enablejsapi=1&origin='+encodeURIComponent(location.origin);
   const f=document.createElement('iframe'); f.allow='autoplay; encrypted-media'; f.referrerPolicy='strict-origin-when-cross-origin';
   f.src=o.id?'https://www.youtube-nocookie.com/embed/'+encodeURIComponent(o.id)+'?'+q+(o.list?'&list='+encodeURIComponent(o.list):''):'https://www.youtube-nocookie.com/embed/videoseries?list='+encodeURIComponent(o.list)+'&'+q;
-  ymBox.appendChild(f); YM.fr=f; YM.cur=o; YM.title=o.title||''; YM.paused=false;
+  ymBox.appendChild(f); YM.fr=f; YM.cur=o; YM.title=o.title||''; YM.paused=false; YM.byCar=false;
   let R=[]; try{ R=JSON.parse(LSg('ydYtmRecent','[]')); if(!Array.isArray(R)) R=[]; }catch(e){}
   R=R.filter(x=>x&&!(x.id===o.id&&x.list===o.list)); R.unshift({id:o.id||null,list:o.list||null,title:o.title||'',by:o.by||''}); LSs('ydYtmRecent',JSON.stringify(R.slice(0,20)));
   if(!o.title&&o.id) fetch('https://www.youtube.com/oembed?format=json&url='+encodeURIComponent('https://www.youtube.com/watch?v='+o.id)).then(r=>r.ok?r.json():null).then(j=>{ if(!j||!j.title||YM.cur!==o) return;
@@ -203,7 +204,7 @@ app('ytmusic','YT Music','🎼','linear-gradient(#f43f5e,#7f1d1d)',(bd,w)=>{
     '<form class="row"><input id="phYmQ" placeholder="Paste a YouTube Music link, or a song" autocomplete="off"><button class="btn">Go</button></form><div id="phYmR"></div><div class="sec">Recent</div><div id="phYmRec"></div>';
   const Tt=bd.querySelector('#phYmT'), P=bd.querySelector('#phYmP'), Rs=bd.querySelector('#phYmR'), T=window.TUBE;
   for(const b of bd.querySelectorAll('[data-c]')) b.onclick=()=>{ ymCmd(b.dataset.c); YM.paused=false; };
-  P.onclick=()=>{ if(!YM.fr) return; YM.paused=!YM.paused; ymCmd(YM.paused?'pauseVideo':'playVideo'); };
+  P.onclick=()=>{ if(!YM.fr) return; YM.byCar=false; YM.paused=!YM.paused; ymCmd(YM.paused?'pauseVideo':'playVideo'); };
   bd.querySelector('#phYmS').onclick=()=>{ ymStop(); };
   function drawRec(){ const L=bd.querySelector('#phYmRec'); L.textContent=''; let R=[]; try{ R=JSON.parse(LSg('ydYtmRecent','[]')); }catch(e){}
     for(const o of (Array.isArray(R)?R:[]).slice(0,15)) if(o&&(o.id||o.list)) L.appendChild(li(o.title||(o.list&&!o.id?'Playlist':'Song'),o.by||(o.list?'Playlist':''),()=>{ ymPlay(o); drawRec(); },o.id?'https://i.ytimg.com/vi/'+o.id+'/mqdefault.jpg':''));
@@ -232,6 +233,7 @@ app('tube','YouTube','▶️','#ff0000',bd=>{
     '<form class="row"><input id="phTubeQ" placeholder="Paste a link, or type a name"><button class="btn">Go</button></form><div id="phTubeR"></div><div class="sec">Recent</div><div id="phTubeRec"></div>';
   const V=bd.querySelector('#phVid'); let fr=null, moving=false;
   const cmd=f=>{ try{ fr&&fr.contentWindow.postMessage(JSON.stringify({event:'command',func:f,args:[]}),'*'); }catch(e){} };
+  TUBE_PAUSE=()=>cmd('pauseVideo');
   function play(id,list,title){ if(window.TUBE&&TUBE.stop) TUBE.stop(); if(window.MUSIC&&MUSIC.pause) MUSIC.pause(); V.style.display='block'; if(fr) fr.remove();
     const q='autoplay=1&playsinline=1&rel=0&enablejsapi=1&origin='+encodeURIComponent(location.origin);
     fr=document.createElement('iframe'); fr.allow='autoplay; encrypted-media; picture-in-picture'; fr.referrerPolicy='strict-origin-when-cross-origin';
@@ -436,6 +438,14 @@ function close(){ ph.classList.remove('on'); if(pbtn) pbtn.classList.remove('on'
 function toggle(){ ph.classList.contains('on')?close():open(); }
 $('phHome').onclick=()=>{ if(cur==null) close(); else home(); };
 setInterval(()=>{ if(ph.classList.contains('on')) status(); },1000);
+/* the car turned off (owner 2026-11-22: "make the music stop when I turn off the car"): the car's own music already pauses
+   (music.js); the phone's music and videos stop too, as if they were playing through the car. YouTube Music picks up
+   again when the engine starts. */
+let ignWas=null;
+setInterval(()=>{ const I=window.IGN; if(!I) return; const on=I.state==='on'||I.state==='crank';
+  if(ignWas===true&&!on){ if(YM.fr&&!YM.paused){ ymCmd('pauseVideo'); YM.paused=true; YM.byCar=true; } if(TUBE_PAUSE) TUBE_PAUSE(); if(SPOT_STOP) SPOT_STOP(); }
+  else if(ignWas===false&&on&&YM.byCar){ YM.byCar=false; if(YM.fr){ ymCmd('playVideo'); YM.paused=false; } }
+  ignWas=on; },250);
 addEventListener('keydown',e=>{ if(e.key==='Escape'&&ph.classList.contains('on')&&!(e.target&&/INPUT|TEXTAREA/.test(e.target.tagName))) close(); });
 window.PHONE={locked:null,get ytm(){ return PHONE_YM; },open,close,toggle,snap,openApp,spotOf:v=>PHONE_SPOT(v),horn:false,get isOpen(){ return ph.classList.contains('on'); }};
 home();
