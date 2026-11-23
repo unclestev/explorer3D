@@ -213,9 +213,12 @@ function startWx(){
   WX.parts=[]; for(let i=0;i<n;i++) WX.parts.push(newPart(true));
   if(!WX.run){ WX.run=true; WX.last=performance.now(); requestAnimationFrame(wxFrame); }
 }
-function newPart(anyY){ const w=wxCv.width||innerWidth, h=wxCv.height||innerHeight, snow=AT.wx.type==='snow';
-  return {x:Math.random()*w*1.2-w*.1,y:anyY?Math.random()*h:-20-Math.random()*60,v:snow?40+Math.random()*50:650+Math.random()*450,
-    l:snow?0:14+Math.random()*16,r:snow?1.2+Math.random()*2:0,ph:Math.random()*6.3,a:.35+Math.random()*.4}; }
+function newPart(anyY){ const w=innerWidth, h=innerHeight, W=AT.wx,   /* the page size: the canvas may still be its default 300 x 150 before its first frame */ snow=W.type==='snow', wind=W.wind||0;
+  const big=snow&&Math.random()<.06+.08*Math.min(1,W.int-1);    // in heavy snow some flakes are close to you: bigger, faster
+  const p={x:Math.random()*w*1.2-w*.1,y:anyY?Math.random()*h:-20-Math.random()*60,v:snow?(40+Math.random()*50)*(1+wind*1.6)*(big?1.8:1):650+Math.random()*450,
+    l:snow?0:14+Math.random()*16,r:snow?(1.2+Math.random()*2)*(big?2.4:1)*(W.int>1?1.2:1):0,ph:Math.random()*6.3,a:.35+Math.random()*.4,w:snow?-(220+Math.random()*320)*wind*(big?1.6:1):0};
+  if(!anyY&&wind&&Math.random()<.55){ p.x=w+10+Math.random()*40; p.y=Math.random()*h; }   // driven in from the side
+  return p; }
 function wxFrame(now){
   if(!WX.run) return;
   const idle=Math.abs(S.v)<.3&&mode!=='glider';
@@ -230,8 +233,13 @@ function wxFrame(now){
       if(p.y>h+20) Object.assign(p,newPart(false)); }
     x.stroke(); }
   else if(W.type==='snow'){ x.fillStyle=night>.5?'rgba(210,220,240,.8)':'rgba(255,255,255,.9)'; x.beginPath();
-    for(const p of WX.parts){ p.ph+=dt*1.7; p.y+=p.v*dt; p.x+=(Math.sin(p.ph)*30+drift*.4)*dt; x.moveTo(p.x+p.r,p.y); x.arc(p.x,p.y,p.r,0,6.3);
-      if(p.y>h+10) Object.assign(p,newPart(false)); }
+    const gust=(W.wind||0)*(1+.5*Math.sin(now/900)+.3*Math.sin(now/370));   // blizzard gusts
+    for(const p of WX.parts){ p.ph+=dt*(1.7+gust*2); p.y+=p.v*dt*(1+.3*gust*Math.sin(p.ph*.7)); p.x+=(Math.sin(p.ph)*(30+gust*60)+drift*.4+(p.w||0)*(.6+.6*gust))*dt;
+      x.moveTo(p.x+p.r,p.y); x.arc(p.x,p.y,p.r,0,6.3);
+      if(p.y>h+10||p.x<-60) Object.assign(p,newPart(false)); }
+    // over snowy white ground white flakes vanish: a faint blue-grey shadow under each one first, then the flake
+    const cover=window.SNOWCOVER?SNOWCOVER.level:0;
+    if(cover>.3||W.int>1){ x.save(); x.fillStyle='rgba(95,110,140,'+(.22+.2*Math.min(1,cover)).toFixed(2)+')'; x.translate(1.2,1.6); x.fill(); x.restore(); }
     x.fill(); }
   if(W.thunder){                                                  // a flash every 6-20 s, sometimes a double
     if(!WX.nextBolt) WX.nextBolt=now+4000+Math.random()*8000;
@@ -244,10 +252,13 @@ function wxFrame(now){
    ⚙️ Weather — Real (the actual weather where you're driving, from Open-Meteo, as before) or one you choose. The real
    temperature and clock still show; only the sky, rain / snow, fog and lightning follow the pick. Kept on this device.
    window.WEATHER = {set(name), get pick} — names: real clear cloudy rain heavy storm snow blizzard fog */
-const PICKS={clear:[0,0],cloudy:[3,1],rain:[63,.9],heavy:[65,1],storm:[95,1],snow:[73,.9],blizzard:[75,1],fog:[45,.9]};
+// [weather code, cloud, extra] (owner 2026-11-23: "add … light snow … make the snow heavier … the blizzard heavier, all over"):
+// snow is heavy now, the blizzard is a whiteout with the snow driven sideways by the wind
+const PICKS={clear:[0,0],cloudy:[3,1],rain:[63,.9],heavy:[65,1],storm:[95,1],lightsnow:[71,.85,{int:.35}],snow:[75,1,{int:1.3,fog:.22}],
+  blizzard:[75,1,{int:2.8,wind:1,fog:.62,text:'Blizzard',icon:'❄️'}],fog:[45,.9]};
 var pick='real'; try{ const v=localStorage.getItem('ydWxPick'); if(v&&(v==='real'||PICKS[v])) pick=v; }catch(e){}
 function usePick(save){
-  if(FIX_WX==null){ if(pick!=='real'){ const [c,cl]=PICKS[pick]; AT.wx=wxFrom(c); AT.cloud=cl; } else if(AT.real){ AT.wx=AT.real.wx; AT.cloud=AT.real.cloud; } }
+  if(FIX_WX==null){ if(pick!=='real'){ const [c,cl,x]=PICKS[pick]; AT.wx=Object.assign(wxFrom(c),x||{}); AT.cloud=cl; } else if(AT.real){ AT.wx=AT.real.wx; AT.cloud=AT.real.cloud; } }
   if(save) try{ localStorage.setItem('ydWxPick',pick); }catch(e){}
   for(const b of document.querySelectorAll('#wxPick button')) b.classList.toggle('on',b.dataset.w===pick);
   const st=document.getElementById('wxPickStat'); if(st) st.textContent=pick==='real'?'Real: the actual weather where you\'re driving':'Your pick · the real temperature still shows';
@@ -258,5 +269,5 @@ window.WEATHER={set:setPick,get pick(){ return pick; },names:['real',...Object.k
 onReady(function atmosInit(){ windowImage(); usePick(false); loadWeather(); });
 // battery saver toggled: redo the look right away
 window.onPowerChange=()=>{ AT.lastKey=''; safe('power',applyAtmos); safe('power',startWx); };
-Object.assign(YD,{AT});
+Object.assign(YD,{AT,WX});
 })();
