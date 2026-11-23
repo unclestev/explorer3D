@@ -17,7 +17,7 @@ const IGN={state:'on',t:0};
 function HOLD(u){ return Math.min(1,u*5)*(u<1?1:Math.exp(-(u-1)*3.2)); }
 window.IGN=IGN;
 const say=(m,ms)=>{ if(typeof toast==='function') toast(m,ms||1600); };
-const kind=()=>mode==='tractor'?'diesel':(typeof CARKEY==='string'&&CARKEY==='modely')?'ev':/^javelin/.test(CARKEY||'')?'v8':CARKEY==='navigator'?'lux':'gas';
+const kind=()=>mode==='tractor'?'diesel':(typeof CARKEY==='string'&&CARKEY==='modely')?'ev':/^javelin|^muscle70$/.test(CARKEY||'')?'v8':CARKEY==='navigator'?'lux':'gas';
 const CRANK={gas:.35,v8:1.3,diesel:1.6,ev:0,lux:0};                // the Navigator: no starter sound, just the chime
                                                                   // as the engine comes quietly to life (owner 2026-11-21)                       // seconds of cranking before it catches
 IGN.drive=()=>IGN.state==='on';

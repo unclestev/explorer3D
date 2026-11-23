@@ -142,7 +142,7 @@ function cabin(inside,tractor){ if(!A.bus) return; const t=A.ctx.currentTime;
    pair; Model Y: one brighter tone; tractor: a single low one. It works with the engine off, like a real car. */
 const HORN={explorer:[410,510],expedition:[410,510],navigator:[400,500],tesla:[500],javelin:[350,440],tractor:[300]};
 const H={on:false,nodes:null};
-function hornTones(){ const k=mode==='tractor'?'tractor':(typeof CARKEY!=='undefined'&&/javelin/.test(CARKEY))?'javelin':(typeof CARSPEC!=='undefined'&&CARSPEC&&CARSPEC.sound==='tesla')?'tesla':(typeof CARKEY!=='undefined'&&HORN[CARKEY])?CARKEY:'explorer'; return HORN[k]; }
+function hornTones(){ const k=mode==='tractor'?'tractor':(typeof CARKEY!=='undefined'&&/javelin|^muscle70$/.test(CARKEY))?'javelin':(typeof CARSPEC!=='undefined'&&CARSPEC&&CARSPEC.sound==='tesla')?'tesla':(typeof CARKEY!=='undefined'&&HORN[CARKEY])?CARKEY:'explorer'; return HORN[k]; }
 function horn(v){ v=!!v&&on&&(mode==='car'||mode==='tractor'); if(v===H.on) return; H.on=v;
   if(v){ start(); if(!A.ctx||A.failed&&!A.ctx) return; if(A.ctx.state!=='running') A.ctx.resume().catch(()=>{}); clearTimeout(A.sus);
     const c=A.ctx, t=c.currentTime, out=c.createGain(); out.gain.setValueAtTime(0,t); out.gain.linearRampToValueAtTime(.16,t+.025);

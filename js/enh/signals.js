@@ -40,7 +40,7 @@ function tickNow(){ SIG.t=PERIOD; }                                 // start a f
 /* ---------- sound ---------- */
 const SR=48000, BUF={};
 const STYLE=()=>{ if(mode==='tractor') return 'tractor'; const k=typeof CARKEY==='string'?CARKEY:'';
-  return k==='navigator'?'lincoln':/^javelin/.test(k)?'thermal':k==='modely'?'tesla':'ford'; };
+  return k==='navigator'?'lincoln':/^javelin|^muscle70$/.test(k)?'thermal':k==='modely'?'tesla':'ford'; };
 // one click: a noise/impulse excitation ringing a few damped resonances, plus a low body knock
 function synth(parts,len,seed){
   const n=Math.round(SR*len), out=new Float32Array(n); let s=seed||1;
