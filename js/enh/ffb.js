@@ -13,7 +13,9 @@
    window.FFB = {connect(), driving, state} */
 (()=>{
 'use strict';
-if(!navigator.hid) return;
+const wheelSeen=()=>{ for(const g of navigator.getGamepads?navigator.getGamepads():[]) if(g&&g.connected&&/wheel|g29|g27|driving force|logitech/i.test(g.id)) return true; return false; };
+if(!navigator.hid){                                                // Firefox / Safari: no WebHID, so say why once
+  let told=false; setInterval(()=>{ if(!told&&window.AUTO&&AUTO.on&&wheelSeen()){ told=true; if(typeof toast==='function') toast('To let autopilot turn your wheel, open the game in Chrome or Edge',5000); } },1000); return; }
 const IDS=[0xc24f,0xc260,0xc29b,0xc29a,0xc298];       // G29 (PS3 / PS4 mode), G27, Driving Force GT, Driving Force Pro
 const F={dev:null,rid:0,len:7,sign:0,on:false,last:-1,lastT:0,prev:null,pv:0,hold:0,cmd:0,busy:false,err:0,why:''};
 const say=(m,ms)=>{ if(typeof toast==='function') toast(m,ms||2600); };
@@ -28,10 +30,10 @@ function off(broken){ if(F.on){ stop(); centreOn(); } F.on=false; F.hold=0; if(b
 
 function wheelAxis(){ for(const g of navigator.getGamepads()) if(g&&g.connected&&g.axes&&g.axes.length&&/wheel|g29|g27|driving force|logitech/i.test(g.id)) return g.axes[0]; return null; }
 function outRep(d){ for(const c of d.collections||[]) for(const r of c.outputReports||[]){ const n=(r.items||[]).reduce((a,i)=>a+(i.reportCount||0)*(i.reportSize||0),0)/8; return {id:r.reportId||0,len:Math.max(7,Math.round(n)||7)}; } return null; }
-const pick=ds=>ds.find(d=>d.vendorId===0x046d&&IDS.includes(d.productId)&&outRep(d))||ds.find(d=>d.vendorId===0x046d&&IDS.includes(d.productId));
+const pick=ds=>ds.find(d=>d.vendorId===0x046d&&IDS.includes(d.productId)&&outRep(d))||ds.find(d=>d.vendorId===0x046d&&/wheel|g29|g27|driving/i.test(d.productName||'')&&outRep(d))||ds.find(d=>d.vendorId===0x046d&&IDS.includes(d.productId))||ds.find(d=>d.vendorId===0x046d&&outRep(d));
 async function open(d){ try{ if(!d.opened) await d.open(); const o=outRep(d); F.rid=o?o.id:0; F.len=o?o.len:7; F.dev=d; F.err=0; F.sign=+localStorage.getItem('ydFfbSign')||0; row(); return true; }catch(e){ console.warn('wheel motor open',e); return false; } }
-async function connect(){ try{ const ds=await navigator.hid.requestDevice({filters:IDS.map(p=>({vendorId:0x046d,productId:p}))});
-    if(!ds.length) return; if(await open(pick(ds))) say('🛞 Wheel motor connected — on autopilot the wheel turns by itself',3600); else say('Couldn\'t open the wheel. Close Logitech G HUB and try again.',4000); }
+async function connect(){ try{ const ds=await navigator.hid.requestDevice({filters:[{vendorId:0x046d}]})   /* any Logitech device, in case the wheel reports another id */;
+    if(!ds.length){ say('Pick the Logitech wheel in the list, then press Connect',3500); return; } if(await open(pick(ds))) say('🛞 Wheel motor connected — on autopilot the wheel turns by itself',3600); else say('Couldn\'t open the wheel. Close Logitech G HUB and try again.',4000); }
   catch(e){ say('Couldn\'t connect the wheel motor',2400); } }
 navigator.hid.getDevices().then(ds=>{ const d=pick(ds); if(d) open(d); }).catch(()=>{});
 navigator.hid.addEventListener('disconnect',e=>{ if(e.device===F.dev){ F.dev=null; F.on=false; row(); } });
@@ -67,5 +69,12 @@ function row(){ const r=document.getElementById('wheelRow'); if(!r) return; let 
     b.addEventListener('click',e=>{ e.stopPropagation(); if(F.dev) test(); else connect(); }); box.appendChild(b); }
   b.textContent=F.dev?'Test wheel motor':'Wheel motor'; b.title='Let autopilot turn the wheel (Logitech G29 / G27)'; }
 setTimeout(row,1500);
+const css=document.createElement('style'); css.textContent='#ffbAsk{position:absolute;left:50%;top:calc(var(--st,10px) + 64px);transform:translateX(-50%);z-index:43;display:none;'+
+  'background:#2563eb;color:#fff;border:0;border-radius:999px;padding:11px 18px;font:600 15px system-ui,Arial;box-shadow:0 6px 18px rgba(0,0,0,.45);cursor:pointer}#ffbAsk.on{display:block}';
+document.head.appendChild(css);
+const ask=document.createElement('button'); ask.id='ffbAsk'; ask.textContent='🛞 Tap here so the wheel turns by itself'; document.body.appendChild(ask);
+ask.addEventListener('pointerdown',e=>e.stopPropagation());
+ask.addEventListener('click',async e=>{ e.stopPropagation(); await connect(); if(F.dev) ask.classList.remove('on'); });
+let later=0; setInterval(()=>{ const show=!F.dev&&!!(window.AUTO&&AUTO.on)&&wheelSeen()&&Date.now()>later; ask.classList.toggle('on',show); },500);
 window.FFB={connect,test,state:F,get driving(){ return F.on; },set cmd(v){ F.cmd=+v||0; }};
 })();
