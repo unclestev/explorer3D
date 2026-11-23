@@ -61,7 +61,7 @@ const SPECS={
   // same platform and size as the Navigator, its own dash — a 24-inch panoramic display along the top of the dash in
   // front of the driver, a 13.2-inch touchscreen in a silver frame with tall chrome vents either side, a satin band
   // sweeping across the dash and down round the centre stack, a squared-off two-tone wheel, light grey seats
-  expedition:{style:'sport', xp:true, sunroof:{hw:.42,z0:.07,z1:.76}, eye:[-.42,1.565,.12], pitch:81,
+  expedition:{style:'sport', xp:true, consoleRoof:true, sunroof:{hw:.42,z0:.07,z1:.76}, eye:[-.42,1.565,.12], pitch:81,
     ws:{zB:-1.10,yB:1.30,hwB:.81,zT:-.30,yT:1.855,hwT:.73,bow:.05}, roof:{y:1.88,hw:.77,zR:1.95}, belt:1.36, winTop:1.79, door:.86, zBp:.58, zC:1.62,
     hood:{zr:-1.15,zf:-2.62,yr:1.288,yf:1.205,hw:1.05,crown:.03,gap:.86,nose:.08,crease:{x:.40,h:.014}},
     dash:[[1.262,-1.115],[1.282,-.94],[1.28,-.77],[1.258,-.70],[1.18,-.675],[1.05,-.69],[.93,-.635],[.79,-.50]],
@@ -630,9 +630,10 @@ function overheadEx(G,P,ws){
   // headliner so its face sits ~1 cm below it, inside a soft trim ring, level with the roof (no longer hanging down)
   const W=.25, D=.25, zf=ws.zT+.075, cz=zf+D/2, th=.03;
   const g=new THREE.Group(); g.position.set(0,P.roof.y-.009,cz); G.add(g);
-  const white=!!P.xp, blk=M({color:white?0xf6f6f3:0x151517,emissive:white?0x2a2a28:0,roughness:.62,normalMap:rep(textures().grain,3,3),normalScale:new THREE.Vector2(.35,.35)});
+  const tint=P.consoleRoof?new THREE.Color(P.col.head):null,   /* consoleRoof: the console in the roof lining's own colour (owner 2026-11-22, the Expedition) */
+    white=!!P.consoleWhite||!!tint,   /* the Expedition's is black again (owner 2026-11-22); set consoleWhite on a car for the white one */ blk=M({color:tint?tint:white?0xf6f6f3:0x151517,emissive:tint?0:white?0x2a2a28:0,roughness:.62,normalMap:rep(textures().grain,3,3),normalScale:new THREE.Vector2(.35,.35)});
   const pod=mesh(rbox(W,D,th,.03,.06),blk,g); pod.rotation.x=-Math.PI/2; pod.position.y=th/2;
-  const ring=mesh(rbox(W+.026,D+.026,.006,.04,.008),M({color:new THREE.Color(P.col.head).multiplyScalar(.75),roughness:.9,normalMap:rep(textures().fabric,6,6),normalScale:new THREE.Vector2(.4,.4)}),g);
+  const ring=mesh(rbox(W+.026,D+.026,.006,.04,.008),M({color:new THREE.Color(P.col.head).multiplyScalar(tint?1:.75),roughness:.9,normalMap:rep(textures().fabric,6,6),normalScale:new THREE.Vector2(.4,.4)}),g);
   ring.rotation.x=-Math.PI/2; ring.position.y=.006;                                        // the headliner's edge rolled in round it
   // the face, drawn: 1024 px across the 25 cm pod (y down the picture = toward the driver)
   const T=canvasTex(1024,1024), x=T.x, R=(X,Y,w,h,r)=>{ x.beginPath(); x.moveTo(X+r,Y); x.arcTo(X+w,Y,X+w,Y+h,r); x.arcTo(X+w,Y+h,X,Y+h,r); x.arcTo(X,Y+h,X,Y,r); x.arcTo(X,Y,X+w,Y,r); x.closePath(); };
@@ -661,7 +662,7 @@ function overheadEx(G,P,ws){
     for(const X of [150,742]){ x.fillStyle='#b9bbbd'; R(X,615,132,150,10); x.fill(); const gr=x.createLinearGradient(X+30,0,X+102,0); gr.addColorStop(0,'#8d9196'); gr.addColorStop(.5,'#f2f4f6'); gr.addColorStop(1,'#8d9196');
       x.fillStyle=gr; R(X+34,650,64,80,10); x.fill(); x.strokeStyle='#9a9ea3'; x.lineWidth=5; R(X+22,636,88,108,8); x.stroke(); } }
   T.t.anisotropy=8; T.t.needsUpdate=true;
-  const face=mesh(new THREE.PlaneGeometry(W-.004,D-.004),M({map:T.t,roughness:.6,emissive:white?0xffffff:0,emissiveMap:white?T.t:null,emissiveIntensity:white?.22:0,normalMap:rep(textures().grain,3,3),normalScale:new THREE.Vector2(.25,.25)}),g,false,false);
+  const face=mesh(new THREE.PlaneGeometry(W-.004,D-.004),M({map:T.t,color:tint||0xffffff,roughness:tint?.85:.6,emissive:white&&!tint?0xffffff:0,emissiveMap:white&&!tint?T.t:null,emissiveIntensity:white&&!tint?.22:0,normalMap:rep(textures().grain,3,3),normalScale:new THREE.Vector2(.25,.25)}),g,false,false);
   face.rotation.x=Math.PI/2; face.position.y=-.0006;                                             // faces down into the cabin
   // a little relief: the lid stands proud, the key strip and lenses sit in
   const lid=mesh(rbox(W*.86,D*.40,.004,.008,.012),M({color:0x1c1d20,roughness:.6,transparent:true,opacity:0}),g,false,false); lid.visible=false;
