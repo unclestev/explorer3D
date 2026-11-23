@@ -80,9 +80,68 @@ function light(ph){ const t=(Date.now()/1000)%30, a=t<12?'g':t<15?'y':'r', b=t<1
 // vehicle designs live in js/enh/vehicles.js
 function makeParts(){ return YD.VEH.mats(); }
 function carMesh(){ const g=YD.VEH.build(shadow.material); g.visible=false; T.group.add(g); return g; }
-function place(a,seg,s){ a.hold=0; a.path=[seg]; a.s=s; a.v=seg.v; a.stopDone=null; a.waitT=0;
-  const p=pos(a); a.px=p[0]; a.py=p[1]; a.hd=Math.atan2(seg.ux,seg.uy); a.fade=0; }
-function pos(a){ const s=a.path[0], cx=s.a.x+s.ux*a.s, cy=s.a.y+s.uy*a.s, o=s.off*(typeof driveSide==='function'?driveSide():1); return [cx+s.uy*o, cy-s.ux*o]; }   // its lane: the right-hand half (normal (uy,-ux)), or the left where they drive on the left
+function place(a,seg,s){ a.hold=0; a.path=[seg]; a.prev=null; a.s=s; a.v=seg.v; a.stopDone=null; a.waitT=0; a.yN=null; a.yT=0;
+  const p=pos(a); a.px=p[0]; a.py=p[1]; a.hd=Math.atan2(p[2],p[3]); a.fade=0; }
+/* bends (owner 2026-11-23: "make the computer controlled vehicles adhere to the new curved roads so they turn smoothly
+   around curves"): the road is drawn with every corner rounded (js/enh/smooth.js: a quadratic bend from d before the
+   corner to d after it, d = half of each piece at most and the bend no more than DEV inside the corner). A car takes the
+   same bend in its own lane: the lane lines of the two pieces meet at X, and the car follows the curve from its lane
+   point d before the corner, through X, to its lane point d after it, so it joins the straight lane exactly at both
+   ends. Turns at intersections (onto another road) get a wider bend, like a real turn. */
+const DEV=1.8, MIN_TURN=.6*Math.PI/180, LAT=4;                   // DEV as in smooth.js; LAT: lateral grip for bend speeds, m/s^2
+const SIDE=()=>typeof driveSide==='function'?driveSide():1;
+function corner(s1,s2){
+  if(!s2) return null; const sd=SIDE();
+  if(s1._cn===s2&&s1._cs===sd) return s1._cc;
+  let r=null;
+  const c=Math.max(-1,Math.min(1,s1.ux*s2.ux+s1.uy*s2.uy)), cr=s1.ux*s2.uy-s1.uy*s2.ux, th=Math.acos(c);
+  if(th>MIN_TURN&&th<Math.PI*.97&&Math.hypot(s1.b.x-s2.a.x,s1.b.y-s2.a.y)<1.5){
+    const sn=Math.sin(th/2), turn=s1.b.deg>=3&&c<.9;
+    const d=Math.min(.5*s1.len,.5*s2.len,turn?Math.max(8,2*DEV/sn):2*DEV/sn);
+    const o1=s1.off*sd, o2=s2.off*sd, Cx=s1.b.x, Cy=s1.b.y;
+    const n1x=s1.uy, n1y=-s1.ux, n2x=s2.uy, n2y=-s2.ux;           // right-hand normals
+    let a1=null;                                                  // where the two lane lines cross, along piece 1 from its lane point at the corner
+    if(Math.abs(o1-o2)<.01) a1=o1*cr/(1+c);
+    else if(Math.abs(cr)>.1){ const rx=n2x*o2-n1x*o1, ry=n2y*o2-n1y*o1; a1=(rx*s2.uy-ry*s2.ux)/cr; }
+    if(a1!=null&&d>.25){
+      const Xx=Cx+n1x*o1+s1.ux*a1, Xy=Cy+n1y*o1+s1.uy*a1;
+      const P0=[Cx-s1.ux*d+n1x*o1, Cy-s1.uy*d+n1y*o1], P2=[Cx+s2.ux*d+n2x*o2, Cy+s2.uy*d+n2y*o2];
+      const e1=(Xx-P0[0])*s1.ux+(Xy-P0[1])*s1.uy, e2=(P2[0]-Xx)*s2.ux+(P2[1]-Xy)*s2.uy;
+      if(e1>.3&&e2>.3){                                           // both legs still point the way the car goes
+        // tightest radius (at the middle of the bend), for the speed through it
+        const bx=P2[0]-P0[0], by=P2[1]-P0[1], qx=2*(P0[0]-2*Xx+P2[0]), qy=2*(P0[1]-2*Xy+P2[1]);
+        const k=Math.abs(bx*qy-by*qx)/Math.pow(Math.hypot(bx,by)||1e-6,3), R=k>1e-6?1/k:1e6;
+        r={d,P0,X:[Xx,Xy],P2,R,cap:SPEEDUP*Math.sqrt(LAT*R),turn};
+      } } }
+  s1._cn=s2; s1._cs=sd; s1._cc=r; return r;
+}
+// where the car is in its lane, and which way it points: [x, y, dirx, diry, m] (m: how far it moves per metre of road)
+function pos(a){ const s=a.path[0], sd=SIDE();
+  let cc=null, q=0;
+  const nx=a.path[1]; if(nx){ const k=corner(s,nx); if(k&&a.s>s.len-k.d){ cc=k; q=(a.s-(s.len-k.d))/(2*k.d); } }
+  if(!cc&&a.prev){ const k=corner(a.prev,s); if(k&&a.s<k.d){ cc=k; q=(k.d+a.s)/(2*k.d); } }
+  if(cc){ const t=Math.max(0,Math.min(1,q)), u=1-t, P0=cc.P0, X=cc.X, P2=cc.P2;
+    const x=u*u*P0[0]+2*u*t*X[0]+t*t*P2[0], y=u*u*P0[1]+2*u*t*X[1]+t*t*P2[1];
+    const dx=2*(u*(X[0]-P0[0])+t*(P2[0]-X[0])), dy=2*(u*(X[1]-P0[1])+t*(P2[1]-X[1])), L=Math.hypot(dx,dy)||1e-6;
+    return [x,y,dx/L,dy/L,Math.max(.2,L/(2*cc.d))]; }
+  const cx=s.a.x+s.ux*a.s, cy=s.a.y+s.uy*a.s, o=s.off*sd; return [cx+s.uy*o, cy-s.ux*o, s.ux, s.uy, 1]; }   // its lane: the right-hand half (normal (uy,-ux)), or the left where they drive on the left
+/* giving way to you (owner 2026-11-23: "make the cars yield to the user driver as they approach stop sign intersections
+   or no sign intersections"): at an intersection without traffic lights, a car holds short while you are in the
+   intersection, coming toward it on a crossing road (or from ahead when it is turning across your way) and would get
+   there before it or soon after, or are waiting at it facing in. If you sit still at the edge it waves you on for a few
+   seconds, then goes. A car too close to stop already is committed and carries on. */
+function yieldTo(a,s,nx,dist,px,py,ph,pv){
+  const n=s.b, wx=n.x-px, wy=n.y-py, D=Math.hypot(wx,wy); if(D>70) return false;
+  const hx=Math.sin(ph), hy=Math.cos(ph), close=pv*(hx*wx+hy*wy)/(D||1);          // how fast you are closing on it
+  const par=hx*s.ux+hy*s.uy;
+  if(par>.8) return false;                                                         // same way as the car: behind it or ahead of it (the gap keeping handles that)
+  if(par<-.8){ const tc=nx?(s.ux*nx.uy-s.uy*nx.ux)*SIDE():0; if(!(tc>.3)) return false; }   // oncoming: only when the car turns across your lane
+  if(D<7.5) return Math.abs(pv)>.3?true:a.yT<4;                        // in the middle of it
+  const facing=(hx*wx+hy*wy)/(D||1)>.7;
+  if(close>.5){ const tp=D/close, ta=dist/Math.max(a.v,.5); return tp<9&&tp<ta+4; }
+  if(D<16&&facing&&Math.abs(pv)<.5) return a.yT<3;                                 // waiting at it: after you
+  return false;
+}
 function spawn(a,minD,maxD){
   const px=S.lng*MLNG, py=S.lat*MLAT;
   for(let tries=0;tries<40;tries++){
@@ -113,29 +172,39 @@ function drive(a,dt,px,py,pv,ph){ const B=BB(), ACC=ACCF();
   while(ahead<LA){ const n=nextSeg(a.path[a.path.length-1]); if(!n) break; a.path.push(n); ahead+=n.len; }
   const seg=a.path[0]; let allow=seg.v*a.f; a.endIn=1e9;
   let dist=seg.len-a.s;
+  if(a.prev){ const k=corner(a.prev,seg); if(k&&a.s<k.d) allow=Math.min(allow,k.cap); }     // still in the bend just taken
+  let held=false;
   for(let i=0;i<a.path.length;i++){
     const s=a.path[i], nx=a.path[i+1], end=s.b;
-    if(nx) allow=Math.min(allow,Math.sqrt(Math.pow(Math.min(turnCap(s,nx),nx.v*a.f),2)+2*B*Math.max(0,dist-3)));
+    if(nx){ const k=corner(s,nx), cap=Math.min(k?(k.turn?Math.min(k.cap,turnCap(s,nx)):k.cap):turnCap(s,nx),nx.v*a.f);
+      allow=Math.min(allow,Math.sqrt(cap*cap+2*B*Math.max(0,dist-(k?k.d:3)))); }
     else a.endIn=dist;                                               // road ends (edge of the loaded map, dead end): no stopping in the lane (owner 2026-11-21) — it drives on and fades away, then turns up elsewhere
     const stopSign=(s.stop||end.stop)&&a.stopDone!==end, sg=s.sig||end.sig;
+    // give way to you at an intersection without lights, if it can still stop short of it
+    if(!sg&&end.deg>=3&&!held&&dist<70){
+      const atLine=dist<9&&a.v<1, canStop=a.yN===end||dist-6>a.v*a.v/(2*B*2);     // already slowing for you here: keep at it
+      if((atLine||canStop)&&yieldTo(a,s,nx,dist,px,py,ph,pv)){ held=true;
+        allow=Math.min(allow,Math.sqrt(2*B*1.5*Math.max(0,dist-6)));
+        if(a.yN!==end){ a.yN=end; a.yT=0; } if(atLine) a.yT+=dt; } }
     if(stopSign){ allow=Math.min(allow,Math.sqrt(2*B*Math.max(0,dist-5)));
-      if(i===0&&dist<9&&a.v<1){ a.waitT+=dt; if(a.waitT>1.3){ a.stopDone=end; a.waitT=0; } } }
+      if(i===0&&dist<9&&a.v<1&&!held){ a.waitT+=dt; if(a.waitT>1.3){ a.stopDone=end; a.waitT=0; } } }
     if(sg){ const st=light(sg.ph); if(st==='r'||(st==='y'&&dist>a.v*a.v/(2*B)+4)) allow=Math.min(allow,Math.sqrt(2*B*Math.max(0,dist-6))); }
     dist+=nx?nx.len:0; if(!nx||dist>LA) break;
   }
   // keep a gap to anyone ahead in the same lane (other cars and you)
-  const [x,y]=pos(a), hx=seg.ux, hy=seg.uy;
+  const [x,y,hx,hy,mv]=pos(a);
   const gap=(ox,oy,ohx,ohy,ov)=>{ const dx=ox-x, dy=oy-y, fd=dx*hx+dy*hy, lat=Math.abs(dx*hy-dy*hx);
     if(fd>0&&fd<70&&lat<3.2&&(ohx*hx+ohy*hy)>.5) allow=Math.min(allow,Math.sqrt(Math.max(0,ov*ov*.8+2*B*Math.max(0,fd-11)))); };
   for(const o of T.agents) if(o!==a&&o.path) gap(o.px,o.py,Math.sin(o.hd),Math.cos(o.hd),o.v);
   gap(px,py,Math.sin(ph),Math.cos(ph),Math.max(0,pv));
   if(a.hold>0){ a.hold-=dt; allow=0; }                             // just been in a bump with you (js/enh/feel.js): stay put a moment
   a.v=a.v<allow?Math.min(allow,a.v+ACC*dt):Math.max(allow,a.v-B*1.6*dt); if(a.v<.05&&allow<.3) a.v=0;
-  a.s+=a.v*dt;
-  while(a.path.length&&a.s>a.path[0].len){ a.s-=a.path[0].len; a.path.shift(); }
+  a.s+=a.v*dt/mv;                                                  // in a bend the lane is a little shorter/longer than the road it rounds
+  while(a.path.length&&a.s>a.path[0].len){ a.s-=a.path[0].len; a.prev=a.path.shift(); }
   if(!a.path.length) return false;
-  const p=pos(a), k=Math.min(1,dt*8); a.px+=(p[0]-a.px)*k; a.py+=(p[1]-a.py)*k;          // smooth the step at bends
-  const th=Math.atan2(a.path[0].ux,a.path[0].uy); let dh=th-a.hd; dh=Math.atan2(Math.sin(dh),Math.cos(dh)); a.hd+=dh*Math.min(1,dt*7);
+  if(a.yN&&a.prev&&a.prev.b===a.yN){ a.yN=null; a.yT=0; }          // through the intersection it gave way at
+  const p=pos(a), k=Math.min(1,dt*14); a.px+=(p[0]-a.px)*k; a.py+=(p[1]-a.py)*k;          // the lane is continuous now; this only softens a corner too tight to round
+  const th=Math.atan2(p[2],p[3]); let dh=th-a.hd; dh=Math.atan2(Math.sin(dh),Math.cos(dh)); a.hd+=dh*Math.min(1,dt*12);
   return true;
 }
 
