@@ -14,12 +14,18 @@ const css=document.createElement('style'); css.textContent=`
 #tubeBox.moving .stop{display:flex}
 #paneVideo .it{display:flex;gap:9px;align-items:center;padding:6px;border-radius:9px;cursor:pointer}
 #paneVideo .it:hover{background:rgba(255,255,255,.1)}
+#tubeResults{max-height:min(40vh,320px);overflow-y:auto;margin-top:6px}
+#paneVideo .it .ch{opacity:.6;font-size:12px}
 #paneVideo img{width:64px;height:36px;border-radius:5px;flex:none;object-fit:cover;background:#223}`;
 document.head.appendChild(css);
-pane.innerHTML=`<form id="tubeForm" style="margin-top:8px"><input id="tubeQ" type="search" placeholder="Paste a YouTube link" autocomplete="off" enterkeyhint="go"><button type="submit">Watch</button></form>
+pane.innerHTML=`<form id="tubeForm" style="margin-top:8px"><input id="tubeQ" type="search" placeholder="Type a video name or paste a link" autocomplete="off" enterkeyhint="search"><button type="submit">Go</button></form>
+<div id="tubeResults"></div>
 <div class="row"><button type="button" id="tubeStop">⏹ Stop video</button></div>
 <div class="hd">Recent</div><div id="tubeRecent"></div>
-<div class="note">Plays on the car's centre screen in cockpit view. In the YouTube app: Share → Copy link, then paste it here. The video pauses while the car is moving, like in a real car.</div>`;
+<details id="tubeKeyBox" style="margin-top:8px"><summary style="cursor:pointer;opacity:.75;font-size:12px">🔑 YouTube search key</summary>
+<div class="note" style="opacity:.8">Searching by name needs a free key from Google: console.cloud.google.com → new project → enable "YouTube Data API v3" → Credentials → Create API key (limit it to this website). Paste it here; it stays on this device.</div>
+<form id="tubeKeyForm" style="margin-top:6px"><input id="tubeKey" type="password" placeholder="Paste your API key" autocomplete="off"><button type="submit">Save</button></form></details>
+<div class="note">Plays on the car's centre screen in cockpit view. The video pauses while the car is moving, like in a real car.</div>`;
 const $=id=>document.getElementById(id);
 const box=document.createElement('div'); box.id='tubeBox'; box.innerHTML='<div class="stop">Video paused<br>while driving</div>'; document.body.appendChild(box);
 for(const t of ['pointerdown','touchstart','wheel']) box.addEventListener(t,e=>e.stopPropagation(),{passive:true});   // taps on the video don't steer the view
@@ -51,7 +57,29 @@ function watch(id){ stop(); T.id=id; if(window.MUSIC&&MUSIC.pause) MUSIC.pause()
   if(!(window.COCKPIT&&COCKPIT.on)) toast('The video plays on the centre screen — switch to cockpit view (C)',2600);
   if(window.MUSIC&&MUSIC.close) MUSIC.close(); }
 function stop(){ if(T.frame){ T.frame.remove(); T.frame=null; } T.id=null; box.style.display='none'; box.classList.remove('moving'); T.moving=false; }
-$('tubeForm').onsubmit=e=>{ e.preventDefault(); const id=idOf($('tubeQ').value); if(!id){ toast("That doesn't look like a YouTube link",1800); return; } $('tubeQ').value=''; $('tubeQ').blur(); watch(id); };
+// search by name (owner 2026-11-22: "make it so I can type the name"): YouTube Data API v3 with the key saved on this
+// device (localStorage ydTubeKey); safe search on, only videos that can play outside YouTube
+const KEY=()=>{ try{ return localStorage.getItem('ydTubeKey')||''; }catch(e){ return ''; } };
+const esc=t=>{ const d=document.createElement('textarea'); d.innerHTML=t||''; return d.value; };   // titles come HTML-escaped
+function searchTube(q){ const R=$('tubeResults'), key=KEY();
+  if(!key){ R.innerHTML='<div style="opacity:.75;padding:6px;font-size:13px">To search by name, add a YouTube key below (🔑). Pasted links work without one.</div>'; $('tubeKeyBox').open=true; return; }
+  R.innerHTML='<div style="opacity:.6;padding:6px">Searching…</div>';
+  fetch('https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=20&safeSearch=strict&videoEmbeddable=true&q='+encodeURIComponent(q)+'&key='+encodeURIComponent(key))
+    .then(r=>r.json().then(j=>({ok:r.ok,j}))).then(({ok,j})=>{
+      if(!ok){ const m=(j&&j.error&&j.error.message)||'Search failed'; R.innerHTML=''; const d=document.createElement('div'); d.style.cssText='opacity:.75;padding:6px;font-size:13px';
+        d.textContent=/quota/i.test(m)?"Today's free searches are used up — try again tomorrow, or paste a link.":/key|API/i.test(m)?'The YouTube key was not accepted: '+m:m; R.append(d); return; }
+      R.textContent=''; const items=(j.items||[]).filter(it=>it.id&&it.id.videoId);
+      if(!items.length){ R.innerHTML='<div style="opacity:.6;padding:6px">No videos found.</div>'; return; }
+      for(const it of items){ const id=it.id.videoId, sn=it.snippet||{}, title=esc(sn.title);
+        const el=document.createElement('div'); el.className='it'; const img=document.createElement('img'); img.alt=''; img.loading='lazy'; img.src=(sn.thumbnails&&sn.thumbnails.medium&&sn.thumbnails.medium.url)||'https://i.ytimg.com/vi/'+id+'/mqdefault.jpg';
+        const t=document.createElement('div'); t.style.cssText='min-width:0'; const b=document.createElement('div'); b.textContent=title; b.style.cssText='white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+        const c=document.createElement('div'); c.className='ch'; c.textContent=esc(sn.channelTitle); t.append(b,c); el.append(img,t);
+        el.onclick=()=>{ const o=recent.find(o=>o.id===id); if(!o) recent.unshift({id,title}); else o.title=title; watch(id); }; R.append(el); } })
+    .catch(()=>{ R.innerHTML='<div style="opacity:.6;padding:6px">YouTube search isn\'t reachable right now.</div>'; }); }
+$('tubeForm').onsubmit=e=>{ e.preventDefault(); const v=$('tubeQ').value.trim(); if(!v) return; const id=/[\/.]/.test(v)||/^[\w-]{11}$/.test(v)&&!/\s/.test(v)&&/\d|[A-Z]/.test(v)?idOf(v):null;
+  $('tubeQ').blur(); if(id){ $('tubeQ').value=''; watch(id); } else searchTube(v); };
+$('tubeKeyForm').onsubmit=e=>{ e.preventDefault(); const k=$('tubeKey').value.trim(); try{ k?localStorage.setItem('ydTubeKey',k):localStorage.removeItem('ydTubeKey'); }catch(_){ }
+  $('tubeKey').value=''; $('tubeKeyBox').open=false; toast(k?'YouTube key saved on this device':'YouTube key removed',1600); const q=$('tubeQ').value.trim(); if(k&&q) searchTube(q); };
 $('tubeStop').onclick=stop;
 drawRecent();
 
