@@ -36,6 +36,7 @@ button{font-family:inherit;cursor:pointer}
 #wxl{color:#fde68a}
 #surf{color:#bef264;font-size:11px}
 #near{color:#7dd3fc;font-size:11px}
+#xnext{margin-top:2px;font-size:14px;font-weight:600;color:#fde68a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}   /* the next cross street ahead (game.js nextCross) */
 
 /* ---------- tool buttons (top-right: a column in portrait, a row in landscape) ---------- */
 #zoom{position:absolute;top:var(--st);right:var(--sr);z-index:20;display:flex;flex-direction:column;gap:calc(var(--gap)*.6)}
@@ -202,7 +203,7 @@ button{font-family:inherit;cursor:pointer}
 .seg button.on{background:#1d4ed8;color:#fff}
 .carRow{flex-wrap:wrap;gap:8px 12px}.carRow .seg{flex:1 1 100%;flex-wrap:wrap}.carRow .seg button{flex:1 1 auto;padding:7px 4px}   /* car picker on its own line(s): wraps to a second row when the cars don't fit the 330 px panel */
 /* on foot (js/enh/walk.js): the 🚶/🚗 button lights up when you're close enough to get back in */
-#walkBtn.on{background:#15803d;box-shadow:0 0 0 2px #86efac inset}
+#walkBtn.on,#garBtn.on{background:#15803d;box-shadow:0 0 0 2px #86efac inset}
 /* look around (js/enh/look.js): while the view is panned the compass becomes a "look ahead again" button */
 #compass.look{pointer-events:auto;cursor:pointer;border-color:#38bdf8;box-shadow:0 0 0 3px rgba(56,189,248,.55),0 4px 14px rgba(0,0,0,.4)}
 #compass.look::after{content:'↺';position:absolute;right:-7px;top:-7px;width:22px;height:22px;border-radius:50%;background:#0284c7;border:2px solid #fff;

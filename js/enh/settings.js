@@ -7,15 +7,15 @@
 'use strict';
 const panel=document.getElementById('settings'), gear=document.getElementById('gear'), closeBtn=document.getElementById('setX');
 const sizeEl=document.getElementById('carSize'), zoomEl=document.getElementById('zoomVal');
-const BASE_EXAG=1.6, ZMIN=-3, ZMAX=2;
+const BASE_EXAG=1, ZMIN=-3, ZMAX=2;   // 100% = real size (2026-11-23; was 1.6)
 
 // restore size and zoom from last time
-try{ const e=parseFloat(localStorage.getItem('ydCarSize')); if(e>=.25&&e<=2.5) EXAG=e;
+try{ const e=parseFloat(localStorage.getItem('ydCarSize2'));   /* new key: sizes saved before real size meant 1.6x */ if(e>=.25&&e<=2.5) EXAG=e;
      const z=parseFloat(localStorage.getItem('ydZoom')); if(z>=ZMIN&&z<=ZMAX) zoomOff=z; }catch(e){}
 
 const EXu=()=>window.COCKPIT&&COCKPIT.on?COCKPIT.exag:EXAG;    // the cockpit view draws everything real size; this is the chase-view car size
 function show(){ sizeEl.textContent=Math.round(EXu()/BASE_EXAG*100)+'%'; zoomEl.textContent=Math.pow(2,zoomOff).toFixed(1)+'×'; }
-function save(){ try{ localStorage.setItem('ydCarSize',String(EXu())); localStorage.setItem('ydZoom',String(zoomOff)); }catch(e){} }
+function save(){ try{ localStorage.setItem('ydCarSize2',String(EXu())); localStorage.setItem('ydZoom',String(zoomOff)); }catch(e){} }
 // game.js's own click handlers run first (they were attached earlier); then show and save the new values
 for(const id of ['cp','cm','zi','zo']) document.getElementById(id).addEventListener('click',e=>{ e.stopPropagation(); show(); save(); });
 

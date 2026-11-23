@@ -167,20 +167,21 @@ function hiddenByBuilding(a,camX,camY,camH){
    ground is flat there). ---------- */
 const OCC={mesh:null,at:null,t:0,o:null,dirty:true,ter:null};
 function occFeatures(){ const out=[]; const add=(src,sl,hk,bk)=>{ let fs=[]; try{ fs=map.getSource(src)?map.querySourceFeatures(src,sl?{sourceLayer:sl}:{}):[]; }catch(e){} for(const f of fs) out.push([f,hk,bk]); };
-  add(bSrc,'building','b','b'); add('rebuilt',null,'h','b'); add('roofs',null,'h','b');            // footprints, redrawn buildings, and the houses' pitched roofs (stacked slices)
+  add(bSrc,'building','b','b'); add('rebuilt',null,'h','b'); add('roofs',null,'h','b'); add('inrest',null,'b','b');            // footprints, redrawn buildings, and the houses' pitched roofs (stacked slices)
   return out; }
 // built a slice at a time, ~4 ms a frame (owner 2026-11-22: downtown LA froze for ~150 ms each time it rebuilt in one go);
 // the old blockers stay up until the new set is finished
 function buildOcc(){ OCC.t=performance.now(); OCC.at=[S.lng,S.lat]; OCC.dirty=false; OCC.ter=terrainOn; OCC.job=occJob(); }
 function* occJob(){
   const ox=S.lng*MLNG, oy=S.lat*MLAT, R=700, pos=[], idx=[], seen=new Set(), e0=terrainOn?(map.transform.elevation||0):0; let n=0;
-  const hid=window.WALK&&WALK.insideId?WALK.insideId():null;
+  const ir=window.WALK&&WALK.inside&&WALK.inside.rec;                                               // the building you're inside (js/enh/walk.js): not a blocker
+  const mine=ring=>{ if(!ir) return false; let x=0,y=0; const n=ring.length-1; for(let i=0;i<n;i++){ x+=ring[i][0]; y+=ring[i][1]; } return WALK.inRec(ir,y/n,x/n); };
   for(const [f,hk] of occFeatures()){ if(++n%40===0) yield; const g=f.geometry; if(!g) continue; const polys=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
     const pr=f.properties||{}; let h,h0;
-    if(hid!=null&&(hk==='b'?f.id===hid:pr.i===hid)) continue;                                      // the building you're walking around inside (js/enh/walk.js)
+    if(ir&&hk!=='b'&&pr.bk===ir.key) continue;
     if(hk==='b'){ h=+(pr.render_height??pr.height??6)||6; h0=+(pr.render_min_height??pr.min_height??0)||0; } else { h=+pr.h||0; h0=+pr.b||0; }
     if(h<=h0) continue;
-    for(const pl of polys){ const ring=pl[0]; if(!ring||ring.length<4) continue;
+    for(const pl of polys){ const ring=pl[0]; if(!ring||ring.length<4||(ir&&hk!=='h'&&mine(ring))) continue;
       const key=hk+ring.length+':'+ring[0][0].toFixed(6)+','+ring[0][1].toFixed(6)+':'+h0; if(seen.has(key)) continue; seen.add(key);   // the same piece from overlapping tiles
       const P=[]; let near=false, cx=0, cy=0; for(let i=0;i<ring.length-1;i++){ const x=ring[i][0]*MLNG-ox, y=ring[i][1]*MLAT-oy; P.push(new THREE.Vector2(x,y)); cx+=ring[i][0]; cy+=ring[i][1]; if(Math.abs(x)<R&&Math.abs(y)<R) near=true; }
       if(!near||P.length<3) continue;

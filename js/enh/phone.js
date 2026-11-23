@@ -447,6 +447,22 @@ app('car','FordPass','🚙','linear-gradient(#2563eb,#0b2a6b)',(bd,w)=>{
   return ()=>{ PHONE.horn=false; };
 });
 
+// Garage: the same opener as the car's (js/enh/garage.js), for when you're on foot or not in the cockpit
+app('garage','Garage','🏠','linear-gradient(#94a3b8,#334155)',bd=>{
+  bd.innerHTML='<div style="text-align:center;padding-top:10px"><div style="font-size:64px" id="gaIc">🏠</div><div class="big" style="font-size:26px;margin-top:4px" id="gaSt">…</div>'+
+    '<div class="muted" id="gaWh" style="min-height:34px;margin:6px 10px 0"></div>'+
+    '<button class="btn on" id="gaGo" style="font-size:18px;padding:14px 28px;margin-top:14px;border-radius:30px">Open</button>'+
+    '<div class="muted" style="margin-top:20px;font-size:12px">Works in the driveway in front of a garage door, or inside the garage</div></div>';
+  const go=bd.querySelector('#gaGo');
+  go.onclick=()=>{ if(window.GARAGE) GARAGE.press('phone'); };
+  every(200,()=>{ const G=window.GARAGE, t=G&&G.target(); const st=$('gaSt'), wh=$('gaWh'); if(!st) return;
+    if(!t){ st.textContent='No garage in range'; wh.textContent='Pull into a driveway in front of a garage door, or walk up to one'; go.disabled=true; go.style.opacity=.45; go.textContent='Open'; return; }
+    const o=G.openness(t.g.gk), d=G.state.dir[t.g.gk]; go.disabled=false; go.style.opacity=1;
+    st.textContent=d>0?'Opening… '+Math.round(o*100)+'%':d<0?'Closing… '+Math.round(o*100)+'%':o>.99?'Open':'Closed';
+    wh.textContent=mode==='walk'?'You\'re on foot by the garage':'Your car is '+(t.inside?'in the garage':'in the driveway');
+    go.textContent=(d?d<0:o<.5)?'Open':'Close'; go.className='btn '+((d?d<0:o<.5)?'on':'r'); });
+});
+
 // Voice, Settings, Controls
 app('voice','Voice','🎙️','linear-gradient(#a78bfa,#6d28d9)',bd=>{
   bd.innerHTML='<div style="text-align:center;margin-top:30px"><button class="shut" style="background:#6d28d9;border-color:#a78bfa;font-size:28px">🎙️</button><div>Tap and say what you want</div>'+

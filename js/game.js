@@ -772,7 +772,7 @@ function aimCam3D(H,pitchDeg){ const dist=.5*H/Math.tan(rad(camera.fov)/2), p=ra
 const S={lng:START.lng,lat:START.lat,hdg:START.hdg,v:0,steer:0,camB:START.hdg,zoom:19.3,roll:0,pitch:0,wheel:0,dist:0,sp:0,sr:0};
 let boat=false, waterC=0, landC=0, mode='car', farmC=0, offFarmC=0, terrainOn=false, landIds=[];
 const TERRAIN_X=1.5, TRACTOR=0.75;   // tractor runs at 75% of car speed
-const BOATMAX=48, WB=3.05, MAXV=60, REVMAX=28; let SPEEDUP=3, EXAG=1.6;   // two steps below the largest size (2.5)   // SPEEDUP: world distance per game metre
+const BOATMAX=48, WB=3.05, MAXV=60, REVMAX=28; let SPEEDUP=3, EXAG=1;   // real size (owner 2026-11-23: the car and person looked far too big next to doors and garages; was 1.6)   // SPEEDUP: world distance per game metre
 let last=0,frame=0,onRoad=true,roadName='';
 // world speed per speedometer metre: 3 everywhere, except the cockpit with ⚙️ Real speed (1 — the world goes past at what the
 // speedometer says; owner 2026-11-20). Everything that moves scales with it; traffic's planned road speeds are rescaled.
@@ -810,6 +810,7 @@ function wxGrip(){
   return W.type==='snow' ? .55-.15*i : .9-.2*i;                    // snow .40-.55, rain .70-.90
 }
 const rad=d=>d*Math.PI/180;
+const CAM_IN=Math.log2(1.6);   // ~0.68 zoom levels: the old car size, as camera distance
 const mpp=(lat,z)=>78271.517*Math.cos(rad(lat))/Math.pow(2,z);
 let roadFails=0, miss=0;
 const hitRoad=(x,y,r)=>{ try{ if(!roadIds.length) return null; return map.queryRenderedFeatures([[x-r,y-r],[x+r,y+r]],{layers:roadIds}); }catch(e){ roadFails++; return null; } };
@@ -841,13 +842,25 @@ function rebuildRoadGeo(){
   roadGeo.segs=segs;
   // street names live in the map's separate 'transportation_name' layer, not on the road lines above (so roadName was
   // always empty): keep its named lines too, for the panel's "· NE · Main St" (streetHere) and the cockpit
-  const names=[], Rn=400; let nf=[]; try{ nf=map.querySourceFeatures(roadGeo.src,{sourceLayer:'transportation_name'}); }catch(e){}
+  const names=[], Rn=650;   /* far enough for the next cross street (nextCross) */ let nf=[]; try{ nf=map.querySourceFeatures(roadGeo.src,{sourceLayer:'transportation_name'}); }catch(e){}
   for(const f of nf){ const pr=f.properties||{}, nm=pr['name:en']||pr.name||(pr.ref?String(pr.ref).replace(/;.*/,''):''); if(!nm) continue;
     const g=f.geometry, lines=g&&(g.type==='LineString'?[g.coordinates]:g.type==='MultiLineString'?g.coordinates:null); if(!lines) continue;
     for(const L of lines) for(let i=1;i<L.length;i++){ const x1=(L[i-1][0]-S.lng)*kx, y1=(L[i-1][1]-S.lat)*111320, x2=(L[i][0]-S.lng)*kx, y2=(L[i][1]-S.lat)*111320;
       if(Math.max(x1,x2)<-Rn||Math.min(x1,x2)>Rn||Math.max(y1,y2)<-Rn||Math.min(y1,y2)>Rn) continue; names.push([x1,y1,x2,y2,nm]); } }
   roadGeo.names=names;
 }
+// the next street crossing the one you're on (owner 2026-11-23: "identifying the upcoming crossroads from further away"):
+// look straight ahead up to ~450 m for a named line crossing (or meeting) your path that isn't your own street
+function nextCross(cur){ const N=roadGeo.names; if(!N||!N.length) return null;
+  const kx=111320*Math.cos(rad(roadGeo.lat)), x=(S.lng-roadGeo.lng)*kx, y=(S.lat-roadGeo.lat)*111320, h=rad(S.hdg), hx=Math.sin(h), hy=Math.cos(h), LA=450;
+  let best=null, bd=1e9;
+  for(const s of N){ if(!s[4]||s[4]===cur) continue;
+    const dx=s[2]-s[0], dy=s[3]-s[1], L=Math.hypot(dx,dy); if(L<.5) continue;
+    const den=hx*dy-hy*dx; if(Math.abs(den)/L<.35) continue;                       // running alongside, not across
+    const t=((s[0]-x)*dy-(s[1]-y)*dx)/den, u=((s[0]-x)*hy-(s[1]-y)*hx)/den, slack=6/L; // t: metres ahead; u: along the cross street
+    if(t<8||t>LA||u<-slack||u>1+slack) continue;
+    if(t<bd){ bd=t; best={name:s[4],d:t}; } }
+  return best; }
 // the street under the car: the nearest named line within 14 m, preferring one that runs the way you're heading
 function streetHere(){ const N=roadGeo.names; if(!N||!N.length) return '';
   const kx=111320*Math.cos(rad(roadGeo.lat)), x=(S.lng-roadGeo.lng)*kx, y=(S.lat-roadGeo.lat)*111320, h=rad(S.hdg), hx=Math.sin(h), hy=Math.cos(h);
@@ -1338,7 +1351,11 @@ const roadxEl=document.getElementById('roadx');
 function updateRoadX(){ if(!roadxEl) return; const H=['N','NE','E','SE','S','SW','W','NW'][Math.round((((S.hdg%360)+360)%360)/45)%8];
   let st=''; if(mode!=='glider'&&mode!=='boat'&&(onRoad||mode==='walk')&&roadEl.className!=='off'){ if(!roadGeo.segs||meters(roadGeo.lat,roadGeo.lng,S.lat,S.lng)>300) rebuildRoadGeo(); st=streetHere(); }
   roadName=st;                                                        /* the cockpit's cluster and speed-limit signs read this too */
-  const t='\u00a0· '+H+(st?' · '+st:'');   /* non-breaking: a flex item drops a plain leading space */ if(roadxEl.textContent!==t) roadxEl.textContent=t; }
+  const t='\u00a0· '+H+(st?' · '+st:'');   /* non-breaking: a flex item drops a plain leading space */ if(roadxEl.textContent!==t) roadxEl.textContent=t;
+  if(xnextEl){ const nx=mode!=='glider'&&mode!=='boat'&&st?nextCross(st):null;           /* the next cross street ahead */
+    const ft=nx?nx.d*3.281:0, tx=nx?'Next: '+nx.name+' · '+(ft<1000?Math.max(50,Math.round(ft/50)*50)+' ft':(nx.d/1609).toFixed(1)+' mi'):'';
+    if(xnextEl.textContent!==tx){ xnextEl.textContent=tx; xnextEl.style.display=tx?'':'none'; } } }
+const xnextEl=document.getElementById('xnext');
 function every(k,sec){ const t=last/1000; if(tick[k]===undefined||t-tick[k]>=sec){ tick[k]=t; return true; } return false; }
 let lastStep=0;
 function loop(now){
@@ -1428,11 +1445,14 @@ function step(now){
   const SOLID=REAL&&(mode==='car'||mode==='tractor'), NOSE=2.4*(SOLID?Math.max(1,EXAG*.85):1);
   if(Math.abs(S.v)>(SOLID?.05:.5) && styleReady && blockIds.length){
     const ahead=[nLng+Math.sin(h)*NOSE/(111320*Math.cos(rad(S.lat)))*Math.sign(S.v), nLat+Math.cos(h)*NOSE/111320*Math.sign(S.v)];
-    const p=map.project(ahead);
+    // garages (js/enh/garage.js): through an open door and around inside one, its walls rule instead of the house's
+    const gg=mode==='car'&&window.GARAGE?GARAGE.gate(S.lat,S.lng,nLat,nLng,ahead):null;
+    const p=gg?null:map.project(ahead);
     // tall extrusions overlap the car on screen, so candidates are filtered by real footprint under the car's nose.
     // A small box is enough: fill-extrusion queries hit the whole projected prism, including its base footprint.
-    const bh=(QG?geoBlocks(ahead[0],ahead[1]):hit(p.x,p.y,6,blockIds)).filter(f=>contains(f.geometry,ahead[0],ahead[1]));   // cockpit: the nose can be off screen
-    if(bh.length&&SOLID&&!bh.some(f=>contains(f.geometry,S.lng,S.lat))){ blocked=true; step.bid=null; }   // a wall stops you
+    const bh=gg?[]:(QG?geoBlocks(ahead[0],ahead[1]):hit(p.x,p.y,6,blockIds)).filter(f=>contains(f.geometry,ahead[0],ahead[1]));   /* cockpit: the nose can be off screen */
+    if(gg==='wall'){ blocked=true; step.bid=null; }
+    else if(bh.length&&SOLID&&!bh.some(f=>contains(f.geometry,S.lng,S.lat))){ blocked=true; step.bid=null; }   // a wall stops you
     else if(bh.length){ inBuilding=true;                            // realistic driving off (or already inside one): you plow through
       const b0=bh[0], bid=b0.id!=null?b0.id:JSON.stringify(bboxOf(partsOf(b0.geometry)[0]?.[0]||[[0,0]]));
       if(bid!==step.bid){ step.bid=bid; step.newHit=true; } }
@@ -1522,7 +1542,9 @@ function step(now){
 
   // camera: lagged chase, zooms out with speed
   const dB=((S.hdg+LOOK.yaw-S.camB+540)%360)-180; S.camB+=dB*(1-Math.exp(-dt*7));
-  const tz=19.3+zoomOff-Math.min(Math.abs(S.v)/MAXV,1)*2.0; S.zoom+=(tz-S.zoom)*Math.min(1,dt*3);
+  // the camera sits closer (CAM_IN) so the real-size car looks as big on screen as the old 1.6x one did; the extra closeness
+  // fades out with speed, so at speed you see as far ahead as before
+  const spdF=Math.min(Math.abs(S.v)/MAXV,1), tz=19.3+zoomOff+CAM_IN*(1-spdF)-spdF*2.0; S.zoom+=(tz-S.zoom)*Math.min(1,dt*3);
   let camMoved=true;
   if(window.COCKPIT&&COCKPIT.active()) COCKPIT.view(dt);          // from behind the wheel (js/enh/cockpit.js)
   else{

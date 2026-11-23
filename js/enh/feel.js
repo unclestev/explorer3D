@@ -33,6 +33,7 @@ function pick(){
   if(mode==='tractor') return SURF.dirt;
   if(mode!=='car') return SURF.paved;
   if(onRoad) return S.rcls==='gravel'?SURF.gravel:SURF.paved;
+  if(window.PARKING&&PARKING.at(S.lng,S.lat)) return SURF.lot;      // js/enh/parking.js: the map tiles don't have the lots
   return SURF[LANDS[S.land]||'grass'];
 }
 // smooth noise in -1..1 along a line
