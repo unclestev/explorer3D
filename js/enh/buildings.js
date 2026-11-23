@@ -117,7 +117,7 @@ const crossesTile=(b)=>Math.floor(tx(b[0]))!==Math.floor(tx(b[2]))||Math.floor(t
    Every map group with a piece within RW metres is taken over whole (the map can only leave a group out by its id):
    all its pieces in the loaded tiles are drawn here, each cut back to its own tile so pieces from two tiles don't
    overlap. Groups already taken stay taken until they are RW+150 m away, so the list doesn't flip back and forth. */
-const W={sig:'',hid:new Set(),n:0,ms:0};
+const W={sig:'',hid:new Set(),n:0,ms:0,cache:new Map()};
 const tileBox=(z,x,y)=>{ const n=2**z, lat=v=>Math.atan(Math.sinh(Math.PI*(1-2*v/n)))*180/Math.PI; return [x/n*360-180, lat(y+1), (x+1)/n*360-180, lat(y)]; };
 function clipRing(r,b){                                           // Sutherland-Hodgman against a lng/lat box; closed ring in and out
   let P=r.slice(0,-1);
@@ -143,14 +143,17 @@ function buildWalls(fs,kx,ky,RW,gone){
     const pls=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[], pr=f.properties||{};
     const h=+(pr.render_height!=null?pr.render_height:pr.height!=null?pr.height:6), b0=+(pr.render_min_height||pr.min_height||0);
     for(const pl of pls){ const r=pl[0]; if(!r||r.length<4) continue;
-      const sk=tk+':'+r.length+':'+r[0][0]+','+r[0][1]; if(seen.has(sk)) continue; seen.add(sk);
-      const outer=clipRing(r,box); if(!outer) continue;
+      const sk=tk+':'+r.length+':'+r[0][0]+','+r[0][1]+':'+h; if(seen.has(sk)) continue; seen.add(sk);
+      const old=W.cache.get(sk); if(old!==undefined){ if(old){ old.id=f.id; feats.push(old); } continue; }
+      const outer=clipRing(r,box); if(!outer){ W.cache.set(sk,null); continue; }
       let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const q of r){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
       const cx=(x0+x1)/2, cy=(y0+y1)/2, A=Math.abs(area(r.slice(0,-1).map(q=>[(q[0]-cx)*kx,(q[1]-cy)*ky]))), seed=seedOf(cx,cy);
       const house=h<=12&&b0===0&&A>=25&&A<=450, L=house?houseLook(seed):null;
       const c=house?L.wall:h<=12?LOWC[Math.floor(hash(seed,59)*LOWC.length)]:h<=30?['#c8c4bc','#b3b8be','#d2c8b5','#bdb7ad','#a89f93'][seed%5]:['#9fb3c6','#8b9fb2','#a7b4bf'][seed%3];
       const rings=[outer]; for(const hr of pl.slice(1)){ const c2=clipRing(hr,box); if(c2) rings.push(c2); }
-      feats.push({type:'Feature',id:f.id,properties:{c,cc:house?L.roof:FLAT[seed%2],b:b0,h},geometry:{type:'Polygon',coordinates:rings}}); } }
+      const ft={type:'Feature',id:f.id,properties:{c,cc:house?L.roof:FLAT[seed%2],b:b0,h},geometry:{type:'Polygon',coordinates:rings}};
+      W.cache.set(sk,ft); feats.push(ft); } }
+  if(W.cache.size>20000) W.cache.clear();
   const sig=[...hid].sort().join(',')+'|'+[...tiles].sort().join(',');
   if(sig!==W.sig){ W.sig=sig; W.hid=hid; W.n=feats.length;
     safe('walls',()=>map.getSource('walls').setData({type:'FeatureCollection',features:feats}));
