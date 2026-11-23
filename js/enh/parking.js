@@ -44,7 +44,8 @@ function* stallJob(){                                            // spread over 
   const lines=f=>{ const g=f.geometry; return !g?[]:g.type==='LineString'?[g.coordinates]:g.type==='MultiLineString'?g.coordinates:[]; };
   // aisles, and the other roads (stalls stay off them), in local metres
   const aisles=[], roads=[], seen=new Set();
-  for(const f of tf){ const pr=f.properties||{}, cl=pr.class||''; if(/^(path|rail|transit|ferry|pier|aerialway|bridge)/.test(cl)) continue;
+  let nf=0;
+  for(const f of tf){ if(++nf%150===0) yield; const pr=f.properties||{}, cl=pr.class||''; if(/^(path|rail|transit|ferry|pier|aerialway|bridge)/.test(cl)) continue;
     const isA=cl==='service'&&pr.service==='parking_aisle';
     for(const l of lines(f)) for(let i=1;i<l.length;i++){ const a=L(l[i-1][0],l[i-1][1]), b=L(l[i][0],l[i][1]);
       if(Math.min(Math.abs(a[0]),Math.abs(b[0]))>R+60||Math.min(Math.abs(a[1]),Math.abs(b[1]))>R+60) continue;
@@ -61,7 +62,7 @@ function* stallJob(){                                            // spread over 
       if(Math.hypot(s.a[0]+dx*t-x,s.a[1]+dy*t-y)<s.half+pad) return true; } return false; };
   // buildings on a 25 m grid
   const grid=new Map(), gk=(x,y)=>Math.floor(x/25)+','+Math.floor(y/25);
-  for(const f of bf){ const g=f.geometry, pls=!g?[]:g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
+  for(const f of bf){ yield; const g=f.geometry, pls=!g?[]:g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
     for(const pl of pls){ const r=(pl[0]||[]).map(q=>L(q[0],q[1])); if(r.length<4) continue; let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
       for(const q of r){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
       if(x1<-R||x0>R||y1<-R||y0>R) continue; const o={r,b:[x0,y0,x1,y1]};
@@ -69,7 +70,7 @@ function* stallJob(){                                            // spread over 
   yield;
   const inBld=(x,y)=>{ for(const o of grid.get(gk(x,y))||[]){ const b=o.b; if(x<b[0]||x>b[2]||y<b[1]||y>b[3]) continue; if(inRing(o.r,x,y)) return true; } return false; };
   // the lots, in local metres
-  const lots=[]; for(const p of P.polys){ const r0=p.rings[0].map(q=>L(q[0],q[1])); let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  const lots=[]; let nl=0; for(const p of P.polys){ if(++nl%60===0) yield; const r0=p.rings[0].map(q=>L(q[0],q[1])); let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
     for(const q of r0){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
     if(x1<-R||x0>R||y1<-R||y0>R) continue; lots.push({r:r0,holes:p.rings.slice(1).map(h=>h.map(q=>L(q[0],q[1]))),b:[x0,y0,x1,y1],aisle:false}); }
   const lotAt=(x,y)=>{ for(const o of lots){ const b=o.b; if(x<b[0]||x>b[2]||y<b[1]||y>b[3]) continue; if(inRing(o.r,x,y)&&!o.holes.some(h=>inRing(h,x,y))) return o; } return null; };
