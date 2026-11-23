@@ -11,13 +11,16 @@
    - The rubber deflector on top of the blade (owner: "can you make the top black part dangle?"): the node 'Deflector',
      hinged along the blade's top edge, hangs a little forward when parked, swings forward when you brake and back when you
      pull away, is blown back more the faster you go, and flutters — a damped spring.
-   window.PLOW = {turn(dir), step(dir), straight(), angle (degrees, + = snow to the right), flap} */
+   - Up and down (owner 2026-11-23: "can you make the plow able to go up and down?"): the blade lifts 32 cm on its ram
+     (▲▼ on the screen, U, or "raise / lower the plow"); raised, it doesn't throw snow or clear the road.
+   window.PLOW = {turn(dir), step(dir), straight(), lift(up?), angle (degrees, + = snow to the right), down, flap} */
 (()=>{
 'use strict';
 const isPlow=()=>typeof CARKEY!=='undefined'&&CARKEY==='snowplow';
 const say=(m,ms)=>{ if(typeof toast==='function') toast(m,ms||1400); };
 const MAXA=32, RATE=34;                                         // degrees, degrees a second
-let ang=0, want=0, hold=0;                                      // ang: + = left end ahead, snow off to the right
+let ang=0, want=0, hold=0, up=0, upWant=0;                      // up: 0 down … 1 raised                                      // ang: + = left end ahead, snow off to the right
+try{ upWant=up=localStorage.getItem('ydPlowUp')==='1'?1:0; }catch(e){}
 try{ const v=+localStorage.getItem('ydPlowAng'); if(isFinite(v)) ang=want=Math.max(-MAXA,Math.min(MAXA,v)); }catch(e){}
 const save=()=>{ try{ localStorage.setItem('ydPlowAng',String(Math.round(want))); }catch(e){} };
 
@@ -37,11 +40,13 @@ setInterval(()=>{
 function turn(dir){ hold=dir; }                                  // hold: -1 left, 1 right, 0 stop
 function step(dir){ want=Math.max(-MAXA,Math.min(MAXA,Math.round((want+dir*8)/4)*4)); save(); }
 function straight(){ want=0; hold=0; save(); }
+function lift(u){ upWant=u==null?(upWant?0:1):(u?1:0); try{ localStorage.setItem('ydPlowUp',upWant?'1':'0'); }catch(e){} return upWant; }
+const LIFT=.32, RAM0=[0,1.28,3.86];
 const BW=3.70, PIV=[0,.42,4.00], C0=[0,.08-.42,.62];          // blade width; pivot; blade centre seen from the pivot (model metres)
 
 // ---------- snow spray and the dangling deflector ----------
 const N=700, P=new Float32Array(N*3), V=new Float32Array(N*3), L=new Float32Array(N);
-let pts=null, emit=0, WS=null, last=0, D=null, Bn=null, base=null, th=.12, w=0, vPrev=0, gust=0, gT=0;
+let pts=null, emit=0, WS=null, last=0, D=null, Bn=null, Rm=null, base=null, th=.12, w=0, vPrev=0, gust=0, gT=0;
 function make(g){ const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.BufferAttribute(P,3));
   const c=document.createElement('canvas'); c.width=c.height=64; const x=c.getContext('2d'), gr=x.createRadialGradient(32,32,0,32,32,32);
   gr.addColorStop(0,'rgba(255,255,255,1)'); gr.addColorStop(.45,'rgba(250,252,255,.85)'); gr.addColorStop(1,'rgba(240,246,255,0)'); x.fillStyle=gr; x.fillRect(0,0,64,64);
@@ -60,12 +65,16 @@ function frame(now){
   // the blade: follow the buttons, ease to where it's going
   if(hold){ want=Math.max(-MAXA,Math.min(MAXA,want+hold*RATE*dtB)); }
   const prevA=ang; ang+=Math.max(-RATE*dtB,Math.min(RATE*dtB,want-ang));
-  if(!Bn) Bn=M.g.getObjectByName('PlowBlade');
-  if(Bn&&(Bn.userData.a!==ang)){ Bn.rotation.y=-ang*Math.PI/180; Bn.userData.a=ang; if(typeof dirty!=='undefined') dirty=true; }
+  if(!Bn){ Bn=M.g.getObjectByName('PlowBlade'); if(Bn) Bn.userData.y0=Bn.position.y; Rm=M.g.getObjectByName('LiftRam'); }
+  up+=Math.max(-dtB/1.4,Math.min(dtB/1.4,upWant-up));            // about 1.4 s up or down
+  if(Bn&&(Bn.userData.a!==ang||Bn.userData.u!==up)){ Bn.rotation.set(-up*.10,-ang*Math.PI/180,0,'YXZ'); Bn.position.y=Bn.userData.y0+up*LIFT;   // tips back a little as it rises
+    Bn.userData.a=ang; Bn.userData.u=up; if(typeof dirty!=='undefined') dirty=true;
+    if(Rm){ const tx=PIV[0], ty=PIV[1]+.78+up*LIFT, tz=PIV[2], d=new THREE.Vector3(tx-RAM0[0],ty-RAM0[1],tz-RAM0[2]), L=d.length();   // the ram reaches the post top
+      Rm.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),d.normalize()); Rm.scale.set(1,1,Math.max(.05,L)); } }
   if(ang!==prevA&&isPlow()&&window.SOUND&&SOUND.click&&Math.floor(now/180)!==Math.floor((now-dt*1000)/180)) try{ SOUND.click(); }catch(e){}
   // snow off the trailing end(s)
   const v=Math.abs((typeof S!=='undefined'&&S.v)||0), mph=v*2.237;
-  const active=isPlow()&&mode==='car'&&snowing()&&S.v>.8;
+  const active=isPlow()&&mode==='car'&&snowing()&&S.v>.8&&up<.2;   // a raised blade throws nothing
   const sides=Math.abs(ang)<6?[-1,1]:[ang>0?-1:1];               // which end trails: + angle -> the right end (u = -1)
   let alive=false; if(active) emit+=dt*Math.min(1400,mph*34)*(sides.length>1?.6:1);
   for(let i=0;i<N;i++){
@@ -99,20 +108,22 @@ const css=document.createElement('style'); css.textContent='#plowBtns{position:a
   '#plowBtns button:active{background:#2563eb}#plowBtns b{min-width:62px;text-align:center;color:#fff;font:600 12px system-ui;text-shadow:0 1px 3px #000}';
 document.head.appendChild(css);
 const box=document.createElement('div'); box.id='plowBtns';
-box.innerHTML='<button data-d="-1" aria-label="Angle the plow left">◀</button><b id="plowAng">Plow ⟂</b><button data-d="1" aria-label="Angle the plow right">▶</button>';
+box.innerHTML='<button data-d="-1" aria-label="Angle the plow left">◀</button><b id="plowAng">Plow ⟂</b><button data-d="1" aria-label="Angle the plow right">▶</button><button id="plowUp" aria-label="Raise or lower the plow">▲</button>';
 document.body.appendChild(box);
-for(const b of box.querySelectorAll('button')){ const d=+b.dataset.d; let t0=0;
+for(const b of box.querySelectorAll('button[data-d]')){ const d=+b.dataset.d; let t0=0;
   b.addEventListener('pointerdown',e=>{ e.stopPropagation(); e.preventDefault(); t0=performance.now(); turn(d); });
   const up=e=>{ if(!t0) return; e&&e.stopPropagation(); if(performance.now()-t0<220) step(d); turn(0); t0=0; save(); };
   b.addEventListener('pointerup',up); b.addEventListener('pointerleave',up); b.addEventListener('pointercancel',up); }
 box.querySelector('b').addEventListener('click',e=>{ e.stopPropagation(); straight(); say('Plow straight'); });
+document.getElementById('plowUp').addEventListener('click',e=>{ e.stopPropagation(); say(lift()?'Plow up':'Plow down'); });
 box.addEventListener('pointerdown',e=>e.stopPropagation());
 setInterval(()=>{ const on=isPlow()&&mode==='car'; box.classList.toggle('on',on);
+  document.getElementById('plowUp').textContent=upWant?'▼':'▲'; document.getElementById('plowUp').title=upWant?'Lower the plow':'Raise the plow';
   const r=Math.round(want); document.getElementById('plowAng').textContent=Math.abs(r)<2?'Plow ⟂':r>0?'Plow '+r+'° ▶':'◀ Plow '+(-r)+'°'; },150);
 const KEYS={KeyZ:-1,KeyX:1};
 addEventListener('keydown',e=>{ if(!isPlow()||e.repeat||/INPUT|TEXTAREA/.test((e.target&&e.target.tagName)||'')) return;
-  if(KEYS[e.code]) turn(KEYS[e.code]); });
+  if(KEYS[e.code]) turn(KEYS[e.code]); else if(e.code==='KeyU') say(lift()?'Plow up':'Plow down'); });
 addEventListener('keyup',e=>{ if(KEYS[e.code]&&hold===KEYS[e.code]){ turn(0); save(); } });
 
-window.PLOW={turn,step,straight,get angle(){ return ang; },get flap(){ return th; }};
+window.PLOW={turn,step,straight,lift,get down(){ return up<.2; },get angle(){ return ang; },get flap(){ return th; }};
 })();
