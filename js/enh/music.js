@@ -178,6 +178,14 @@ MU.info=()=>MU.now?{title:MU.now.title,artist:MU.now.radio?(MU.now.artist?MU.now
 setInterval(()=>{ const on=carOn(); if(on===wasOn) return; wasOn=on;
   if(!on){ resume=!!MU.now&&!au.paused; if(resume) au.pause(); }
   else if(resume&&MU.now){ const n=MU.now; resume=false; if(n.radio||au.src!==n.url) play(n); else au.play().catch(()=>{}); } },250);
+// voice (voice.js): play the first song / station a search finds; resolves to its title, or null
+MU.playSong=q=>new Promise(res=>{ const cb='__ydMusicV'+(++seq), s=document.createElement('script'); let done=false;
+  window[cb]=r=>{ done=true; delete window[cb]; s.remove(); const t=((r&&r.results)||[]).find(x=>x.previewUrl);
+    if(!t) return res(null); show(r.results); MU.queue=[]; MU.qi=-1; play({title:t.trackName||'',artist:t.artistName||'',url:t.previewUrl,art:t.artworkUrl60||'',preview:true}); res(t.trackName+(t.artistName?' by '+t.artistName:'')); };
+  s.src='https://itunes.apple.com/search?media=music&entity=song&limit=10&explicit=No&term='+encodeURIComponent(q)+'&callback='+cb;
+  s.onerror=()=>{ if(!done){ delete window[cb]; s.remove(); res(null); } }; document.head.appendChild(s); });
+MU.playRadio=async q=>{ await radioSearch(q); const el=rList.querySelector('.it'); if(!el) return null; el.click(); return (el.querySelector('b')||{}).textContent||q; };
+MU.stop=()=>$('musicStop').click(); MU.resume=()=>{ if(MU.now&&au.paused) $('musicPlay').click(); };
 MU.open=open; MU.close=close; MU.pause=()=>{ if(!au.paused) au.pause(); }; MU.toggle=toggle; MU.presets=presets; MU.playStation=playStation;
 window.MUSIC=MU;
 })();

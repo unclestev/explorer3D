@@ -89,6 +89,7 @@ async function search(q){
       const rank=+x.place_rank||30, bb=(x.boundingbox||[]).map(Number);
       if(rank<=20&&/^(boundary|place)$/.test(x.category||x.class||'')&&bb.length===4&&bb.every(isFinite)) Object.defineProperties(p,{area:{value:true},bbox:{value:bb}});   // not saved with recents
       placeRow(p,()=>go(p,name)); }
+    return res.map(o=>{ const {name}=label(o.x); return {o:{name,lat:o.lat,lng:o.lng},name}; });
   }catch(e){ list.innerHTML=''; row('Search isn’t reachable right now. Check your connection and try again'); console.warn('search',e); }
   finally{ clearTimeout(to); F.busy=false; }
 }
@@ -107,5 +108,7 @@ input.addEventListener('input',()=>{ if(!input.value.trim()) showSaved(); });   
 // typing must not drive the car (the game listens for W/A/S/D, arrows and space on the whole page)
 for(const t of ['keydown','keyup','keypress']) input.addEventListener(t,e=>{ e.stopPropagation(); if(t==='keydown'&&e.key==='Escape') close(); });
 for(const t of ['pointerdown','click','touchstart']) panel.addEventListener(t,e=>e.stopPropagation());
-YD.PLACES={fav:()=>FAV,recent:()=>RECENT,toggleFav,addRecent};
+YD.PLACES={fav:()=>FAV,recent:()=>RECENT,toggleFav,addRecent,
+  // voice (voice.js): "navigate to …" heads to the nearest match; resolves to its name, or null
+  navigate:async q=>{ open(); input.value=q; const rs=await search(q); if(!rs||!rs.length) return null; go(rs[0].o,rs[0].name); return rs[0].name; }};
 })();
