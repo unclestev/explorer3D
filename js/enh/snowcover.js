@@ -13,11 +13,13 @@
    pitched house roofs near the car, js/enh/buildings.js) are blended toward snow white as it settles — mixed in the
    map's own expression from each roof's own colour, so every roof keeps a hint of its shingles; walls, windows and doors stay.
    The snow layer is also kept under the roads even after a layer (satellite view, …) is added later.
+   Salt (js/enh/plow.js): where the plow spreads salt, the road is left speckled with grains across ~6 m, and where
+   there's snow that lane is wet and dark. It stays for the drive.
    window.SNOWCOVER = {level (0…1, how white), inches, set(level) for testing} */
 (()=>{
 'use strict';
 const {onReady,onTick,safe,mz}=YD;
-let lvl=0, inch=0, ready=false, shown=-1, track=[], lastPt=null, trackShown=0, wtrack=[], wOn=false;
+let lvl=0, inch=0, ready=false, salt=[], sLast=null, shown=-1, track=[], lastPt=null, trackShown=0, wtrack=[], wOn=false;
 const WORLD={type:'FeatureCollection',features:[{type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[[[-180,-85],[180,-85],[180,85],[-180,85],[-180,-85]]]}}]};
 const EMPTY={type:'FeatureCollection',features:[]};
 function layers(){ safe('snow cover',()=>{
@@ -27,6 +29,14 @@ function layers(){ safe('snow cover',()=>{
   const below=road&&map.getLayer(road)?road:undefined, under=map.getLayer('building')?'building':undefined;
   if(!map.getLayer('snow-ground')) map.addLayer({id:'snow-ground',type:'fill',source:'snowworld',paint:{'fill-color':'#f3f6fa','fill-opacity':0},layout:{visibility:'none'}},below);
   if(!map.getLayer('snow-roads')) map.addLayer({id:'snow-roads',type:'fill',source:'snowworld',paint:{'fill-color':'#e9edf2','fill-opacity':0},layout:{visibility:'none'}},under);
+  if(!map.getSource('salttrack')) map.addSource('salttrack',{type:'geojson',data:EMPTY});
+  if(!map.hasImage('salt-dots')){ const c=document.createElement('canvas'); c.width=c.height=64; const x=c.getContext('2d');
+    for(let i=0;i<150;i++){ x.fillStyle=Math.random()<.7?'rgba(245,241,232,.95)':'rgba(205,196,178,.9)'; const r=.6+Math.random()*1.1; x.beginPath(); x.arc(Math.random()*64,Math.random()*64,r,0,6.3); x.fill(); }
+    map.addImage('salt-dots',x.getImageData(0,0,64,64)); }
+  if(!map.getLayer('salt-wet')) map.addLayer({id:'salt-wet',type:'line',source:'salttrack',layout:{'line-cap':'round','line-join':'round'},
+    paint:{'line-color':'#4f5257','line-width':mz(6,3),'line-opacity':0}},under);
+  if(!map.getLayer('salt-grains')) map.addLayer({id:'salt-grains',type:'line',source:'salttrack',minzoom:14,layout:{'line-cap':'round','line-join':'round'},
+    paint:{'line-pattern':'salt-dots','line-width':mz(6,3),'line-opacity':.9}},under);
   if(!map.getSource('snowbanks')) map.addSource('snowbanks',{type:'geojson',data:EMPTY});
   if(!map.getLayer('snow-banks')) map.addLayer({id:'snow-banks',type:'fill-extrusion',source:'snowbanks',layout:{visibility:'none'},
     paint:{'fill-extrusion-color':'#f7f9fc','fill-extrusion-height':['get','h'],'fill-extrusion-base':0,'fill-extrusion-opacity':.97}});   // with the 3D buildings
@@ -54,6 +64,7 @@ function paint(){ if(!ready) return; roofs(Math.max(0,Math.min(1,(lvl-.15)*1.3))
     map.setPaintProperty('snow-ground','fill-opacity',Math.min(.93,k*1.15));                 // the ground goes first
     map.setPaintProperty('snow-roads','fill-opacity',Math.max(0,Math.min(.62,(k-.25)*.85))); // then the roads, never quite hidden
     map.setPaintProperty('snow-plowed','line-opacity',Math.min(.9,k*1.4));
+    if(map.getLayer('salt-wet')) map.setPaintProperty('salt-wet','line-opacity',Math.min(.6,k*.9));
     if(typeof dirty!=='undefined') dirty=true; }); }
 onReady(function snowCover(){ layers(); map.on('styledata',()=>{ if(!map.getLayer('snow-ground')) layers(); }); });
 // settle / melt, once a second
@@ -103,5 +114,15 @@ onTick(250,function plowTrack(){
   else if(wOn) wtrack.push(null);
   wOn=wd;
   if(track.length-trackShown>=2) drawTrack(); });
+// the salted road: a line along where the truck spread salt (pieces split where it stopped salting)
+function drawSalt(){ safe('salt track',()=>{ const s=map.getSource('salttrack'); if(!s) return; const L=[]; let c=[];
+  for(const p of salt){ if(p===null){ if(c.length>1) L.push(c); c=[]; } else c.push(p); } if(c.length>1) L.push(c);
+  s.setData({type:'FeatureCollection',features:L.map(q=>({type:'Feature',properties:{},geometry:{type:'LineString',coordinates:q}}))}); if(typeof dirty!=='undefined') dirty=true; }); }
+onTick(300,function saltTrack(){ const on=!!(window.PLOW&&PLOW.salting);
+  if(!on){ if(sLast){ salt.push(null); sLast=null; } return; }
+  // the spinner is ~3.7 m behind the truck's centre
+  const h=S.hdg*Math.PI/180, p=[+(S.lng-Math.sin(h)*3.7/(111320*Math.cos(S.lat*Math.PI/180))).toFixed(7),+(S.lat-Math.cos(h)*3.7/110540).toFixed(7)];
+  if(sLast&&meters(sLast[1],sLast[0],p[1],p[0])<3) return; if(sLast&&meters(sLast[1],sLast[0],p[1],p[0])>60) salt.push(null);
+  salt.push(p); sLast=p; if(salt.length>8000) salt.splice(0,1000); if(salt.length%2===0) drawSalt(); });
 window.SNOWCOVER={get level(){ return lvl; },get inches(){ return inch; },set(v,inches){ lvl=Math.max(0,Math.min(1,+v||0)); if(inches!=null) inch=+inches; else if(lvl>0&&inch<1) inch=lvl*8; paint(); }};
 })();

@@ -224,7 +224,14 @@ def basis_quat(fwd, side):                                       # rotation taki
 WQ = basis_quat(WB-WA, (1, 0, 0))
 box(trim, 'Spreader', (0, .98, -3.66), (.90, .36, .40))                                # spreader hopper
 cyl(trim, 'Spreader', (0, .74, -3.74), (0, .62, -3.74), .04, 10)
-cyl(trim, 'Spinner', (0, .60, -3.74), (0, .57, -3.74), .30, 24)                        # spinner disc
+# the spinner (owner 2026-11-23: "turn on the salt in the back"): its own node, Spinner, so js/enh/plow.js can spin it;
+# a disc with four fins that fling the salt out
+spin = Mesh('Spinner')
+cyl(spin, 'Spinner', (0, .015, 0), (0, -.015, 0), .30, 24)
+for k in range(4):
+    a_ = k*math.pi/2; box_c = (math.cos(a_)*.15, .04, math.sin(a_)*.15)
+    P = [np.array((math.cos(a_)*r, y, math.sin(a_)*r))+np.array((-math.sin(a_), 0, math.cos(a_)))*t for r, y, t in ((.03, .015, 0), (.28, .015, 0), (.28, .07, 0), (.03, .07, 0))]
+    slab(spin, 'Spreader', P, .012)
 for sx in (1, -1):
     box(trim, 'Flap', (sx*.95, .55, -3.40), (.62, .60, .02))                           # mud flaps behind the tandem
     box(lamps, 'Taillight', (sx*1.10, .82, -3.47), (.20, .16, .05))                    # tail / brake lights
@@ -452,6 +459,7 @@ J['nodes'].append(dict(name='PlowBlade', translation=[float(c) for c in PIV], ch
 blade.P = [tuple(np.array(q)-PIV) for q in blade.P]                                    # the blade in the pivot's coordinates
 put(blade, parent=PB)
 put(ram, translation=tuple(float(c) for c in RAM0))
+put(spin, translation=(0, .585, -3.74))                                            # spun by plow.js when salting
 put(wing, translation=tuple(float(c) for c in WA)); J['nodes'][-1]['rotation'] = [float(c) for c in WQ]
 put(wram, translation=(MX, 2.30, MZ)); put(wbr, translation=(MX+.05, .78, -1.90))   # aimed by plow.js
 put(flap, translation=tuple(float(c) for c in HINGE-PIV), parent=PB)   # hinge line through its origin; plow.js turns it about the blade's length
