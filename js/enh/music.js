@@ -184,7 +184,18 @@ MU.playSong=q=>new Promise(res=>{ const cb='__ydMusicV'+(++seq), s=document.crea
     if(!t) return res(null); show(r.results); MU.queue=[]; MU.qi=-1; play({title:t.trackName||'',artist:t.artistName||'',url:t.previewUrl,art:t.artworkUrl60||'',preview:true}); res(t.trackName+(t.artistName?' by '+t.artistName:'')); };
   s.src='https://itunes.apple.com/search?media=music&entity=song&limit=10&explicit=No&term='+encodeURIComponent(q)+'&callback='+cb;
   s.onerror=()=>{ if(!done){ delete window[cb]; s.remove(); res(null); } }; document.head.appendChild(s); });
-MU.playRadio=async q=>{ await radioSearch(q); const el=rList.querySelector('.it'); if(!el) return null; el.click(); return (el.querySelector('b')||{}).textContent||q; };
+// "play 93.9" (owner 2026-11-22): a preset that matches first (your 93.9 LITE FM), else the matching station nearest to
+// where you're driving in the game (the directory's map position, else US first), not the most popular 93.9 in the world
+MU.playRadio=async q=>{ q=q.toLowerCase().trim(); const ws=q.split(/\s+/).filter(w=>w&&!/^(fm|am|the|station|radio)$/.test(w)); if(!ws.length) return null;
+  const fit=nm=>{ nm=String(nm||'').toLowerCase(); return ws.every(w=>nm.includes(w)); };
+  const pre=PRE.find(p=>fit(p.title)); if(pre){ playStation(pre); return pre.title; }
+  const key=ws.find(w=>/\d/.test(w))||ws.slice().sort((a,b)=>b.length-a.length)[0];
+  let rs=[]; try{ rs=await rbGet('/json/stations/search?hidebroken=true&order=clickcount&reverse=true&limit=300&name='+encodeURIComponent(key)); }catch(_){ return null; }
+  rs=rs.filter(s=>fit(s.name)&&okUrl(s.url_resolved||s.url)); if(!rs.length) return null;
+  const lat=(typeof S!=='undefined'&&S.lat)||41.6, lng=(typeof S!=='undefined'&&S.lng)||-88.4, km=(a,b,c,d)=>Math.hypot((c-a)*111,(d-b)*111*Math.cos(a*Math.PI/180));
+  const score=s=>{ const g=+s.geo_lat, h=+s.geo_long; if(isFinite(g)&&isFinite(h)&&(g||h)) return km(lat,lng,g,h);
+    return (s.countrycode==='US'?3000:20000)+(/\.m3u8|hls/i.test(s.url_resolved||'')?500:0); };
+  rs.sort((a,b)=>score(a)-score(b)); const st=toStation(rs[0]); playStation(st); return st.title; };
 MU.stop=()=>$('musicStop').click(); MU.resume=()=>{ if(MU.now&&au.paused) $('musicPlay').click(); };
 // Controls (js/enh/controls.js): next / previous song or preset station, volume steps (the wheel's + / −, the = / − keys)
 MU.next=()=>{ if(MU.queue.length||(MU.now&&MU.now.radio)) next(); };

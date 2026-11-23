@@ -37,17 +37,19 @@ const lift=e=>{
 mapEl.addEventListener('pointerup',lift); mapEl.addEventListener('pointercancel',lift);
 
 // back to straight ahead: ease over ~0.4 s
-function reset(){
-  if(!panned()) return;
+function reset(){ if(panned()) ease(0,0,400); }
+// ease the look to yaw / pitch (degrees) — also used by voice commands ("look left", "look up")
+function ease(yT,pT,ms){
+  const hi=window.COCKPIT&&COCKPIT.on?135:12; pT=Math.max(-55,Math.min(hi,pT));
   const y0=LOOK.yaw, p0=LOOK.pitch, t0=performance.now(), my=++easing;
   (function tick(now){
     if(my!==easing) return;                                       // a new drag took over
-    const k=Math.min(1,(now-t0)/400), e=1-Math.pow(1-k,3);
-    const ny=y0*(1-e), dYaw=ny-LOOK.yaw; LOOK.yaw=ny; S.camB=((S.camB+dYaw)%360+360)%360;
-    LOOK.pitch=p0*(1-e); dirty=true;
-    if(k<1) requestAnimationFrame(tick); else { LOOK.yaw=0; LOOK.pitch=0; show(); }
+    const k=Math.min(1,(now-t0)/(ms||600)), e=1-Math.pow(1-k,3);
+    const ny=y0+(yT-y0)*e, dYaw=ny-LOOK.yaw; LOOK.yaw=ny; S.camB=((S.camB+dYaw)%360+360)%360;
+    LOOK.pitch=p0+(pT-p0)*e; dirty=true;
+    if(k<1) requestAnimationFrame(tick); else { LOOK.yaw=yT; LOOK.pitch=pT; show(); }
   })(performance.now());
 }
 if(compass) compass.addEventListener('click',e=>{ e.stopPropagation(); reset(); });
-window.LOOKAROUND={reset,state:LOOK};
+window.LOOKAROUND={reset,ease,state:LOOK};
 })();
