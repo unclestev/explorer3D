@@ -1378,7 +1378,10 @@ function step(now){
   let wBrake=0; const WA=!!(WH&&WH.ok&&!WH.cal&&Math.abs(kG)<.05&&Math.abs(tGas)<.05&&mode!=='walk'&&mode!=='glider');
   if(WA){ wBrake=WH.brake||0; gas=WH.sel==='D'?WH.pedal:WH.sel==='R'?-WH.pedal:0; S.sel=WH.sel; } else S.sel=null;
   // autopilot (js/enh/autopilot.js) drives until you touch the steering, gas or handbrake
-  if(window.AUTO&&AUTO.on){ if(Math.abs(st)>.05||Math.abs(gas)>.05||hand||wBrake>.05) AUTO.takeover(); else { const c=AUTO.control(dt); st=c.st; gas=c.gas; wBrake=0; } }
+  // with the wheel motor (js/enh/ffb.js) the wheel turns itself, so only the keys / touch steering count here; holding
+  // the wheel away from where autopilot is steering hands over in ffb.js
+  if(window.AUTO&&AUTO.on){ const fb=!!(window.FFB&&FFB.driving), stIn=fb?Math.max(Math.abs(kS),Math.abs(tSteer)):Math.abs(st);
+    if(stIn>.05||Math.abs(gas)>.05||hand||wBrake>.05) AUTO.takeover(); else { const c=AUTO.control(dt); st=c.st; gas=c.gas; wBrake=0; if(window.FFB) FFB.cmd=c.st; } }
   // engine switched off (js/enh/ignition.js): the gas does nothing; the brakes still work, the car rolls to a stop
   if(window.IGN&&!IGN.drive()&&(mode==='car'||mode==='tractor')){ if(window.AUTO&&AUTO.on) AUTO.takeover(); gas=S.v>.5?Math.min(0,gas):S.v<-.5?Math.max(0,gas):0; }
   S.gas=gas; S.stIn=st;                                            // pedal + steering input for add-ons (engine sound, cockpit wheel)
