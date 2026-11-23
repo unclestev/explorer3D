@@ -95,6 +95,6 @@ function listen(){
   rec.onend=()=>{ busy=false; const t=(final||heard).trim(); if(t) handle(t); else if(bar.classList.contains('on')&&!bar.classList.contains('think')) hideBar(300); };
   try{ rec.start(); }catch(e){ busy=false; }
 }
-addEventListener('keydown',e=>{ if(e.repeat||(e.target&&/INPUT|TEXTAREA/.test(e.target.tagName))) return; if(e.key.toLowerCase()==='v') listen(); });
+/* the V key: js/enh/controls.js */
 window.VOICE={listen,handle,say};
 })();

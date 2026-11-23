@@ -187,7 +187,7 @@ function sndStat(){ const el=document.getElementById('startSndStat'); if(el) el.
 sndStat();
 
 /* I key and the ⏻ button */
-addEventListener('keydown',e=>{ if(!e.repeat&&e.key.toLowerCase()==='i'&&!(e.target&&e.target.tagName==='INPUT')) IGN.button(); });
+/* the I key: js/enh/controls.js */
 const b=document.createElement('button'); b.id='ignBtn'; b.setAttribute('aria-label','Engine start / stop'); b.textContent='⏻';
 const box=document.getElementById('sigBtns'); if(box) box.insertBefore(b,box.firstChild);
 b.addEventListener('pointerdown',e=>e.stopPropagation()); b.addEventListener('click',e=>{ e.stopPropagation(); IGN.button(); });

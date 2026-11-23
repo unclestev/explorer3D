@@ -719,11 +719,11 @@ pedal('brake',a=>{ pBrake=a; tGas=pGas-pBrake; });
 // 🪂 button (or the G key) launches the hang glider, and lands it again while flying
 const glideBtn=document.getElementById('glide');
 glideBtn.addEventListener('click',e=>{ e.stopPropagation(); toggleGlider(); });
-addEventListener('keydown',e=>{ if(!e.repeat&&e.key.toLowerCase()==='g'&&!(e.target&&e.target.tagName==='INPUT')) toggleGlider(); });
+/* the G key: js/enh/controls.js */
 let toastT=null;
 function toast(msg,ms){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show');
   clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('show'),ms||2600); }
-const K={}; addEventListener('keydown',e=>{K[e.key.toLowerCase()]=1; if(e.key.startsWith('Arrow')||e.key===' ')e.preventDefault();}); addEventListener('keyup',e=>K[e.key.toLowerCase()]=0);
+/* keys: js/enh/controls.js (CTRL.held) */ const KH=id=>!!(window.CTRL&&CTRL.held(id));
 let kS=0,kG=0; let zoomOff=0;
 let dirty=true;
 const CKX=()=>window.COCKPIT&&COCKPIT.on;   // cockpit view: the world is real size; the chase-view car size is kept for later
@@ -1352,11 +1352,11 @@ function step(now){
   const dt=Math.min((now-last)/1000,.05); last=now; frame++;
   // inputs (keyboard eases like an analog stick)
   const ease=(v,p,n)=>{ if(p)v+=dt*4; else if(n)v-=dt*4; else v*=Math.exp(-dt*8); return Math.max(-1,Math.min(1,v)); };
-  kS=ease(kS,K.d||K.arrowright,K.a||K.arrowleft); kG=ease(kG,K.w||K.arrowup,K.s||K.arrowdown);
+  kS=ease(kS,KH('steerR'),KH('steerL')); kG=ease(kG,KH('gas'),KH('brake'));
   // racing wheel + pedals on a PC (js/enh/wheel.js); the touch controls and keys still win when used
   const WH=window.WHEEL&&WHEEL.read();
   const wS=WH&&Math.abs(kS)<.05?WH.st:kS, wG=WH&&Math.abs(kG)<.05&&(WH.ok||WH.cal)?WH.gas:kG;
-  let st=Math.abs(tSteer)>.05?tSteer:wS, gas=Math.abs(tGas)>.05?tGas:wG; const hand=!!K[' '];
+  let st=Math.abs(tSteer)>.05?tSteer:wS, gas=Math.abs(tGas)>.05?tGas:wG; const hand=KH('handbrake');
   // the wheel's pedals as an automatic: gas drives the way the selector says, the brake only ever brakes (js/enh/wheel.js)
   let wBrake=0; const WA=!!(WH&&WH.ok&&!WH.cal&&Math.abs(kG)<.05&&Math.abs(tGas)<.05&&mode!=='walk'&&mode!=='glider');
   if(WA){ wBrake=WH.brake||0; gas=WH.sel==='D'?WH.pedal:WH.sel==='R'?-WH.pedal:0; S.sel=WH.sel; } else S.sel=null;
