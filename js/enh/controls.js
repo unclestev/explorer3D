@@ -19,7 +19,7 @@
 'use strict';
 const say=(m,ms)=>{ if(typeof toast==='function') toast(m,ms||1400); };
 const has=o=>typeof o!=='undefined'&&o;
-const GROUPS=['Driving','Gears','Car','Lights & signals','View','Music & voice','Getting around','Game'];
+const GROUPS=['Driving','Gears','Car','Lights & signals','View','Music & voice','Getting around','Snow plow','Game'];
 // run: what a press does. undo: how to take back a press (used by combos). note: shown on the Controls screen.
 const A=[
   {id:'steerL',  g:'Driving', label:'Steer left',           t:'hold'},
@@ -48,13 +48,17 @@ const A=[
   {id:'look',    g:'View',    label:'Look around',          t:'axis', dev:true},
   {id:'recenter',g:'View',    label:'Look straight ahead',  t:'press', run:()=>{ if(window.LOOKAROUND) LOOKAROUND.reset(); if(window.COCKPIT&&COCKPIT.recenter) COCKPIT.recenter(); }},
   {id:'music',   g:'Music & voice', label:'Music panel',    t:'press', run:k=>window.MUSIC&&MUSIC.toggle(k==='key'?undefined:false)},
-  {id:'next',    g:'Music & voice', label:'Next song / station',     t:'press', run:()=>window.MUSIC&&MUSIC.next&&MUSIC.next()},
-  {id:'prev',    g:'Music & voice', label:'Previous song / station', t:'press', run:()=>window.MUSIC&&MUSIC.prev&&MUSIC.prev()},
+  // in the snow plow the red dial (next / previous) turns the blade instead (js/enh/plow.js)
+  {id:'next',    g:'Music & voice', label:'Next song / station',     t:'press', run:()=>{ if(typeof CARKEY!=='undefined'&&CARKEY==='snowplow'&&window.PLOW) return PLOW.step(1); window.MUSIC&&MUSIC.next&&MUSIC.next(); }, note:'In the snow plow: turns the blade right'},
+  {id:'prev',    g:'Music & voice', label:'Previous song / station', t:'press', run:()=>{ if(typeof CARKEY!=='undefined'&&CARKEY==='snowplow'&&window.PLOW) return PLOW.step(-1); window.MUSIC&&MUSIC.prev&&MUSIC.prev(); }, note:'In the snow plow: turns the blade left'},
   {id:'volUp',   g:'Music & voice', label:'Volume up',      t:'press', rep:true, run:()=>window.MUSIC&&MUSIC.volStep&&MUSIC.volStep(1)},
   {id:'volDn',   g:'Music & voice', label:'Volume down',    t:'press', rep:true, run:()=>window.MUSIC&&MUSIC.volStep&&MUSIC.volStep(-1)},
   {id:'voice',   g:'Music & voice', label:'Voice command',  t:'press', run:()=>window.VOICE&&VOICE.listen()},
   {id:'walk',    g:'Getting around', label:'Get out and walk / back in', t:'press', run:()=>window.WALK&&WALK.toggle&&WALK.toggle()},
   {id:'glider',  g:'Getting around', label:'Hang glider',   t:'press', run:()=>typeof toggleGlider==='function'&&toggleGlider()},
+  {id:'plowL',   g:'Snow plow', label:'Turn the blade left (hold)',  t:'hold'},
+  {id:'plowR',   g:'Snow plow', label:'Turn the blade right (hold)', t:'hold'},
+  {id:'plowStraight', g:'Snow plow', label:'Straighten the blade', t:'press', run:()=>window.PLOW&&PLOW.straight()},
   {id:'phone',   g:'Game',    label:'Phone',            t:'press', run:()=>window.PHONE&&PHONE.toggle()},
   {id:'controls',g:'Game',    label:'Show / hide this screen', t:'press', always:true, run:()=>window.CTRLVIEW&&CTRLVIEW.toggle()},
 ];
@@ -71,7 +75,7 @@ const DEFAULTS={
     sigL:['BracketLeft'], sigR:['BracketRight'], hazard:['Backslash'],
     view:['KeyC'], hud:['KeyH'], lookL:['KeyQ'], lookR:['KeyE'], recenter:['KeyR'],
     music:['KeyM'], next:['Period'], prev:['Comma'], volUp:['Equal'], volDn:['Minus'], voice:['KeyV'],
-    walk:['KeyF'], glider:['KeyG'], phone:['KeyT'], controls:['Slash'] },
+    walk:['KeyF'], glider:['KeyG'], phone:['KeyT'], plowL:['KeyZ'], plowR:['KeyX'], plowStraight:['KeyN'], controls:['Slash'] },
   wheel:{
     steer:[{axis:0}], gas:[{pedal:'gas'}], brake:[{pedal:'brake'}],
     gearD:[{shift:12}], gearR:[{shift:13},{shift:18}], gearN:[{shift:14},{shift:15},{shift:16},{shift:17}], gearToggle:[{b:[4,5]}],

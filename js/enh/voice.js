@@ -196,6 +196,11 @@ async function handle(raw){
   if(/\b(handbrake|hand brake|parking brake|e-?brake|emergency brake)\b/.test(t)) return say('Hold space for the handbrake, or the handbrake on your controller.');
   if(/\b(air conditioning|a\/?c|heat|heater|climate|fan|defrost|seat heat|heated seats?|temperature to|warmer|cooler)\b/.test(t)&&!/\b(what|how)\b/.test(t)) return say('The climate controls aren\'t working in the game yet.');
   if(/\b(window|windows)\b/.test(t)&&/\b(open|close|roll|up|down)\b/.test(t)) return say('The windows don\'t open in the game yet. I can open the sunroof.');
+  // ---- the snow plow's blade (js/enh/plow.js)
+  if(window.PLOW&&/\b(plow|blade)\b/.test(t)&&/\b(left|right|straight|center|centre|middle)\b/.test(t)){
+    if(typeof CARKEY!=='undefined'&&CARKEY!=='snowplow') return say('Switch to the snow plow first.');
+    if(/straight|center|centre|middle/.test(t)){ PLOW.straight(); return say('Plow straight.'); }
+    const d=/left/.test(t)?-1:1; for(let k=0;k<4;k++) PLOW.step(d); return say('Plow angled '+(d<0?'left':'right')+'.'); }
   // ---- engine
   if(/^(start|turn on|switch on|fire up|power on)( up)?\s+(the\s+|my\s+)?(car|engine|truck|suv|vehicle|it|tractor)( up)?$|^start( it)?( up)?$|^(start|crank) (the )?engine$/.test(t)){ if(!IG) return say('I can\'t do that here.');
     if(IG.state==='on'||IG.state==='crank') return say('The engine is already running.'); IG.button(); return say('Starting the engine.'); }
