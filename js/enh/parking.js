@@ -37,7 +37,7 @@ function draw(){ safe('parking draw',()=>{ const s=map.getSource('parking'); if(
 
 /* ---------- stall lines ---------- */
 const SW=2.75, SD=5.4, AH=3.2, AISLE=6.6;                         // stall width / depth, half an aisle, a full aisle (m)
-function stalls(){
+function* stallJob(){                                            // spread over frames by the tick below (a few ms at a time)
   const t0=performance.now(), R=650, lat0=S.lat, lng0=S.lng, kx=111320*Math.cos(lat0*Math.PI/180), ky=111320;
   const L=(lng,lat)=>[(lng-lng0)*kx,(lat-lat0)*ky], G=(x,y)=>[+(lng0+x/kx).toFixed(7),+(lat0+y/ky).toFixed(7)];
   let tf=[], bf=[]; try{ tf=map.querySourceFeatures(bSrc,{sourceLayer:'transportation'}); bf=map.querySourceFeatures(bSrc,{sourceLayer:'building'}); }catch(e){ return; }
@@ -56,7 +56,7 @@ function stalls(){
       for(let gx=Math.floor((Math.min(s.a[0],s.b[0])-m)/20);gx<=Math.floor((Math.max(s.a[0],s.b[0])+m)/20);gx++)
         for(let gy=Math.floor((Math.min(s.a[1],s.b[1])-m)/20);gy<=Math.floor((Math.max(s.a[1],s.b[1])+m)/20);gy++){ const k=gx+','+gy; let a=g.get(k); if(!a) g.set(k,a=[]); a.push(s); } }
     return g; };
-  const RG=seg(roads), AG=seg(aisles);
+  yield; const RG=seg(roads), AG=seg(aisles); yield;
   const near=(G,x,y,pad,skip)=>{ for(const s of G.get(Math.floor(x/20)+','+Math.floor(y/20))||[]){ if(s===skip) continue; const dx=s.b[0]-s.a[0], dy=s.b[1]-s.a[1], t=Math.max(0,Math.min(1,((x-s.a[0])*dx+(y-s.a[1])*dy)/(s.len*s.len)));
       if(Math.hypot(s.a[0]+dx*t-x,s.a[1]+dy*t-y)<s.half+pad) return true; } return false; };
   // buildings on a 25 m grid
@@ -66,6 +66,7 @@ function stalls(){
       for(const q of r){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
       if(x1<-R||x0>R||y1<-R||y0>R) continue; const o={r,b:[x0,y0,x1,y1]};
       for(let gx=Math.floor(x0/25);gx<=Math.floor(x1/25);gx++) for(let gy=Math.floor(y0/25);gy<=Math.floor(y1/25);gy++){ const k=gx+','+gy; let a=grid.get(k); if(!a) grid.set(k,a=[]); a.push(o); } } }
+  yield;
   const inBld=(x,y)=>{ for(const o of grid.get(gk(x,y))||[]){ const b=o.b; if(x<b[0]||x>b[2]||y<b[1]||y>b[3]) continue; if(inRing(o.r,x,y)) return true; } return false; };
   // the lots, in local metres
   const lots=[]; for(const p of P.polys){ const r0=p.rings[0].map(q=>L(q[0],q[1])); let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
@@ -77,7 +78,8 @@ function stalls(){
     if(lot){ if(lotAt(p[0],p[1])!==lot||lotAt(q[0],q[1])!==lot) return false; }
     return !inBld(p[0],p[1])&&!inBld(q[0],q[1])&&!inBld(m[0],m[1])&&!near(RG,q[0],q[1],.6)&&!near(RG,m[0],m[1],.6); };
   // 1. along the aisles
-  for(const s of aisles){ if(s.len<SW*2+1||Math.hypot((s.a[0]+s.b[0])/2,(s.a[1]+s.b[1])/2)>R) continue;
+  let nA=0;
+  for(const s of aisles){ if(s.len<SW*2+1||Math.hypot((s.a[0]+s.b[0])/2,(s.a[1]+s.b[1])/2)>R) continue; if(++nA%20===0) yield;
     const ux=(s.b[0]-s.a[0])/s.len, uy=(s.b[1]-s.a[1])/s.len, nx=uy, ny=-ux, mid=[(s.a[0]+s.b[0])/2,(s.a[1]+s.b[1])/2];
     const lot=lotAt(mid[0],mid[1]); if(lot) lot.aisle=true;
     const n=Math.floor((s.len-2)/SW), st=(s.len-n*SW)/2; let any=false;
@@ -88,7 +90,7 @@ function stalls(){
     if(any&&!lot){ const w=AH+SD+.3, c=[[-w,-.4],[w,-.4],[w,s.len+.4],[-w,s.len+.4]].map(([o,t])=>G(s.a[0]+ux*t+nx*o,s.a[1]+uy*t+ny*o)); c.push(c[0]);
       pads.push({type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[c]}}); } }
   // 2. lots with no aisle in the map: rows along the long side
-  for(const lot of lots){ if(lot.aisle) continue; const r=lot.r.slice(0,-1); if(r.length<3) continue;
+  for(const lot of lots){ if(lot.aisle) continue; const r=lot.r.slice(0,-1); if(r.length<3) continue; yield;
     let best=null;
     for(let i=0;i<r.length;i++){ const a=r[i], b=r[(i+1)%r.length], ang=Math.atan2(b[1]-a[1],b[0]-a[0]), c=Math.cos(ang), sn=Math.sin(ang);
       let u0=1e9,u1=-1e9,v0=1e9,v1=-1e9; for(const q of r){ const u=q[0]*c+q[1]*sn, v=-q[0]*sn+q[1]*c; if(u<u0)u0=u; if(u>u1)u1=u; if(v<v0)v0=v; if(v>v1)v1=v; }
@@ -101,7 +103,7 @@ function stalls(){
       v+=SD; if(row%2===0) v+=AISLE; row++; }                     // stalls, aisle, stalls | back to back | stalls, aisle, stalls ...
   }
   safe('pk lines',()=>{ map.getSource('pk-lines').setData({type:'FeatureCollection',features:out}); map.getSource('pk-pads').setData({type:'FeatureCollection',features:pads}); });
-  P.nLines=out.length; P.nPads=pads.length; P.lineAt=[lng0,lat0]; P.lineT=performance.now(); P.ms=performance.now()-t0;
+  P.nLines=out.length; P.nPads=pads.length; P.ms=performance.now()-t0;
 }
 function layers(){ safe('parking layers',()=>{
   if(!map.getSource('parking')) map.addSource('parking',{type:'geojson',data:EMPTY});
@@ -137,7 +139,9 @@ onReady(function parking(){ layers(); P.ready=true; map.on('styledata',()=>{ if(
 // the stall lines: again after ~300 m of driving, or when new map tiles / lot outlines are in (at most every 4 s)
 onTick(1000,function parkingLines(){ if(!P.ready||!map.getSource('pk-lines')) return;
   const moved=P.lineAt?meters(P.lineAt[1],P.lineAt[0],S.lat,S.lng):1e9, age=performance.now()-P.lineT;
-  if(moved>300||(P.tilesNew&&age>4000)||(!P.lineT&&age>1500)){ P.tilesNew=false; safe('parking lines',stalls); } });
+  if(!P.job&&(moved>300||(P.tilesNew&&age>4000)||(!P.lineT&&age>1500))){ P.tilesNew=false; P.lineAt=[S.lng,S.lat]; P.lineT=performance.now(); P.job=stallJob(); } });
+onTick(50,function parkingJob(){ if(!P.job) return; const t=performance.now();
+  try{ while(performance.now()-t<6){ if(P.job.next().done){ P.job=null; break; } } }catch(e){ console.warn('parking lines',e); P.job=null; } });
 onTick(2000,function parkingTick(){ if(!P.ready||P.busy||Date.now()<P.retry) return;
   if(!P.at||meters(P.at[1],P.at[0],S.lat,S.lng)>1500) load(); });
 window.PARKING={at,state:P};
