@@ -1110,7 +1110,7 @@ function dashModern(G,P,parts){
     ['❄','A/C','▲','◢◣','✱','AUTO','≋'].forEach((t,i)=>x.fillText(t,40+i*72,48)); if(!lux){ x.fillStyle='#d01c24'; x.beginPath(); x.moveTo(256,22); x.lineTo(278,70); x.lineTo(234,70); x.closePath(); x.lineWidth=5; x.strokeStyle='#d01c24'; x.stroke(); }
     const lab=mesh(new THREE.PlaneGeometry(.29,.045),new THREE.MeshBasicMaterial({map:T3.t}),row,false,false); lab.position.z=.0065; parts.btns=lab.material; }
   // centre console with the gear selector (rotary dial / piano-key buttons) and armrest
-  if(P.xp) consoleXp(G,P,T,loM); else
+  if(P.xp) consoleXp(G,P,T,loM,parts.shelf); else
   { const cm=M({color:P.col.top,roughness:.45,normalMap:rep(T.grain,4,6),normalScale:new THREE.Vector2(.4,.4)}), cx=0;
     const zc0=P.dash[P.dash.length-1][1]-.03, zc1=P.eye[2]+.45;
     mesh(grid(10,10,(u,v)=>{ const s=u*2-1, z=lerp(zc0,zc1,v); return [cx+s*.15,.62+.03*(1-s*s)-.06*v+(v<.15?.12*(1-v/.15):0),z]; }),cm,G);
@@ -1198,11 +1198,7 @@ function expeditionDash(G,P,parts,fz,xd){
   const SL=10*DEG, g=new THREE.Group(); g.position.set(S.c[0],ys,(zs0+zsF)/2); g.rotation.x=-(Math.PI/2-SL); G.add(g);   // local z = up off the shelf, local y = forward
   { const sh=mesh(rbox(SW,SD+.02,.045,.012,.03),M({color:0x17181a,roughness:.45,normalMap:rep(textures().grain,3,2),normalScale:new THREE.Vector2(.25,.25)}),g); sh.position.set(0,.01,-.0235);
     const top=mesh(rbox(SW-.016,SD-.012,.004,.0015,.022),M({color:0x101113,roughness:.35,metalness:.2,env:.7,normalMap:rep(textures().grain,4,2),normalScale:new THREE.Vector2(.15,.15)}),g); top.position.set(0,.004,-.003); }   // dark satin top (photo)
-  // under the shelf: the stack drops into the console — a dark panel with an open cubby (photo)
-  { const y0=.64, y1=ys-.05, hw=.15, cx=S.c[0]*.5, zc0=P.dash[P.dash.length-1][1]-.03, sz=y=>y>=.79?fz(y):lerp(zc0+.01,fz(.79),(y-.64)/.15);   // down to the console's front
-    mesh(grid(12,14,(u,v)=>{ const x=cx+lerp(-hw,hw,u), y=lerp(y0,y1,v), c=1-Math.pow(u*2-1,2); return [x,y,sz(y)+.012+.012*c]; }),M({color:0x1b1c1e,roughness:.55,normalMap:rep(textures().grain,3,3),normalScale:new THREE.Vector2(.3,.3)}),G);
-    const yc=lerp(y0,y1,.72), cub=new THREE.Group(); cub.position.set(cx,yc,sz(yc)+.026); G.add(cub);
-    mesh(rbox(.22,.075,.006,.002,.014),M({color:0x060607,roughness:.9}),cub); }
+  parts.shelf={ys,zsF};   // the console comes right up under the shelf (consoleXp)
   // the controls on the shelf (owner 2026-11-22, "put all of the buttons and knobs under the screen" as in the photo):
   { g.updateMatrix();
     // photo: two keys on the left, the big chrome rotary dial (the gear selector, P R N D lit above it), a small volume
@@ -1324,26 +1320,42 @@ function xpTrimMat(lenX,lenY){ const T=canvasTex(128,128), x=T.x; x.fillStyle='#
   x.fillStyle='rgba(0,0,0,.18)'; for(let i=0;i<600;i++) x.fillRect(Math.random()*128,Math.random()*128,1,1);
   T.t.wrapS=T.t.wrapT=THREE.RepeatWrapping; T.t.repeat.set(lenX/.035,lenY/.035);
   return M({map:T.t,roughness:.62,metalness:.15,normalMap:rep(textures().grain,lenX/.12,lenY/.12),normalScale:new THREE.Vector2(.25,.25)}); }
-// centre console (photo): dark grey with a satin-chrome surround on top framing a gloss-black tray at the front and two cup
-// holders behind it; the armrest beyond
-function consoleXp(G,P,T,loM){
-  const cm=M({color:0x2a2c2f,roughness:.5,normalMap:rep(T.grain,4,6),normalScale:new THREE.Vector2(.4,.4)});
-  const zc0=P.dash[P.dash.length-1][1]-.03, zc1=P.eye[2]+.45, top=(s,v)=>.63+.012*(1-s*s)-.03*v;
-  mesh(grid(12,12,(u,v)=>{ const s=u*2-1, z=lerp(zc0,zc1,v); return [s*.16,top(s,v)+(v<.12?.10*(1-v/.12):0),z]; }),cm,G);
-  for(const s of [-1,1]) mesh(grid(2,8,(u,v)=>[s*.165,lerp(.34,top(1,v),u),lerp(zc0,zc1,v)]),loM,G);
-  const z0=zc0+.15, z1=zc0+.53, zm=(z0+z1)/2, vm=(zm-zc0)/(zc1-zc0), g=new THREE.Group(); g.position.set(0,top(0,vm)+.012,zm);
-  g.rotation.x=-Math.PI/2+Math.atan(.03/(zc1-zc0)); G.add(g);                                     // local y = forward, local z = up
-  const sat=M({map:rep(T.alu,3,1),color:0xd9dde2,metalness:.8,roughness:.26,env:1.6}), L=z1-z0;
+// centre console (owner 2026-11-22, photo: "it should come right up under the panel with the gear selector ... it goes back
+// and also integrates as the armrest for both"): a tall bridge between the seats starting right under the shelf's lip, its
+// top sloping gently back with satin rails along both edges — the gloss-black tray and the cup holders in a satin frame —
+// then rising into one wide padded armrest shared by the driver and passenger; an open pass-through in its front face
+function consoleXp(G,P,T,loM,sh){
+  const cm=M({color:0x232427,roughness:.5,normalMap:rep(T.grain,4,6),normalScale:new THREE.Vector2(.4,.4)});
+  const sat=M({map:rep(T.alu,3,1),color:0xd9dde2,metalness:.8,roughness:.26,env:1.6});
+  const hw=.155, zf=sh.zsF-.012, yF=sh.ys-.062, z0=zf+.035, z1=z0+.40, yB=yF-.035, za=z1+.03, zr=P.eye[2]+.62, yA=yF+.13, yFl=.34;
+  const topY=z=>lerp(yF,yB,clamp((z-zf)/(z1-zf),0,1));
+  // body: top with rolled edges, sides, front face
+  mesh(grid(16,24,(u,v)=>{ const s=u*2-1, z=lerp(zf,zr,v), e=Math.pow(Math.abs(s),8); return [s*hw*(1-.03*e),topY(z)-.022*e,z]; }),cm,G);
+  for(const s of [-1,1]) mesh(grid(2,16,(u,v)=>{ const z=lerp(zf,zr,v); return [s*hw*.97,lerp(yFl,topY(z)-.022,u),z]; }),loM,G);
+  mesh(grid(12,6,(u,v)=>{ const s=u*2-1, e=Math.pow(Math.abs(s),8); return [s*hw*(1-.03*e),lerp(yFl,yF-.022*e,v),zf-.004*Math.sin(Math.PI*v)]; }),cm,G);
+  { const pt=mesh(rbox(.24,.085,.01,.003,.02),M({color:0x050506,roughness:.95}),G); pt.position.set(0,yF-.115,zf-.002);   // the open pass-through under the bridge
+    mesh(new THREE.BoxGeometry(.21,.003,.004),sat,G).position.set(0,yF-.068,zf-.004); }
+  // satin rails along both top edges, from the front to the armrest
+  for(const s of [-1,1]){ const pts=[]; for(let i=0;i<=6;i++){ const z=lerp(zf+.01,za+.02,i/6); pts.push([s*(hw-.012),topY(z)-.004,z]); }
+    mesh(bar(pts,.014,.007,[0,1,0],24,8),sat,G); }
+  // tray and cup holders in a satin frame on the sloping top
+  const L=z1-z0, zm=(z0+z1)/2, g=new THREE.Group(); g.position.set(0,topY(zm)+.002,zm);
+  g.rotation.x=-Math.PI/2+Math.atan((yF-yB)/(z1-zf)); G.add(g);                                     // local y = forward, local z = up
   const rs=(w,h,r)=>{ const s=new THREE.Shape(), X=w/2, Y=h/2; s.moveTo(-X+r,-Y); s.lineTo(X-r,-Y); s.quadraticCurveTo(X,-Y,X,-Y+r); s.lineTo(X,Y-r); s.quadraticCurveTo(X,Y,X-r,Y); s.lineTo(-X+r,Y); s.quadraticCurveTo(-X,Y,-X,Y-r); s.lineTo(-X,-Y+r); s.quadraticCurveTo(-X,-Y,-X+r,-Y); return s; };
-  { const f=rs(.27,L,.035); f.holes.push(rs(.246,L-.024,.026)); mesh(new THREE.ExtrudeGeometry(f,{depth:.004,bevelEnabled:true,bevelThickness:.0015,bevelSize:.0015,bevelSegments:2,curveSegments:8}),sat,g); }
-  mesh(new THREE.ShapeGeometry(rs(.246,L-.024,.026),8),M({color:0x1a1b1d,roughness:.4}),g).position.z=-.001;
-  const tray=mesh(rbox(.222,L*.42,.008,.003,.012),M({color:0x070708,roughness:.12,metalness:.3,env:.9}),g); tray.position.set(0,L*.24,.002);   // gloss lid at the front
-  const trim=mesh(rbox(.06,.008,.004,.0015,.003),sat,g); trim.position.set(0,L*.24+L*.21-.012,.007);
-  for(const s of [-1,1]){ const cx=s*.058, cy=-L*.22;                                                 // cup holders behind it
-    const ring=mesh(new THREE.TorusGeometry(.039,.003,8,40),sat,g); ring.position.set(cx,cy,.003);
-    const well=mesh(new THREE.CylinderGeometry(.037,.034,.07,32,1,true),M({color:0x0b0b0c,roughness:.8}),g); well.rotation.x=Math.PI/2; well.position.set(cx,cy,-.034);
-    mesh(new THREE.CircleGeometry(.034,32),M({color:0x060606,roughness:1}),g).position.set(cx,cy,-.068); }
-  const ar=mesh(rbox(.2,.07,.32,.03,.05),M({color:0x3a3c40,roughness:.6,normalMap:rep(T.leather,3,4)}),G); ar.position.set(0,.66,zc1-.18); }
+  { const f=rs(.255,L,.035); f.holes.push(rs(.231,L-.024,.026)); mesh(new THREE.ExtrudeGeometry(f,{depth:.004,bevelEnabled:true,bevelThickness:.0015,bevelSize:.0015,bevelSegments:2,curveSegments:8}),sat,g); }
+  mesh(new THREE.ShapeGeometry(rs(.231,L-.024,.026),8),M({color:0x1a1b1d,roughness:.4}),g).position.z=.001;
+  const tray=mesh(rbox(.21,L*.44,.008,.003,.012),M({color:0x070708,roughness:.12,metalness:.3,env:.9}),g); tray.position.set(0,L*.23,.003);   // gloss lid at the front
+  const trim=mesh(rbox(.06,.008,.004,.0015,.003),sat,g); trim.position.set(0,L*.23+L*.22-.012,.008);
+  for(const s of [-1,1]){ const cx=s*.056, cy=-L*.24;                                                 // cup holders behind it
+    const ring=mesh(new THREE.TorusGeometry(.039,.003,8,40),sat,g); ring.position.set(cx,cy,.004);
+    const well=mesh(new THREE.CylinderGeometry(.037,.034,.07,32,1,true),M({color:0x0b0b0c,roughness:.8}),g); well.rotation.x=Math.PI/2; well.position.set(cx,cy,-.033);
+    mesh(new THREE.CircleGeometry(.034,32),M({color:0x060606,roughness:1}),g).position.set(cx,cy,-.067); }
+  // the armrest: one wide padded lid for both front seats, rising out of the console behind the cup holders
+  const lm=M({color:0x3a3c40,roughness:.6,normalMap:rep(T.leather,4,6),normalScale:new THREE.Vector2(.3,.3)}), La=zr-za;
+  const base=mesh(rbox(hw*2-.004,yA-yB,La,.02,.03),cm,G); base.position.set(0,(yA+yB)/2-.01,za+La/2);
+  const pad=mesh(rbox(hw*2+.02,.05,La+.01,.022,.04),lm,G); pad.position.set(0,yA,za+La/2);
+  mesh(bar([[-hw-.008,yA-.026,za+.01],[0,yA-.03,za-.004],[hw+.008,yA-.026,za+.01]],.006,.006,[0,0,1],16,6),M({color:0x141516,roughness:.8}),G);   // seam under the pad's front edge
+}
 function explorerStack(G,P,parts,fz,xd,upM,loM){
   const T=textures(), wood=M({map:rep(T.ash,3,1),color:0x76675b,roughness:.38,clearcoat:.6,clearcoatRoughness:.15});
   const chrome=M({color:0xd5dade,metalness:1,roughness:.18,env:1.5}), satin=M({map:rep(T.alu,2,1),color:0xc4c9cf,metalness:.9,roughness:.3,env:1.3});
