@@ -60,6 +60,7 @@ const A=[
   {id:'plowR',   g:'Snow plow', label:'Turn the blade right (hold)', t:'hold'},
   {id:'plowStraight', g:'Snow plow', label:'Straighten the blade', t:'press', run:()=>window.PLOW&&PLOW.straight()},
   {id:'plowLift', g:'Snow plow', label:'Raise / lower the blade', t:'hold'},
+  {id:'plowWing', g:'Snow plow', label:'Wing plow down / up', t:'hold'},
   {id:'phone',   g:'Game',    label:'Phone',            t:'press', run:()=>window.PHONE&&PHONE.toggle()},
   {id:'controls',g:'Game',    label:'Show / hide this screen', t:'press', always:true, run:()=>window.CTRLVIEW&&CTRLVIEW.toggle()},
 ];
@@ -76,7 +77,7 @@ const DEFAULTS={
     sigL:['BracketLeft'], sigR:['BracketRight'], hazard:['Backslash'],
     view:['KeyC'], hud:['KeyH'], lookL:['KeyQ'], lookR:['KeyE'], recenter:['KeyR'],
     music:['KeyM'], next:['Period'], prev:['Comma'], volUp:['Equal'], volDn:['Minus'], voice:['KeyV'],
-    walk:['KeyF'], glider:['KeyG'], phone:['KeyT'], plowL:['KeyZ'], plowR:['KeyX'], plowStraight:['KeyN'], plowLift:['KeyU'], controls:['Slash'] },
+    walk:['KeyF'], glider:['KeyG'], phone:['KeyT'], plowL:['KeyZ'], plowR:['KeyX'], plowStraight:['KeyN'], plowLift:['KeyU'], plowWing:['KeyJ'], controls:['Slash'] },
   wheel:{
     steer:[{axis:0}], gas:[{pedal:'gas'}], brake:[{pedal:'brake'}],
     gearD:[{shift:12}], gearR:[{shift:13},{shift:18}], gearN:[{shift:14},{shift:15},{shift:16},{shift:17}], gearToggle:[{b:[4,5]}],

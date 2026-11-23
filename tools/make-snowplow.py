@@ -201,13 +201,27 @@ MX, MZ = 1.30, .40
 box(trim, 'Frame', (MX, 1.75, MZ), (.14, 2.10, .14))                                   # mast
 box(trim, 'Frame', (MX-.15, 1.0, MZ), (.30, .14, .30))
 cyl(trim, 'Trim', (MX, 2.80, MZ), (MX, 2.86, MZ), .10, 16); cyl(lamps, 'Beacon', (MX, 2.86, MZ), (MX, 3.02, MZ), .085, 16)   # beacon
-WA, WB = np.array((MX+.16, 2.55, MZ-.12)), np.array((MX+.42, .62, -2.30))              # the wing: top front to low back
-wd = (WB-WA)/np.linalg.norm(WB-WA); wn = np.array((1, 0, 0.)); ww = np.cross(wd, wn); ww /= np.linalg.norm(ww)
-slab(trim, 'Steel', [WA-ww*.30, WB-ww*.30, WB+ww*.30, WA+ww*.30], .03)                 # the wing blade, about 0.6 m tall
-slab(trim, 'Frame', [WA-ww*.33+wn*.03, WB-ww*.33+wn*.03, WB-ww*.24+wn*.03, WA-ww*.24+wn*.03], .03)   # its edges
-slab(trim, 'Frame', [WA+ww*.24+wn*.03, WB+ww*.24+wn*.03, WB+ww*.33+wn*.03, WA+ww*.33+wn*.03], .03)
-cyl(trim, 'Chrome', (MX, 2.30, MZ), WA+wd*.6-wn*.02, .03, 8)                           # lift ram from the mast
-cyl(trim, 'Frame', (MX+.05, .78, -1.90), WB-wd*.30, .05, 8)                            # rear support
+# the wing blade is its own node, WingPlow (owner 2026-11-23: "make it so I can put down the side plows"): built along
+# its local -z from its front end (origin), face toward local +x, 0.6 m tall; stored here folded up along the body
+# (front end high by the mast, rear end low), js/enh/plow.js swings it down and out beside the truck. Its lift ram
+# (WingRam) and rear brace (WingBrace) are 1 m along +z, aimed and stretched by plow.js.
+WA, WB = np.array((MX+.16, 2.55, MZ-.12)), np.array((MX+.42, .62, -2.30))              # stowed: top front to low back
+WL = float(np.linalg.norm(WB-WA))
+wing, wram, wbr = Mesh('WingPlow'), Mesh('WingRam'), Mesh('WingBrace')
+slab(wing, 'Steel', [(0, -.30, 0), (0, -.30, -WL), (0, .30, -WL), (0, .30, 0)], .03)
+for y0, y1 in ((-.33, -.24), (.24, .33)): slab(wing, 'Frame', [(.03, y0, 0), (.03, y0, -WL), (.03, y1, -WL), (.03, y1, 0)], .03)   # edges
+for z in (-.35, -WL/2, -WL+.35): box(wing, 'Frame', (-.05, 0, z), (.08, .56, .06))   # ribs on the back
+box(wing, 'Edge', (.04, -.30, -WL/2), (.03, .06, WL))                                  # cutting edge
+cyl(wram, 'Frame', (0, 0, 0), (0, 0, .55), .045, 10); cyl(wram, 'Chrome', (0, 0, .5), (0, 0, 1), .028, 8)
+cyl(wbr, 'Frame', (0, 0, 0), (0, 0, 1), .05, 8)
+def basis_quat(fwd, side):                                       # rotation taking local -z to fwd and local +x toward side
+    z = -np.asarray(fwd, float); z /= np.linalg.norm(z); x = np.asarray(side, float); x = x-z*np.dot(x, z); x /= np.linalg.norm(x); y = np.cross(z, x)
+    R = np.array([x, y, z]).T; t = R.trace()
+    if t > 0: S_ = math.sqrt(t+1)*2; return [(R[2,1]-R[1,2])/S_, (R[0,2]-R[2,0])/S_, (R[1,0]-R[0,1])/S_, .25*S_]
+    k = int(np.argmax([R[0,0], R[1,1], R[2,2]])); i_, j_, k_ = k, (k+1) % 3, (k+2) % 3
+    S_ = math.sqrt(1+R[i_,i_]-R[j_,j_]-R[k_,k_])*2; q = [0, 0, 0, 0]
+    q[i_] = .25*S_; q[j_] = (R[j_,i_]+R[i_,j_])/S_; q[k_] = (R[k_,i_]+R[i_,k_])/S_; q[3] = (R[k_,j_]-R[j_,k_])/S_; return q
+WQ = basis_quat(WB-WA, (1, 0, 0))
 box(trim, 'Spreader', (0, .98, -3.66), (.90, .36, .40))                                # spreader hopper
 cyl(trim, 'Spreader', (0, .74, -3.74), (0, .62, -3.74), .04, 10)
 cyl(trim, 'Spinner', (0, .60, -3.74), (0, .57, -3.74), .30, 24)                        # spinner disc
@@ -438,6 +452,8 @@ J['nodes'].append(dict(name='PlowBlade', translation=[float(c) for c in PIV], ch
 blade.P = [tuple(np.array(q)-PIV) for q in blade.P]                                    # the blade in the pivot's coordinates
 put(blade, parent=PB)
 put(ram, translation=tuple(float(c) for c in RAM0))
+put(wing, translation=tuple(float(c) for c in WA)); J['nodes'][-1]['rotation'] = [float(c) for c in WQ]
+put(wram, translation=(MX, 2.30, MZ)); put(wbr, translation=(MX+.05, .78, -1.90))   # aimed by plow.js
 put(flap, translation=tuple(float(c) for c in HINGE-PIV), parent=PB)   # hinge line through its origin; plow.js turns it about the blade's length
 for name, x, za, dual in (('Wheel_FL', TRACK_F/2, ZA_F, False), ('Wheel_FR', -TRACK_F/2, ZA_F, False),
                           ('Wheel_RL', TRACK_R/2, ZA_R, True), ('Wheel_RR', -TRACK_R/2, ZA_R, True),
