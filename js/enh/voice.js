@@ -28,7 +28,7 @@ if(window.speechSynthesis){ pickVoice(); speechSynthesis.onvoiceschanged=pickVoi
 // the music, video and engine go quiet while you talk and while the car answers, then come back up
 let ducked=false, unduckT=0;
 function duck(on){ clearTimeout(unduckT); if(on===ducked) return; ducked=on;
-  for(const f of [()=>window.MUSIC&&MUSIC.duck&&MUSIC.duck(on),()=>window.TUBE&&TUBE.duck&&TUBE.duck(on),()=>window.SOUND&&SOUND.duck&&SOUND.duck(on)]) try{ f(); }catch(e){} }
+  for(const f of [()=>window.MUSIC&&MUSIC.duck&&MUSIC.duck(on),()=>window.TUBE&&TUBE.duck&&TUBE.duck(on),()=>window.SOUND&&SOUND.duck&&SOUND.duck(on),()=>window.PHONE&&PHONE.duck&&PHONE.duck(on)]) try{ f(); }catch(e){} }
 function unduck(ms){ clearTimeout(unduckT); unduckT=setTimeout(()=>duck(false),ms||0); }
 function say(t){ showBar(t,true); hideBar(Math.max(2500,t.length*70)); if(typeof toast==='function'&&!window.speechSynthesis) toast(t,2500);
   unduck(Math.max(3000,t.length*95));                                   // in case the speech never reports that it ended

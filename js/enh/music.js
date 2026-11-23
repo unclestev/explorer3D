@@ -76,10 +76,16 @@ au.addEventListener('error',()=>{ const n=MU.now; if(n&&n.radio&&au.getAttribute
 $('musicPlay').onclick=()=>{ const n=MU.now; if(!n) return; if(!carOn()){ say('📻 Turn the engine on to listen',2200); return; } if(!au.paused){ au.pause(); return; } if(n.radio) play(n); else au.play(); };
 $('musicNext').onclick=()=>{ if(MU.queue.length||(MU.now&&MU.now.radio)) next(); };
 $('musicStop').onclick=()=>{ resume=false; au.pause(); au.removeAttribute('src'); au.load(); MU.now=null; MU.queue=[]; MU.qi=-1; setNow(); };
-$('musicVol').oninput=e=>{ vol=+e.target.value; au.volume=vol*duckF; LSs('ydMusicVol',vol); };
+$('musicVol').oninput=e=>{ vol=+e.target.value; au.volume=vol*duckF; LSs('ydMusicVol',vol); announce(); };
+/* one volume for all the music (owner 2026-11-22: "make all the music turn down with the volume on my steering wheel"):
+   the car's songs and radio, the centre-screen YouTube and the phone's YouTube / YouTube Music follow this volume and the
+   voice ducking; they hear about changes through the 'ydvolume' event. MUSIC.ytVol() = the YouTube player volume, 0-100. */
+let duckOn=false;
+const ytVol=()=>Math.round(100*vol*(duckOn?.15:1));
+function announce(){ try{ dispatchEvent(new CustomEvent('ydvolume',{detail:{vol,duck:duckOn,yt:ytVol()}})); }catch(e){} }
 // turned down while you talk to the car (owner 2026-11-22: "turn down the volume in the car when I'm using voice recognition")
 let duckF=1, duckT=0;
-function duck(on){ const to=on?.15:1; clearInterval(duckT); duckT=setInterval(()=>{ duckF+=Math.sign(to-duckF)*Math.min(Math.abs(to-duckF),.08);
+function duck(on){ duckOn=!!on; announce(); const to=on?.15:1; clearInterval(duckT); duckT=setInterval(()=>{ duckF+=Math.sign(to-duckF)*Math.min(Math.abs(to-duckF),.08);
   au.volume=Math.max(0,Math.min(1,vol*duckF)); if(duckF===to) clearInterval(duckT); },25); }
 
 // ---------- songs: iTunes Search API through JSONP (works from any page, no key)
@@ -206,7 +212,7 @@ MU.next=()=>{ if(MU.queue.length||(MU.now&&MU.now.radio)) next(); };
 MU.prev=()=>{ const n=MU.now; if(n&&n.radio){ const P=presets(); if(!P.length) return; const i=P.findIndex(p=>p.url===n.url); playStation(P[(i-1+P.length)%P.length]); return; }
   if(n&&!au.paused&&au.currentTime>3){ au.currentTime=0; return; }                       // like a car stereo: first back to the start of the song
   if(MU.qi>0){ MU.qi--; play(MU.queue[MU.qi]); } else if(n){ au.currentTime=0; } };
-MU.volStep=d=>{ vol=Math.round(Math.max(0,Math.min(1,vol+d*.05))*100)/100; au.volume=vol*duckF; $('musicVol').value=vol; LSs('ydMusicVol',vol); say('🔊 Volume '+Math.round(vol*100),900); };
-MU.duck=duck; MU.open=open; MU.close=close; MU.pause=()=>{ if(!au.paused) au.pause(); }; MU.toggle=toggle; MU.presets=presets; MU.playStation=playStation;
+MU.volStep=d=>{ vol=Math.round(Math.max(0,Math.min(1,vol+d*.05))*100)/100; au.volume=vol*duckF; $('musicVol').value=vol; LSs('ydMusicVol',vol); announce(); say('🔊 Volume '+Math.round(vol*100),900); };
+MU.duck=duck; MU.ytVol=ytVol; MU.vol=()=>vol; MU.open=open; MU.close=close; MU.pause=()=>{ if(!au.paused) au.pause(); }; MU.toggle=toggle; MU.presets=presets; MU.playStation=playStation;
 window.MUSIC=MU;
 })();

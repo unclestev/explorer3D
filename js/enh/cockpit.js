@@ -1300,6 +1300,9 @@ function fitText(x,t,X,Y,maxW,size,weight,align,num){ t=String(t); let s=size; c
 // the 24" panoramic display (photo): a status line along the top; on the left the speed in a rounded pill with the gear
 // letters under it, the turn arrows either side and the limit sign beyond; a card in the middle (next turn, or the street);
 // the moving map on the right
+// the town and county you're in, from the location line (game.js: "Town, County, State")
+function townCounty(){ const e=document.getElementById('place'), t=e?e.textContent.trim():''; if(!t||/Locating/.test(t)) return {town:'',county:''};
+  const p=t.split(',').map(s=>s.trim()); return {town:p[0]||'',county:p.length>2?p[1]:(/county|parish|borough/i.test(p[1]||'')?p[1]:'')}; }
 function drawPanoXp(pn,d){ const x=pn.T.x, W=pn.w, H=pn.h, u=H/100;
   x.fillStyle='#05070b'; x.fillRect(0,0,W,H);
   const g=x.createLinearGradient(0,0,0,H); g.addColorStop(0,'#0d121a'); g.addColorStop(1,'#06080c'); x.fillStyle=g; x.fillRect(0,0,W,H);
@@ -1308,6 +1311,7 @@ function drawPanoXp(pn,d){ const x=pn.T.x, W=pn.w, H=pn.h, u=H/100;
   x.fillStyle='#9aa3ad'; fitText(x,(d.temp+(d.wx?'  ·  '+d.wx:'')).trim(),W*.02,H*.085,W*.30,Math.round(11*u),'500','left');
   fitText(x,d.time,W*.985,H*.085,W*.12,Math.round(11*u),'500','right');
   fitText(x,d.compass,W*.81,H*.085,W*.14,Math.round(11*u),'500','center');
+  if(d.town){ x.fillStyle='#d6dce3'; fitText(x,d.town+(d.county?'  ·  '+d.county:''),W*.49,H*.085,W*.40,Math.round(12*u),'600','center'); x.fillStyle='#9aa3ad'; }   // the town and county (owner 2026-11-23)
   // speed pill (zone .15–.29 W)
   const pc=W*.22, pw=W*.13, ph=H*.50, py=H*.20; x.fillStyle='#1a2029'; rr(x,pc-pw/2,py,pw,ph,ph*.32); x.fill();
   x.strokeStyle='#2a323d'; x.lineWidth=Math.max(2,u*.8); x.stroke();
@@ -1949,7 +1953,7 @@ function drawEV(sc,d){ const x=sc.T.x, W=sc.w, H=sc.h, k=YD.AT?(YD.AT.k||0):0, d
   sc.T.t.needsUpdate=true; }
 const ARROWS={'↑':'↑','↗':'↗','→':'→','↘':'↘','↓':'↓','↙':'↙','←':'←','↖':'↖'};
 function gather(c,dt){ const e=engineState(c,dt), sp=c.P, mph=Math.round(Math.abs(S.v||0)*2.237), hd=((S.hdg%360)+360)%360;
-  return {mph, rpm:e.rpm, gear:e.gear, gearL:gearLetter(), tach:sp.tachMax, red:sp.red, vmax:sp.vmaxG, street:street(), limit:limitTxt(), time:hhmm(), temp:tempF(),
+  return {mph, rpm:e.rpm, gear:e.gear, gearL:gearLetter(), tach:sp.tachMax, red:sp.red, vmax:sp.vmaxG, street:street(), ...townCounty(), limit:limitTxt(), time:hhmm(), temp:tempF(),
     wx:(YD.AT&&YD.AT.wx&&YD.AT.wx.text)||'', trip:(Math.max(0,(S.dist||0)-c.trip)/1609.34).toFixed(1),
     nav:navOn(), navArrow:txt('navArrow'), navDist:txt('navDist'), navStreet:txt('navStreet'), eta:txt('navEta'),
     compass:['N','NE','E','SE','S','SW','W','NW'][Math.round(hd/45)%8]+' · '+Math.round(hd)+'°',
