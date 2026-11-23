@@ -48,7 +48,7 @@ function start(){
   // muffled and the low boom comes up a little, the way an engine and the road sound from inside a closed car
   A.bus=A.ctx.createBiquadFilter(); A.bus.type='lowpass'; A.bus.frequency.value=20000; A.bus.Q.value=.5;
   A.boom=A.ctx.createBiquadFilter(); A.boom.type='peaking'; A.boom.frequency.value=110; A.boom.Q.value=.9; A.boom.gain.value=0;
-  A.bus.connect(A.boom); A.boom.connect(A.ctx.destination);
+  A.duck=A.ctx.createGain(); A.bus.connect(A.boom); A.boom.connect(A.duck); A.duck.connect(A.ctx.destination);   // A.duck: quieter while you talk to the car
   A.ctx.audioWorklet.addModule('js/enh/engine-worklet.js?v=5').then(()=>{
     for(const k of Object.keys(ENG)){
       const n=new AudioWorkletNode(A.ctx,ENG[k].proc||k,{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2]});
@@ -162,5 +162,5 @@ function squirt(){ if(!on) return; start(); const c=A.ctx; if(!c) return; if(c.s
   src.connect(bp); bp.connect(g); m.connect(mg); const out=A.bus||c.destination; g.connect(out); mg.connect(out); src.start(t); m.start(t); src.stop(t+.9); m.stop(t+.75); }
 // a timer (not a frame hook), so it works parked and in every view
 setInterval(()=>horn(window.CTRL&&CTRL.held('horn')),30);
-window.SOUND={setOn,get on(){ return on; },state:A,ENG,cabin,horn,squirt,get honking(){ return H.on; }};
+window.SOUND={duck:on=>{ try{ if(A.duck) A.duck.gain.setTargetAtTime(on?.25:1,A.ctx.currentTime,.12); }catch(e){} },setOn,get on(){ return on; },state:A,ENG,cabin,horn,squirt,get honking(){ return H.on; }};
 })();
