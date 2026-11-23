@@ -146,7 +146,7 @@ function buildPolice(shadowMat){
 }
 /* ---------- the drivable cars' own 3D models in traffic (owner 2026-11-23: "have the drivable cars also be other cars
    we see on the road") ----------
-   About 1 traffic car in 4 is an Expedition, a Model Y or the Javelin AMX (v2), each in a random paint. Each .glb is
+   About 1 traffic car in 4 is an Expedition (random paint), a Model Y (Pearl White) or the Javelin AMX v2 (black). Each .glb is
    loaded once (only when such a car first turns up) and turned into a template: every part merged by kind of surface
    (paint, glass, lamps, shiny, matte; colours kept as vertex colours), so a car is ~6 draw calls plus 2-3 per wheel
    instead of 30-50. No interiors (the cabin is built by cockpit.js for your own car only; the Javelin's "Interior" part is
@@ -158,7 +158,7 @@ const REAL_SHARE=.25;
 const REAL={
   expedition:{share:.3,lo:'big',colors:[0xb4c3d2,0x0f1114,0xeeeeec,0x6e7680,0x1c2b40,0x7a1b1b,0x3a2a22]},
   modely:{share:.3,lo:'luxury',colors:[0xeceeee],photos:true},       // Pearl White only: its front and back are the owner's photos (plain paint there was a blank blob)
-  javelin3d2:{share:.4,lo:'classic',colors:[0x141518,0xea580c,0x15803d,0x1d4ed8,0xeab308,0xb91c1c,0xf8fafc]},
+  javelin3d2:{share:.4,lo:'classic',colors:[0x141518]},    // black only, like the owner's: the model's body panels run across the bottom of the wheel arches, which only black hides
 };
 const RM={};                                        // key -> {parts, wheels, r, wb, paint:{metal,rough}} once loaded; 'loading' / 'fail'
 const RMAT={};
@@ -237,17 +237,17 @@ function template(gl,key){
     const M=new THREE.Matrix4().multiplyMatrices(flip,o.matrixWorld), ms=Array.isArray(o.material)?o.material:[o.material];
     const groups=Array.isArray(o.material)&&o.geometry.groups.length?o.geometry.groups:[{start:0,count:null,materialIndex:0}];
     for(const gr of groups){ const m=ms[gr.materialIndex||0]; if(!m) continue; const cls=rclass(m,key); if(!cls) continue;
-      if(cls.startsWith('photo')&&!own[cls]){ own[cls]=m; if(m.map){ m.map.encoding=THREE.LinearEncoding; m.map.needsUpdate=true; } m.depthWrite=false; m.polygonOffset=true; m.polygonOffsetFactor=-2; m.polygonOffsetUnits=-4; m.needsUpdate=true; }   // as js/game.js treats them
+      if(cls.startsWith('photo')&&!own[cls]){ own[cls]=m; if(m.isMeshStandardMaterial){ m.envMap=rmats().env; m.envMapIntensity=1; } if(m.map){ m.map.encoding=THREE.LinearEncoding; m.map.needsUpdate=true; } m.depthWrite=false; m.polygonOffset=true; m.polygonOffsetFactor=-2; m.polygonOffsetUnits=-4; m.needsUpdate=true; }   // as js/game.js treats them
       const col=cls.startsWith('photo')?new THREE.Color(1,1,1):m.color?m.color.clone():new THREE.Color(1,1,1); if(Math.max(col.r,col.g,col.b)>=.05) col.convertLinearToSRGB();   // as js/game.js does
-      if(cls==='paint'){ paint.metal=Math.min(.6,m.metalness??.3); paint.rough=Math.max(.25,m.roughness??.4); paint.col=col.getHex(); }
+      if(cls==='paint'){ paint.metal=Math.min(.6,m.metalness??.3); paint.rough=Math.max(.25,m.roughness??.4); paint.col=col.getHex(); if(REAL[key].photos&&!own.paint){ own.paint=m; if(m.map) m.map=null; if(Math.max(m.color.r,m.color.g,m.color.b)>=.05) m.color.convertLinearToSRGB(); m.envMap=rmats().env; m.envMapIntensity=1; m.needsUpdate=true; } }
       const w=wheelOf(o), bucket=w?(wb.get(w)||(wb.set(w,{}),wb.get(w))):body;
       (bucket[cls]||(bucket[cls]=[])).push(bake(o,M,gr.start,gr.count,col)); } });
-  const parts=Object.keys(body).map(cls=>({cls,geo:joinBaked(body[cls]),mat:own[cls]})).sort((p,q)=>!!p.mat-!!q.mat);   // photos drawn last (they lie on the paint)
   const wheels=[]; let r=.35;
   for(const [w,bk] of wb){ const c=new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().multiplyMatrices(flip,w.matrixWorld));
     const ps=Object.keys(bk).map(cls=>({cls,geo:joinBaked(bk[cls],c)}));
     const bb=new THREE.Box3(); for(const p of ps){ p.geo.computeBoundingBox(); bb.union(p.geo.boundingBox); } r=Math.max(.15,(bb.max.y-bb.min.y)/2);
     wheels.push({c,parts:ps,front:c.z<0}); }
+  const parts=Object.keys(body).map(cls=>({cls,geo:joinBaked(body[cls]),mat:own[cls]})).sort((p,q)=>p.cls.startsWith('photo')-q.cls.startsWith('photo'));   // photos drawn last (they lie on the paint)
   const zs=wheels.map(w=>w.c.z);
   return {parts,wheels,r,wb:zs.length?Math.max(...zs)-Math.min(...zs):2.8,paint};
 }
@@ -256,7 +256,7 @@ function detail(g,on){
   const u=g.userData, R=u.real; if(!R) return false;
   const T=RM[R.key]; if(on&&!(T&&T.parts)){ if(!T) loadReal(R.key); on=false; }
   if(on&&!R.hi){ const Mt=rmats(), h=new THREE.Group(), hw=[], hf=[];
-    for(const p of T.parts){ const me=new THREE.Mesh(p.geo,p.mat||(p.cls==='paint'?realPaint(R.key,R.col):Mt[p.cls])); if(p.mat) me.renderOrder=1; h.add(me); }
+    for(const p of T.parts){ const me=new THREE.Mesh(p.geo,p.mat||(p.cls==='paint'?realPaint(R.key,R.col):Mt[p.cls])); if(p.cls.startsWith('photo')) me.renderOrder=1; h.add(me); }
     for(const w of T.wheels){ const pv=new THREE.Group(); pv.position.copy(w.c); h.add(pv); const wh=new THREE.Group(); pv.add(wh);
       for(const p of w.parts) wh.add(new THREE.Mesh(p.geo,p.cls==='paint'?realPaint(R.key,R.col):Mt[p.cls]));
       wh.rotation.order='YXZ'; hw.push(wh); if(w.front) hf.push(pv); }
