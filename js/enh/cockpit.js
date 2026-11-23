@@ -255,9 +255,10 @@ function shell(G,P,mats){
     mesh(bar([[bx,ws.yB-.02,ws.zB-.005],[lerp(bx,tx,.5),lerp(ws.yB,ws.yT,.5),lerp(ws.zB,ws.zT,.5)+.012],[tx,ws.yT+.01,ws.zT+.02]],[pil.w*1.1,pil.w],pil.t,[-s*.6,0,1]),pilM,G).renderOrder=7;
     if(P.xp){ // grab handle on each A-pillar (owner 2026-11-22, photo): a dark strap standing off the trim, a little above halfway up
       const B=new V3(bx,ws.yB-.02,ws.zB-.005), Tp=new V3(tx,ws.yT+.01,ws.zT+.02), dir=Tp.clone().sub(B).normalize(), n=new V3(-s*.6,0,1).normalize(), sd=new V3().crossVectors(dir,n).normalize();
-      const at=(t,o)=>{ const v=B.clone().lerp(Tp,t).addScaledVector(n,o); return [v.x,v.y,v.z]; }, hm=M({color:0x1c1d1f,roughness:.5,normalMap:rep(textures().grain,2,2),normalScale:new THREE.Vector2(.3,.3),transparent:true});
-      mesh(bar([at(.40,.028),at(.415,.058),at(.45,.074),at(.55,.074),at(.585,.058),at(.60,.028)],.016,.026,[sd.x,sd.y,sd.z],40,10),hm,G).renderOrder=8;
-      for(const t of [.40,.60]){ const c=mesh(rbox(.034,.05,.012,.004,.012),hm,G); c.position.set(...at(t,.032)); c.up.copy(dir); c.lookAt(new V3(...at(t,.2))); c.renderOrder=8; } } }
+      const at=(t,o)=>{ const v=B.clone().lerp(Tp,t).addScaledVector(n,o); return [v.x,v.y,v.z]; }, hm=pilM;   // owner 2026-11-22: same colour as the pillar, chunkier (photo)
+      mesh(bar([at(.36,.03),at(.375,.075),at(.41,.098),at(.59,.098),at(.625,.075),at(.64,.03)],.026,.034,[sd.x,sd.y,sd.z],48,14),hm,G).renderOrder=8;
+      for(const t of [.36,.64]){ const c=mesh(rbox(.05,.07,.022,.008,.018),hm,G); c.position.set(...at(t,.034)); c.up.copy(dir); c.lookAt(new V3(...at(t,.2))); c.renderOrder=8;
+        const sm=mesh(new THREE.PlaneGeometry(.044,.004),M({color:0x7d7d7a,roughness:.9,transparent:true}),G,false,false); sm.position.set(...at(t,.0455)); sm.up.copy(dir); sm.lookAt(new V3(...at(t,.2))); sm.renderOrder=9; } } }
   mesh(bar([[-ws.hwT-.01,ws.yT+.015,ws.zT+.03],[0,ws.yT+.03,ws.zT+.04],[ws.hwT+.01,ws.yT+.015,ws.zT+.03]],.09,.05,[0,-1,.4]),trimM,G);
   // backing between the glass's top edge and the headliner (looking up you saw a sliver of sky there)
   mesh(grid(16,2,(u,v)=>{ const s=u*2-1; return [s*(ws.hwT+.02),lerp(ws.yT-.012,P.roof.y+.01,v),lerp(ws.zT-.012,ws.zT+.05,v)]; }),M({color:0x0a0a0b,roughness:.9}),G,false);
@@ -305,7 +306,8 @@ function shell(G,P,mats){
       return [xd-s*(arm+top+.02*Math.sin(Math.PI*v)),y,z]; }),doorM,G);
     mesh(bar([[xd-s*.03,P.belt+.01,zA],[xd-s*.045,P.belt+.018,(zA+zE)/2],[xd-s*.03,P.belt+.01,zE]],.075,.03,[0,1,0]),sillM,G);
     const sp=mesh(new THREE.CircleGeometry(.075,24),M({map:rep(textures().perf,3,3),roughness:.5,metalness:.6}),G,false); sp.position.set(xd-s*.012,.52,lerp(zA,zE,.25)); sp.rotation.y=s*Math.PI/2;
-    if(s<0&&P.style!=='classic'){ const pk=mesh(rbox(.06,.025,.22,.008,.01),M({color:0x101011,roughness:.3,metalness:.2}),G); pk.position.set(xd+.085,P.belt-.255,lerp(zA,zE,.45)); }
+    if(s<0&&P.xp) doorXp(G,P,xd,zA,zE);
+    else if(s<0&&P.style!=='classic'){ const pk=mesh(rbox(.06,.025,.22,.008,.01),M({color:0x101011,roughness:.3,metalness:.2}),G); pk.position.set(xd+.085,P.belt-.255,lerp(zA,zE,.45)); }
     if(P.style==='classic'){ const cr=M({color:0xd9dde2,metalness:1,roughness:.12,out:true}); const h=mesh(bar([[xd-s*.035,P.belt-.15,lerp(zA,zE,.3)],[xd-s*.07,P.belt-.15,lerp(zA,zE,.3)+.03],[xd-s*.09,P.belt-.17,lerp(zA,zE,.3)+.08]],.014,.014,[0,1,0],8,8),cr,G);
       const wc=mesh(new THREE.TorusGeometry(.03,.006,8,20),cr,G); wc.position.set(xd-s*.04,P.belt-.25,lerp(zA,zE,.55)); wc.rotation.y=Math.PI/2; } }
   // B pillar (not on the pillarless Javelin hardtop), rear doors, C pillar, rear seats — seen when you look round
@@ -396,6 +398,37 @@ function shell(G,P,mats){
 }
 
 // door-mirror glass outline, centred; o = which way is outboard (+1 / -1 along x)
+// Expedition driver's door controls (owner 2026-11-22, photo): on the armrest a gloss-black switch panel sloping up toward
+// you — four window switches, the window lock and the door lock / unlock keys, the mirror pad with its L / R selector — and
+// higher up on the door, by the release handle, the seat-memory keys 1 2 3 and SET
+function doorXp(G,P,xd,zA,zE){
+  const gl=M({color:0x09090a,roughness:.15,metalness:.25,env:.9}), sw=M({color:0x17181a,roughness:.45}), ch=M({color:0xd8dce0,metalness:.85,roughness:.2,env:1.6});
+  // switch panel on the armrest (local x = across toward the cabin, local z = back, local y = up off the panel)
+  const g=new THREE.Group(); g.position.set(xd+.072,P.belt-.222,lerp(zA,zE,.46)); g.rotation.z=-.22; G.add(g);
+  mesh(rbox(.078,.01,.235,.004,.02),gl,g);
+  mesh(bar([[-.041,.004,-.118],[-.041,.004,.118]],.006,.004,[0,1,0],8,6),ch,g);                       // satin edge along the door side
+  const T=canvasTex(160,480), x=T.x; x.fillStyle='#0a0a0b'; x.fillRect(0,0,160,480);
+  x.fillStyle='#bfc4ca'; x.font='600 18px system-ui,Arial'; x.textAlign='center'; x.textBaseline='middle';
+  x.fillText('L',46,40); x.fillText('R',114,40); const lock=(cx,cy,open)=>{ x.fillRect(cx-9,cy-2,18,14); x.beginPath(); x.arc(cx+(open?7:0),cy-4,6,Math.PI,0); x.stroke(); };   // padlocks: unlock, lock
+  x.lineWidth=2.5; x.strokeStyle='#bfc4ca'; lock(46,410,true); lock(114,410,false); x.font='600 13px system-ui,Arial'; x.fillText('LOCK',80,330);
+  x.strokeStyle='#bfc4ca'; x.lineWidth=2; for(const [cx,cy] of [[46,170],[114,170],[46,270],[114,270]]){ x.beginPath(); x.moveTo(cx-10,cy-30); x.lineTo(cx,cy-40); x.lineTo(cx+10,cy-30); x.stroke(); }
+  const face=mesh(new THREE.PlaneGeometry(.074,.222),new THREE.MeshBasicMaterial({map:T.t}),g,false,false); face.rotation.x=-Math.PI/2; face.position.y=.0052;
+  const X=px=>(px/160-.5)*.074, Z=py=>(py/480-.5)*.222;
+  for(const [cx,cy] of [[46,170],[114,170],[46,270],[114,270]]){ const k=mesh(rbox(.019,.012,.03,.004,.006),sw,g); k.position.set(X(cx),.011,Z(cy)); k.rotation.x=.18; }   // window switches (pull up / push down)
+  for(const cx of [46,114]){ const k=mesh(rbox(.024,.006,.016,.002,.005),sw,g); k.position.set(X(cx),.008,Z(410)); }                             // unlock / lock
+  { const k=mesh(rbox(.018,.005,.014,.002,.005),sw,g); k.position.set(X(80),.008,Z(350)); }                                                       // window lock
+  { const pad=mesh(new THREE.CylinderGeometry(.014,.015,.006,32),sw,g); pad.position.set(X(80),.008,Z(95));                                        // mirror pad + L/R selector
+    const ring=mesh(new THREE.TorusGeometry(.016,.0016,8,32),ch,g); ring.rotation.x=Math.PI/2; ring.position.set(X(80),.0075,Z(95));
+    const sel=mesh(rbox(.03,.006,.01,.002,.004),sw,g); sel.position.set(X(80),.008,Z(40)); }
+  // seat memory keys on the upper door, ahead of the chrome release handle (facing the cabin)
+  const m=new THREE.Group(); m.position.set(xd+.035,P.belt-.11,lerp(zA,zE,.33)); m.rotation.y=Math.PI/2; G.add(m);
+  mesh(rbox(.085,.026,.006,.002,.008),gl,m);
+  const T2=canvasTex(256,80), y=T2.x; y.fillStyle='#0a0a0b'; y.fillRect(0,0,256,80); y.fillStyle='#bfc4ca'; y.font='600 30px system-ui,Arial'; y.textAlign='center'; y.textBaseline='middle';
+  ['SET','1','2','3'].forEach((t,i)=>{ y.font='600 '+(t==='SET'?20:30)+'px system-ui,Arial'; y.fillText(t,32+i*64,42); });
+  const f2=mesh(new THREE.PlaneGeometry(.081,.024),new THREE.MeshBasicMaterial({map:T2.t}),m,false,false); f2.position.z=.0032;
+  for(let i=0;i<4;i++){ const k=mesh(rbox(.016,.016,.004,.0015,.005),sw,m); k.position.set(-.0304+i*.0203,0,.004); k.scale.set(1,1,.6); }
+  const h=mesh(bar([[xd+.022,P.belt-.11,lerp(zA,zE,.38)],[xd+.04,P.belt-.108,lerp(zA,zE,.41)],[xd+.042,P.belt-.11,lerp(zA,zE,.48)]],.018,.008,[1,0,0],16,8),ch,G);   // release handle
+  const cup=mesh(rbox(.008,.04,.13,.003,.012),M({color:0x111214,roughness:.6}),G); cup.position.set(xd+.012,P.belt-.11,lerp(zA,zE,.43)); }
 function mirShape(w,h,o){ const hw=w/2, hh=h/2, ti=hh*.78, bi=-hh*.70, to=hh, bo=-hh;    // inboard edge shorter, top rises outboard
   const r1=.018, r2=.03, r3=Math.min(.075,h*.42), r4=.025, X=v=>v*o, s=new THREE.Shape();
   s.moveTo(X(-hw),ti-r1); s.quadraticCurveTo(X(-hw),ti,X(-hw+r1),ti);
