@@ -18,6 +18,7 @@
 const {onReady,onTick,safe}=YD;
 const SRC='roads-smooth', DEV=1.8, MIN_TURN=.6*Math.PI/180, STEP=4*Math.PI/180;
 let on=true; try{ on=localStorage.getItem('ydSmooth')!=='0'; }catch(e){}
+const KID=new Map();                                             // road properties -> short id, for joining
 const SM={on:false, vec:null, cache:new Map(), keys:'', t:0, want:false, n:0, ms:0};
 window.SMOOTH=SM;
 
@@ -25,15 +26,15 @@ window.SMOOTH=SM;
 const tileBox=(z,x,y)=>{ const n=2**z, lat=v=>Math.atan(Math.sinh(Math.PI*(1-2*v/n)))*180/Math.PI;
   return [x/n*360-180, lat(y+1), (x+1)/n*360-180, lat(y)]; };
 // round every inner corner of a lng/lat line; the line's two ends stay where they are
-function smoothLine(P){
+function smoothLine(P,step){
   if(P.length<3) return P;
   const N=P.length-1;
   if(N>2&&P[0][0]===P[N][0]&&P[0][1]===P[N][1]){                  // a closed loop (roundabout): start half-way along the
     const M=[(P[0][0]+P[1][0])/2,(P[0][1]+P[1][1])/2];           // first piece so its first corner gets rounded too
-    return smoothOpen([M].concat(P.slice(1),[M])); }
-  return smoothOpen(P);
+    return smoothOpen([M].concat(P.slice(1),[M]),step); }
+  return smoothOpen(P,step);
 }
-function smoothOpen(P){
+function smoothOpen(P,step){
   const lat0=P[0][1], kx=111320*Math.cos(lat0*Math.PI/180), ky=111320;
   const X=P.map(p=>(p[0]-P[0][0])*kx), Y=P.map(p=>(p[1]-lat0)*ky);
   const back=(x,y)=>[P[0][0]+x/kx, lat0+y/ky];
@@ -47,7 +48,7 @@ function smoothOpen(P){
     // half of each neighbouring piece at most (the next corner takes the other half), and no more than DEV inside the corner
     const d=Math.min(.5*la,.5*lb,2*DEV/Math.max(1e-6,Math.sin(turn/2)));
     const x0=X[i]-ax/la*d, y0=Y[i]-ay/la*d, x2=X[i]+bx/lb*d, y2=Y[i]+by/lb*d;
-    const n=Math.max(2,Math.min(16,Math.ceil(turn/STEP)+1));
+    const n=Math.max(2,Math.min(16,Math.ceil(turn/step)+1));
     for(let k=0;k<=n;k++){ const t=k/n, u=1-t;
       add(u*u*x0+2*u*t*X[i]+t*t*x2, u*u*y0+2*u*t*Y[i]+t*t*y2); }
   }
@@ -65,10 +66,10 @@ function clipLine(P,b){
       const r=q/p; if(p<0){ if(r>t1){ ok=false; break; } if(r>t0) t0=r; } else { if(r<t0){ ok=false; break; } if(r<t1) t1=r; } }
     if(!ok){ cur=null; continue; }
     const A=t0===0?P[i-1]:[x0+dx*t0,y0+dy*t0], B=t1===1?P[i]:[x0+dx*t1,y0+dy*t1];
-    if(!cur||t0>0){ cur=[A]; parts.push(cur); }
-    cur.push(B); if(t1<1) cur=null;
+    if(!cur||t0>0){ cur=[A]; cur.cs=t0>0; parts.push(cur); }
+    cur.push(B); if(t1<1){ cur.ce=true; cur=null; }
   }
-  return parts.filter(p=>p.length>1);
+  return parts.filter(p=>p.length>1);                             // .cs/.ce: start/end was cut at the box edge
 }
 const twoWay=pr=>!pr.oneway||pr.oneway===0||pr.oneway==='0';
 /* join lines of the same road end to start. exact: points must match exactly (inside one tile) and only where exactly two
@@ -101,10 +102,10 @@ function buildTile(z,x,y,feats){
   for(const f of feats){ const vt=f._vectorTileFeature; if(vt&&vt.type!==2) continue;   // 2 = line
     const g=f.geometry; if(!g) continue;
     const lines=g.type==='LineString'?[g.coordinates]:g.type==='MultiLineString'?g.coordinates:null; if(!lines) continue;
-    const p=Object.assign({},f.properties), k=JSON.stringify(p);
+    const p=Object.assign({},f.properties), j=JSON.stringify(p); let k=KID.get(j); if(k==null) KID.set(j,k=KID.size);
     for(const c of lines) if(c.length>1) items.push({k,p,c}); }
-  const box=tileBox(z,x,y), out=[];
-  for(const it of join(items,true)) for(const c of clipLine(smoothLine(it.c),box)) out.push({k:it.k,p:it.p,c});
+  const box=tileBox(z,x,y), out=[], step=z>=14?STEP:STEP*2.5;    // far-off, less detailed tiles: fewer points per bend
+  for(const it of join(items,true)) for(const c of clipLine(smoothLine(it.c,step),box)) out.push({k:it.k,p:it.p,c,cut:!!(c.cs||c.ce)});
   return out;
 }
 
@@ -122,8 +123,10 @@ function rebuild(){
   if(ks===SM.keys&&SM.on) return;
   for(const k of keys) if(!SM.cache.has(k)){ const {T,f}=by.get(k); SM.cache.set(k,buildTile(T.z,T.x,T.y,f)); }
   for(const k of [...SM.cache.keys()]) if(!by.has(k)) SM.cache.delete(k);
-  const all=[]; for(const k of keys) all.push(...SM.cache.get(k));
-  const feats=join(all,false).map(it=>({type:'Feature',properties:it.p,geometry:{type:'LineString',coordinates:it.c}}));
+  // only pieces cut at a tile edge need joining to the next tile; the rest go straight in
+  const seam=[], feats=[], F=it=>({type:'Feature',properties:it.p,geometry:{type:'LineString',coordinates:it.c}});
+  for(const k of keys) for(const it of SM.cache.get(k)) if(it.cut) seam.push(it); else feats.push(F(it));
+  for(const it of join(seam,false)) feats.push(F(it));
   const src=map.getSource(SRC); if(src) src.setData({type:'FeatureCollection',features:feats});
   SM.keys=ks; SM.n=feats.length; SM.ms=performance.now()-t0;
 }
