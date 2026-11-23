@@ -153,12 +153,13 @@ function buildPolice(shadowMat){
    dropped) and the glass is opaque dark tint. The Model Y keeps its photo panels (the owner's own car: lamps, rear
    details), so traffic Model Ys are Pearl White like his; those panels keep their own materials (5 more draw calls). A car shows its real model only near you (traffic.js: within ~80 m, and only the nearest few:
    Low 2, Medium 3, High 4); farther away, or before the model has loaded, it is the similar low-poly design underneath
-   (Expedition → big SUV, Model Y → luxury SUV, Javelin → classic coupe) in the same paint. */
+   (Expedition → big SUV, Model Y → luxury SUV, Javelin and 70's Muscle Car → classic coupe) in the same paint. */
 const REAL_SHARE=.25;
 const REAL={
   expedition:{share:.3,lo:'big',colors:[0xb4c3d2,0x0f1114,0xeeeeec,0x6e7680,0x1c2b40,0x7a1b1b,0x3a2a22]},
   modely:{share:.3,lo:'luxury',colors:[0xeceeee],photos:true},       // Pearl White only: its front and back are the owner's photos (plain paint there was a blank blob)
   javelin3d2:{share:.4,lo:'classic',colors:[0x141518,0x141518,0x141518,0xc2410c,0x15803d,0x1e3a8a,0x8b1a1a,0xf1f1ee]},   // mostly black like the owner's; the gold stripe stays
+  muscle70:{share:.3,lo:'classic',colors:[0x1e3a8a,0xb91c1c,0xf1f1ee,0x15803d,0x141518,0x5b2a6e]},   // the 70's Muscle Car (owner 2026-11-23): brighter colours than the black Javelin; the gold stripe stays
 };
 const RM={};                                        // key -> {parts, wheels, r, wb, paint:{metal,rough}} once loaded; 'loading' / 'fail'
 const RMAT={};
