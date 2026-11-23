@@ -318,7 +318,7 @@ function screenPt(b){
   const w=M[3]*x+M[7]*y+M[11]*z+M[15]; if(w<=0) return null;      // behind the camera
   return [(M[0]*x+M[4]*y+M[8]*z+M[12])/w,(M[1]*x+M[5]*y+M[9]*z+M[13])/w];
 }
-const OCC=['building-3d','rebuilt-3d','wall-3d'];
+const OCC=['building-3d','rebuilt-3d','wall-3d','wall-pat'];
 /* is a building between the camera and this light? (owner 2026-11-21: "the water tower red lights shine through the
    buildings"). The old check asked the screen what was drawn at the dot — any building there, in front of the tower or
    behind it — and with 3D terrain on it didn't check at all. Now: walk the sight line from the camera toward the light

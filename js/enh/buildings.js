@@ -24,9 +24,21 @@ const ROOFC=['#3a3c41','#46484d','#55585e','#62656b','#5b4a3c','#6a5c4d','#4a3f3
   '#2f3a33','#7a4b3a','#86898d','#4d4a46','#695849'];
 const LOWC=['#d8d2c4','#c9c0ae','#b5a48c','#a7a29a','#c2b8a3','#9e6b55','#d0c9bd','#b9bcbf','#cfc6b4','#a58f78'];
 const seedOf=(cx,cy)=>(Math.floor(cx*1e5)^Math.floor(cy*1e5))>>>0;
-function houseLook(seed){ const brick=hash(seed,51)<.2;
-  return {brick, wall:brick?BRICK[Math.floor(hash(seed,53)*BRICK.length)]:SIDING[Math.floor(hash(seed,53)*SIDING.length)],
+function houseLook(seed){ const brick=hash(seed,51)<.2, i=Math.floor(hash(seed,53)*(brick?BRICK.length:SIDING.length));
+  return {brick, wall:brick?BRICK[i]:SIDING[i], pat:brick?'hw-br'+i:(hash(seed,55)<.2?'hw-bb':'hw-lap')+i,
     roof:ROOFC[Math.floor(hash(seed,57)*ROOFC.length)]}; }
+/* wall textures for houses, one per colour, drawn in code: lap siding (boards ~20 cm apart from the chase camera),
+   board and batten, and brick courses with light mortar. 32 px tiles, so they repeat seamlessly along any wall. */
+function wallImages(){
+  const mk=(id,base,draw)=>{ if(map.hasImage(id)) return; const c=document.createElement('canvas'); c.width=c.height=32; const x=c.getContext('2d');
+    x.fillStyle=base; x.fillRect(0,0,32,32); draw(x); map.addImage(id,x.getImageData(0,0,32,32),{pixelRatio:1}); };
+  SIDING.forEach((c,i)=>{
+    mk('hw-lap'+i,c,x=>{ for(let y=0;y<32;y+=4){ x.fillStyle='rgba(0,0,0,.2)'; x.fillRect(0,y+3,32,1); x.fillStyle='rgba(255,255,255,.16)'; x.fillRect(0,y,32,1); } });
+    mk('hw-bb'+i,c,x=>{ for(let v=0;v<32;v+=8){ x.fillStyle='rgba(0,0,0,.2)'; x.fillRect(v+2,0,1,32); x.fillStyle='rgba(255,255,255,.14)'; x.fillRect(v,0,2,32); } }); });
+  BRICK.forEach((c,i)=>mk('hw-br'+i,c,x=>{ const r=(a,b)=>{ let h=(a*73856093^b*19349663)>>>0; return (h%1000)/1000; };
+    for(let y=0;y<32;y+=4) for(let v=-8;v<32;v+=8){ const o=(y/4)%2?4:0; x.fillStyle=`rgba(${r(y,v)<.5?0:255},${r(y,v)<.5?0:220},${r(y,v)<.5?0:200},${.05+.08*r(v,y)})`; x.fillRect(v+o,y,8,4); }
+    x.fillStyle='rgba(225,220,210,.55)'; for(let y=0;y<32;y+=4){ x.fillRect(0,y+3,32,1); for(let v=0;v<32;v+=8) x.fillRect(v+((y/4)%2?4:0),y,1,3); } }));
+}
 const NID=['%',['abs',['to-number',['id'],0]],8];
 const R={at:null,t:0,n:-1,tiles:false,last:''};
 
@@ -56,13 +68,18 @@ function addCaps(){
        pitched roof (its own feature) sat on the ground at its own house. Here every building is its own feature, so wall
        and roof stand on the same ground; the map's own copies of those groups are left out (js/game.js applyHides). */
     map.addSource('walls',{type:'geojson',data:{type:'FeatureCollection',features:[]},maxzoom:18,tolerance:0,buffer:16});
-    map.addLayer({id:'wall-3d',type:'fill-extrusion',source:'walls',
+    wallImages();
+    origFilters['wall-3d']=['!',['has','pat']]; origFilters['wall-pat']=['has','pat'];
+    map.addLayer({id:'wall-3d',type:'fill-extrusion',source:'walls',filter:origFilters['wall-3d'],
       paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-base':['get','b'],'fill-extrusion-height':['get','h'],'fill-extrusion-opacity':1}},before);
+    // houses: their siding / brick texture (no colour of their own, the texture carries it)
+    map.addLayer({id:'wall-pat',type:'fill-extrusion',source:'walls',filter:origFilters['wall-pat'],
+      paint:{'fill-extrusion-pattern':['get','pat'],'fill-extrusion-base':['get','b'],'fill-extrusion-height':['get','h'],'fill-extrusion-opacity':1}},before);
     map.addLayer({id:'wall-cap',type:'fill-extrusion',source:'walls',
       paint:{'fill-extrusion-color':['get','cc'],'fill-extrusion-base':['get','h'],'fill-extrusion-height':['+',['get','h'],.35],'fill-extrusion-vertical-gradient':false}},before);
-    for(const id of ['wall-3d','wall-cap']){ hideIds.push(id); origFilters[id]=null; }
-    blockIds.push('wall-3d');                                        // you still bump into them (screen check without terrain)
-    if(destroyed.length||HIDE.walk!=null) applyHides(['wall-3d','wall-cap']);
+    origFilters['wall-cap']=null; for(const id of ['wall-3d','wall-pat','wall-cap']) hideIds.push(id);
+    blockIds.push('wall-3d','wall-pat');                             // you still bump into them (screen check without terrain)
+    if(destroyed.length||HIDE.walk!=null) applyHides(['wall-3d','wall-pat','wall-cap']);
   }
   if(!map.getSource('roofs')){
     map.addSource('roofs',{type:'geojson',data:{type:'FeatureCollection',features:[]},maxzoom:19,tolerance:0,buffer:16,promoteId:'gk'});
@@ -151,7 +168,8 @@ function buildWalls(fs,kx,ky,RW,gone){
       const house=h<=12&&b0===0&&A>=25&&A<=450, L=house?houseLook(seed):null;
       const c=house?L.wall:h<=12?LOWC[Math.floor(hash(seed,59)*LOWC.length)]:h<=30?['#c8c4bc','#b3b8be','#d2c8b5','#bdb7ad','#a89f93'][seed%5]:['#9fb3c6','#8b9fb2','#a7b4bf'][seed%3];
       const rings=[outer]; for(const hr of pl.slice(1)){ const c2=clipRing(hr,box); if(c2) rings.push(c2); }
-      const ft={type:'Feature',id:f.id,properties:{c,cc:house?L.roof:FLAT[seed%2],b:b0,h},geometry:{type:'Polygon',coordinates:rings}};
+      const pr2={c,cc:house?L.roof:FLAT[seed%2],b:b0,h}; if(house&&!POWER) pr2.pat=L.pat;
+      const ft={type:'Feature',id:f.id,properties:pr2,geometry:{type:'Polygon',coordinates:rings}};
       W.cache.set(sk,ft); feats.push(ft); } }
   if(W.cache.size>20000) W.cache.clear();
   const sig=[...hid].sort().join(',')+'|'+[...tiles].sort().join(',');
@@ -413,6 +431,6 @@ onTick(700,function roofTick(){
   if(moved>(POWER?160:120)||destroyed.length!==R.n||(R.tiles&&age>(POWER?8000:5000))||R.pending) safe('roofs',build);
 });
 const prev=window.onPowerChange;
-window.onPowerChange=(on)=>{ if(prev) prev(on); R.at=null; R.last=''; R.parts=null; CACHE.clear(); };   // slice count / unit count change
+window.onPowerChange=(on)=>{ if(prev) prev(on); R.at=null; R.last=''; R.parts=null; CACHE.clear(); W.cache.clear(); W.sig=''; };   // also: wall textures off in battery saver   // slice count / unit count change
 window.ROOFS={build,state:R,walls:W,doorsNear:()=>R.reg||[],openDoor};
 })();
