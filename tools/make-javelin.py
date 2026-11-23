@@ -18,10 +18,10 @@ HW = .955                                       # half the 75.1 in body width
 def ease(a, b, t): t = min(1, max(0, t)); return a+(b-a)*t*t*(3-2*t)
 # ---------- side profile (z, y): low nose, long hood, short fastback roof, flat deck with a lip ----------
 ZW = .42                                         # foot of the windshield
-top = Pchip([ZR, -2.42, -2.365, -2.29, -2.12, -1.99, -1.86, -1.62, -1.38, -1.12, -.70, -.15, .05, .25, ZW, .60, 1.20, 1.90, 2.25, 2.38, ZF],
-            [.80, .955, 1.008, .988, .978, .988, 1.040, 1.150, 1.235, 1.290, 1.305, 1.305, 1.270, 1.120, .940, .905, .880, .850, .825, .80, .74])
-# (2026-11-23 owner: the real car's trunk is much shorter — the fastback glass now runs down to z -1.99, the deck is ~35 cm
-# long and ends in a ducktail lip)
+top = Pchip([ZR, -2.42, -2.37, -2.31, -2.22, -2.13, -2.02, -1.80, -1.52, -1.24, -.75, -.15, .05, .25, ZW, .60, 1.20, 1.90, 2.25, 2.38, ZF],
+            [.80, .950, .995, .975, .966, .975, 1.030, 1.140, 1.230, 1.290, 1.305, 1.305, 1.270, 1.120, .940, .905, .880, .850, .825, .80, .74])
+# (2026-11-23 owner: the real car's trunk is much shorter, then "still a little smaller and/or shorter" — the fastback glass
+# runs down to z -2.13, the deck is ~22 cm long, a little lower, and ends in a ducktail lip)
 belt = Pchip([ZR, -2.25, -1.85, -1.50, -1.18, -.92, 0., ZW, .6, ZF], [.92, .968, .992, .990, .945, .925, .915, .925, .93, .90])   # the waist kicks up sharply over the rear wheels
 bot = Pchip([ZR, -2.3, -2.0, -1.7, 1.75, 2.1, 2.35, ZF], [.36, .30, .25, .22, .22, .25, .30, .36])
 
@@ -92,10 +92,10 @@ scoop = .058*np.clip(1-(np.abs(X)/.36)**6, 0, 1)*np.clip((Z-SC0)/.03, 0, 1)*np.c
 # the trademark of the Javelin's appearance")
 BL = lambda za, w: np.exp(-((Z-za)/w)**2)
 outer = np.clip((X-.52)/.30, 0, 1)**1.5
-blis = .060*BL(ZA_F, .60)*outer+.055*BL(ZA_R, .58)*outer
+blis = .105*BL(ZA_F, .56)*outer+.055*BL(ZA_R, .58)*outer          # (owner: the front ones rise even higher)
 up = Y > .70
 Y += np.where(up, crown+scoop, 0)+np.where(Y > .55, blis*np.clip((Y-.55)/.25, 0, 1), 0)
-X += (.030*BL(ZA_F, .62)+.034*BL(ZA_R, .60))*np.clip((Y-TYRE_R)/.15, 0, 1)*np.clip((1.02-Y)/.12, 0, 1)*(X > .5)
+X += (.036*BL(ZA_F, .60)+.034*BL(ZA_R, .60))*np.clip((Y-TYRE_R)/.15, 0, 1)*np.clip((1.02-Y)/.12, 0, 1)*(X > .5)
 RA = .405; XW = TRACK/2-.035                     # open, round wheel arches; the liner a little inside the tyre's outer face
 for za in (ZA_F, ZA_R):                          # flared lips: the panel swells ~4.5 cm in a band round each arch
     d = np.hypot(Z-za, Y-TYRE_R)
@@ -151,14 +151,14 @@ def ggrid(u0, u1, z0f, z1f, nz, nu, mat):
     mirror_grid(gh, G_, lambda i, j: mat)
 zA = lambda u: ZW-.02-.50*min(u, .5)/.5          # front of the door glass along the raked A pillar
 zQ = lambda u: -1.00-.12*min(u, .5)/.5           # back of the door glass (a thin seam, no B pillar)
-zS = lambda u: -1.66+.44*min(u, .5)/.5           # back of the quarter window: its rear edge slants forward up the sail
+zS = lambda u: -1.78+.46*min(u, .5)/.5           # back of the quarter window: its rear edge slants forward up the sail
 cz0 = lambda u: ZG0
 ggrid(0, .5, cz0, zS, 10, 14, 'Paint')           # sail panel (C pillar), wide and body colour
 ggrid(0, .5, zS, lambda u: zQ(u)-.008, 30, 14, 'Glass')   # quarter window
 ggrid(0, .5, lambda u: zQ(u)-.008, zQ, 1, 14, 'Chrome')   # the seam between the two glasses
 ggrid(0, .5, zQ, zA, 60, 14, 'Glass')            # door glass
 ggrid(0, .5, zA, lambda u: ZW, 6, 14, 'Paint')   # A pillar, body colour
-ZRG = -1.12                                       # back edge of the roof: the fastback glass from here down to the deck
+ZRG = -1.24                                       # back edge of the roof: the fastback glass from here down to the deck
 ggrid(.5, .54, cz0, lambda u: ZW, 160, 1, 'Paint')        # roof edge
 ggrid(.54, 1, lambda u: ZRG, lambda u: -.12, 40, 12, 'Paint')   # roof
 ggrid(.54, 1, cz0, lambda u: ZRG, 40, 12, 'Glass')        # fastback rear glass
@@ -223,7 +223,11 @@ def patch(m, mat, f, nu, nv, push=.004, zfn=zfront, sgn=1, shift=0.):
                 else: m.tri(mat, a, c, b); m.tri(mat, b, c, d)
 def xat(z, y):                                    # the body side at (z, y), arches and flares included (from the grid)
     i = int(np.clip(np.searchsorted(zs, z)-1, 0, NZ-2)); f = (z-zs[i])/(zs[i+1]-zs[i])
-    def at(col): c = col[col[:, 0] > XW+.02]; k = np.argsort(c[:, 1]); return float(np.interp(y, c[k, 1], c[k, 0])) if len(c) > 2 else HW
+    def at(col):                                  # only the side of the section (not the shoulder curling over the top)
+        c = col[col[:, 0] > XW+.02]
+        if len(c) < 3: return HW
+        jm = int(np.argmax(c[:, 0])); keep = np.arange(len(c)) <= jm+np.argmax(np.r_[c[jm:, 0] < c[jm, 0]-.07, True])
+        c = c[keep]; k = np.argsort(c[:, 1]); return float(np.interp(y, c[k, 1], c[k, 0]))
     return at(G0[i])*(1-f)+at(G0[i+1])*f
 def side_grid(m, mat, f, nu, nv, push=.004):      # like side_patch but on the real surface (flares included)
     for side in (1, -1):
@@ -342,7 +346,7 @@ patch(trim, 'Trim', lambda u, v: (.90*u*max(halfwidth(2.30, .78), .3), .77+.005*
 # down the front fender behind the wheel and runs back along the lower side to the rear wheel (photo) ----------
 STR = Mesh('Stripe')
 def side_band(z):                                 # centre height of the spear along z: under the fender's shoulder at the front, sweeping down at the door
-    hi = min(.875, float(section(z)['yt'])-.065+.060*math.exp(-((z-ZA_F)/.60)**2))      # rides up on the blistered fender, above the flare
+    hi = min(.80+.10*math.exp(-((z-ZA_F)/.62)**2), float(section(z)['yt'])-.07+.13*math.exp(-((z-ZA_F)/.56)**2))   # clears the flare's top      # rides up on the blistered fender, above the flare
     return .555+(hi-.555)*ease(0, 1, (z-.45)/.75)
 def band_pt(u, v, z0, z1):
     z = z0+(z1-z0)*u; yc = side_band(z); h = .10-.012*ease(0, 1, (z-.45)/.75); return z, yc-h/2+h*v
