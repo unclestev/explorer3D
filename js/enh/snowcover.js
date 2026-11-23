@@ -44,7 +44,7 @@ function drawTrack(){ safe('plow track',()=>{ const s=map.getSource('plowtrack')
   const lines=[]; let cur=[]; for(const p of track){ if(p===null){ if(cur.length>1) lines.push(cur); cur=[]; } else cur.push(p); } if(cur.length>1) lines.push(cur);
   s.setData({type:'FeatureCollection',features:lines.map(c=>({type:'Feature',properties:{},geometry:{type:'LineString',coordinates:c}}))}); }); trackShown=track.length; }
 onTick(250,function plowTrack(){
-  const plowing=typeof CARKEY!=='undefined'&&CARKEY==='snowplow'&&mode==='car'&&lvl>.05&&Math.abs(S.v)>.4;
+  const plowing=typeof CARKEY!=='undefined'&&CARKEY==='snowplow'&&mode==='car'&&lvl>.05&&Math.abs(S.v)>.4&&!(window.PLOW&&!PLOW.down);   // blade raised: no lane
   if(!plowing){ if(lastPt){ track.push(null); lastPt=null; } return; }
   const p=[+S.lng.toFixed(7),+S.lat.toFixed(7)];
   if(lastPt&&meters(lastPt[1],lastPt[0],p[1],p[0])<3) return;

@@ -294,7 +294,10 @@ box(trim, 'Frame', (0, 1.32, 3.82), (.54, .10, .12))
 # the blade turns about the pivot: a post on the pivot carries the lift ram's end (on the turning axis, so the ram
 # from the fixed tower still meets it), and the angle rams go from the pivot to the blade — all part of the blade node
 TOPP = PIV+UP*.78
-cyl(trim, 'Chrome', (0, 1.28, 3.86), TOPP, .04, 10)                                     # lift ram (fixed) to the post top
+# the lift ram (owner 2026-11-23: "make the plow able to go up and down"): its own node LiftRam, a 1 m ram along +z from
+# the tower; js/enh/plow.js points it at the post top and stretches it as the blade rises and falls
+RAM0 = np.array((0, 1.28, 3.86)); ram = Mesh('LiftRam')
+cyl(ram, 'Frame', (0, 0, 0), (0, 0, .55), .055, 12); cyl(ram, 'Chrome', (0, 0, .5), (0, 0, 1.0), .032, 10)
 cyl(blade, 'BladeBack', PIV, TOPP, .05, 10)                                              # post on the pivot
 cyl(blade, 'BladeBack', TOPP, bp(0, .80, TH+.06), .045, 8)                               # from the post to the blade top
 for u in (-.40, .40): cyl(blade, 'Chrome', PIV+UP*.05, bp(u, .22, TH+.10), .033, 8)      # angle rams
@@ -434,6 +437,7 @@ for m in (body, glass, trim, lamps):
 J['nodes'].append(dict(name='PlowBlade', translation=[float(c) for c in PIV], children=[])); PB = len(J['nodes'])-1; J['nodes'][0]['children'].append(PB)
 blade.P = [tuple(np.array(q)-PIV) for q in blade.P]                                    # the blade in the pivot's coordinates
 put(blade, parent=PB)
+put(ram, translation=tuple(float(c) for c in RAM0))
 put(flap, translation=tuple(float(c) for c in HINGE-PIV), parent=PB)   # hinge line through its origin; plow.js turns it about the blade's length
 for name, x, za, dual in (('Wheel_FL', TRACK_F/2, ZA_F, False), ('Wheel_FR', -TRACK_F/2, ZA_F, False),
                           ('Wheel_RL', TRACK_R/2, ZA_R, True), ('Wheel_RR', -TRACK_R/2, ZA_R, True),

@@ -197,6 +197,9 @@ async function handle(raw){
   if(/\b(air conditioning|a\/?c|heat|heater|climate|fan|defrost|seat heat|heated seats?|temperature to|warmer|cooler)\b/.test(t)&&!/\b(what|how)\b/.test(t)) return say('The climate controls aren\'t working in the game yet.');
   if(/\b(window|windows)\b/.test(t)&&/\b(open|close|roll|up|down)\b/.test(t)) return say('The windows don\'t open in the game yet. I can open the sunroof.');
   // ---- the snow plow's blade (js/enh/plow.js)
+  if(window.PLOW&&/\b(plow|blade)\b/.test(t)&&/\b(up|down|raise|lower|lift|drop)\b/.test(t)){
+    if(typeof CARKEY!=='undefined'&&CARKEY!=='snowplow') return say('Switch to the snow plow first.');
+    const u=/\b(up|raise|lift)\b/.test(t); PLOW.lift(u); return say(u?'Plow up.':'Plow down.'); }
   if(window.PLOW&&/\b(plow|blade)\b/.test(t)&&/\b(left|right|straight|center|centre|middle)\b/.test(t)){
     if(typeof CARKEY!=='undefined'&&CARKEY!=='snowplow') return say('Switch to the snow plow first.');
     if(/straight|center|centre|middle/.test(t)){ PLOW.straight(); return say('Plow straight.'); }
