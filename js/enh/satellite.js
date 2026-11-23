@@ -19,7 +19,7 @@ let on=false, hidden=[];                                        // layers we swi
 try{ on=localStorage.getItem('ydSat')==='1'; }catch(e){}
 
 // the photo goes just under the first road layer: above the ground fills, below roads, bridges, buildings and signs
-function beforeId(){ const all=map.getStyle().layers; const r=all.find(l=>l['source-layer']==='transportation'); return r&&map.getLayer(r.id)?r.id:undefined; }
+function beforeId(){ const all=map.getStyle().layers; const r=all.find(l=>l['source-layer']==='transportation'||l.source==='roads-smooth');   /* roads-smooth: js/enh/smooth.js */ return r&&map.getLayer(r.id)?r.id:undefined; }
 
 function hideCovered(){
   const all=map.getStyle().layers, i=all.findIndex(l=>l.id===LAYER); if(i<0) return;

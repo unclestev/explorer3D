@@ -25,7 +25,7 @@ const strHash=s=>{ let h=2166136261; for(let i=0;i<(s||'').length;i++){ h^=s.cha
 
 /* ---------- asphalt colours ---------- */
 const ROADRE=/^(road|bridge)_/, SKIP=/rail|hatching|transit|arrow|path|pedestrian|track|area|pier|ferry/;
-function roadLayers(){ return map.getStyle().layers.filter(l=>l['source-layer']==='transportation'&&l.type==='line'&&ROADRE.test(l.id)&&!SKIP.test(l.id)); }
+function roadLayers(){ return map.getStyle().layers.filter(l=>(l['source-layer']==='transportation'||l.source==='roads-smooth')&&l.type==='line'&&ROADRE.test(l.id)&&!SKIP.test(l.id)); }
 function asphaltColour(id){ if(/_casing$/.test(id)) return /motorway|trunk/.test(id)?'#8a8b86':'#9a9a94';   // concrete curb / shoulder
   return /motorway/.test(id)?'#36383b':/trunk|primary/.test(id)?'#3b3d40':/secondary|tertiary/.test(id)?'#3f4144':/service/.test(id)?'#4c4e51':'#434548'; }
 function applyAsphalt(){ if(!map.isStyleLoaded||!map.getStyle()) return;
