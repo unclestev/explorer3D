@@ -102,7 +102,9 @@ function basis(p){ const m=[p[0][0],p[1][0],p[2][0],p[0][1],p[1][1],p[2][1],1,1,
 function quadMatrix(w,h,dst){ const t=mm(basis(dst),adj(basis([[0,0],[w,0],[0,h],[w,h]]))); for(let i=0;i<9;i++) t[i]/=t[8];
   return 'matrix3d('+[t[0],t[3],0,t[6],t[1],t[4],0,t[7],0,0,1,0,t[2],t[5],0,t[8]].join(',')+')'; }
 
-function frame(){ requestAnimationFrame(frame); if(!T.frame) return;
+// placed right after the cockpit draws its frame (COCKPIT.afterRender), so the video sits on the screen in the same frame and
+// doesn't wobble or lag behind it while driving (owner 2026-11-22); outside cockpit view the rAF below just hides it
+function place(){ if(!T.frame) return;
   const q=window.COCKPIT&&COCKPIT.screenQuad&&COCKPIT.screenQuad();
   if(!q||!q.vis){ box.style.visibility='hidden'; return; }                 // keeps playing (you hear it) while the screen is out of view
   box.style.visibility='visible'; const w=640, h=Math.round(640/q.aspect); box.style.width=w+'px'; box.style.height=h+'px';
@@ -111,6 +113,8 @@ function frame(){ requestAnimationFrame(frame); if(!T.frame) return;
   const v=Math.abs((typeof S!=='undefined'&&S.v)||0), moving=T.moving?v>.6:v>1.4;
   if(moving!==T.moving){ T.moving=moving; box.classList.toggle('moving',moving);
     if(moving){ cmd('pauseVideo'); if(!T.warned){ T.warned=true; toast('Video pauses while the car is moving',2000); } } } }
+if(window.COCKPIT&&COCKPIT.afterRender) COCKPIT.afterRender.push(place);
+function frame(){ requestAnimationFrame(frame); if(T.frame&&!(window.COCKPIT&&COCKPIT.on)) box.style.visibility='hidden'; }
 requestAnimationFrame(frame);
 window.TUBE={watch,stop,idOf,listOf,state:T};
 })();
