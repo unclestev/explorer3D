@@ -322,8 +322,8 @@ function walkStep(dt,st,gas,now){
       roadEl.textContent=IN.rec?'Indoors':'On foot'; roadEl.className=''; /* the street shows next to it: game.js updateRoadX */ }
     const st2=Math.abs(W.v)<.05?'Standing':W.v<0?'Stepping back':W.run>.6?'Running':W.run>.15?'Jogging':'Walking';
     if(st2!==step.surf){ step.surf=st2; surfEl.textContent=st2; surfEl.style.color=''; }
-    const c=carInfo(); W.near=c.d<=reach()&&!IN.rec;
-    nearEl.textContent=IN.rec?'Inside · walk out through a door to leave':W.near?'Tap 🚗 to get back in':(PK.mode==='tractor'?'🚜':'🚗')+' Your '+vehName()+': '+c.dist+' '+c.where;
+    const c=carInfo(); W.near=c.d<=reach()&&(!IN.rec||inRec(IN.rec,PK.lat,PK.lng));
+    nearEl.textContent=W.near?'Tap 🚗 to get back in':IN.rec?'Inside · walk out through a door to leave':W.near?'Tap 🚗 to get back in':(PK.mode==='tractor'?'🚜':'🚗')+' Your '+vehName()+': '+c.dist+' '+c.where;
     step.near=null; updateBtn();
   }
 
