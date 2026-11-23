@@ -60,7 +60,7 @@ const MU={now:null,queue:[],qi:-1};
 /* the music follows the engine (owner 2026-11-22): it goes quiet when the engine is switched off and comes back, on the
    same station or song, once the engine has caught (js/enh/ignition.js IGN.state: on / crank / stop / off). Picking
    something while the engine is off is remembered and starts when the engine is on. */
-const carOn=()=>!window.IGN||IGN.state==='on';
+const carOn=()=>!window.IGN||IGN.state==='on'||!!(window.COCKPIT&&COCKPIT.accessory&&COCKPIT.accessory());   // or the screen woken with its ⏻ while the car's off (accessory)
 let wasOn=true, resume=false;
 function setNow(){ const n=MU.now; $('musicNow').textContent=n?(au.paused?'⏸ ':n.radio?'📻 ':'♪ ')+n.title+(n.artist?' — '+n.artist:''):'Nothing playing';
   for(const el of panel.querySelectorAll('.it,#radioPresets button')) el.classList.toggle('on',!!n&&el.dataset.url===n.url); }
