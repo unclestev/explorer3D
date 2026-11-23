@@ -21,7 +21,7 @@ const N=700, P=new Float32Array(N*3), V=new Float32Array(N*3), L=new Float32Arra
 let pts=null, last=0, emit=0, WS=null;
 // the blade's trailing end and the direction snow leaves it, in the model's own metres (front +z, left +x)
 const ANG=21*Math.PI/180, AX=[Math.cos(ANG),0,Math.sin(ANG)], NF=[-Math.sin(ANG),0,Math.cos(ANG)];
-const END=[.42-AX[0]*1.9, .55, 4.22-AX[2]*1.9];
+const END=[.42-AX[0]*1.9, .55, 4.62-AX[2]*1.9];
 function make(g){ const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.BufferAttribute(P,3));
   const c=document.createElement('canvas'); c.width=c.height=64; const x=c.getContext('2d'), gr=x.createRadialGradient(32,32,0,32,32,32);
   gr.addColorStop(0,'rgba(255,255,255,1)'); gr.addColorStop(.45,'rgba(250,252,255,.85)'); gr.addColorStop(1,'rgba(240,246,255,0)'); x.fillStyle=gr; x.fillRect(0,0,64,64);

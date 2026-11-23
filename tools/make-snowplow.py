@@ -159,7 +159,7 @@ for sx in (1, -1):
 # frame on the back, tall orange markers; carried on a push frame (A-frame arms to a pivot), lifted by a ram from a tower
 # on the bumper mount and swung by two angle rams.
 ANG = math.radians(21)
-BW, BH, CX, CZ = 4.00, .82, .42, 4.22
+BW, BH, CX, CZ = 4.00, .82, .42, 4.62
 AX = np.array((math.cos(ANG), 0, math.sin(ANG)))                 # along the blade (toward its left, leading end)
 NF = np.array((-math.sin(ANG), 0, math.cos(ANG)))                # its forward face normal
 UP = np.array((0, 1., 0))
@@ -178,28 +178,39 @@ for i in range(NU):
         blade.quad('Blade', G[i][j], G[i+1][j], G[i+1][j+1], G[i][j+1])
         blade.quad('BladeBack', Gb[i][j], Gb[i][j+1], Gb[i+1][j+1], Gb[i+1][j])
 for i in range(NU): blade.quad('BladeBack', G[i][NV], G[i+1][NV], Gb[i+1][NV], Gb[i][NV]); blade.quad('Edge', G[i][0], Gb[i][0], Gb[i+1][0], G[i+1][0])
-# orange end plates following the profile: the face curve in front, a straight back edge .22 m behind
-for u, sg in ((-1, -1), (1, 1)):
-    face = [bp(u, j/NV)+NF*.01 for j in range(NV+1)]
-    backl = [bp(u, 1)-NF*.20+UP*.0, bp(u, .55)-NF*.26, bp(u, 0)-NF*.24]
-    prism(blade, 'PlowPaint', face+backl, AX*sg, .035)
-# steel cutting edge along the bottom, a little proud of the face
+# after the owner's close-up of a blade (2026-11-23, "make the blade the same as this"): a rust-red moldboard, a black
+# rubber snow deflector bolted along the top and standing up past it, a black cutting edge bolted along the bottom, plain
+# black end plates
+def profile(m, mat, u, depth, t, off=0.):                       # a plate following the blade's curve, depth(v) deep behind it
+    for j in range(NV):
+        v0, v1 = j/NV, (j+1)/NV; f0, f1 = bp(u, v0, off), bp(u, v1, off)
+        prism(m, mat, [f0, f1, f1-NF*depth(v1), f0-NF*depth(v0)], AX, t)   # one convex piece per step: no fan across the curve
+for u in (-1, 1): profile(blade, 'BladeBack', u, lambda v: .18+.06*math.sin(v*math.pi), .02, -.005)   # end plates
+def bolts(v, off, n, mat='Bolt'):                                 # a row of bolt heads on the face
+    for k in range(n):
+        u = -1+(k+.5)*2/n; c = bp(u, v)+NF*off; cyl(blade, mat, c, c+NF*.014, .016, 8)
+# black cutting edge along the bottom: a band over the lowest ~14 cm of the face, a little proud of it
+EB = .17
 for i in range(NU):
-    a, b = bp(-1+2*i/NU, 0)+NF*.012, bp(-1+2*(i+1)/NU, 0)+NF*.012
-    prism(blade, 'Edge', [a-UP*.05, b-UP*.05, b+UP*.13, a+UP*.13], NF, .03)
-# orange top rail with a lip
+    u0, u1 = -1+2*i/NU, -1+2*(i+1)/NU
+    a0, b0, a1, b1 = bp(u0, 0)+NF*.012-UP*.03, bp(u1, 0)+NF*.012-UP*.03, bp(u0, EB)+NF*.012, bp(u1, EB)+NF*.012
+    prism(blade, 'EdgeBlack', [a0, b0, b1, a1], NF, .022)
+bolts(EB*.55, .024, 22)
+# the rubber deflector on the top: a band down over the top ~22 % of the face and standing ~14 cm up past the top,
+# leaning forward, slightly wider than the blade
+DV = .80
 for i in range(NU):
-    a, b = bp(-1+2*i/NU, 1), bp(-1+2*(i+1)/NU, 1)
-    prism(blade, 'PlowPaint', [a-UP*.06, b-UP*.06, b+UP*.02-NF*.02, a+UP*.02-NF*.02], NF, .05)
+    u0, u1 = (-1+2*i/NU)*1.01, (-1+2*(i+1)/NU)*1.01
+    lo0, lo1 = bp(u0, DV)+NF*.014, bp(u1, DV)+NF*.014
+    tp0, tp1 = bp(u0, 1)+NF*.016, bp(u1, 1)+NF*.016
+    up0, up1 = tp0+UP*.15+NF*.07, tp1+UP*.15+NF*.07
+    prism(blade, 'Rubber', [lo0, lo1, tp1, tp0], NF, .02)
+    prism(blade, 'Rubber', [tp0, tp1, up1, up0], NF*.6+UP*-.4, .02)
+bolts(.90, .026, 22)
 # ribs and a frame on the back
-for u in np.linspace(-.85, .85, 7):
-    face = [bp(u, j/NV, TH) for j in range(NV+1)]
-    prism(blade, 'BladeBack', face+[bp(u, .92, TH+.12), bp(u, .5, TH+.22), bp(u, .05, TH+.18)], AX, .035)
+for u in np.linspace(-.85, .85, 7): profile(blade, 'BladeBack', u, lambda v: .14+.08*math.sin(v*math.pi), .035, TH)
 for v in (.18, .70):                                             # two horizontal stiffeners
     a, b = bp(-.95, v, TH+.10), bp(.95, v, TH+.10); cyl(blade, 'BladeBack', a, b, .045, 8)
-# the curb guard: an orange shoe at the leading end, with a steel skid under it
-L = bp(1, 0); prism(blade, 'PlowPaint', [L+NF*.05, L-NF*.40, L-NF*.36+UP*.42, L+NF*.02+UP*.50], AX, .09)
-prism(blade, 'Edge', [L+NF*.06-UP*.06, L-NF*.42-UP*.06, L-NF*.40-UP*.0, L+NF*.05-UP*.0], AX, .12)
 for u in (-.985, .985):                                          # tall orange markers
     a = bp(u, 1, .06); cyl(blade, 'MarkerTip', a-UP*.15, a+UP*1.15, .013, 6, False)
     cyl(blade, 'Marker', a+UP*1.05, a+UP*1.17, .02, 6)
@@ -285,7 +296,10 @@ MATS = {
  'Spreader':  dict(c=[.30, .31, .33, 1], m=.7, r=.5),
  'Spinner':   dict(c=[.10, .10, .11, 1], m=.5, r=.5),
  'Flap':      dict(c=[.012, .012, .013, 1], m=0, r=.9),
- 'Blade':     dict(c=[.016, .016, .018, 1], m=.35, r=.4),    # black moldboard, as in the photo
+ 'Blade':     dict(c=[.20, .036, .011, 1], m=.25, r=.40),    # rust-red moldboard, as in the owner's close-up
+ 'EdgeBlack': dict(c=[.014, .014, .016, 1], m=.5, r=.45),
+ 'Rubber':    dict(c=[.012, .012, .014, 1], m=0, r=.75),
+ 'Bolt':      dict(c=[.35, .36, .38, 1], m=.9, r=.35),
  'BladeBack': dict(c=[.022, .022, .024, 1], m=.3, r=.55),
  'Edge':      dict(c=[.25, .26, .28, 1], m=.95, r=.35),
  'Marker':    dict(c=[.02, .02, .02, 1], m=0, r=.6),
