@@ -16,14 +16,18 @@
    - The wing plow (owner 2026-11-23: "make it so I can put down the side plows"): the long side blade folded up along the
      driver's side swings down and out beside the truck (about 3 s; "Wing" button, J, or "lower / raise the wing"); down,
      it throws snow off its rear end and clears a second lane beside the truck.
-   window.PLOW = {turn(dir), step(dir), straight(), lift(up?), wing(down?), wingDown, angle (degrees, + = snow to the right), down, flap} */
+   - Salt (owner 2026-11-23: "turn on the salt in the back and leave grains of salt on the roads"): "Salt" button, Y, or
+     "turn on the salt": while the engine runs and the truck moves, the spinner at the back spins and flings salt out
+     behind in a fan, and the road it covers is left speckled with grains (and wet and dark where there's snow; js/enh/
+     snowcover.js draws that).
+   window.PLOW = {turn(dir), step(dir), straight(), lift(up?), wing(down?), salt(on?), salting, wingDown, angle (degrees, + = snow to the right), down, flap} */
 (()=>{
 'use strict';
 const isPlow=()=>typeof CARKEY!=='undefined'&&CARKEY==='snowplow';
 const say=(m,ms)=>{ if(typeof toast==='function') toast(m,ms||1400); };
 const MAXA=32, RATE=34;                                         // degrees, degrees a second
-let ang=0, want=0, hold=0, up=0, upWant=0, wg=0, wgWant=0;         // wg: 0 folded up … 1 down and out                      // up: 0 down … 1 raised                                      // ang: + = left end ahead, snow off to the right
-try{ upWant=up=localStorage.getItem('ydPlowUp')==='1'?1:0; wgWant=wg=localStorage.getItem('ydPlowWing')==='1'?1:0; }catch(e){}
+let ang=0, want=0, hold=0, up=0, upWant=0, wg=0, wgWant=0, saltOn=false;         // wg: 0 folded up … 1 down and out                      // up: 0 down … 1 raised                                      // ang: + = left end ahead, snow off to the right
+try{ saltOn=localStorage.getItem('ydPlowSalt')==='1'; upWant=up=localStorage.getItem('ydPlowUp')==='1'?1:0; wgWant=wg=localStorage.getItem('ydPlowWing')==='1'?1:0; }catch(e){}
 try{ const v=+localStorage.getItem('ydPlowAng'); if(isFinite(v)) ang=want=Math.max(-MAXA,Math.min(MAXA,v)); }catch(e){}
 const save=()=>{ try{ localStorage.setItem('ydPlowAng',String(Math.round(want))); }catch(e){} };
 
@@ -45,6 +49,8 @@ function step(dir){ want=Math.max(-MAXA,Math.min(MAXA,Math.round((want+dir*8)/4)
 function straight(){ want=0; hold=0; save(); }
 function lift(u){ upWant=u==null?(upWant?0:1):(u?1:0); try{ localStorage.setItem('ydPlowUp',upWant?'1':'0'); }catch(e){} return upWant; }
 const LIFT=.32, RAM0=[0,1.28,3.86];
+function salt(on){ saltOn=on==null?!saltOn:!!on; try{ localStorage.setItem('ydPlowSalt',saltOn?'1':'0'); }catch(e){} return saltOn; }
+const salting=()=>saltOn&&isPlow()&&mode==='car'&&!!(window.IGN&&IGN.state==='on')&&Math.abs((typeof S!=='undefined'&&S.v)||0)>.8;
 function wing(d){ wgWant=d==null?(wgWant?0:1):(d?1:0); try{ localStorage.setItem('ydPlowWing',wgWant?'1':'0'); }catch(e){} return wgWant; }
 // the wing's two positions (model metres): folded (as built) and down beside the truck, angled back ~45°
 const MX=1.30, MZ=.40, WA=[MX+.16,2.55,MZ-.12], WB=[MX+.42,.62,-2.30];
@@ -59,7 +65,7 @@ const BW=3.70, PIV=[0,.42,4.00], C0=[0,.08-.42,.62];          // blade width; pi
 
 // ---------- snow spray and the dangling deflector ----------
 const N=700, P=new Float32Array(N*3), V=new Float32Array(N*3), L=new Float32Array(N);
-let pts=null, emit=0, WS=null, last=0, D=null, Bn=null, Rm=null, base=null, th=.12, w=0, vPrev=0, gust=0, gT=0;
+let pts=null, emit=0, WS=null, last=0, D=null, Bn=null, Rm=null, Sp=null, spinA=0, salts=null, sEmit=0, base=null, th=.12, w=0, vPrev=0, gust=0, gT=0;
 function make(g){ const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.BufferAttribute(P,3));
   const c=document.createElement('canvas'); c.width=c.height=64; const x=c.getContext('2d'), gr=x.createRadialGradient(32,32,0,32,32,32);
   gr.addColorStop(0,'rgba(255,255,255,1)'); gr.addColorStop(.45,'rgba(250,252,255,.85)'); gr.addColorStop(1,'rgba(240,246,255,0)'); x.fillStyle=gr; x.fillRect(0,0,64,64);
@@ -125,13 +131,37 @@ function frame(now){
 }
 requestAnimationFrame(frame);
 
+// ---------- salt: the spinner turns and flings grains out behind in a fan ----------
+const SN=500, SP=new Float32Array(SN*3), SV=new Float32Array(SN*3), SL=new Float32Array(SN), SPIN=[0,.585,-3.74];
+let sLast=0;
+function saltFrame(now){
+  requestAnimationFrame(saltFrame);
+  const M=typeof MODELS!=='undefined'&&MODELS.snowplow; if(!M||!M.g||!window.THREE||!WS) return;
+  const dt=Math.min(.05,(now-sLast)/1000||0); sLast=now; if(!dt) return;
+  if(!Sp) Sp=M.g.getObjectByName('Spinner');
+  if(!salts){ const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.BufferAttribute(SP,3));
+    salts=new THREE.Points(geo,new THREE.PointsMaterial({color:0xece6da,size:.09,sizeAttenuation:true,transparent:true,opacity:.95,depthWrite:false}));
+    salts.frustumCulled=false; for(let i=0;i<SN;i++){ SL[i]=0; SP[i*3+1]=-50; } M.g.add(salts); }
+  const on=salting(); let alive=false;
+  if(Sp&&on){ spinA+=dt*28; Sp.rotation.y=spinA; }
+  if(on) sEmit+=dt*420;
+  for(let i=0;i<SN;i++){
+    if(SL[i]<=0&&on&&sEmit>=1){ sEmit-=1; const k=i*3, a=Math.PI+(Math.random()*2-1)*1.9, sp=4+Math.random()*5;   // a fan behind (-z), ~110° each way
+      SP[k]=SPIN[0]; SP[k+1]=SPIN[1]+.05; SP[k+2]=SPIN[2]; SV[k]=Math.sin(a)*sp; SV[k+1]=.6+Math.random()*1.2; SV[k+2]=Math.cos(a)*sp; SL[i]=.35+Math.random()*.35; }
+    if(SL[i]>0){ alive=true; const k=i*3; SL[i]-=dt; SV[k+1]-=9.8*dt; SP[k]+=SV[k]*dt; SP[k+1]+=SV[k+1]*dt; SP[k+2]+=SV[k+2]*dt;
+      if(SP[k+1]<.02){ SP[k+1]=.02; SV[k]*=.3; SV[k+2]*=.3; SV[k+1]=0; } if(SL[i]<=0) SP[k+1]=-50; } }
+  if(sEmit>30) sEmit=30;
+  if(alive||on){ salts.material.size=.09*WS.x; salts.geometry.attributes.position.needsUpdate=true; if(typeof dirty!=='undefined') dirty=true; }
+}
+requestAnimationFrame(saltFrame);
+
 // ---------- buttons on the screen (only in the plow) and keys ----------
-const css=document.createElement('style'); css.textContent='#plowBtns{position:absolute;left:var(--gap,10px);bottom:calc(var(--gap,10px) + 222px);z-index:31;display:none;gap:6px;align-items:center}'+
+const css=document.createElement('style'); css.textContent='#plowBtns{position:absolute;left:var(--gap,10px);bottom:calc(var(--gap,10px) + 222px);z-index:31;display:none;gap:6px;align-items:center;flex-wrap:wrap;max-width:min(60vw,420px)}'+
   '#plowBtns.on{display:flex}#plowBtns button{width:46px;height:40px;border:0;border-radius:12px;background:rgba(20,26,38,.86);color:#fff;font:700 15px system-ui;box-shadow:0 2px 8px rgba(0,0,0,.35);touch-action:none}'+
   '#plowBtns button:active{background:#2563eb}#plowBtns b{min-width:62px;text-align:center;color:#fff;font:600 12px system-ui;text-shadow:0 1px 3px #000}';
 document.head.appendChild(css);
 const box=document.createElement('div'); box.id='plowBtns';
-box.innerHTML='<button data-d="-1" aria-label="Angle the plow left">◀</button><b id="plowAng">Plow ⟂</b><button data-d="1" aria-label="Angle the plow right">▶</button><button id="plowUp" aria-label="Raise or lower the plow">▲</button><button id="plowWing" aria-label="Wing plow down or up" style="width:auto;padding:0 10px;font-size:13px">Wing ▼</button>';
+box.innerHTML='<button data-d="-1" aria-label="Angle the plow left">◀</button><b id="plowAng">Plow ⟂</b><button data-d="1" aria-label="Angle the plow right">▶</button><button id="plowUp" aria-label="Raise or lower the plow">▲</button><button id="plowWing" aria-label="Wing plow down or up" style="width:auto;padding:0 10px;font-size:13px">Wing ▼</button><button id="plowSalt" aria-label="Salt on or off" style="width:auto;padding:0 10px;font-size:13px">🧂 Salt</button>';
 document.body.appendChild(box);
 for(const b of box.querySelectorAll('button[data-d]')){ const d=+b.dataset.d; let t0=0;
   b.addEventListener('pointerdown',e=>{ e.stopPropagation(); e.preventDefault(); t0=performance.now(); turn(d); });
@@ -140,15 +170,17 @@ for(const b of box.querySelectorAll('button[data-d]')){ const d=+b.dataset.d; le
 box.querySelector('b').addEventListener('click',e=>{ e.stopPropagation(); straight(); say('Plow straight'); });
 document.getElementById('plowUp').addEventListener('click',e=>{ e.stopPropagation(); say(lift()?'Plow up':'Plow down'); });
 document.getElementById('plowWing').addEventListener('click',e=>{ e.stopPropagation(); say(wing()?'Wing plow down':'Wing plow up'); });
+document.getElementById('plowSalt').addEventListener('click',e=>{ e.stopPropagation(); say(salt()?'Salt on':'Salt off'); });
 box.addEventListener('pointerdown',e=>e.stopPropagation());
 setInterval(()=>{ const on=isPlow()&&mode==='car'; box.classList.toggle('on',on);
   document.getElementById('plowWing').textContent=wgWant?'Wing ▲':'Wing ▼';
+  const sb=document.getElementById('plowSalt'); sb.textContent=saltOn?'🧂 Salt on':'🧂 Salt'; sb.style.background=saltOn?'#16a34a':'';
   document.getElementById('plowUp').textContent=upWant?'▼':'▲'; document.getElementById('plowUp').title=upWant?'Lower the plow':'Raise the plow';
   const r=Math.round(want); document.getElementById('plowAng').textContent=Math.abs(r)<2?'Plow ⟂':r>0?'Plow '+r+'° ▶':'◀ Plow '+(-r)+'°'; },150);
 const KEYS={KeyZ:-1,KeyX:1};
 addEventListener('keydown',e=>{ if(!isPlow()||e.repeat||/INPUT|TEXTAREA/.test((e.target&&e.target.tagName)||'')) return;
-  if(KEYS[e.code]) turn(KEYS[e.code]); else if(e.code==='KeyU') say(lift()?'Plow up':'Plow down'); else if(e.code==='KeyJ') say(wing()?'Wing plow down':'Wing plow up'); });
+  if(KEYS[e.code]) turn(KEYS[e.code]); else if(e.code==='KeyU') say(lift()?'Plow up':'Plow down'); else if(e.code==='KeyJ') say(wing()?'Wing plow down':'Wing plow up'); else if(e.code==='KeyY') say(salt()?'Salt on':'Salt off'); });
 addEventListener('keyup',e=>{ if(KEYS[e.code]&&hold===KEYS[e.code]){ turn(0); save(); } });
 
-window.PLOW={turn,step,straight,lift,wing,get wingDown(){ return wg>.95; },get wingPos(){ return wg; },get down(){ return up<.2; },get angle(){ return ang; },get flap(){ return th; }};
+window.PLOW={turn,step,straight,lift,wing,salt,get salting(){ return salting(); },get wingDown(){ return wg>.95; },get wingPos(){ return wg; },get down(){ return up<.2; },get angle(){ return ang; },get flap(){ return th; }};
 })();
