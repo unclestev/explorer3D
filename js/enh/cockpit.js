@@ -65,9 +65,9 @@ const SPECS={
     ws:{zB:-1.10,yB:1.30,hwB:.81,zT:-.30,yT:1.855,hwT:.73,bow:.05}, roof:{y:1.88,hw:.77,zR:1.95}, belt:1.36, winTop:1.79, door:.86, zBp:.58, zC:1.62,
     hood:{zr:-1.15,zf:-2.62,yr:1.288,yf:1.205,hw:1.05,crown:.03,gap:.86,nose:.08,crease:{x:.40,h:.014}},
     dash:[[1.262,-1.115],[1.282,-.94],[1.28,-.77],[1.258,-.70],[1.18,-.675],[1.05,-.69],[.93,-.635],[.79,-.50]],
-    wheel:{c:[-.42,1.105,-.40],r:.19,tilt:24,rim:.017,flat:false},
+    wheel:{c:[-.42,1.165,-.40],r:.19,tilt:24,rim:.017,flat:false},   /* owner 2026-11-22: 6 cm higher, its top just under the panoramic display as in the photo */
     pano:{x0:-.46,x1:.055,y:1.322,z:-.745,h:.11,tilt:16},   /* photo: from about the wheel's centre to above the middle of the centre screen, standing just above it */
-    screen:{c:[.06,1.165,-.66],w:.29,h:.165,tilt:10},
+    screen:{c:[.06,1.172,-.646],w:.33,h:.188,tilt:10},   /* owner 2026-11-22: bigger and wider, flush with the two vents beside it */
     col:{dash:0x2e3034,top:0x26282b,trim:0x3a3c40,lower:0x35373b,seat:0x9c9e9d,head:0xb3b3b0,stitch:0,accent:'alu',carpet:0x1c1d1f},
     eng:'ecoboost35', vmaxG:160, red:6.0, tachMax:8},
   javelin:{style:'classic', eye:[-.38,1.03,.22], pitch:82,
@@ -232,11 +232,13 @@ function shell(G,P,mats){
       M({color:P.col.top,roughness:.85,normalMap:rep(textures().grain,8,1)}),G,false); }
   // windshield glass + black ceramic band and (modern) dotted frit, light tint shade band at the top
   const wsP=(u,v)=>{ const s=u*2-1; return [s*lerp(ws.hwB,ws.hwT,v),lerp(ws.yB,ws.yT,v),lerp(ws.zB,ws.zT,v)-ws.bow*(1-s*s)*Math.sin(Math.PI*(.3+.7*v))]; };
+  const pil=P.style==='classic'?{w:.055,t:.04}:{w:P.style==='lux'?.115:P.style==='ev'?.08:.105,t:P.style==='ev'?.055:.07};
   { const T=canvasTex(1024,512), x=T.x, W=1024, H=512; x.clearRect(0,0,W,H);
+    const so=Math.max(0,Math.round((pil.w*.55-.012)/(2*ws.hwB)*W));   // owner 2026-11-22: the dots began under the A-pillar trim — start the side bands where it ends
     const top=x.createLinearGradient(0,0,0,H*.22); top.addColorStop(0,P.style==='classic'?'rgba(20,70,60,.55)':'rgba(20,40,70,.45)'); top.addColorStop(1,'rgba(20,40,70,0)'); x.fillStyle=top; x.fillRect(0,0,W,H*.22);
     x.fillStyle='rgba(60,80,90,.06)'; x.fillRect(0,0,W,H);
-    if(P.style!=='classic'){ x.fillStyle='#050505'; const b=(w)=>{ x.fillRect(0,0,W,w*1.3); x.fillRect(0,H-w,W,w); x.fillRect(0,0,w,H); x.fillRect(W-w,0,w,H); }; b(14);
-      for(let k=0;k<4;k++){ const r=2.6-k*.55, o=15+k*7; for(let i=o;i<W-o;i+=7){ x.beginPath(); x.arc(i,o+4,r,0,7); x.arc(i,H-o-2,r,0,7); x.fill(); } for(let j=o;j<H-o;j+=7){ x.beginPath(); x.arc(o,j,r,0,7); x.arc(W-o,j,r,0,7); x.fill(); } }
+    if(P.style!=='classic'){ x.fillStyle='#050505'; const b=(w)=>{ x.fillRect(0,0,W,w*1.3); x.fillRect(0,H-w,W,w); x.fillRect(0,0,w+so,H); x.fillRect(W-w-so,0,w+so,H); }; b(14);
+      for(let k=0;k<4;k++){ const r=2.6-k*.55, o=15+k*7; for(let i=o+so;i<W-o-so;i+=7){ x.beginPath(); x.arc(i,o+4,r,0,7); x.arc(i,H-o-2,r,0,7); x.fill(); } for(let j=o;j<H-o;j+=7){ x.beginPath(); x.arc(o+so,j,r,0,7); x.arc(W-o-so,j,r,0,7); x.fill(); } }
       x.fillRect(W/2-70,14,140,70); }                               // the mirror/sensor patch
     else { x.fillStyle='#0a0a0a'; x.fillRect(0,0,W,6); x.fillRect(0,H-6,W,6); }
     const gm=new THREE.MeshBasicMaterial({map:T.t,transparent:true,depthWrite:false,side:THREE.DoubleSide});
@@ -245,11 +247,18 @@ function shell(G,P,mats){
     const rm=M({color:0x000000,roughness:.02,metalness:1,transparent:true,opacity:.05,depthWrite:false,out:true,env:1});
     const r=mesh(grid(12,6,(u,v)=>{ const p=wsP(u,v); return [p[0],p[1],p[2]+.002]; }),rm,G,false,false); r.renderOrder=6; }
   // A-pillars (inner trim), front header with sun visors, headliner, roof rails
-  const pil=P.style==='classic'?{w:.055,t:.04}:{w:P.style==='lux'?.115:P.style==='ev'?.08:.105,t:P.style==='ev'?.055:.07};
   const trimM=M({color:P.col.head,roughness:.95,normalMap:rep(textures().fabric,20,20),normalScale:new THREE.Vector2(.6,.6)});
-  const hardTrim=M({color:P.style==='classic'?0x0f0f0f:P.col.trim,roughness:.8,normalMap:rep(textures().grain,4,4)});
+  // the pillars are drawn after the glass (transparent pass, renderOrder 7), so the glass's black band and dots can never
+  // show on top of them where the glass runs in front of the trim's edge (owner 2026-11-22)
+  const pilM=M({color:P.style==='classic'?0x0f0f0f:P.col.head,roughness:P.style==='classic'?.8:.95,normalMap:rep(P.style==='classic'?textures().grain:textures().fabric,P.style==='classic'?4:20,P.style==='classic'?4:20),normalScale:new THREE.Vector2(.6,.6),transparent:true});
   for(const s of [-1,1]){ const bx=s*(ws.hwB+.012), tx=s*(ws.hwT+.012);
-    mesh(bar([[bx,ws.yB-.02,ws.zB-.005],[lerp(bx,tx,.5),lerp(ws.yB,ws.yT,.5),lerp(ws.zB,ws.zT,.5)+.012],[tx,ws.yT+.01,ws.zT+.02]],[pil.w*1.1,pil.w],pil.t,[-s*.6,0,1]),P.style==='classic'?hardTrim:trimM,G); }
+    mesh(bar([[bx,ws.yB-.02,ws.zB-.005],[lerp(bx,tx,.5),lerp(ws.yB,ws.yT,.5),lerp(ws.zB,ws.zT,.5)+.012],[tx,ws.yT+.01,ws.zT+.02]],[pil.w*1.1,pil.w],pil.t,[-s*.6,0,1]),pilM,G).renderOrder=7;
+    if(P.xp){ // grab handle on each A-pillar (owner 2026-11-22, photo): a dark strap standing off the trim, a little above halfway up
+      const B=new V3(bx,ws.yB-.02,ws.zB-.005), Tp=new V3(tx,ws.yT+.01,ws.zT+.02), dir=Tp.clone().sub(B).normalize(), n=new V3(-s*.6,0,1).normalize(), sd=new V3().crossVectors(dir,n).normalize();
+      const at=(t,o)=>{ const v=B.clone().lerp(Tp,t).addScaledVector(n,o); return [v.x,v.y,v.z]; }, hm=pilM;   // owner 2026-11-22: same colour as the pillar, chunkier (photo)
+      mesh(bar([at(.36,.03),at(.375,.075),at(.41,.098),at(.59,.098),at(.625,.075),at(.64,.03)],.026,.034,[sd.x,sd.y,sd.z],48,14),hm,G).renderOrder=8;
+      for(const t of [.36,.64]){ const c=mesh(rbox(.05,.07,.022,.008,.018),hm,G); c.position.set(...at(t,.034)); c.up.copy(dir); c.lookAt(new V3(...at(t,.2))); c.renderOrder=8;
+        const sm=mesh(new THREE.PlaneGeometry(.044,.004),M({color:0x7d7d7a,roughness:.9,transparent:true}),G,false,false); sm.position.set(...at(t,.0455)); sm.up.copy(dir); sm.lookAt(new V3(...at(t,.2))); sm.renderOrder=9; } } }
   mesh(bar([[-ws.hwT-.01,ws.yT+.015,ws.zT+.03],[0,ws.yT+.03,ws.zT+.04],[ws.hwT+.01,ws.yT+.015,ws.zT+.03]],.09,.05,[0,-1,.4]),trimM,G);
   // backing between the glass's top edge and the headliner (looking up you saw a sliver of sky there)
   mesh(grid(16,2,(u,v)=>{ const s=u*2-1; return [s*(ws.hwT+.02),lerp(ws.yT-.012,P.roof.y+.01,v),lerp(ws.zT-.012,ws.zT+.05,v)]; }),M({color:0x0a0a0b,roughness:.9}),G,false);
@@ -297,7 +306,8 @@ function shell(G,P,mats){
       return [xd-s*(arm+top+.02*Math.sin(Math.PI*v)),y,z]; }),doorM,G);
     mesh(bar([[xd-s*.03,P.belt+.01,zA],[xd-s*.045,P.belt+.018,(zA+zE)/2],[xd-s*.03,P.belt+.01,zE]],.075,.03,[0,1,0]),sillM,G);
     const sp=mesh(new THREE.CircleGeometry(.075,24),M({map:rep(textures().perf,3,3),roughness:.5,metalness:.6}),G,false); sp.position.set(xd-s*.012,.52,lerp(zA,zE,.25)); sp.rotation.y=s*Math.PI/2;
-    if(s<0&&P.style!=='classic'){ const pk=mesh(rbox(.06,.025,.22,.008,.01),M({color:0x101011,roughness:.3,metalness:.2}),G); pk.position.set(xd+.085,P.belt-.255,lerp(zA,zE,.45)); }
+    if(s<0&&P.xp) doorXp(G,P,xd,zA,zE);
+    else if(s<0&&P.style!=='classic'){ const pk=mesh(rbox(.06,.025,.22,.008,.01),M({color:0x101011,roughness:.3,metalness:.2}),G); pk.position.set(xd+.085,P.belt-.255,lerp(zA,zE,.45)); }
     if(P.style==='classic'){ const cr=M({color:0xd9dde2,metalness:1,roughness:.12,out:true}); const h=mesh(bar([[xd-s*.035,P.belt-.15,lerp(zA,zE,.3)],[xd-s*.07,P.belt-.15,lerp(zA,zE,.3)+.03],[xd-s*.09,P.belt-.17,lerp(zA,zE,.3)+.08]],.014,.014,[0,1,0],8,8),cr,G);
       const wc=mesh(new THREE.TorusGeometry(.03,.006,8,20),cr,G); wc.position.set(xd-s*.04,P.belt-.25,lerp(zA,zE,.55)); wc.rotation.y=Math.PI/2; } }
   // B pillar (not on the pillarless Javelin hardtop), rear doors, C pillar, rear seats — seen when you look round
@@ -388,6 +398,37 @@ function shell(G,P,mats){
 }
 
 // door-mirror glass outline, centred; o = which way is outboard (+1 / -1 along x)
+// Expedition driver's door controls (owner 2026-11-22, photo): on the armrest a gloss-black switch panel sloping up toward
+// you — four window switches, the window lock and the door lock / unlock keys, the mirror pad with its L / R selector — and
+// higher up on the door, by the release handle, the seat-memory keys 1 2 3 and SET
+function doorXp(G,P,xd,zA,zE){
+  const gl=M({color:0x09090a,roughness:.15,metalness:.25,env:.9}), sw=M({color:0x17181a,roughness:.45}), ch=M({color:0xd8dce0,metalness:.85,roughness:.2,env:1.6});
+  // switch panel on the armrest (local x = across toward the cabin, local z = back, local y = up off the panel)
+  const g=new THREE.Group(); g.position.set(xd+.072,P.belt-.222,lerp(zA,zE,.46)); g.rotation.z=-.22; G.add(g);
+  mesh(rbox(.078,.01,.235,.004,.02),gl,g);
+  mesh(bar([[-.041,.004,-.118],[-.041,.004,.118]],.006,.004,[0,1,0],8,6),ch,g);                       // satin edge along the door side
+  const T=canvasTex(160,480), x=T.x; x.fillStyle='#0a0a0b'; x.fillRect(0,0,160,480);
+  x.fillStyle='#bfc4ca'; x.font='600 18px system-ui,Arial'; x.textAlign='center'; x.textBaseline='middle';
+  x.fillText('L',46,40); x.fillText('R',114,40); const lock=(cx,cy,open)=>{ x.fillRect(cx-9,cy-2,18,14); x.beginPath(); x.arc(cx+(open?7:0),cy-4,6,Math.PI,0); x.stroke(); };   // padlocks: unlock, lock
+  x.lineWidth=2.5; x.strokeStyle='#bfc4ca'; lock(46,410,true); lock(114,410,false); x.font='600 13px system-ui,Arial'; x.fillText('LOCK',80,330);
+  x.strokeStyle='#bfc4ca'; x.lineWidth=2; for(const [cx,cy] of [[46,170],[114,170],[46,270],[114,270]]){ x.beginPath(); x.moveTo(cx-10,cy-30); x.lineTo(cx,cy-40); x.lineTo(cx+10,cy-30); x.stroke(); }
+  const face=mesh(new THREE.PlaneGeometry(.074,.222),new THREE.MeshBasicMaterial({map:T.t}),g,false,false); face.rotation.x=-Math.PI/2; face.position.y=.0052;
+  const X=px=>(px/160-.5)*.074, Z=py=>(py/480-.5)*.222;
+  for(const [cx,cy] of [[46,170],[114,170],[46,270],[114,270]]){ const k=mesh(rbox(.019,.012,.03,.004,.006),sw,g); k.position.set(X(cx),.011,Z(cy)); k.rotation.x=.18; }   // window switches (pull up / push down)
+  for(const cx of [46,114]){ const k=mesh(rbox(.024,.006,.016,.002,.005),sw,g); k.position.set(X(cx),.008,Z(410)); }                             // unlock / lock
+  { const k=mesh(rbox(.018,.005,.014,.002,.005),sw,g); k.position.set(X(80),.008,Z(350)); }                                                       // window lock
+  { const pad=mesh(new THREE.CylinderGeometry(.014,.015,.006,32),sw,g); pad.position.set(X(80),.008,Z(95));                                        // mirror pad + L/R selector
+    const ring=mesh(new THREE.TorusGeometry(.016,.0016,8,32),ch,g); ring.rotation.x=Math.PI/2; ring.position.set(X(80),.0075,Z(95));
+    const sel=mesh(rbox(.03,.006,.01,.002,.004),sw,g); sel.position.set(X(80),.008,Z(40)); }
+  // seat memory keys on the upper door, ahead of the chrome release handle (facing the cabin)
+  const m=new THREE.Group(); m.position.set(xd+.035,P.belt-.11,lerp(zA,zE,.33)); m.rotation.y=Math.PI/2; G.add(m);
+  mesh(rbox(.085,.026,.006,.002,.008),gl,m);
+  const T2=canvasTex(256,80), y=T2.x; y.fillStyle='#0a0a0b'; y.fillRect(0,0,256,80); y.fillStyle='#bfc4ca'; y.font='600 30px system-ui,Arial'; y.textAlign='center'; y.textBaseline='middle';
+  ['SET','1','2','3'].forEach((t,i)=>{ y.font='600 '+(t==='SET'?20:30)+'px system-ui,Arial'; y.fillText(t,32+i*64,42); });
+  const f2=mesh(new THREE.PlaneGeometry(.081,.024),new THREE.MeshBasicMaterial({map:T2.t}),m,false,false); f2.position.z=.0032;
+  for(let i=0;i<4;i++){ const k=mesh(rbox(.016,.016,.004,.0015,.005),sw,m); k.position.set(-.0304+i*.0203,0,.004); k.scale.set(1,1,.6); }
+  const h=mesh(bar([[xd+.022,P.belt-.11,lerp(zA,zE,.38)],[xd+.04,P.belt-.108,lerp(zA,zE,.41)],[xd+.042,P.belt-.11,lerp(zA,zE,.48)]],.018,.008,[1,0,0],16,8),ch,G);   // release handle
+  const cup=mesh(rbox(.008,.04,.13,.003,.012),M({color:0x111214,roughness:.6}),G); cup.position.set(xd+.012,P.belt-.11,lerp(zA,zE,.43)); }
 function mirShape(w,h,o){ const hw=w/2, hh=h/2, ti=hh*.78, bi=-hh*.70, to=hh, bo=-hh;    // inboard edge shorter, top rises outboard
   const r1=.018, r2=.03, r3=Math.min(.075,h*.42), r4=.025, X=v=>v*o, s=new THREE.Shape();
   s.moveTo(X(-hw),ti-r1); s.quadraticCurveTo(X(-hw),ti,X(-hw+r1),ti);
@@ -1068,10 +1109,10 @@ function dashModern(G,P,parts){
     for(let k=0;k<5;k++){ const s=mesh(new THREE.BoxGeometry(w-.006,.0035,.014),M({color:0x1a1a1b,roughness:.5,metalness:.3}),g); s.position.set(0,-h/2+(k+.5)*h/5,.008); s.rotation.x=-.25; } };
   const fz=(y)=>{ let best=P.dash[4][1]; for(let i=0;i<P.dash.length-1;i++){ const A=P.dash[i],B=P.dash[i+1]; if((A[0]-y)*(B[0]-y)<=0&&A[0]!==B[0]) best=lerp(A[1],B[1],(y-A[0])/(B[0]-A[0])); } return best; };
   const vy=P.ex?P.dash[4][0]-.025:P.dash[4][0]-.06, vw=P.ex?.125:lux?.12:.14, vh=P.ex?.066:lux?.055:.05;
-  const ey=P.ex||P.xp?0:.55, ew=P.xp?.075:vw, eh=P.xp?.15:vh, ey2=P.xp?P.screen.c[1]-.005:vy;
+  const ey=P.ex?0:P.xp?.38:.55, ew=P.xp?.075:vw, eh=P.xp?.15:vh, ey2=P.xp?P.screen.c[1]-.005:vy;
   vent(-xd+.13,ey2,fz(ey2)+.13,ew,eh,[0,ey]); vent(xd-.13,ey2,fz(ey2)+.13,ew,eh,[0,-ey]);   // Explorer: facing straight back (owner: "make the vents straight")
   if(P.ex){ for(const s of [-1,1]) vent(s*.215,vy,fz(vy)+.024,.17,vh,[0,0]); }     // the two big ones either side of the screen
-  else if(P.xp){ for(const s of [-1,1]) vent(P.screen.c[0]+s*(P.screen.w/2+.075),P.screen.c[1]-.005,fz(P.screen.c[1])+.03,.075,.15,[0,0]); }
+  else if(P.xp){ const S=P.screen; for(const s of [-1,1]) vent(S.c[0]+s*(S.w/2+.074),S.c[1],S.c[2]-.012,.08,S.h-.004,[-S.tilt*DEG,0]); }   // owner 2026-11-22: the screen centred between them, all three flush in one plane (photo)
   else if(!lux){ for(const s of [-1,1]) vent(P.screen.c[0]+s*.23,vy-.035,fz(vy-.035)+.02,.15,.05,[0,0]); }
   else { for(const s of [-1,1]) vent(P.screen.c[0]+s*.24,vy-.02,fz(vy-.02)+.015,.11,.03,[0,0]); }
   // driver's cluster brow (sport) — Navigator's panoramic screen has its own hood
@@ -1102,7 +1143,7 @@ function dashModern(G,P,parts){
     ['❄','A/C','▲','◢◣','✱','AUTO','≋'].forEach((t,i)=>x.fillText(t,40+i*72,48)); if(!lux){ x.fillStyle='#d01c24'; x.beginPath(); x.moveTo(256,22); x.lineTo(278,70); x.lineTo(234,70); x.closePath(); x.lineWidth=5; x.strokeStyle='#d01c24'; x.stroke(); }
     const lab=mesh(new THREE.PlaneGeometry(.29,.045),new THREE.MeshBasicMaterial({map:T3.t}),row,false,false); lab.position.z=.0065; parts.btns=lab.material; }
   // centre console with the gear selector (rotary dial / piano-key buttons) and armrest
-  if(P.xp) consoleXp(G,P,T,loM); else
+  if(P.xp) consoleXp(G,P,T,loM,parts.shelf); else
   { const cm=M({color:P.col.top,roughness:.45,normalMap:rep(T.grain,4,6),normalScale:new THREE.Vector2(.4,.4)}), cx=0;
     const zc0=P.dash[P.dash.length-1][1]-.03, zc1=P.eye[2]+.45;
     mesh(grid(10,10,(u,v)=>{ const s=u*2-1, z=lerp(zc0,zc1,v); return [cx+s*.15,.62+.03*(1-s*s)-.06*v+(v<.15?.12*(1-v/.15):0),z]; }),cm,G);
@@ -1157,32 +1198,45 @@ function expeditionDash(G,P,parts,fz,xd){
   { const f=new THREE.Group(); f.position.set(S.c[0],S.c[1],S.c[2]); f.rotation.x=-S.tilt*DEG; G.add(f);
     const bz=mesh(rbox(S.w+.03,S.h+.03,.03,.008,.012),sat,f); bz.position.z=-.022;                       // silver frame round the screen
     const bk=mesh(rbox(S.w+.012,S.h+.012,.03,.004,.008),M({color:0x060607,roughness:.3}),f); bk.position.z=-.0175; }   // behind the screen (it sat 3 mm in front and hid it)
-  // the satin band: along the dash face below the vents, then dipping down round the centre stack
-  const yb=S.c[1]-S.h/2-.035, yd=yb-.10, sx=.19, P2=[];   // photo: the chrome runs just under the screen and wraps snugly round the control strip
-  for(const x of [-xd+.05,-.55,-sx-.06]) P2.push([x,yb]);
-  P2.push([-sx,yb-.03],[-sx+.02,yd+.02],[-sx+.06,yd],[sx-.06,yd],[sx-.02,yd+.02],[sx,yb-.03]);
-  for(const x of [sx+.06,.55,xd-.05]) P2.push([x,yb]);
-  const pts=P2.map(([x,y])=>[x,y,fz(y)+.016+.10*sstep(.55,1,Math.abs(x)/xd)]);
-  mesh(bar(pts,.018,.008,[0,0,1],120,6),sat,G);
+  // owner 2026-11-22 (photo): the controls sit on a shelf under the screen — a flat panel standing out from the dash with a
+  // slight downward slope toward you, the gear dial standing up out of it — and the satin band runs across the dash just
+  // under the screen and vents, then curves down and wraps round the shelf's front lip
+  const yb=S.c[1]-S.h/2*Math.cos(S.tilt*DEG)-.022, ys=yb-.042, zs0=fz(ys), SD=.15, SW=S.w+.035, zsF=zs0+SD, sx=S.w/2+.11, P2=[];
+  const bandZ=(x,y)=>fz(y)+.016+.10*sstep(.55,1,Math.abs(x)/xd);
+  const cx=S.c[0];
+  for(const x of [-xd+.05,-.55,cx-sx-.05,cx-sx]) P2.push([x,yb,bandZ(x,yb)]);
+  P2.push([cx-sx+.035,yb-.022,bandZ(0,yb)+.035],[cx-SW/2-.012,ys-.026,zsF-.03],[cx-SW/2+.02,ys-.03,zsF+.004],[cx+SW/2-.02,ys-.03,zsF+.004],[cx+SW/2+.012,ys-.026,zsF-.03],[cx+sx-.035,yb-.022,bandZ(0,yb)+.035]);
+  for(const x of [cx+sx,cx+sx+.05,.55,xd-.05]) P2.push([x,yb,bandZ(x,yb)]);
+  mesh(bar(P2,.018,.008,[0,0,1],140,6),sat,G);
   // the engraved dark grey trim band right across the dash under the screen (photo)
   { const y0=yb+.008, y1=S.c[1]-S.h/2-.008, xa=-xd+.06, xb=xd-.05;
     mesh(grid(80,3,(u,v)=>{ const x=lerp(xa,xb,u), y=lerp(y0,y1,v); return [x,y,fz(y)+.010+.10*sstep(.55,1,Math.abs(x)/xd)]; }),xpTrimMat(xb-xa,y1-y0),G); }
   // the round engine start button between the wheel and the left vent (photo)
-  { const y=S.c[1]+.03, b=new THREE.Group(); b.position.set(S.c[0]-S.w/2-.165,y,fz(y)+.018); G.add(b); b.lookAt(new V3(...P.eye));
+  { const y=S.c[1]+.058, b=new THREE.Group(); b.position.set(S.c[0]-S.w/2-.148,y,fz(y)+.018); G.add(b); b.lookAt(new V3(...P.eye));
     const T=canvasTex(128,128), x=T.x, gg=x.createRadialGradient(64,56,8,64,64,64); gg.addColorStop(0,'#2a2c30'); gg.addColorStop(1,'#0c0d0f'); x.fillStyle=gg; x.fillRect(0,0,128,128);
     x.fillStyle='#d6dadf'; x.textAlign='center'; x.textBaseline='middle'; x.font='700 17px system-ui,Arial'; x.fillText('ENGINE',64,52); x.fillText('START',64,72); x.font='600 13px system-ui,Arial'; x.fillText('STOP',64,90);
     mesh(new THREE.TorusGeometry(.0165,.0028,10,40),M({color:0xdfe3e7,metalness:.9,roughness:.18,env:1.8}),b);
     mesh(new THREE.CircleGeometry(.0155,40),M({map:T.t,roughness:.35,metalness:.2}),b).position.z=.001;
     const cup=mesh(new THREE.CylinderGeometry(.021,.021,.012,40,1,true),M({color:0x111214,roughness:.4}),b); cup.rotation.x=Math.PI/2; cup.position.z=-.004;
     const tk=mesh(new THREE.CylinderGeometry(.024,.024,.02,20),new THREE.MeshBasicMaterial({visible:false}),b,false,false); tk.rotation.x=Math.PI/2; CK.startKeys.push(tk); }   // tap it to start / stop the engine (owner 2026-11-22)
-  // the recessed stack panel inside the dip, with the big rotary dial and a row of keys (the generic button row sits on it)
-  mesh(grid(10,6,(u,v)=>{ const x=lerp(-sx+.03,sx-.03,u), y=lerp(yd+.02,yb-.02,v); return [x,y,fz(y)+.008]; }),xpTrimMat(2*sx-.06,yb-yd-.04),G);
-  // the controls under the screen (owner 2026-11-22, "put all of the buttons and knobs under the screen" as in the photo):
-  // a row of keys on the left, the big chrome rotary dial with a smaller knob beside it, more keys on the right
-  { const cy=yd+.045, g=new THREE.Group(); g.position.set(S.c[0],cy,fz(cy)+.012); g.rotation.x=-.35; G.add(g);
+  // the hood over the column behind the wheel (photo): a dark arch from the dash face back toward the wheel, with the
+  // driver-watch camera in a small gloss pod on its lip — what you see through the top of the wheel
+  { const Wc=P.wheel.c, hx=Wc[0], yc=Wc[1]-.045, R=.165, Rh=.125, zb=fz(yc+.09)-.025, zf=Wc[2]-.165, hm=M({color:0x151618,roughness:.6,normalMap:rep(textures().grain,3,2),normalScale:new THREE.Vector2(.3,.3)});
+    const arch=(u,v,k)=>{ const a=(u*2-1)*1.32, z=lerp(zb,zf,v), q=1-.10*v; return [hx+Math.sin(a)*R*k*q,yc+Math.cos(a)*Rh*k*q-.015*v,z]; };
+    mesh(grid(32,6,(u,v)=>arch(u,v,1)),hm,G);
+    mesh(grid(32,6,(u,v)=>arch(u,v,.86)),M({color:0x0a0a0b,roughness:.85}),G);
+    mesh(grid(32,1,(u,v)=>arch(u,1,lerp(.86,1,v))),hm,G);
+    const cam=mesh(rbox(.036,.02,.016,.004,.006),M({color:0x050506,roughness:.12,metalness:.3,env:.9}),G); cam.position.set(hx,yc+Rh*.9-.015-.012,zf+.006); cam.rotation.x=-.25; }
+  // the shelf: top face sloping ~10° down toward you, rounded front lip, sides tucked into the dash
+  const SL=10*DEG, g=new THREE.Group(); g.position.set(S.c[0],ys,(zs0+zsF)/2); g.rotation.x=-(Math.PI/2-SL); G.add(g);   // local z = up off the shelf, local y = forward
+  { const sh=mesh(rbox(SW,SD+.02,.045,.012,.03),M({color:0x17181a,roughness:.45,normalMap:rep(textures().grain,3,2),normalScale:new THREE.Vector2(.25,.25)}),g); sh.position.set(0,.01,-.0235);
+    const top=mesh(rbox(SW-.016,SD-.012,.004,.0015,.022),M({color:0x101113,roughness:.35,metalness:.2,env:.7,normalMap:rep(textures().grain,4,2),normalScale:new THREE.Vector2(.15,.15)}),g); top.position.set(0,.004,-.003); }   // dark satin top (photo)
+  parts.shelf={ys,zsF};   // the console comes right up under the shelf (consoleXp)
+  // the controls on the shelf (owner 2026-11-22, "put all of the buttons and knobs under the screen" as in the photo):
+  { g.updateMatrix();
     // photo: two keys on the left, the big chrome rotary dial (the gear selector, P R N D lit above it), a small volume
     // knob, then a row of climate keys ending in the hazard button
-    const W2=.27, H2=W2*96/1024, T=canvasTex(1024,96), x=T.x, X2=X=>(X/1024-.5)*W2;
+    const W2=.30, H2=W2*96/1024, T=canvasTex(1024,96), x=T.x, X2=X=>(X/1024-.5)*W2;
     x.fillStyle='#0c0d0f'; x.fillRect(0,0,1024,96);
     const key=(X,w,t)=>{ x.fillStyle='#1b1c1f'; x.beginPath(); x.roundRect?x.roundRect(X,22,w,52,10):x.rect(X,22,w,52); x.fill(); x.strokeStyle='#050505'; x.lineWidth=3; x.stroke();
       x.fillStyle='#c9cdd2'; x.font='600 '+(t.length>2?17:26)+'px system-ui,Arial'; x.textAlign='center'; x.textBaseline='middle'; x.fillText(t,X+w/2,49); };
@@ -1192,7 +1246,7 @@ function expeditionDash(G,P,parts,fz,xd){
     const face=mesh(new THREE.PlaneGeometry(W2,H2),new THREE.MeshBasicMaterial({map:T.t}),g,false,false); face.position.z=.001; parts.btns=face.material;
     hazKey(g,X2(916),(.5-48/96)*H2,.004,48/1024*W2,H2*.42);
     { const pk=mesh(new THREE.BoxGeometry(64/1024*W2+.006,H2*.7,.012),new THREE.MeshBasicMaterial({visible:false}),g,false,false); pk.position.set(X2(60),0,.004); CK.powerKeys.push(pk); }   // ⏻: tap target
-    const plate=mesh(rbox(W2+.012,H2+.036,.006,.002,.004),M({color:0x0b0b0c,roughness:.2,metalness:.2}),g); plate.position.set(0,.012,-.003);   // tall enough for the gear letters over the dial
+    const plate=mesh(rbox(W2+.012,H2+.036,.004,.0015,.004),M({color:0x0b0b0c,roughness:.2,metalness:.2}),g); plate.position.set(0,.012,-.0025);   // tall enough for the gear letters over the dial
     const chrome=M({map:rep(textures().alu,2,1),color:0xe0e4e8,metalness:.75,roughness:.22,env:1.6});
     const knob=(xk,r,h)=>{ const k=mesh(new THREE.CylinderGeometry(r,r*1.04,h,48),chrome,g); k.rotation.x=Math.PI/2; k.position.set(xk,0,h/2);
       for(let i=0;i<24;i++){ const a=i/24*Math.PI*2, rib=mesh(new THREE.BoxGeometry(.0012,.0012,h*.7),chrome,g); rib.position.set(xk+Math.cos(a)*r*1.01,Math.sin(a)*r*1.01,h*.5); }   // knurled edge
@@ -1208,7 +1262,7 @@ function expeditionDash(G,P,parts,fz,xd){
     mesh(grid(120,1,(u,v)=>{ const x=lerp(xa,xb,u), y=ys-.0035+v*.007; return [x,y,fz(y)+.006+.10*sstep(.55,1,Math.abs(x)/xd)]; }),M({map:T.t,transparent:true,alphaTest:.4,roughness:.6}),G,false,false); }
   // glovebox seam on the passenger side
   const gm=M({color:0x0a0a0b,roughness:.9});
-  mesh(grid(20,1,(u,v)=>{ const x=lerp(sx+.12,xd-.12,u), y=yd-.07+(v-.5)*.0025; return [x,y,fz(y)+.004+.10*sstep(.55,1,x/xd)]; }),gm,G,false);
+  mesh(grid(20,1,(u,v)=>{ const x=lerp(S.c[0]+sx+.06,xd-.12,u), y=ys-.10+(v-.5)*.0025; return [x,y,fz(y)+.004+.10*sstep(.55,1,x/xd)]; }),gm,G,false);
 }
 // Expedition displays (owner 2026-11-22, a photo of the 2025 dash: "make sure nothing overlaps other values on the
 // display"). Every item has its own zone, and text is shrunk to fit its zone (fitText), so nothing can run into anything.
@@ -1299,26 +1353,42 @@ function xpTrimMat(lenX,lenY){ const T=canvasTex(128,128), x=T.x; x.fillStyle='#
   x.fillStyle='rgba(0,0,0,.18)'; for(let i=0;i<600;i++) x.fillRect(Math.random()*128,Math.random()*128,1,1);
   T.t.wrapS=T.t.wrapT=THREE.RepeatWrapping; T.t.repeat.set(lenX/.035,lenY/.035);
   return M({map:T.t,roughness:.62,metalness:.15,normalMap:rep(textures().grain,lenX/.12,lenY/.12),normalScale:new THREE.Vector2(.25,.25)}); }
-// centre console (photo): dark grey with a satin-chrome surround on top framing a gloss-black tray at the front and two cup
-// holders behind it; the armrest beyond
-function consoleXp(G,P,T,loM){
-  const cm=M({color:0x2a2c2f,roughness:.5,normalMap:rep(T.grain,4,6),normalScale:new THREE.Vector2(.4,.4)});
-  const zc0=P.dash[P.dash.length-1][1]-.03, zc1=P.eye[2]+.45, top=(s,v)=>.63+.012*(1-s*s)-.03*v;
-  mesh(grid(12,12,(u,v)=>{ const s=u*2-1, z=lerp(zc0,zc1,v); return [s*.16,top(s,v)+(v<.12?.10*(1-v/.12):0),z]; }),cm,G);
-  for(const s of [-1,1]) mesh(grid(2,8,(u,v)=>[s*.165,lerp(.34,top(1,v),u),lerp(zc0,zc1,v)]),loM,G);
-  const z0=zc0+.15, z1=zc0+.53, zm=(z0+z1)/2, vm=(zm-zc0)/(zc1-zc0), g=new THREE.Group(); g.position.set(0,top(0,vm)+.012,zm);
-  g.rotation.x=-Math.PI/2+Math.atan(.03/(zc1-zc0)); G.add(g);                                     // local y = forward, local z = up
-  const sat=M({map:rep(T.alu,3,1),color:0xd9dde2,metalness:.8,roughness:.26,env:1.6}), L=z1-z0;
+// centre console (owner 2026-11-22, photo: "it should come right up under the panel with the gear selector ... it goes back
+// and also integrates as the armrest for both"): a tall bridge between the seats starting right under the shelf's lip, its
+// top sloping gently back with satin rails along both edges — the gloss-black tray and the cup holders in a satin frame —
+// then rising into one wide padded armrest shared by the driver and passenger; an open pass-through in its front face
+function consoleXp(G,P,T,loM,sh){
+  const cm=M({color:0x232427,roughness:.5,normalMap:rep(T.grain,4,6),normalScale:new THREE.Vector2(.4,.4)});
+  const sat=M({map:rep(T.alu,3,1),color:0xd9dde2,metalness:.8,roughness:.26,env:1.6});
+  const hw=.155, zf=sh.zsF-.012, yF=sh.ys-.062, z0=zf+.035, z1=z0+.40, yB=yF-.035, za=z1+.03, zr=P.eye[2]+.62, yA=yF+.13, yFl=.34;
+  const topY=z=>lerp(yF,yB,clamp((z-zf)/(z1-zf),0,1));
+  // body: top with rolled edges, sides, front face
+  mesh(grid(16,24,(u,v)=>{ const s=u*2-1, z=lerp(zf,zr,v), e=Math.pow(Math.abs(s),8); return [s*hw*(1-.03*e),topY(z)-.022*e,z]; }),cm,G);
+  for(const s of [-1,1]) mesh(grid(2,16,(u,v)=>{ const z=lerp(zf,zr,v); return [s*hw*.97,lerp(yFl,topY(z)-.022,u),z]; }),loM,G);
+  mesh(grid(12,6,(u,v)=>{ const s=u*2-1, e=Math.pow(Math.abs(s),8); return [s*hw*(1-.03*e),lerp(yFl,yF-.022*e,v),zf-.004*Math.sin(Math.PI*v)]; }),cm,G);
+  { const pt=mesh(rbox(.24,.085,.01,.003,.02),M({color:0x050506,roughness:.95}),G); pt.position.set(0,yF-.115,zf-.002);   // the open pass-through under the bridge
+    mesh(new THREE.BoxGeometry(.21,.003,.004),sat,G).position.set(0,yF-.068,zf-.004); }
+  // satin rails along both top edges, from the front to the armrest
+  for(const s of [-1,1]){ const pts=[]; for(let i=0;i<=6;i++){ const z=lerp(zf+.01,za+.02,i/6); pts.push([s*(hw-.012),topY(z)-.004,z]); }
+    mesh(bar(pts,.014,.007,[0,1,0],24,8),sat,G); }
+  // tray and cup holders in a satin frame on the sloping top
+  const L=z1-z0, zm=(z0+z1)/2, g=new THREE.Group(); g.position.set(0,topY(zm)+.002,zm);
+  g.rotation.x=-Math.PI/2+Math.atan((yF-yB)/(z1-zf)); G.add(g);                                     // local y = forward, local z = up
   const rs=(w,h,r)=>{ const s=new THREE.Shape(), X=w/2, Y=h/2; s.moveTo(-X+r,-Y); s.lineTo(X-r,-Y); s.quadraticCurveTo(X,-Y,X,-Y+r); s.lineTo(X,Y-r); s.quadraticCurveTo(X,Y,X-r,Y); s.lineTo(-X+r,Y); s.quadraticCurveTo(-X,Y,-X,Y-r); s.lineTo(-X,-Y+r); s.quadraticCurveTo(-X,-Y,-X+r,-Y); return s; };
-  { const f=rs(.27,L,.035); f.holes.push(rs(.246,L-.024,.026)); mesh(new THREE.ExtrudeGeometry(f,{depth:.004,bevelEnabled:true,bevelThickness:.0015,bevelSize:.0015,bevelSegments:2,curveSegments:8}),sat,g); }
-  mesh(new THREE.ShapeGeometry(rs(.246,L-.024,.026),8),M({color:0x1a1b1d,roughness:.4}),g).position.z=-.001;
-  const tray=mesh(rbox(.222,L*.42,.008,.003,.012),M({color:0x070708,roughness:.12,metalness:.3,env:.9}),g); tray.position.set(0,L*.24,.002);   // gloss lid at the front
-  const trim=mesh(rbox(.06,.008,.004,.0015,.003),sat,g); trim.position.set(0,L*.24+L*.21-.012,.007);
-  for(const s of [-1,1]){ const cx=s*.058, cy=-L*.22;                                                 // cup holders behind it
-    const ring=mesh(new THREE.TorusGeometry(.039,.003,8,40),sat,g); ring.position.set(cx,cy,.003);
-    const well=mesh(new THREE.CylinderGeometry(.037,.034,.07,32,1,true),M({color:0x0b0b0c,roughness:.8}),g); well.rotation.x=Math.PI/2; well.position.set(cx,cy,-.034);
-    mesh(new THREE.CircleGeometry(.034,32),M({color:0x060606,roughness:1}),g).position.set(cx,cy,-.068); }
-  const ar=mesh(rbox(.2,.07,.32,.03,.05),M({color:0x3a3c40,roughness:.6,normalMap:rep(T.leather,3,4)}),G); ar.position.set(0,.66,zc1-.18); }
+  { const f=rs(.255,L,.035); f.holes.push(rs(.231,L-.024,.026)); mesh(new THREE.ExtrudeGeometry(f,{depth:.004,bevelEnabled:true,bevelThickness:.0015,bevelSize:.0015,bevelSegments:2,curveSegments:8}),sat,g); }
+  mesh(new THREE.ShapeGeometry(rs(.231,L-.024,.026),8),M({color:0x1a1b1d,roughness:.4}),g).position.z=.001;
+  const tray=mesh(rbox(.21,L*.44,.008,.003,.012),M({color:0x070708,roughness:.12,metalness:.3,env:.9}),g); tray.position.set(0,L*.23,.003);   // gloss lid at the front
+  const trim=mesh(rbox(.06,.008,.004,.0015,.003),sat,g); trim.position.set(0,L*.23+L*.22-.012,.008);
+  for(const s of [-1,1]){ const cx=s*.056, cy=-L*.24;                                                 // cup holders behind it
+    const ring=mesh(new THREE.TorusGeometry(.039,.003,8,40),sat,g); ring.position.set(cx,cy,.004);
+    const well=mesh(new THREE.CylinderGeometry(.037,.034,.07,32,1,true),M({color:0x0b0b0c,roughness:.8}),g); well.rotation.x=Math.PI/2; well.position.set(cx,cy,-.033);
+    mesh(new THREE.CircleGeometry(.034,32),M({color:0x060606,roughness:1}),g).position.set(cx,cy,-.067); }
+  // the armrest: one wide padded lid for both front seats, rising out of the console behind the cup holders
+  const lm=M({color:0x3a3c40,roughness:.6,normalMap:rep(T.leather,4,6),normalScale:new THREE.Vector2(.3,.3)}), La=zr-za;
+  const base=mesh(rbox(hw*2-.004,yA-yB,La,.02,.03),cm,G); base.position.set(0,(yA+yB)/2-.01,za+La/2);
+  const pad=mesh(rbox(hw*2+.02,.05,La+.01,.022,.04),lm,G); pad.position.set(0,yA,za+La/2);
+  mesh(bar([[-hw-.008,yA-.026,za+.01],[0,yA-.03,za-.004],[hw+.008,yA-.026,za+.01]],.006,.006,[0,0,1],16,6),M({color:0x141516,roughness:.8}),G);   // seam under the pad's front edge
+}
 function explorerStack(G,P,parts,fz,xd,upM,loM){
   const T=textures(), wood=M({map:rep(T.ash,3,1),color:0x76675b,roughness:.38,clearcoat:.6,clearcoatRoughness:.15});
   const chrome=M({color:0xd5dade,metalness:1,roughness:.18,env:1.5}), satin=M({map:rep(T.alu,2,1),color:0xc4c9cf,metalness:.9,roughness:.3,env:1.3});
