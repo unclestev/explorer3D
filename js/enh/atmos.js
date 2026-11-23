@@ -76,7 +76,8 @@ function clock(){
 }
 function hudLine(){
   if(!wxlEl) return; const W=AT.wx, known=FIX_WX!=null||AT.temp!=null||pick!=='real';
-  const t=(known?W.icon+' '+(AT.temp!=null?AT.temp+'°F · ':'')+W.text+' · ':(AT.k>.5?'🌙 ':'')) + clock();
+  let t=(known?W.icon+' '+(AT.temp!=null?AT.temp+'°F · ':'')+W.text+' · ':(AT.k>.5?'🌙 ':'')) + clock();
+  const sn=window.SNOWCOVER?SNOWCOVER.inches:0; if(sn>=.5) t=t.replace(/ · ([^·]+)$/,' · '+Math.round(sn)+' in of snow · $1');   // js/enh/snowcover.js: how deep it is
   if(wxlEl.textContent!==t) wxlEl.textContent=t;
 }
 // colours
@@ -269,5 +270,5 @@ window.WEATHER={set:setPick,get pick(){ return pick; },names:['real',...Object.k
 onReady(function atmosInit(){ windowImage(); usePick(false); loadWeather(); });
 // battery saver toggled: redo the look right away
 window.onPowerChange=()=>{ AT.lastKey=''; safe('power',applyAtmos); safe('power',startWx); };
-Object.assign(YD,{AT,WX});
+Object.assign(YD,{AT,WX}); window.WXHUD=hudLine;   // js/enh/snowcover.js refreshes the weather line with the snow depth
 })();
