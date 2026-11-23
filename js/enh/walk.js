@@ -247,6 +247,11 @@ function buildRoom(r){
     quad(trim,at(0,TH2+.005),at(L,TH2+.005),0,.09);                 // skirting board
   }
   g.add(meshOf(wall,wallM)); g.add(meshOf(trim,trimM));
+  { let cx=0,cy=0; for(const q of p){ cx+=q[0]; cy+=q[1]; } cx/=p.length; cy/=p.length;       // a ceiling light in the middle of the room
+    if(inP(p,cx,cy)){ const [x3,z3]=to3(cx,cy);
+      const base=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,.03,24),trimM); base.position.set(x3,HC-.015,z3); g.add(base);
+      const globe=new THREE.Mesh(new THREE.SphereGeometry(.17,20,10,0,Math.PI*2,Math.PI/2,Math.PI/2),new THREE.MeshBasicMaterial({color:0xfff6df,side:THREE.DoubleSide}));
+      globe.position.set(x3,HC-.03,z3); g.add(globe); } }
   // door leaves, hinged at the jamb; double doors on the wide glass entrances
   ROOM.leaves=[];
   for(const d of r.doors){ const W0=d.s1-d.s0, two=W0>1.5, lw=two?(W0-.06)/2:W0-.04, glass=two;
