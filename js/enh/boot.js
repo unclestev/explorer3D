@@ -11,5 +11,8 @@ function boot(){
     setTimeout(run,POWER?250:100); };
   run();
 }
-if(map.loaded()&&map.isStyleLoaded()) boot(); else map.once('load',boot);
+// start once js/game.js has set the map up (styleReady). Polled as well as on 'load': on a slow start the map's 'load' could
+// fire before this file ran while map.loaded() was still false (tiles pending), and then nothing ever started (2026-11-23)
+const go=()=>{ if(ENH.booted) return; if(typeof styleReady!=='undefined'&&styleReady) boot(); else setTimeout(go,250); };
+map.once('load',()=>setTimeout(go,0)); go();
 })();
