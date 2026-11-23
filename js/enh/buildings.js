@@ -122,7 +122,7 @@ function build(){
     const s=map.getSource('roofs'); if(s) s.setData({type:'FeatureCollection',features:out}); R.last=key; R.setT=now; R.count=out.length; }
   R.at=[S.lng,S.lat]; R.t=now; R.n=destroyed.length; R.tiles=false; R.reg=reg;
 }
-// every roof / facade piece carries its own building's key (prop bk, its middle), so walking inside one can hide just
+// roof pieces carry rf:1 (js/enh/snowcover.js whitens only those when snow settles); every roof / facade piece carries its own building's key (prop bk, its middle), so walking inside one can hide just
 // that building's pieces (not by id: OpenFreeMap gives a whole group of neighbouring buildings one id)
 function tagId(fs,P){ const bk=P.cx.toFixed(6)+','+P.cy.toFixed(6); for(const f of fs) f.properties.bk=bk; }
 // one building's roof features (cached by position, so each is only worked out once)
@@ -146,7 +146,7 @@ function roofParts(P,kx,ky,slices){
         for(let k=0;k<slices;k++){ const t=k/slices, hv=(half+oh)*(1-t), hu=gable?L/2+oh:Math.max(hv,L/2+oh-(half+oh)*t);
           if(hv<.15) break;
           const ring=boxRing(B,um-hu,um+hu,vm-hv,vm+hv).map(toLL); ring.push(ring[0]);
-          out.push({type:'Feature',properties:{c,b:top+rise*t,h:top+rise*(k+1)/slices},geometry:{type:'Polygon',coordinates:[ring]}}); }
+          out.push({type:'Feature',properties:{c,rf:1,b:top+rise*t,h:top+rise*(k+1)/slices},geometry:{type:'Polygon',coordinates:[ring]}}); }
       } else {                                                    // hip roof following the real outline
         let lo=0, hi=half;                                        // how far the outline can shrink before a wing closes up
         for(let it=0;it<10;it++){ const m=(lo+hi)/2; if(inset(p,m)) lo=m; else hi=m; }
@@ -154,7 +154,7 @@ function roofParts(P,kx,ky,slices){
         const rise2=Math.min(4.2,lo*pitch); let q=p;
         for(let k=0;k<slices&&q;k++){ const t=k/slices;
           const ring=q.map(toLL); ring.push(ring[0]);
-          out.push({type:'Feature',properties:{c,b:top+rise2*t,h:top+rise2*(k+1)/slices},geometry:{type:'Polygon',coordinates:[ring]}});
+          out.push({type:'Feature',properties:{c,rf:1,b:top+rise2*t,h:top+rise2*(k+1)/slices},geometry:{type:'Polygon',coordinates:[ring]}});
           q=inset(p,lo*(k+1)/slices); }
       }
       return res;
@@ -163,7 +163,7 @@ function roofParts(P,kx,ky,slices){
       const B=obb(p), n=Math.min(POWER?5:10,Math.floor(A/350));
       if(P.h<=12&&Math.abs(Number(P.f.id)||0)%8<6){                // the vector cap guessed shingles: lay a flat grey roof over it
         const ring=p.map(toLL); ring.push(ring[0]);
-        out.push({type:'Feature',properties:{c:FLAT[idn%2],b:top-.01,h:top+.12},geometry:{type:'Polygon',coordinates:[ring]}}); }
+        out.push({type:'Feature',properties:{c:FLAT[idn%2],rf:1,b:top-.01,h:top+.12},geometry:{type:'Polygon',coordinates:[ring]}}); }
       const placed=[];
       for(let k=0,tries=0;k<n&&tries<n*6;tries++){
         const u=B.u0+(B.u1-B.u0)*(.12+.76*hash(seed+tries,11)), v=B.v0+(B.v1-B.v0)*(.12+.76*hash(seed+tries,13));
