@@ -2,7 +2,11 @@
    - Its amber roof lights (materials Beacon and BeaconB) flash in turn while the engine runs, like a real plow's strobes.
    - Snow (owner 2026-11-23: "step up your game"): when it's snowing (the real weather or ⚙️ Weather) and the plow is
      moving, snow curls off the trailing (right) end of the angled blade and sprays out to the side, more the faster you
-     go — up to ~45 mph, like a real plow throwing a windrow onto the shoulder. */
+     go — up to ~45 mph, like a real plow throwing a windrow onto the shoulder.
+   - The rubber deflector on top of the blade (owner: "can you make the top black part dangle?"): the model's node
+     'Deflector', hinged along the blade's top edge. It hangs a little forward when parked, swings forward when you
+     brake and back when you pull away, is blown back by the wind more the faster you go, and flutters and bounces —
+     a spring with damping, pushed by the truck's speed changes and a little random buffeting. */
 (()=>{
 'use strict';
 let A=null, B=null, was=null;
@@ -52,4 +56,25 @@ function frame(now){
   if(emit>40) emit=40;
 }
 requestAnimationFrame(frame);
+
+// ---------- the dangling deflector ----------
+let D=null, base=null, th=.12, w=0, vPrev=0, tPrev=0, gust=0, gT=0;
+const AXV=()=>new THREE.Vector3(AX[0],AX[1],AX[2]);
+function dangle(now){
+  requestAnimationFrame(dangle);
+  const M=typeof MODELS!=='undefined'&&MODELS.snowplow; if(!M||!M.g||!window.THREE) return;
+  if(!D){ D=M.g.getObjectByName('Deflector'); if(!D) return; base=D.quaternion.clone(); D.userData.ax=AXV(); }
+  const dt=Math.min(.05,(now-tPrev)/1000||0); tPrev=now; if(!dt) return;
+  const here=typeof CARKEY!=='undefined'&&CARKEY==='snowplow';
+  const v=here?((typeof S!=="undefined"&&S.v)||0):0, acc=Math.max(-8,Math.min(8,(v-vPrev)/dt));   // a teleport or a jump in speed is no 100 g kick vPrev=v; const mph=Math.abs(v)*2.237;
+  if(now>gT){ gT=now+120+Math.random()*260; gust=(Math.random()*2-1)*Math.min(1,mph/25); }      // buffeting
+  const target=.12-.55*Math.pow(Math.min(1,mph/40),1.4)*Math.sign(v||1);                       // hangs forward; wind lays it back
+  const k=60, c=3.2;                                                                         // a floppy rubber spring
+  w+=(k*(target-th)-c*w-acc*.55+gust*14)*dt;                      // braking (acc < 0) swings it forward
+  th+=w*dt; th=Math.max(-.9,Math.min(.6,th));
+  D.quaternion.copy(base).multiply(new THREE.Quaternion().setFromAxisAngle(D.userData.ax,th));
+  if(here&&(Math.abs(w)>.01||mph>1)&&typeof dirty!=='undefined') dirty=true;
+}
+requestAnimationFrame(dangle);
+window.PLOW={get flap(){ return th; }};
 })();

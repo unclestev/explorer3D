@@ -196,6 +196,7 @@ for i in range(NU):
     a0, b0, a1, b1 = bp(u0, 0)+NF*.012-UP*.03, bp(u1, 0)+NF*.012-UP*.03, bp(u0, EB)+NF*.012, bp(u1, EB)+NF*.012
     prism(blade, 'EdgeBlack', [a0, b0, b1, a1], NF, .022)
 bolts(EB*.55, .024, 22)
+flap = Mesh('Deflector'); HINGE = bp(0, 1)+NF*.016
 # the rubber deflector on the top: a band down over the top ~22 % of the face and standing ~14 cm up past the top,
 # leaning forward, slightly wider than the blade
 DV = .80
@@ -203,9 +204,11 @@ for i in range(NU):
     u0, u1 = (-1+2*i/NU)*1.01, (-1+2*(i+1)/NU)*1.01
     lo0, lo1 = bp(u0, DV)+NF*.014, bp(u1, DV)+NF*.014
     tp0, tp1 = bp(u0, 1)+NF*.016, bp(u1, 1)+NF*.016
-    up0, up1 = tp0+UP*.15+NF*.07, tp1+UP*.15+NF*.07
     prism(blade, 'Rubber', [lo0, lo1, tp1, tp0], NF, .02)
-    prism(blade, 'Rubber', [tp0, tp1, up1, up0], NF*.6+UP*-.4, .02)
+    # the free part above the top (owner: "can you make the top black part dangle?"): its own node 'Deflector', hinged
+    # along the blade's top edge, so js/enh/plow.js can let it flap and sway
+    up0, up1 = tp0+UP*.22+NF*.06, tp1+UP*.22+NF*.06
+    prism(flap, 'Rubber', [p-HINGE for p in (tp0, tp1, up1, up0)], NF*.4+UP*-.6, .018)
 bolts(.90, .026, 22)
 # ribs and a frame on the back
 for u in np.linspace(-.85, .85, 7): profile(blade, 'BladeBack', u, lambda v: .14+.08*math.sin(v*math.pi), .035, TH)
@@ -355,6 +358,7 @@ def put(m, translation=None):
 for m in (body, glass, trim, lamps):
     flat(m); put(m)
 put(blade)
+put(flap, translation=tuple(float(c) for c in HINGE))   # hinge line through its origin; plow.js turns it about the blade's axis
 for name, x, za, dual in (('Wheel_FL', TRACK_F/2, ZA_F, False), ('Wheel_FR', -TRACK_F/2, ZA_F, False),
                           ('Wheel_RL', TRACK_R/2, ZA_R, True), ('Wheel_RR', -TRACK_R/2, ZA_R, True),
                           ('Wheel_RL2', TRACK_R/2, ZA_R2, True), ('Wheel_RR2', -TRACK_R/2, ZA_R2, True)):
