@@ -96,7 +96,7 @@ SPECS.tractor={style:'tractor', eye:[0,2.46,.9], pitch:76,
     screen:{c:[.5,2.2,.3],w:.2,h:.13},
     col:{dash:0x1a1b1d,top:0x161718,trim:0x2b2c2f,lower:0x1e1f21,seat:0x1d1e20,head:0x3d3f42,carpet:0x141516},
     eng:'jd68', vmaxG:60, red:2.3, tachMax:3, wipers:[.5]};
-const specKey=k=>/^javelin|^muscle70$/.test(k||'')?'javelin':k==='navigator'?'navigator':k==='tractor'?'tractor':k==='modely'?'modely':k==='expedition'?'expedition':'explorer';
+const specKey=k=>/^javelin|^muscle70$/.test(k||'')?'javelin':k==='navigator'?'navigator':k==='tractor'?'tractor':k==='modely'?'modely':k==='expedition'||k==='snowplow'?'expedition':'explorer';
 
 /* ---------- procedural textures ---------- */
 function cnv(w,h){ const c=document.createElement('canvas'); c.width=w; c.height=h; return c; }

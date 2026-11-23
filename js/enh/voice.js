@@ -67,7 +67,7 @@ const SW=[[/\breal speed\b/,'rsBtn','Real speed in the cockpit'],[/\brealistic\b
   [/\b(trail|purple line)\b/,'trailBtn','The trail'],[/^(un)?mute\b|\b(game |engine )?(sound|sounds|audio)\b(?!.*start)/,'audioBtn','Sound']];
 const CARN=[[/^(the )?(70'?s |seventies )?muscle( car)?$/,'muscle70','the 70\'s muscle car'],[/^(amc )?javelin( amx)?( ?3 ?d)?( ?(v(ersion)? ?)?2)?$/,'javelin3d2','the Javelin'],
   [/^(lincoln )?navigator$|^lincoln$/,'navigator','the Navigator'],[/^(tesla )?model ?y$|^tesla$/,'modely','the Model Y'],[/^(ford )?expedition$/,'expedition','the Expedition'],
-  [/^(ford )?explorer( st)?$|^st$/,'explorer','the Explorer'],[/^tractor$/,'tractor','the tractor'],[/^(speed ?)?boat$/,'boat','the boat']];
+  [/^(ford )?explorer( st)?$|^st$/,'explorer','the Explorer'],[/^(snow ?plow|plow truck|plow|snow truck)$/,'snowplow','the snow plow'],[/^tractor$/,'tractor','the tractor'],[/^(speed ?)?boat$/,'boat','the boat']];
 function carName(q){ for(const [re,k,n] of CARN) if(re.test(q)) return [k,n]; return null; }
 async function radio(q){ showBar('Finding '+q+'…',true); const n=await MUSIC.playRadio(q); return say(n?'Playing '+n+'.':'I couldn\'t find '+q+' on the radio.'); }
 function setVol(v){ const e=$('musicVol'); if(!e) return null; v=Math.max(0,Math.min(1,v)); e.value=v; e.dispatchEvent(new Event('input')); return Math.round(v*100); }
@@ -196,6 +196,11 @@ async function handle(raw){
   if(/\b(handbrake|hand brake|parking brake|e-?brake|emergency brake)\b/.test(t)) return say('Hold space for the handbrake, or the handbrake on your controller.');
   if(/\b(air conditioning|a\/?c|heat|heater|climate|fan|defrost|seat heat|heated seats?|temperature to|warmer|cooler)\b/.test(t)&&!/\b(what|how)\b/.test(t)) return say('The climate controls aren\'t working in the game yet.');
   if(/\b(window|windows)\b/.test(t)&&/\b(open|close|roll|up|down)\b/.test(t)) return say('The windows don\'t open in the game yet. I can open the sunroof.');
+  // ---- the snow plow's blade (js/enh/plow.js)
+  if(window.PLOW&&/\b(plow|blade)\b/.test(t)&&/\b(left|right|straight|center|centre|middle)\b/.test(t)){
+    if(typeof CARKEY!=='undefined'&&CARKEY!=='snowplow') return say('Switch to the snow plow first.');
+    if(/straight|center|centre|middle/.test(t)){ PLOW.straight(); return say('Plow straight.'); }
+    const d=/left/.test(t)?-1:1; for(let k=0;k<4;k++) PLOW.step(d); return say('Plow angled '+(d<0?'left':'right')+'.'); }
   // ---- weather (js/enh/atmos.js, ⚙️ Weather)
   if(window.WEATHER&&((m=t.match(/\b(?:make it|set the weather to|change the weather to|weather to|i want|turn on)\s+(?:a\s+|the\s+)?(real|actual|clear|sunny|cloudy|overcast|rain|raining|rainy|downpour|heavy rain|pouring|storm|stormy|thunderstorm|thunder|snow|snowing|snowy|blizzard|fog|foggy)(?: weather)?$/))||(m=t.match(/^(real|actual) weather$/)))){
     const k={real:'real',actual:'real',clear:'clear',sunny:'clear',cloudy:'cloudy',overcast:'cloudy',rain:'rain',raining:'rain',rainy:'rain',downpour:'heavy','heavy rain':'heavy',pouring:'heavy',storm:'storm',stormy:'storm',thunderstorm:'storm',thunder:'storm',snow:'snow',snowing:'snow',snowy:'snow',blizzard:'blizzard',fog:'fog',foggy:'fog'}[m[1]];
