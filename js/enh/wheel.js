@@ -103,6 +103,8 @@
         const sb=cfg[g.id]&&cfg[g.id].start!=null?cfg[g.id].start:23; if(down(sb)&&!prevB[sb]&&window.IGN) IGN.button();
         // wipers on / off (owner 2026-11-22): the blue R2 button on the G29's right spoke — button 7 counting from 1
         if(g.mapping!=='standard'&&down(6)&&!prevB[6]&&window.COCKPIT&&COCKPIT.wiper) COCKPIT.wiper();
+        // voice commands (owner 2026-11-22): the ≡ Options button on the G29's right side — button 10 counting from 1 (9 here)
+        if(down(9)&&!prevB[9]&&window.VOICE) VOICE.listen();
         // Music panel open / close (owner 2026-11-22): the L2 button on the G29's left spoke — button 8 counting from 1.
         // Opened this way it doesn't take the keyboard (js/enh/music.js)
         if(g.mapping!=='standard'&&down(7)&&!prevB[7]&&window.MUSIC&&MUSIC.toggle) MUSIC.toggle(false); }

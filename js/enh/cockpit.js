@@ -1851,6 +1851,7 @@ let lastHash='';
 // VENT and △ (the arrow pointing back, beside it) both open the sunroof all the way (owner 2026-11-21; the cover goes back
 // with it, as in the real car) and pressed again close it; the cover keys open / close the cover.
 const ROOF={vent:false,slide:false,cover:false};
+CK.roofState=()=>({...ROOF});
 CK.roof=function(k){ let t;
   if(k==='vent'||k==='close'){ if(ROOF.slide||ROOF.vent){ ROOF.slide=ROOF.vent=false; t='Sunroof: closing'; } else { ROOF.slide=true; ROOF.cover=true; t='Sunroof: opening'; } }
   else if(k==='open'){ ROOF.cover=true; t='Sunroof cover: open'; }
