@@ -224,8 +224,8 @@ function meshOf(pos,mat){ const g=new THREE.BufferGeometry(); g.setAttribute('po
 function buildRoom(r){
   if(ROOM.key===r.key&&ROOM.g) return; dropRoom();
   const g=new THREE.Group(), p=r.p, HC=Math.max(2.4,Math.min(2.7,(r.h||3)-.3)), DH=2.12, TH2=.2;
-  const wallM=rmat('wall',0xeee8dc,0x2a2824), ceilM=rmat('ceil',0xf6f4ef,0x3a3936), trimM=rmat('trim',0xfbfaf7,0x2a2a2a);
-  const floorM=rmat(r.house?'wood':'tile',r.house?0xa97f52:0xd6d3cb,0x1a1510);
+  const wallM=rmat('wall',0xe8e2d6,0x4a4741), ceilM=rmat('ceil',0xf4f2ed,0x8a8985), trimM=rmat('trim',0xfbfaf7,0x3a3a3a);
+  const floorM=rmat(r.house?'wood':'tile',r.house?0x7d5a3a:0xc9c6be,r.house?0x1e140c:0x2a2a28);
   // floor and ceiling from the outline
   const sh=new THREE.Shape(p.map(q=>new THREE.Vector2(q[0],q[1])));
   const fl=new THREE.Mesh(new THREE.ShapeGeometry(sh),floorM); fl.rotation.x=-Math.PI/2; fl.position.y=.01; g.add(fl);   // shape (x, y=north) -> (x, z=-north)
@@ -235,14 +235,15 @@ function buildRoom(r){
   for(let i=0;i<p.length;i++){ const a=p[i], b=p[(i+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1]); if(L<.05) continue;
     const ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux, at=(t,o)=>[a[0]+ux*t-nx*o,a[1]+uy*t-ny*o];
     const gaps=ways.filter(w=>w.d.ei===i).map(w=>({s0:w.d.s0,s1:w.d.s1,h:w.h})).sort((x,y)=>x.s0-y.s0);
-    let t=0; for(const q of gaps){ if(q.s0>t) quad(wall,at(t,TH2),at(q.s0,TH2),0,HC); quad(wall,at(q.s0,TH2),at(q.s1,TH2),q.h,HC);   // wall up to the gap, header over it
+    const E=TH2+.03;                                                 // walls run on past the corners, so inside corners close up
+    let t=-E; for(const q of gaps){ if(q.s0>t) quad(wall,at(t,TH2),at(q.s0,TH2),0,HC); quad(wall,at(q.s0,TH2),at(q.s1,TH2),q.h,HC);   // wall up to the gap, header over it
       quad(wall,at(q.s0,0),at(q.s0,TH2),0,q.h); quad(wall,at(q.s1,0),at(q.s1,TH2),0,q.h);                                   // jambs
       { const P=at(q.s0,0), Q=at(q.s1,0), R2=at(q.s1,TH2), S2=at(q.s0,TH2); const [px,pz]=to3(...P),[qx,qz]=to3(...Q),[rx,rz]=to3(...R2),[sx,sz]=to3(...S2);
         wall.push(px,q.h,pz, qx,q.h,qz, rx,q.h,rz, px,q.h,pz, rx,q.h,rz, sx,q.h,sz); }                                    // underside of the header
       for(const [s0,s1] of [[q.s0-.1,q.s0],[q.s1,q.s1+.1]]) quad(trim,at(s0,TH2+.01),at(s1,TH2+.01),0,q.h+.1);                // casing round the opening
       quad(trim,at(q.s0-.1,TH2+.01),at(q.s1+.1,TH2+.01),q.h,q.h+.1);
       t=Math.max(t,q.s1); }
-    if(L>t) quad(wall,at(t,TH2),at(L,TH2),0,HC);
+    if(L+E>t) quad(wall,at(t,TH2),at(L+E,TH2),0,HC);
     quad(trim,at(0,TH2+.005),at(L,TH2+.005),0,.09);                 // skirting board
   }
   g.add(meshOf(wall,wallM)); g.add(meshOf(trim,trimM));
