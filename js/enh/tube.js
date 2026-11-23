@@ -118,7 +118,7 @@ if(window.COCKPIT&&COCKPIT.afterRender) COCKPIT.afterRender.push(place);
 // the car switched off (owner 2026-11-22): the video pauses and its screen goes dark with the car's other screens; it comes
 // back, paused where it was, once the car is started again
 function frame(){ requestAnimationFrame(frame); if(!T.frame) return; if(!(window.COCKPIT&&COCKPIT.on)) box.style.visibility='hidden';
-  const st=window.IGN&&IGN.state, off=st==='off'||st==='stop';
+  const st=window.IGN&&IGN.state, off=window.COCKPIT&&COCKPIT.screenOn?!COCKPIT.screenOn():(st==='off'||st==='stop');   // the screen's own ⏻ (or the car) switched it off
   if(off!==!!T.off){ T.off=off; box.classList.toggle('off',off); if(off) cmd('pauseVideo'); } }
 requestAnimationFrame(frame);
 window.TUBE={watch,stop,idOf,listOf,state:T};

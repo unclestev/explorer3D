@@ -452,6 +452,14 @@ function renderMirror(dt){ if(!MIR.rt) return; MIR.t-=dt; if(MIR.t>0) return; MI
    cars, and beep faster as you close in, solid under 30 cm — in any view, in the modern cars ---------- */
 const BC={rt:null,cam:null,mat:null,t:0,d:null,beepT:0,tone:null,wasRev:false,hold:0,fwdT:0};
 const powered=()=>!window.IGN||IGN.state==='on'||IGN.state==='crank';   // the car's electrics: on unless the engine's switched off
+// the centre screen's own ⏻ key (owner 2026-11-22: "make the power button under the screen turn the screen on when the car is
+// off"): with the car off it wakes the screen (accessory: video and music work), pressed again it goes dark; with the car on it
+// switches the screen off and on. Switching the car on or off puts the screen back with the car.
+CK.scrUser=null; let scrWas=null;
+CK.screenOn=()=>{ const pw=powered(); if(pw!==scrWas){ scrWas=pw; CK.scrUser=null; } return pw?CK.scrUser!==false:CK.scrUser===true; };
+CK.accessory=()=>!powered()&&CK.screenOn();
+CK.powerKey=()=>{ const on=CK.screenOn(); CK.scrUser=!on; toast(!on?(powered()?'Screen on':'Screen on — car off'):'Screen off',1300); };
+CK.powerKeys=[];
 const bcCar=()=>mode==='car'&&['explorer','navigator','modely','expedition'].includes(typeof CARKEY==='string'?CARKEY:'');
 // in reverse: the wheel's selector says R, or (keys / touch) the car is actually rolling backwards. Holding the brake at a stop
 // used to count too, so every stop brought the camera back up (owner 2026-11-21: "the backup camera is not switch to map ever")
@@ -1175,6 +1183,7 @@ function expeditionDash(G,P,parts,fz,xd){
     [['❄',470],['A/C',552],['⊟',634],['⊞',716],['AUTO',798],['',880]].forEach(([t,X])=>key(X,72,t));
     x.strokeStyle='#d01c24'; x.lineWidth=5; x.beginPath(); x.moveTo(916,30); x.lineTo(936,66); x.lineTo(896,66); x.closePath(); x.stroke();   // red hazard triangle
     const face=mesh(new THREE.PlaneGeometry(W2,H2),new THREE.MeshBasicMaterial({map:T.t}),g,false,false); face.position.z=.001; parts.btns=face.material;
+    { const pk=mesh(new THREE.BoxGeometry(64/1024*W2+.006,H2*.7,.012),new THREE.MeshBasicMaterial({visible:false}),g,false,false); pk.position.set(X2(60),0,.004); CK.powerKeys.push(pk); }   // ⏻: tap target
     const plate=mesh(rbox(W2+.012,H2+.036,.006,.002,.004),M({color:0x0b0b0c,roughness:.2,metalness:.2}),g); plate.position.set(0,.012,-.003);   // tall enough for the gear letters over the dial
     const chrome=M({map:rep(textures().alu,2,1),color:0xe0e4e8,metalness:.75,roughness:.22,env:1.6});
     const knob=(xk,r,h)=>{ const k=mesh(new THREE.CylinderGeometry(r,r*1.04,h,48),chrome,g); k.rotation.x=Math.PI/2; k.position.set(xk,0,h/2);
@@ -1332,6 +1341,7 @@ function explorerStack(G,P,parts,fz,xd,upM,loM){
     [['⏻',122],['⏮',178],['⏭',334],['◉',390]].forEach(([t,X])=>x.fillText(t,X,32));
     x.lineWidth=5; x.strokeStyle='#d01c24'; x.beginPath(); x.moveTo(256,14); x.lineTo(278,50); x.lineTo(234,50); x.closePath(); x.stroke();
     const lab=mesh(new THREE.PlaneGeometry(.17,.0215),new THREE.MeshBasicMaterial({map:T3.t}),g,false,false); lab.position.z=.0065; parts.btns=lab.material;
+    { const pk=mesh(new THREE.BoxGeometry(.024,.026,.014),new THREE.MeshBasicMaterial({visible:false}),g,false,false); pk.position.set((122/512-.5)*.17,0,.008); CK.powerKeys.push(pk); }   // ⏻: tap target
     const bar1=mesh(new THREE.BoxGeometry(.17,.002,.003),satin,g,false); bar1.position.set(0,.0125,.007);
     for(const sx of [-1,1]){ const kn=mesh(new THREE.CylinderGeometry(.0165,.0175,.02,40),chrome,g); kn.rotation.x=Math.PI/2; kn.position.set(sx*.105,0,.012);
       const kc=mesh(new THREE.CylinderGeometry(.012,.012,.004,32),M({color:0x0d0d0e,roughness:.35}),g); kc.rotation.x=Math.PI/2; kc.position.set(sx*.105,0,.0225); } }
@@ -1602,6 +1612,7 @@ if(typeof FRAME_HOOKS!=="undefined") FRAME_HOOKS.push(function cockpitAO(){ cons
   if(done){ c.ao=null; return true; } return false; });
 function build(key){
   if(CK.cab&&CK.built===key+'|'+(CARSPEC.paint||0)) return;
+  CK.powerKeys=[];
   if(CK.cab) dispose();
   const P=SPECS[specKey(key)]; textures(); updateEnv(true);
   const sc=new THREE.Scene(), root=new THREE.Group(), G=new THREE.Group(); sc.add(root); root.add(G);
@@ -1874,7 +1885,9 @@ function update(dt){
   // engine off (js/enh/ignition.js): every display goes dark, and lights up again as it starts (owner 2026-11-21: "all dash
   // and screen displays should turn off when the engine is off and turn on when the engine is on")
   const pwT=powered()?1:0; CK.pw=CK.pw==null?pwT:CK.pw+(pwT-CK.pw)*Math.min(1,dt*(pwT?5:9)); const pw=CK.pw;
-  const dim=1-.25*k; for(const s of [p.cluster,p.screen,p.pano]) if(s) s.m.color.setScalar((.92*dim+.08)*pw);
+  const dim=1-.25*k; for(const s of [p.cluster,p.pano]) if(s) s.m.color.setScalar((.92*dim+.08)*pw);
+  const spT=CK.screenOn()?1:0; CK.spw=CK.spw==null?spT:CK.spw+(spT-CK.spw)*Math.min(1,dt*(spT?5:9));   // the centre screen has its own ⏻
+  if(p.screen) p.screen.m.color.setScalar((.92*dim+.08)*CK.spw);
   if(p.prnd&&p.prnd.m) p.prnd.m.color.setScalar(pw); if(p.sig&&pw<.5) for(const a of p.sig) a.m.color.setHex(0x0c1a0e);
   if(p.btns) p.btns.color.setScalar(.75+.25*(1-k));
   for(const m of MIR.mats) m.color.setScalar(.85-.2*k); for(const m of MIR.frames) m.color.setScalar(Math.max(.25,hi/.85));
@@ -2107,6 +2120,7 @@ function setHud(v){ CK.hud=v; LSs('ydHud',v?'1':'0'); showPick(); dirty=true; }
     return {pts:out,vis,aspect:g.width/g.height}; };
   CK.tapKey=function(e){ if(!CK.on||!CK.cab) return null; const c=CK.cab;
     c.scene.updateMatrixWorld(); c.cam.updateMatrixWorld(); ray.setFromCamera({x:(e.clientX/innerWidth)*2-1,y:-(e.clientY/innerHeight)*2+1},c.cam);
+    const live=CK.powerKeys.filter(o=>c.scene.getObjectById(o.id)); if(live.length&&ray.intersectObjects(live,false).length){ CK.powerKey(); return 'power'; }
     // a tap on the centre screen opens Music (owner 2026-11-22: "type a song on the lower screen and play it from the car")
     const scr=c.parts.screen&&c.parts.screen.grp; if(scr&&window.MUSIC&&ray.intersectObject(scr.children[0],false).length){ MUSIC.open(); return 'music'; }
     if(!CK.roofKeys||!CK.roofKeys.length) return null;
