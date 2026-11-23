@@ -99,8 +99,9 @@ async function handle(raw){
 
   // ---- the phone (js/enh/phone.js)
   if(window.PHONE&&/\b(take|snap)( a| me a)? (picture|photo|pic|selfie|screenshot)\b/.test(t)){ const u=await PHONE.snap(); return say(u?'Got it. It\'s in Photos on your phone.':'I couldn\'t take a photo here.'); }
-  if(window.PHONE&&(m=t.match(/^(?:open|show|pull up|get out|check)( my| the)? phone(?:'s)?(?: (maps|music|youtube|camera|photos|weather|clock|calculator|notes|car|stopwatch) app| (maps|music|youtube|camera|photos|weather|clock|calculator|notes))?$/))){
-    const k={maps:'maps',music:'music',youtube:'tube',camera:'camera',photos:'photos',weather:'weather',clock:'clock',stopwatch:'clock',calculator:'calc',notes:'notes',car:'car'}[m[2]||m[3]]; PHONE.open(k); return say('Here\'s your phone.'); }
+  if(window.PHONE&&(m=t.match(/^(?:open|show|pull up|get out|check)( my| the)? phone(?:'s)?(?: (maps|music|youtube|spotify|camera|photos|weather|clock|calculator|notes|car|stopwatch) app| (maps|music|youtube|spotify|camera|photos|weather|clock|calculator|notes))?$/))){
+    const k={maps:'maps',music:'music',youtube:'tube',spotify:'spotify',camera:'camera',photos:'photos',weather:'weather',clock:'clock',stopwatch:'clock',calculator:'calc',notes:'notes',car:'car'}[m[2]||m[3]]; PHONE.open(k); return say('Here\'s your phone.'); }
+  if(window.PHONE&&/^(open|play|start|launch)( my| the)? spotify$/.test(t)){ PHONE.open('spotify'); return say('Here\'s Spotify. Paste a link to play it.'); }
   if(window.PHONE&&/^(close|hide|put away|put down)( my| the)? phone$/.test(t)){ PHONE.close(); return say('Phone away.'); }
   // ---- YouTube
   if(/^(stop|close|turn off|end|exit|quit)( the)? (video|youtube)/.test(t)){ if(window.TUBE) TUBE.stop(); return say('Video stopped.'); }

@@ -1,6 +1,6 @@
 /* Phone (owner 2026-11-22: "can you make a phone in the game with apps"). A phone you pull up over the game: 📱 in the
    top-right bar, the T key, or say "open my phone". The apps use what the game already has:
-     Maps (search, favourites and recents, "Drive me there" on autopilot) · Music (now playing, songs, radio presets and
+     Maps (search, favourites and recents, "Drive me there" on autopilot) · Spotify (paste a link) · Music (now playing, songs, radio presets and
      stations, volume) · YouTube (its own player on the phone; pauses while you drive) · Camera (a photo of the game view)
      and Photos (kept on this device, download or delete) · Weather · Clock (with a stopwatch) · Calculator · Notes ·
      Car (remote start, hazards, headlights, sunroof, wipers, horn — like the FordPass app) · Voice · Settings · Controls.
@@ -8,6 +8,7 @@
    window.PHONE = {open, close, toggle, snap(), horn} */
 (()=>{
 'use strict';
+let PHONE_SPOT=null;
 const $=id=>document.getElementById(id);
 const LSg=(k,d)=>{ try{ const v=localStorage.getItem(k); return v==null?d:v; }catch(e){ return d; } };
 const LSs=(k,v)=>{ try{ localStorage.setItem(k,v); return true; }catch(e){ return false; } };
@@ -141,6 +142,33 @@ app('music','Music','🎵','linear-gradient(#fb7185,#e11d48)',bd=>{
   if(!P.length) pre.appendChild(el('div','muted','Save stations with ☆ in the car\'s Radio tab.'));
   every(1000,()=>{ const n=MU.info&&MU.info(); if(n&&n.title){ $('phNow').textContent=n.title; $('phNowA').textContent=n.artist||''; } else if(!/^Finding|^Couldn/.test($('phNow').textContent)){ $('phNow').textContent='Nothing playing'; $('phNowA').textContent=''; } });
 },true);
+
+// Spotify (owner 2026-11-22): paste a Spotify link (song, album, playlist, artist, podcast) and Spotify's own player plays
+// it. Signed in to Spotify in this browser: whole songs; not signed in: 30-second previews. Searching Spotify by name
+// needs a developer key, so it's links only (Share → Copy link in the Spotify app).
+function spotOf(v){ v=String(v||'').trim(); let m=v.match(/^spotify:(track|album|playlist|artist|episode|show):([A-Za-z0-9]{10,40})$/);
+  if(!m) m=v.match(/open\.spotify\.com\/(?:intl-[a-z-]+\/|embed\/)?(track|album|playlist|artist|episode|show)\/([A-Za-z0-9]{10,40})/);
+  return m?{type:m[1],id:m[2]}:null; }
+app('spotify','Spotify','🎧','linear-gradient(#22c55e,#15803d)',bd=>{
+  bd.innerHTML='<div id="phSpot"></div><form class="row"><input id="phSpotQ" placeholder="Paste a Spotify link" autocomplete="off"><button class="btn on">Play</button></form>'+
+    '<div class="muted">In Spotify: ⋯ → Share → Copy link, then paste it here. Signed in to Spotify in this browser = whole songs; otherwise 30-second previews.</div>'+
+    '<div class="sec">Recent</div><div id="phSpotRec"></div>';
+  const box=bd.querySelector('#phSpot'), rec=bd.querySelector('#phSpotRec');
+  let R=[]; try{ R=JSON.parse(LSg('ydSpotRecent','[]')); if(!Array.isArray(R)) R=[]; }catch(e){ R=[]; } R=R.filter(o=>o&&spotOf('spotify:'+o.type+':'+o.id));
+  const kinds={track:'Song',album:'Album',playlist:'Playlist',artist:'Artist',episode:'Podcast episode',show:'Podcast'};
+  function drawRec(){ rec.textContent=''; for(const o of R) rec.appendChild(li(o.title||kinds[o.type],kinds[o.type],()=>play(o),o.img||''));
+    if(!R.length) rec.appendChild(el('div','muted','What you play shows up here.')); }
+  function play(o){ if(window.MUSIC&&MUSIC.stop&&MUSIC.now) MUSIC.stop(); if(window.TUBE&&TUBE.stop) TUBE.stop();
+    box.innerHTML=''; const f=document.createElement('iframe'); f.src='https://open.spotify.com/embed/'+o.type+'/'+o.id+'?utm_source=generator&theme=0';
+    f.allow='autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture'; f.loading='lazy'; f.style.cssText='width:100%;height:'+(o.type==='track'||o.type==='episode'?152:352)+'px;border:0;border-radius:12px;margin-top:4px';
+    box.appendChild(f); R=R.filter(x=>!(x.type===o.type&&x.id===o.id)); R.unshift({type:o.type,id:o.id,title:o.title||'',img:o.img||''}); R=R.slice(0,15); LSs('ydSpotRecent',JSON.stringify(R)); drawRec();
+    if(!o.title) fetch('https://open.spotify.com/oembed?url='+encodeURIComponent('https://open.spotify.com/'+o.type+'/'+o.id)).then(r=>r.ok?r.json():null).then(j=>{ if(!j||!j.title) return;
+      const x=R.find(x=>x.type===o.type&&x.id===o.id); if(x){ x.title=String(j.title).slice(0,100); x.img=/^https:\/\//.test(j.thumbnail_url||'')?j.thumbnail_url:''; LSs('ydSpotRecent',JSON.stringify(R)); drawRec(); } }).catch(()=>{}); }
+  bd.querySelector('form').onsubmit=e=>{ e.preventDefault(); const q=bd.querySelector('#phSpotQ'), o=spotOf(q.value); q.blur();
+    if(!o){ box.innerHTML='<div class="muted">That doesn\'t look like a Spotify link. It should start with open.spotify.com/</div>'; return; } q.value=''; play(o); };
+  drawRec(); if(R[0]&&!box.children.length) box.appendChild(el('div','muted','Tap a recent one to play it again.'));
+});
+PHONE_SPOT=spotOf;
 
 // YouTube: its own little player on the phone
 app('tube','YouTube','▶️','#ff0000',bd=>{
@@ -288,11 +316,11 @@ app('controls','Controls','🎮','linear-gradient(#34d399,#0d9488)',()=>{ close(
 // ---------- open / close
 function open(appId){ ph.classList.add('on'); if(pbtn) pbtn.classList.add('on'); if(appId) openApp(appId); else if(cur==null) home(); status(); }
 function close(){ ph.classList.remove('on'); if(pbtn) pbtn.classList.remove('on'); ph.classList.remove('driving');
-  if(cur==='tube'||cur==='car') home(); if(document.activeElement&&ph.contains(document.activeElement)) document.activeElement.blur(); }
+  if(cur==='tube'||cur==='car') home();   /* Spotify keeps playing with the phone put away */ if(document.activeElement&&ph.contains(document.activeElement)) document.activeElement.blur(); }
 function toggle(){ ph.classList.contains('on')?close():open(); }
 $('phHome').onclick=()=>{ if(cur==null) close(); else home(); };
 setInterval(()=>{ if(ph.classList.contains('on')) status(); },1000);
 addEventListener('keydown',e=>{ if(e.key==='Escape'&&ph.classList.contains('on')&&!(e.target&&/INPUT|TEXTAREA/.test(e.target.tagName))) close(); });
-window.PHONE={open,close,toggle,snap,openApp,horn:false,get isOpen(){ return ph.classList.contains('on'); }};
+window.PHONE={open,close,toggle,snap,openApp,spotOf:v=>PHONE_SPOT(v),horn:false,get isOpen(){ return ph.classList.contains('on'); }};
 home();
 })();
