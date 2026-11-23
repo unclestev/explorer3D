@@ -146,17 +146,17 @@ function clipRing(r,b){                                           // Sutherland-
     P=out; }
   if(P.length<3) return null; P.push(P[0]); return P;
 }
-function buildWalls(fs,kx,ky,RW,gone){
+function buildWalls(fs,geo,kx,ky,RW,gone){                          // geo[i]: fs[i].geometry, decoded once (each read decodes it again)
   const t0=performance.now(), minD=new Map();
-  for(const f of fs){ if(f.id==null||gone.has(f.id)) continue; const g=f.geometry; if(!g) continue;
+  for(let i=0;i<fs.length;i++){ const f=fs[i]; if(f.id==null||gone.has(f.id)) continue; const g=geo[i]; if(!g) continue;
     const pls=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
     let m=minD.has(f.id)?minD.get(f.id):1e9;
     for(const pl of pls){ const r=pl[0]; if(!r||r.length<4) continue; const q=r[0], d=Math.hypot((q[0]-S.lng)*kx,(q[1]-S.lat)*ky); if(d<m) m=d; }
     minD.set(f.id,m); }
   const hid=new Set(); for(const [id,d] of minD) if(d<RW||(W.hid.has(id)&&d<RW+150)) hid.add(id);
   const feats=[], seen=new Set(), tiles=new Set();
-  for(const f of fs){ if(!hid.has(f.id)) continue; const T=f.tile||{z:f._z,x:f._x,y:f._y}; if(T.z==null) continue;
-    const tk=T.z+'/'+T.x+'/'+T.y; tiles.add(tk); const box=tileBox(T.z,T.x,T.y), g=f.geometry;
+  for(let i=0;i<fs.length;i++){ const f=fs[i]; if(!hid.has(f.id)) continue; const T=f.tile||{z:f._z,x:f._x,y:f._y}; if(T.z==null) continue;
+    const tk=T.z+'/'+T.x+'/'+T.y; tiles.add(tk); const box=tileBox(T.z,T.x,T.y), g=geo[i]; if(!g) continue;
     const pls=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[], pr=f.properties||{};
     const h=+(pr.render_height!=null?pr.render_height:pr.height!=null?pr.height:6), b0=+(pr.render_min_height||pr.min_height||0);
     for(const pl of pls){ const r=pl[0]; if(!r||r.length<4) continue;
@@ -190,17 +190,18 @@ function build(){
   const reuse=R.pending&&R.parts&&R.pAt&&meters(R.pAt[1],R.pAt[0],S.lat,S.lng)<40&&R.n===destroyed.length;
   if(reuse) parts=R.parts; else {
   let fs=[]; try{ fs=map.querySourceFeatures(bSrc,{sourceLayer:'building'}); }catch(e){ return; }
-  if(map.getSource('walls')) safe('walls',()=>buildWalls(fs,kx,ky,radius+60,gone));
+  const geo=fs.map(f=>f.geometry);
+  if(map.getSource('walls')) safe('walls',()=>buildWalls(fs,geo,kx,ky,radius+60,gone));
   safe('driveways',()=>{ const ds=[]; for(const f of map.querySourceFeatures(bSrc,{sourceLayer:'transportation'})){ const pr=f.properties||{};
       if(pr.class!=='service'||pr.service!=='driveway') continue; const g=f.geometry, ls=g.type==='LineString'?[g.coordinates]:g.type==='MultiLineString'?g.coordinates:[];
       for(const l of ls){ if(l.length<2) continue; let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const q of l){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
         if(Math.hypot(((x0+x1)/2-S.lng)*kx,((y0+y1)/2-S.lat)*ky)<radius+150) ds.push({l,bb:[x0,y0,x1,y1]}); } }
     DRIVES=ds; });
-  for(const f of fs){
+  for(let i=0;i<fs.length;i++){ const f=fs[i];
     if(f.id!=null&&gone.has(f.id)) continue;
     const pr=f.properties||{}; if(pr.hide_3d) continue;
     const h=+(pr.render_height!=null?pr.render_height:pr.height!=null?pr.height:6), b0=+(pr.render_min_height||pr.min_height||0);
-    const polys=f.geometry.type==='Polygon'?[f.geometry.coordinates]:f.geometry.type==='MultiPolygon'?f.geometry.coordinates:[];
+    const G=geo[i]; if(!G) continue; const polys=G.type==='Polygon'?[G.coordinates]:G.type==='MultiPolygon'?G.coordinates:[];
     for(const pl of polys){ const ring=pl[0]; if(!ring||ring.length<4) continue;
       let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const q of ring){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
       const cx=(x0+x1)/2, cy=(y0+y1)/2, d=Math.hypot((cx-S.lng)*kx,(cy-S.lat)*ky); if(d>radius) continue;
