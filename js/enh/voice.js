@@ -101,6 +101,7 @@ async function handle(raw){
   if(window.PHONE&&/\b(take|snap)( a| me a)? (picture|photo|pic|selfie|screenshot)\b/.test(t)){ const u=await PHONE.snap(); return say(u?'Got it. It\'s in Photos on your phone.':'I couldn\'t take a photo here.'); }
   if(window.PHONE&&(m=t.match(/^(?:open|show|pull up|get out|check)( my| the)? phone(?:'s)?(?: (maps|music|youtube|spotify|camera|photos|weather|clock|calculator|notes|car|stopwatch) app| (maps|music|youtube|spotify|camera|photos|weather|clock|calculator|notes))?$/))){
     const k={maps:'maps',music:'music',youtube:'tube',spotify:'spotify',camera:'camera',photos:'photos',weather:'weather',clock:'clock',stopwatch:'clock',calculator:'calc',notes:'notes',car:'car'}[m[2]||m[3]]; PHONE.open(k); return say('Here\'s your phone.'); }
+  if(window.PHONE&&/^(open|start|launch|show)( my| the)? (ford ?pass|car app|ford app)$/.test(t)){ PHONE.open('car'); return say('Here\'s FordPass.'); }
   if(window.PHONE&&/^(open|start|launch)( my| the)? (youtube music|you tube music|yt music)$/.test(t)){ PHONE.open('ytmusic'); return say('Here\'s YouTube Music.'); }
   if(window.PHONE&&PHONE.ytm&&(m=t.match(/^(?:play|put on|listen to)\s+(.+?)\s+on (?:youtube music|you tube music|yt music)$/))){ showBar('Finding '+m[1]+'…',true); const r=await PHONE.ytm.search(m[1]);
     if(r.err) return say(/key/i.test(r.err)?'To find songs by name I need a YouTube key. Add it in the car\'s video tab.':r.err); if(!r.items.length) return say('I couldn\'t find '+m[1]+'.');
