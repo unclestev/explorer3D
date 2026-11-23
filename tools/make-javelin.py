@@ -366,12 +366,47 @@ STR = Mesh('Stripe')
 # to just above the chrome rocker and runs low along the body to the rear wheel, carries on behind the rear wheel, and
 # fills the lower front fender ahead of the front wheel)
 LOW = .365                                        # centre of the low band, just above the rocker moulding
-def side_band(z):
-    hi = min(.80+.07*math.exp(-((z-ZA_F)/.62)**2), float(section(z)['yt'])-.07+.13*math.exp(-((z-ZA_F)/.56)**2))   # clears the flare's top
-    return LOW+(hi-LOW)*ease(0, 1, (z-.60)/.48)
-def band_pt(u, v, z0, z1):
-    z = z0+(z1-z0)*u; yc = side_band(z); h = .095+.010*ease(0, 1, (z-.60)/.48); return z, yc-h/2+h*v
-side_grid(STR, 'Stripe', lambda u, v: band_pt(u, v, ZA_R+.53, 2.22), 160, 3, push=.006)          # front fender → down → low along the doors
+# (owner: "make sure the gold line is smooth on the fender and accentuates the wheel flare") — the band is one smooth
+# path: straight back from behind the headlamp, then round the front wheel on an arc concentric with the flare (just
+# outside it), then curving down behind the wheel into the low line along the doors
+RS, HS = .565, .085                               # arc radius (the flare ends at RA+.085) and band height over the wheel
+def stripe_path():
+    P = []
+    a0, a1 = math.radians(62), math.radians(158)
+    def herm(p0, t0, p1, t1, k, n):
+        out = []
+        for t in np.linspace(0, 1, n)[:-1]:
+            h00, h10, h01, h11 = 2*t**3-3*t**2+1, t**3-2*t**2+t, -2*t**3+3*t**2, t**3-t**2
+            out.append(tuple(h00*p0+h10*k*t0+h01*p1+h11*k*t1))
+        return out
+    pa = np.array([ZA_F+RS*math.cos(a0), TYRE_R+RS*math.sin(a0)]); ta = np.array([-math.sin(a0), math.cos(a0)])
+    P += herm(np.array([2.21, .685]), np.array([-1., .12]), pa, ta, .45, 30)      # from behind the headlamp, curving up onto the arc
+    for a in np.linspace(a0, a1, 70)[:-1]: P.append((ZA_F+RS*math.cos(a), TYRE_R+RS*math.sin(a)))
+    p0 = np.array([ZA_F+RS*math.cos(a1), TYRE_R+RS*math.sin(a1)]); t0 = np.array([-math.sin(a1), math.cos(a1)])
+    p1 = np.array([.55, LOW]); t1 = np.array([-1., 0.]); k = .55
+    for t in np.linspace(0, 1, 40)[:-1]:          # Hermite blend down into the low line
+        h00, h10, h01, h11 = 2*t**3-3*t**2+1, t**3-2*t**2+t, -2*t**3+3*t**2, t**3-t**2
+        P.append(tuple(h00*p0+h10*k*t0+h01*p1+h11*k*t1))
+    for z in np.linspace(.55, ZA_R+.53, 50): P.append((z, LOW))
+    return np.array(P)
+def band_along(m, mat, P, h0, h1, push=.006, nv=3):
+    T = np.gradient(P, axis=0); T /= np.linalg.norm(T, axis=1, keepdims=True); N = np.stack([-T[:, 1], T[:, 0]], 1)
+    N *= np.sign(N[:, 1:2]+1e-9)                  # normals pointing up
+    H = np.interp(np.arange(len(P)), [0, len(P)-1], [h0, h1]) if h1 is not None else np.full(len(P), h0)
+    H = np.where(P[:, 1] < LOW+.02, .095, H)
+    rows = []
+    for (z, y), n, h in zip(P, N, H):
+        rows.append([(z+n[0]*h*(v/nv-.5), y+n[1]*h*(v/nv-.5)) for v in range(nv+1)])
+    X_ = np.array([[xat(z, y) for z, y in r] for r in rows])
+    X_ = np.vstack([np.convolve(np.pad(X_[:, j], 4, mode='edge'), np.ones(9)/9, mode='valid') for j in range(nv+1)]).T   # smooth along the band
+    for side in (1, -1):
+        idx = [[m.v((side*(X_[i, j]+push), rows[i][j][1], rows[i][j][0])) for j in range(nv+1)] for i in range(len(rows))]
+        for i in range(len(rows)-1):
+            for j in range(nv):
+                a, b, c, d = idx[i][j], idx[i+1][j], idx[i][j+1], idx[i+1][j+1]
+                if side > 0: m.tri(mat, a, c, b); m.tri(mat, b, c, d)
+                else: m.tri(mat, a, b, c); m.tri(mat, b, d, c)
+band_along(STR, 'Stripe', stripe_path(), HS, None)
 side_grid(STR, 'Stripe', lambda u, v: (ZR+.14+(ZA_R-.53-(ZR+.14))*u, LOW-.0475+.095*v), 14, 2, push=.006)   # behind the rear wheel
 side_grid(STR, 'Stripe', lambda u, v: (ZA_F+.53+(2.22-(ZA_F+.53))*u, LOW-.0475+(.125-.03*u)*v), 12, 3, push=.006) # lower front fender, ahead of the wheel
 # ---------- sides: chrome rocker moulding, wheel-lip trim, door seams, handle, chrome bullet mirror, side markers ----------
@@ -504,22 +539,41 @@ def wheel_mesh(name, outward, W, dish):
     xf = w*.88; xs = xf-dish                      # outer bead plane, spoke face
     lathe('Chrome', [(xf, RIM), (xf+.010, RIM+.004), (xf+.012, RIM-.006), (xf+.004, RIM-.016), (xs+.006, RIM-.022), (xs, RIM-.026)], 64)
     lathe('Well', [(xs, RIM-.026), (xs-.012, RIM-.028), (-w*.80, RIM-.028), (-w*.80, .05)], 40)        # dark barrel behind
-    lathe('Bar', [(xs-.075, .155), (xs-.070, .150), (xs-.070, .06)], 40)                               # brake drum face
-    # styled steel wheel (photo): a silver face, gently coned, with five slots; small chrome cap; lug nuts round it
-    hub = xs+.022
-    face = [(xs, RIM-.026), (xs+.004, .165), (xs+.010, .150), (xs+.012, .100), (hub, .080), (hub+.004, .056)]
-    lathe('Steel', face, 64)
-    for k in range(5):                            # the slots: dark openings through the face
-        a0 = k/5*2*math.pi+math.pi/5
-        for t in range(6):
-            a = a0-.24+t*.08; r0, r1 = .108, .148
-            def xo(r): return xs+.010+(.012-.010)*(.150-r)/.05+.0015
-            q('Well', (xo(r0), r0*math.cos(a), r0*math.sin(a)), (xo(r1), r1*math.cos(a), r1*math.sin(a)),
-              (xo(r1), r1*math.cos(a+.08), r1*math.sin(a+.08)), (xo(r0), r0*math.cos(a+.08), r0*math.sin(a+.08)))
-    lathe('Steel', [(hub+.004, .056), (hub+.006, .044)], 40)
-    lathe('Chrome', [(hub+.006, .044), (hub+.020, .040), (hub+.028, .026), (hub+.030, 0.)], 32)                # small centre cap
+    lathe('Well', [(xs-.075, .155), (xs-.070, .150), (xs-.070, .06)], 40)                              # brake drum face (dark)
+    # sporty split five-spoke (owner: "a more sporty rim"): ten slim spokes in pairs rising from the dish to a raised hub,
+    # machined faces with bright edges, dark between them; polished lip; centre cap and lug nuts
+    hub = xs+.034
+    def twin(a0, a1, r0, r1, w0, w1, d0, d1):    # a straight spoke from (r0, a0) to (r1, a1)
+        p0 = np.array([r0*math.cos(a0), r0*math.sin(a0)]); p1 = np.array([r1*math.cos(a1), r1*math.sin(a1)])
+        dv = (p1-p0)/np.linalg.norm(p1-p0); nv = np.array([-dv[1], dv[0]])
+        def P(end, t, depth):
+            pp = (p0 if end == 0 else p1)+nv*t; x = (hub if end == 0 else xs+.002)-depth
+            return (x, pp[0], pp[1])
+        f = [P(0, -w0, 0), P(1, -w1, 0), P(1, w1, 0), P(0, w0, 0)]
+        b = [P(0, -w0, d0), P(1, -w1, d1), P(1, w1, d1), P(0, w0, d0)]
+        q('Steel', f[0], f[1], f[2], f[3])
+        q('Rim', f[1], f[0], b[0], b[1]); q('Rim', f[3], f[2], b[2], b[3]); q('Rim', f[2], f[1], b[1], b[2])
+        for t0, t1 in ((-1, -.55), (.55, 1)):     # bright machined edges
+            q('Chrome', P(0, w0*t0, -.0008), P(1, w1*t0, -.0008), P(1, w1*t1, -.0008), P(0, w0*t1, -.0008))
+    def spoke(a, r0, r1, w0, w1, d0, d1):
+        def P(r, t, depth):
+            xface = hub+(xs+.002-hub)*(r-r0)/(r1-r0)
+            ca, sa = math.cos(a), math.sin(a)
+            return (xface-depth, r*ca-t*sa, r*sa+t*ca)
+        f = [P(r0, -w0, 0), P(r1, -w1, 0), P(r1, w1, 0), P(r0, w0, 0)]
+        b = [P(r0, -w0, d0), P(r1, -w1, d1), P(r1, w1, d1), P(r0, w0, d0)]
+        q('Steel', f[0], f[1], f[2], f[3])
+        q('Rim', f[1], f[0], b[0], b[1]); q('Rim', f[3], f[2], b[2], b[3]); q('Rim', f[2], f[1], b[1], b[2])
+        for t0, t1 in ((-1, -.6), (.6, 1)):       # bright machined edges
+            q('Chrome', P(r0+.004, w0*t0, -.0008), P(r1, w1*t0, -.0008), P(r1, w1*t1, -.0008), P(r0+.004, w0*t1, -.0008))
+    for k in range(5):
+        a = k/5*2*math.pi+math.pi/10
+        for da0, da1 in ((-.10, -.20), (.10, .20)):   # a pair of straight spokes splaying apart toward the rim
+            twin(a+da0, a+da1, .060, RIM-.024, .013, .011, .028, .022)
+    lathe('Steel', [(hub, .066), (hub+.006, .058), (hub+.008, .044)], 40)                               # hub face
+    lathe('Chrome', [(hub+.008, .044), (hub+.022, .040), (hub+.030, .026), (hub+.032, 0.)], 32)          # centre cap
     for k in range(5):                                                                                   # lug nuts round the cap
-        a = k/5*2*math.pi; cy, cz = .064*math.cos(a), .064*math.sin(a)
+        a = k/5*2*math.pi; cy, cz = .056*math.cos(a), .056*math.sin(a)
         pr = [(hub+.006, .010), (hub+.020, .010), (hub+.024, .006), (hub+.025, 0.)]
         idx = []
         for i in range(7):
@@ -530,7 +584,7 @@ def wheel_mesh(name, outward, W, dish):
                 if outward > 0: m.tri('Chrome', a_, b_, c_); m.tri('Chrome', b_, d_, c_)
                 else: m.tri('Chrome', a_, c_, b_); m.tri('Chrome', b_, c_, d_)
     return m
-wheels = [('Wheel_FL', XF, ZA_F, WF, .045), ('Wheel_FR', -XF, ZA_F, WF, .045), ('Wheel_RL', XR, ZA_R, WR, .065), ('Wheel_RR', -XR, ZA_R, WR, .065)]
+wheels = [('Wheel_FL', XF, ZA_F, WF, .060), ('Wheel_FR', -XF, ZA_F, WF, .060), ('Wheel_RL', XR, ZA_R, WR, .095), ('Wheel_RR', -XR, ZA_R, WR, .095)]
 
 # ---------- write the .glb ----------
 MATS = {
@@ -550,7 +604,7 @@ MATS = {
  'Tyre':      dict(c=[.020, .020, .022, 1], m=0, r=.85),
  'Letters':   dict(c=[.13, .13, .125, 1], m=0, r=.8),
  'Rim':       dict(c=[.20, .21, .22, 1], m=.6, r=.35),
- 'Steel':     dict(c=[.50, .51, .53, 1], m=.55, r=.30),        # silver-painted steel wheel face
+ 'Steel':     dict(c=[.62, .63, .65, 1], m=.75, r=.22),        # machined spoke faces
  'Panel':     dict(c=[.025, .026, .028, 1], m=.2, r=.55),       # the dark tail panel
  'Backup':    dict(c=[.80, .80, .78, 1], m=.1, r=.25),          # white reversing lamps
  'Well':      dict(c=[.008, .008, .009, 1], m=0, r=.9),
