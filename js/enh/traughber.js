@@ -47,6 +47,27 @@ const TR=[]; for(let t=0;t<2;t++) for(let fx=0;fx<2;fx++) for(let fy=0;fy<2;fy++
 const tf=(u,v,[t,fx,fy])=>{ if(t){ const q=u; u=v; v=q; } return [fx?1-u:u, fy?1-v:v]; };
 const norm=b=>[(b[0]-X0)/(X1-X0),1-(b[3]-Y0)/(Y1-Y0),(b[2]-X0)/(X1-X0),1-(b[1]-Y0)/(Y1-Y0)];   // x0,y0(south),x1,y1(north) in 0..1
 
+
+/* the real outline decides where the walls stand (owner 2026-11-24: "building exterior walls are drawn right at the edge of the
+   building footprint from the mapping data, only one exterior wall side"). The traced plan only says how tall each part is. */
+const area2=r=>{ let a=0; for(let i=0,j=r.length-1;i<r.length;j=i++) a+=r[j][0]*r[i][1]-r[i][0]*r[j][1]; return a/2; };   // > 0 counter-clockwise
+const openRing=r=>{ const o=r.slice(), a=o[0], b=o[o.length-1]; if(o.length>3&&Math.hypot(a[0]-b[0],a[1]-b[1])<1e-6) o.pop(); return o; };
+// the school's own rings, without the copies the tiles cut differently (a ring that lies inside a bigger one is dropped)
+function distinct(polys){ const kept=[];
+  for(const r0 of polys.map(openRing).sort((a,b)=>Math.abs(area2(b))-Math.abs(area2(a)))){
+    let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9; for(const q of r0){ x0=Math.min(x0,q[0]); x1=Math.max(x1,q[0]); y0=Math.min(y0,q[1]); y1=Math.max(y1,q[1]); }
+    let n=0, inK=0; for(let i=0;i<9;i++) for(let j=0;j<9;j++){ const x=x0+(i+.5)*(x1-x0)/9, y=y0+(j+.5)*(y1-y0)/9; if(inPoly(r0,x,y)){ n++; if(kept.some(k=>inPoly(k,x,y))) inK++; } }
+    if(n>=3&&inK/n>=.9) continue; kept.push(r0); }
+  return kept; }
+// turn the plan's axes to the real outline's own (stair-stepped, so its edges all run two ways) when they are within 6 degrees
+function realign(R,polys){ let sx=0,sy=0;
+  for(const r of polys) for(let i=0;i<r.length;i++){ const a=r[i], b=r[(i+1)%r.length], L=Math.hypot(b[0]-a[0],b[1]-a[1]); if(L<1) continue; const t=Math.atan2(b[1]-a[1],b[0]-a[0])*4; sx+=L*Math.cos(t); sy+=L*Math.sin(t); }
+  if(sx*sx+sy*sy<1e-6) return; const th=Math.atan2(sy,sx)/4, t0=Math.atan2(R.uy,R.ux); let d=th-t0; d-=Math.round(d/(Math.PI/2))*(Math.PI/2);
+  if(Math.abs(d)>.105) return;
+  const t=t0+d, ux=Math.cos(t), uy=Math.sin(t), vx=-uy, vy=ux; let u0=1e9,u1=-1e9,v0=1e9,v1=-1e9;
+  for(const r of polys) for(const p of r){ const u=p[0]*ux+p[1]*uy, v=p[0]*vx+p[1]*vy; u0=Math.min(u0,u); u1=Math.max(u1,u); v0=Math.min(v0,v); v1=Math.max(v1,v); }
+  const um=(u0+u1)/2, vm=(v0+v1)/2; R.ux=ux; R.uy=uy; R.vx=vx; R.vy=vy; R.W=u1-u0; R.H=v1-v0; R.cx=ux*um+vx*vm; R.cy=uy*um+vy*vm; }
+
 function fit(P,kx,ky){
   /* the school's own pieces only (owner 2026-11-24: cars drove through the school): OpenFreeMap gives the school and the whole
      subdivision round it one id, and a house 130 m away once stretched the plan over the street and the bus loop. So: pieces
@@ -70,14 +91,16 @@ function fit(P,kx,ky){
   const sll=[P[0]+(sbb[0]-3)/kx,P[1]+(sbb[1]-3)/ky,P[0]+(sbb[2]+3)/kx,P[1]+(sbb[3]+3)/ky];     // the school's pieces lie in here (lng/lat, 3 m spare)
   if(polys.length<1||pts.length<4) return null;
   const R=minRect(pts); if(!R||R.W<40||R.H<40||R.W>400||R.H>400) return null;
-  const real=new Uint8Array(N*N); let nReal=0;
+  realign(R,polys);
+  const real=distinct(polys);
+  const realG=new Uint8Array(N*N); let nReal=0;
   for(let i=0;i<N;i++) for(let j=0;j<N;j++){ const u=(i+.5)/N-.5, v=(j+.5)/N-.5, x=R.cx+R.ux*u*R.W+R.vx*v*R.H, y=R.cy+R.uy*u*R.W+R.vy*v*R.H;
-    for(const p of polys) if(inPoly(p,x,y)){ real[i*N+j]=1; nReal++; break; } }
+    for(const p of polys) if(inPoly(p,x,y)){ realG[i*N+j]=1; nReal++; break; } }
   const fits=[];
   for(const T8 of TR){ const pl=new Uint8Array(N*N); let nPl=0;
     for(const b of PLAN0){ const n=norm(b); for(let i=0;i<N;i++) for(let j=0;j<N;j++){ if(pl[i*N+j]) continue; const [u,v]=tf((i+.5)/N,(j+.5)/N,T8);
       if(u>=n[0]&&u<=n[2]&&v>=n[1]&&v<=n[3]){ pl[i*N+j]=1; nPl++; } } }
-    let inter=0; for(let k=0;k<N*N;k++) if(pl[k]&&real[k]) inter++;
+    let inter=0; for(let k=0;k<N*N;k++) if(pl[k]&&realG[k]) inter++;
     fits.push({iou:inter/Math.max(1,nPl+nReal-inter),T8}); }
   /* two ways round often fit almost equally well; then the one with the gym to the south-west wins (the gym and music suite
      are the school's south-west wing) */
@@ -91,9 +114,9 @@ function fit(P,kx,ky){
   let gb={sc:-1,box:G};
   for(let dx=-360;dx<=360;dx+=24) for(let dy=-240;dy<=240;dy+=24){ const B=[G[0]+dx,G[1]+dy,G[2]+dx,G[3]+dy,G[4]]; if(B[0]<X0||B[2]>X1||B[1]<Y0||B[3]>Y1) continue;
     const n=norm(B); let a=0, inR=0;
-    for(let i=0;i<N;i++) for(let j=0;j<N;j++){ const [u,v]=tf((i+.5)/N,(j+.5)/N,best.T8); if(u>=n[0]&&u<=n[2]&&v>=n[1]&&v<=n[3]){ a++; if(real[i*N+j]) inR++; } }
+    for(let i=0;i<N;i++) for(let j=0;j<N;j++){ const [u,v]=tf((i+.5)/N,(j+.5)/N,best.T8); if(u>=n[0]&&u<=n[2]&&v>=n[1]&&v<=n[3]){ a++; if(realG[i*N+j]) inR++; } }
     const sc=a?inR/a-Math.hypot(dx,dy)*2e-4:0; if(sc>gb.sc) gb={sc,box:B}; }
-  return {R,ids:[...ids],keys,sll,iou:best.iou,T8:best.T8,nReal,gbox:gb.box,gfit:gb.sc}; }
+  return {R,real,ids:[...ids],keys,sll,iou:best.iou,T8:best.T8,nReal,gbox:gb.box,gfit:gb.sc}; }
 
 function toLL(F,P,kx,ky,px,py){        // a photo-plan point -> lng/lat, through the fitted rectangle
   const [t,fx,fy]=F.T8, pu=(px-X0)/(X1-X0), pv=1-(py-Y0)/(Y1-Y0);
@@ -108,58 +131,87 @@ function polysM(F){                     // the plan's wings as rings in metres (
       return [F.R.cx+F.R.ux*uu*F.R.W+F.R.vx*vv*F.R.H, F.R.cy+F.R.uy*uu*F.R.W+F.R.vy*vv*F.R.H]; });
     out.push({ring,h:b[4],b}); });
   return out; }
-function polysOf(F,P,kx,ky){            // ... as lng/lat rings
-  return polysM(F).map(o=>{ const ring=o.ring.map(([x,y])=>[+(P[0]+x/kx).toFixed(7),+(P[1]+y/ky).toFixed(7)]); ring.push(ring[0]); return {ring,h:o.h}; }); }
+
+const clipHP=(poly,ax,lim,ge)=>{ const o=[]; for(let i=0;i<poly.length;i++){ const a=poly[i], b=poly[(i+1)%poly.length], ia=ge?a[ax]>=lim:a[ax]<=lim, ib=ge?b[ax]>=lim:b[ax]<=lim;
+  if(ia) o.push(a); if(ia!==ib){ const t=(lim-a[ax])/(b[ax]-a[ax]), p=[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t]; p[ax]=lim; o.push(p); } } return o; };
+const clipRect=(ring,u0,v0,u1,v1)=>clipHP(clipHP(clipHP(clipHP(ring,0,u0,true),0,u1,false),1,v0,true),1,v1,false);
+function cleanRing(r){ let o=r.filter((p,i)=>{ const q=r[(i+r.length-1)%r.length]; return Math.hypot(p[0]-q[0],p[1]-q[1])>.08; });
+  for(let ch=true;ch&&o.length>=3;){ ch=false; for(let i=0;i<o.length;i++){ const a=o[(i+o.length-1)%o.length], b=o[i], c=o[(i+1)%o.length], L=Math.hypot(c[0]-a[0],c[1]-a[1]);
+    if(Math.abs((b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]))<.04*L+1e-9){ o.splice(i,1); ch=true; break; } } }
+  return o.length>=3?o:null; }
+
+/* the school as drawn: the real outline cut into blocks, each as tall as the traced plan says there. The plan's rectangles are
+   put into the outline's own axes and their sides pulled onto the outline's corners (within 1.2 m), every block is cut to the
+   real outline, so the outer walls are exactly the footprint's edges and nothing else is a wall. The gym is one block. */
+function model(F){
+  const R=F.R, ux=R.ux, uy=R.uy, vx=R.vx, vy=R.vy, rings=F.real||[];
+  const toF=(x,y)=>[(x-R.cx)*ux+(y-R.cy)*uy,(x-R.cx)*vx+(y-R.cy)*vy], fromF=(u,v)=>[R.cx+ux*u+vx*v,R.cy+uy*u+vy*v];
+  const fr=rings.map(r=>r.map(([x,y])=>toF(x,y))), us=[], vs=[]; for(const r of fr) for(const q of r){ us.push(q[0]); vs.push(q[1]); }
+  const snap=(a,L)=>{ let b=a, d=1.2; for(const x of L){ const e=Math.abs(x-a); if(e<d){ d=e; b=x; } } return b; };
+  const boxes=polysM(F).map((o,k)=>{ let u0=1e9,u1=-1e9,v0=1e9,v1=-1e9; for(const [x,y] of o.ring){ const q=toF(x,y); u0=Math.min(u0,q[0]); u1=Math.max(u1,q[0]); v0=Math.min(v0,q[1]); v1=Math.max(v1,q[1]); }
+    return {u0:snap(u0,us),u1:snap(u1,us),v0:snap(v0,vs),v1:snap(v1,vs),h:o.h,g:k===GYM}; }).filter(b=>b.u1-b.u0>.3&&b.v1-b.v0>.3);
+  const inReal=(x,y)=>rings.some(r=>inPoly(r,x,y));
+  const hAt=(x,y)=>{ const [u,v]=toF(x,y); let h=-1; for(const b of boxes) if(u>b.u0&&u<b.u1&&v>b.v0&&v<b.v1){ if(b.g) return {h:b.h,g:1}; if(b.h>h) h=b.h; } return {h:h<0?6.4:h,g:0}; };
+  const brk=(a,lo,hi)=>{ const L=[lo,hi]; for(const x of a) if(x>lo&&x<hi) L.push(x); L.sort((p,q)=>p-q); const o=[]; for(const x of L) if(!o.length||x-o[o.length-1]>.05) o.push(x); return o; };
+  const bu=brk(boxes.flatMap(b=>[b.u0,b.u1]),-R.W/2-1,R.W/2+1), bv=brk(boxes.flatMap(b=>[b.v0,b.v1]),-R.H/2-1,R.H/2+1);
+  let cells=[];
+  for(let j=0;j<bv.length-1;j++) for(let i=0;i<bu.length-1;i++){ const uc=(bu[i]+bu[i+1])/2, vc=(bv[j]+bv[j+1])/2; let h=-1, g=false;
+    for(const b of boxes) if(uc>b.u0&&uc<b.u1&&vc>b.v0&&vc<b.v1){ if(b.g){ g=true; break; } if(b.h>h) h=b.h; }
+    if(g) continue; cells.push({u0:bu[i],u1:bu[i+1],v0:bv[j],v1:bv[j+1],h:h<0?6.4:h}); }
+  const same=(a,b)=>a.h===b.h&&Math.abs(a.v0-b.v0)<1e-6&&Math.abs(a.v1-b.v1)<1e-6&&Math.abs(a.u1-b.u0)<1e-6;      // merge runs along u, then runs along v
+  let m=[]; for(const c of cells){ const l=m[m.length-1]; if(l&&same(l,c)) l.u1=c.u1; else m.push({...c}); }
+  const col=new Map(); for(const c of m){ const k=c.u0.toFixed(3)+'|'+c.u1.toFixed(3)+'|'+c.h; (col.get(k)||col.set(k,[]).get(k)).push(c); }
+  m=[]; for(const L of col.values()){ L.sort((a,b)=>a.v0-b.v0); let l=null; for(const c of L){ if(l&&Math.abs(l.v1-c.v0)<1e-6) l.v1=c.v1; else m.push(l={...c}); } }
+  const cut=(u0,v0,u1,v1)=>{ const o=[]; for(const r of fr){ const c=clipRect(r,u0,v0,u1,v1); if(c.length<3) continue; const g=cleanRing(c.map(([u,v])=>fromF(u,v))); if(g&&Math.abs(area2(g))>1.5) o.push(g); } return o; };
+  const blocks=[]; for(const c of m) for(const g of cut(c.u0,c.v0,c.u1,c.v1)) blocks.push({ring:g,h:c.h});
+  const gb=boxes.find(b=>b.g); let gym=null;
+  if(gb){ const gs=cut(gb.u0,gb.v0,gb.u1,gb.v1).sort((a,b)=>Math.abs(area2(b))-Math.abs(area2(a))); if(gs[0]&&Math.abs(area2(gs[0]))>80) gym={ring:gs[0],h:gb.h}; }
+  return {R,rings,toF,fromF,inReal,hAt,blocks,gym,boxes}; }
 
 /* the walls' details, after the owner's front photo (a Junior High of the same design): dark red-brick base, a red band under the
    roof edge, rows of small square windows high on the walls (two rows on the two-storey wings), and three recessed entrances with
-   brick canopies and red doors on the parking-lot side. Drawn flat on the faces of the wings, and only where no other wing
-   covers the wall, so nothing floats. */
+   brick canopies and red doors on the parking-lot side. They go along the outline's own outer edges, standing out 25-50 cm so they
+   don't flicker against the wall, and only where nothing else stands in front. */
 const BASE='#7a4a38', BAND='#8b3a32', GLASS='#1f2a36', RED='#8a1f26', DARK='#3a1a1a', BRICKC='#c58a5c';
-const PORTALS=[[480,860,'main'],[655,912,'aud']];      // [photo x, y on a south wall, kind]: found among the wings at run time
-function details(F,P,kx,ky){
-  const W=polysM(F), feats=[], ll=([x,y])=>[+(P[0]+x/kx).toFixed(7),+(P[1]+y/ky).toFixed(7)];
-  const area=r=>{ let a=0; for(let i=0,j=r.length-1;i<r.length;j=i++) a+=(r[j][0]-r[i][0])*(r[j][1]+r[i][1]); return a; };
-  const cover=(x,y,self)=>{ let h=0; W.forEach((o,k)=>{ if(k!==self&&o.h>h&&inPoly(o.ring,x,y)) h=o.h; }); return h; };
+const PORTALS=[[480,860,'main'],[655,912,'aud']];      // [photo x, y on a south wall, kind]: the nearest outer wall to that spot
+function details(F,M,P,kx,ky){
+  const feats=[], ll=([x,y])=>[+(P[0]+x/kx).toFixed(7),+(P[1]+y/ky).toFixed(7)];
+  let curG=0;                                                        // 1 on the gym's own pieces (hidden while you're inside it)
   const put=(a,u,n,s0,s1,o0,o1,b,h,c)=>{ if(s1-s0<.02||h-b<.02) return;           // a flat box on a wall: along s0..s1, out o0..o1, up b..h
+    if(o1<.5) o1=o1*2.5+.08; o0=Math.min(o0,0);
     const P4=[[s0,o0],[s1,o0],[s1,o1],[s0,o1]].map(([s,o])=>ll([a[0]+u[0]*s+n[0]*o,a[1]+u[1]*s+n[1]*o])); P4.push(P4[0]);
     feats.push({type:'Feature',properties:{c,b,h,g:curG},geometry:{type:'Polygon',coordinates:[P4]}}); };
-  let curG=0;                                                        // 1 on the gym's own pieces (hidden while you're inside it)
-  W.forEach((w,k)=>{ const r=w.ring, ccw=area(r)<0, H=w.h; curG=k===GYM?1:0;
-    for(let e=0;e<4;e++){ const a=r[e], b=r[(e+1)%4], L=Math.hypot(b[0]-a[0],b[1]-a[1]); if(L<6) continue;
-      const u=[(b[0]-a[0])/L,(b[1]-a[1])/L], n=ccw?[u[1],-u[0]]:[-u[1],u[0]];
-      const free=(s,hh)=>{ const c=cover(a[0]+u[0]*s+n[0]*.8,a[1]+u[1]*s+n[1]*.8,k); return c<hh-.3; };   // nothing taller (or as tall) in front of that bit of wall
-      for(let s=0;s<L;s+=2){ const s1=Math.min(L,s+2), m=(s+s1)/2;
-        if(free(m,.5)) put(a,u,n,s,s1,.02,.07,0,.9,BASE);                                              // the dark red-brick base
-        if(free(m,H-.5)) put(a,u,n,s,s1,.02,.08,H-.65,H-.3,BAND); }                                    // the red band under the roof edge
-      if(k===GYM) continue;                                                                          // the gym's windows and doors: from its room record, below
-      const cnt=Math.max(1,Math.floor((L-3.6)/3.8)+1), step=cnt>1?(L-3.6)/(cnt-1):0;
-      const rows=H<6?[[1.5,2.6]]:H<9?[[1.4,2.5],[4.6,5.7]]:[[H-3.3,H-2.3]];
-      for(let i=0;i<cnt;i++){ const s=cnt>1?1.8+i*step:L/2;
-        for(const [wb,wt] of rows) if(wt<H-.4&&free(s,wb+.1)) put(a,u,n,s-.5,s+.5,.02,.09,wb,wt,GLASS); }
-      if(H<9&&L>=24) for(const f of [.3,.72]) if(free(L*f,2.8)&&free(L*f-1.2,2.8)&&free(L*f+1.2,2.8)){ const q=L*f;      // plain doors flush in the brick, along the longer low walls
-        put(a,u,n,q-1.1,q+1.1,.02,.07,0,2.65,DARK); for(const z of [-1,1]){ put(a,u,n,z<0?q-1:q+.04,z<0?q-.04:q+1,.07,.12,.05,2.55,RED); put(a,u,n,z<0?q-.88:q+.16,z<0?q-.16:q+.88,.12,.15,.45,2.35,GLASS); } }
-      if(H>=10&&L>20) for(const f of [.08,.14]) if(free(L*f,3)) put(a,u,n,L*f-.2,L*f+.2,.02,.09,2.2,7.4,GLASS);   // the tall slit windows at a gym's end
-    } });
+  const sideOf=(a,u,n)=>s=>{ const x=a[0]+u[0]*s, y=a[1]+u[1]*s; if(M.inReal(x+n[0]*.7,y+n[1]*.7)) return null; return M.hAt(x-n[0]*.7,y-n[1]*.7); };   // the block behind that bit of wall, or null if it isn't an outer wall
+  const edges=[]; for(const ring of M.rings){ const ccw=area2(ring)>0, m=ring.length;
+    for(let e=0;e<m;e++){ const a=ring[e], b=ring[(e+1)%m], L=Math.hypot(b[0]-a[0],b[1]-a[1]); if(L<2.5) continue; const u=[(b[0]-a[0])/L,(b[1]-a[1])/L], n=ccw?[u[1],-u[0]]:[-u[1],u[0]]; edges.push({a,u,n,L,at:sideOf(a,u,n)}); } }
+  for(const {a,u,n,L,at} of edges){
+    for(let s=0;s<L;s+=2){ const s1=Math.min(L,s+2), q=at((s+s1)/2); if(!q) continue; curG=q.g; put(a,u,n,s,s1,0,.07,0,.9,BASE); put(a,u,n,s,s1,0,.08,q.h-.65,q.h-.3,BAND); }     // the dark red-brick base, the red band under the roof edge
+    if(L<6) continue;
+    const cnt=Math.max(1,Math.floor((L-3.6)/3.8)+1), step=cnt>1?(L-3.6)/(cnt-1):0;
+    for(let i=0;i<cnt;i++){ const s=cnt>1?1.8+i*step:L/2, q=at(s); if(!q||q.g) continue; curG=0; const H=q.h, rows=H<6?[[1.5,2.6]]:H<9?[[1.4,2.5],[4.6,5.7]]:[[H-3.3,H-2.3]];
+      for(const [wb,wt] of rows) if(wt<H-.4) put(a,u,n,s-.5,s+.5,0,.09,wb,wt,GLASS); }
+    if(L>=24) for(const f of [.3,.72]){ const q=at(L*f), q1=at(L*f-1.2), q2=at(L*f+1.2); if(!q||!q1||!q2||q.g||q.h>=9) continue; curG=0; const c=L*f;      // plain doors flush in the brick, along the longer low walls
+      put(a,u,n,c-1.1,c+1.1,0,.07,0,2.65,DARK); for(const z of [-1,1]){ put(a,u,n,z<0?c-1:c+.04,z<0?c-.04:c+1,0,.12,.05,2.55,RED); put(a,u,n,z<0?c-.88:c+.16,z<0?c-.16:c+.88,0,.15,.45,2.35,GLASS); } }
+    if(L>20) for(const f of [.08,.14]){ const q=at(L*f); if(q&&!q.g&&q.h>=10){ curG=0; put(a,u,n,L*f-.2,L*f+.2,0,.09,2.2,7.4,GLASS); } } }    // the tall slit windows at a tall wing's end
   curG=0;
-  for(const [px,py,kind] of PORTALS){ let wi=-1, f=0; PLAN.forEach((b,k)=>{ if(Math.abs(b[3]-py)<30&&px>=b[0]+10&&px<=b[2]-10&&b[2]-b[0]>=50&&(wi<0||Math.abs(b[3]-py)<Math.abs(PLAN[wi][3]-py))){ wi=k; f=(px-b[0])/(b[2]-b[0]); } });
-    const w=W[wi]; if(!w) continue; const r=w.ring, ccw=area(r)<0, a=r[0], b=r[1], L=Math.hypot(b[0]-a[0],b[1]-a[1]), u=[(b[0]-a[0])/L,(b[1]-a[1])/L], n=ccw?[u[1],-u[0]]:[-u[1],u[0]], s=L*f;
-    if(cover(a[0]+u[0]*s+n[0]*2.8,a[1]+u[1]*s+n[1]*2.8,wi)>0) continue;                              // something already stands there
-    const hw=kind==='main'?3.2:2.6, hh=kind==='main'?4.6:4, D=2.4;
+  for(const [px,py,kind] of PORTALS){ const D=planM(F,px,py); let best=null;
+    for(const E of edges){ if(E.L<8) continue; const s=Math.max(2.5,Math.min(E.L-2.5,(D[0]-E.a[0])*E.u[0]+(D[1]-E.a[1])*E.u[1])), d=Math.hypot(E.a[0]+E.u[0]*s-D[0],E.a[1]+E.u[1]*s-D[1]), q=E.at(s);
+      if(q&&!q.g&&d<30&&(!best||d<best.d)) best={d,s,E}; }
+    if(!best) continue; const {a,u,n}=best.E, s=best.s;
+    const hw=kind==='main'?3.2:2.6, hh=kind==='main'?4.6:4, D2=2.4;
     // a covered entrance like the photo's: two brick piers and a roof slab over open space, the red doors sit in the brick wall itself
-    put(a,u,n,s-hw,s-hw+.8,.05,D,0,hh,BRICKC); put(a,u,n,s+hw-.8,s+hw,.05,D,0,hh,BRICKC);            // the piers
-    put(a,u,n,s-hw,s+hw,.05,D,hh-.9,hh,BRICKC); put(a,u,n,s-hw,s+hw,.05,D+.02,hh,hh+.25,'#2c2e34');    // the canopy and its dark roof
-    put(a,u,n,s-hw,s+hw,D-.05,D+.03,hh-.5,hh-.15,BAND);                                                 // red band on its edge
+    put(a,u,n,s-hw,s-hw+.8,.05,D2,0,hh,BRICKC); put(a,u,n,s+hw-.8,s+hw,.05,D2,0,hh,BRICKC);            // the piers
+    put(a,u,n,s-hw,s+hw,.05,D2,hh-.9,hh,BRICKC); put(a,u,n,s-hw,s+hw,.05,D2+.02,hh,hh+.25,'#2c2e34');    // the canopy and its dark roof
+    put(a,u,n,s-hw,s+hw,D2-.05,D2+.03,hh-.5,hh-.15,BAND);                                                 // red band on its edge
     put(a,u,n,s-hw+.8,s+hw-.8,.02,.06,0,2.9,DARK);                                                      // the dark recess on the wall
     for(const z of [-1,1]){ put(a,u,n,z<0?s-1.45:s+.1,z<0?s-.1:s+1.45,.06,.12,.05,2.65,RED); put(a,u,n,z<0?s-1.3:s+.25,z<0?s-.25:s+1.3,.12,.16,.45,2.45,GLASS); }   // two red glass doors flush on the wall
     put(a,u,n,s-hw+.9,s+hw-.9,.06,.12,2.95,3.5,GLASS);                                                  // a window over them
-    if(kind==='main'){ put(a,u,n,s-hw-1.2,s-hw,.05,D,0,9,BRICKC); put(a,u,n,s+hw,s+hw+1.2,.05,D,0,9,BRICKC); put(a,u,n,s-hw-1.2,s+hw+1.2,.05,D,hh-.9,9,BRICKC);   // the tall brick frontispiece of the photo, wider piers up to a block over the opening
-      put(a,u,n,s-hw-1.2,s+hw+1.2,D-.05,D+.05,8.6,9.1,BAND); for(const k of [0,1,2]) put(a,u,n,s-hw+.2+k*.2,s+hw-.2-k*.2,D+.03,D+.09,7.7-k*.45,8.0-k*.45,'#2c2a28');   // red cap, and the dark lettering of the sign
-      for(const z of [-1,1]){ put(a,u,n,s+z*(hw+.9)-.4,s+z*(hw+.9)+.4,D+.3,D+1.1,0,.8,'#b5603f'); put(a,u,n,s+z*(hw+.9)-.25,s+z*(hw+.9)+.25,D+.45,D+.95,.8,1.3,'#4d7a2c');   // terracotta planters with plants
-        put(a,u,n,s+z*(hw+3.6)-1,s+z*(hw+3.6)+1,D+.3,D+.8,0,.5,'#2b2f3a'); put(a,u,n,s+z*(hw+3.6)-1,s+z*(hw+3.6)+1,D+.3,D+.4,.5,1.1,'#2b2f3a'); }                                  // benches
+    if(kind==='main'){ put(a,u,n,s-hw-1.2,s-hw,.05,D2,0,9,BRICKC); put(a,u,n,s+hw,s+hw+1.2,.05,D2,0,9,BRICKC); put(a,u,n,s-hw-1.2,s+hw+1.2,.05,D2,hh-.9,9,BRICKC);   // the tall brick frontispiece of the photo, wider piers up to a block over the opening
+      put(a,u,n,s-hw-1.2,s+hw+1.2,D2-.05,D2+.05,8.6,9.1,BAND); for(const k of [0,1,2]) put(a,u,n,s-hw+.2+k*.2,s+hw-.2-k*.2,D2+.03,D2+.09,7.7-k*.45,8.0-k*.45,'#2c2a28');   // red cap, and the dark lettering of the sign
+      for(const z of [-1,1]){ put(a,u,n,s+z*(hw+.9)-.4,s+z*(hw+.9)+.4,D2+.3,D2+1.1,0,.8,'#b5603f'); put(a,u,n,s+z*(hw+.9)-.25,s+z*(hw+.9)+.25,D2+.45,D2+.95,.8,1.3,'#4d7a2c');   // terracotta planters with plants
+        put(a,u,n,s+z*(hw+3.6)-1,s+z*(hw+3.6)+1,D2+.3,D2+.8,0,.5,'#2b2f3a'); put(a,u,n,s+z*(hw+3.6)-1,s+z*(hw+3.6)+1,D2+.3,D2+.4,.5,1.1,'#2b2f3a'); }                                  // benches
       put(a,u,n,s+hw+6,s+hw+6.18,6,6.18,0,13,'#d6d8da'); put(a,u,n,s+hw+6.18,s+hw+8,6,6.05,11.2,12.6,'#b22234');                      // the flagpole and its flag
-      for(const z of [-1,1]){ put(a,u,n,s+z*(hw+9)-.12,s+z*(hw+9)+.12,9,9.24,0,9,'#5a5f66'); put(a,u,n,s+z*(hw+9)-.9,s+z*(hw+9)+.9,8.9,9.3,9,9.35,'#2a2c30'); } }   // two tall parking-lot light poles with a double head
-  }
+      for(const z of [-1,1]){ put(a,u,n,s+z*(hw+9)-.12,s+z*(hw+9)+.12,9,9.24,0,9,'#5a5f66'); put(a,u,n,s+z*(hw+9)-.9,s+z*(hw+9)+.9,8.9,9.3,9,9.35,'#2a2c30'); } } }   // two tall parking-lot light poles with a double head
   // the gym's entrances and windows, from the same record the room is built from (js/enh/walk.js), so inside and outside match:
   // each door a recessed bay under a brick canopy with red-framed glass doors (owner 2026-11-24, photo of the gym wall)
   curG=1;
@@ -180,13 +232,14 @@ function details(F,P,kx,ky){
    with a double door at the entrance the plan puts on its south wall */
 function planM(F,px,py){ const [t,fx,fy]=F.T8, pu=(px-X0)/(X1-X0), pv=1-(py-Y0)/(Y1-Y0), [u,v]=t?[fy?1-pv:pv,fx?1-pu:pu]:[fx?1-pu:pu,fy?1-pv:pv], uu=u-.5, vv=v-.5;
   return [F.R.cx+F.R.ux*uu*F.R.W+F.R.vx*vv*F.R.H, F.R.cy+F.R.uy*uu*F.R.W+F.R.vy*vv*F.R.H]; }
-function gymRec(F,P,kx,ky){
-  const W=polysM(F), G=W[GYM]; if(!G) return null;
-  let cx=0,cy=0; for(const q of G.ring){ cx+=q[0]/4; cy+=q[1]/4; }
-  let p=G.ring.map(q=>[q[0]-cx,q[1]-cy]); let a=0; for(let i=0,j=p.length-1;i<p.length;j=i++) a+=(p[j][0]-p[i][0])*(p[j][1]+p[i][1]); if(a<0) p.reverse();   // counter-clockwise, as js/enh/stores.js does
+function gymRec(F,M,P,kx,ky){
+  const Gp=M.gym; if(!Gp) return null;
+  let cx=0,cy=0; for(const q of Gp.ring){ cx+=q[0]/Gp.ring.length; cy+=q[1]/Gp.ring.length; }
+  const p=Gp.ring.map(q=>[q[0]-cx,q[1]-cy]); if(area2(p)<0) p.reverse();                 // counter-clockwise, as js/enh/stores.js does
+  const n=p.length;
   // how tall the school is just outside a spot on the gym's wall (0 = open air): doors and windows go only where nothing else stands
-  const cover=(x,y)=>{ let h=0; W.forEach((o,k)=>{ if(k!==GYM&&o.h>h&&inPoly(o.ring,x+cx,y+cy)) h=o.h; }); return h; };
-  const E=p.map((A,i)=>{ const B=p[(i+1)%4], L=Math.hypot(B[0]-A[0],B[1]-A[1]), ux=(B[0]-A[0])/L, uy=(B[1]-A[1])/L; return {i,A,L,ux,uy,nx:uy,ny:-ux}; });
+  const cover=(x,y)=>{ const X=x+cx, Y=y+cy; if(!M.inReal(X,Y)) return 0; const q=M.hAt(X,Y); return q.g?0:q.h; };
+  const E=p.map((A,i)=>{ const B=p[(i+1)%n], L=Math.hypot(B[0]-A[0],B[1]-A[1]), ux=(B[0]-A[0])/L, uy=(B[1]-A[1])/L; return {i,A,L,ux,uy,nx:uy,ny:-ux}; });
   const out=(e,s,o)=>cover(e.A[0]+e.ux*s+e.nx*o,e.A[1]+e.uy*s+e.ny*o);
   const open=(e,s0,s1,hh)=>{ for(let s=s0;s<=s1+.01;s+=Math.max(.5,(s1-s0)/6)) for(const o of [.6,2.6,5.5]) if(out(e,Math.max(.3,Math.min(e.L-.3,s)),o)>=hh) return false; return true; };
   const doors=[]; let dk=0;
@@ -194,22 +247,21 @@ function gymRec(F,P,kx,ky){
     doors.push({ei:e.i,s0,s1,x0:e.A[0]+e.ux*s0,y0:e.A[1]+e.uy*s0,x1:e.A[0]+e.ux*s1,y1:e.A[1]+e.uy*s1,nx:e.nx,ny:e.ny,dk:9.5e8+dk++}); return true; };
   // the main double door, on the wall nearest the plan's gym entrance (or the nearest open bit of it)
   const D=planM(F,GB[0]+75,GB[3]+2), dp=[D[0]-cx,D[1]-cy];
-  const dist=e=>Math.abs((dp[0]-e.A[0])*e.uy-(dp[1]-e.A[1])*e.ux);
-  const me=E.slice().sort((x,y)=>dist(x)-dist(y))[0], t0=Math.max(4,Math.min(me.L-4,(dp[0]-me.A[0])*me.ux+(dp[1]-me.A[1])*me.uy));
-  for(let k=0;k<40;k++){ const c=t0+(k%2?1:-1)*Math.ceil(k/2)*1.5; if(c>4&&c<me.L-4&&open(me,c-3.4,c+3.4,.1)&&door(me,c,1.5)) break; }
-  // a pair of red-framed glass doors at 28% and 72% of both long sides, where they open to the outside (owner's photo)
-  const bi=E.reduce((b,e)=>e.L>b.L?e:b,E[0]).i;
-  for(const e of [E[bi],E[(bi+2)%4]]) for(const f of [.28,.72]){ const c=e.L*f; if(open(e,c-2.4,c+2.4,.1)) door(e,c,1); }
+  const dist=e=>{ const t=Math.max(0,Math.min(e.L,(dp[0]-e.A[0])*e.ux+(dp[1]-e.A[1])*e.uy)); return Math.hypot(e.A[0]+e.ux*t-dp[0],e.A[1]+e.uy*t-dp[1]); };
+  const me=E.filter(e=>e.L>=8).sort((x,y)=>dist(x)-dist(y))[0]; if(me){ const t0=Math.max(4,Math.min(me.L-4,(dp[0]-me.A[0])*me.ux+(dp[1]-me.A[1])*me.uy));
+    for(let k=0;k<40;k++){ const c=t0+(k%2?1:-1)*Math.ceil(k/2)*1.5; if(c>4&&c<me.L-4&&open(me,c-3.4,c+3.4,.1)&&door(me,c,1.5)) break; } }
+  // a pair of red-framed glass doors at 28% and 72% of the long sides, where they open to the outside (owner's photo)
+  for(const e of E){ if(e.L<30) continue; for(const f of [.28,.72]){ const c=e.L*f; if(open(e,c-2.4,c+2.4,.1)) door(e,c,1); } }
   // a school gym always has several doors: top every wall up to 2 (3 on the long ones), sliding along to the nearest open bit
   for(const e of E){ if(e.L<14) continue; const need=e.L>50?3:2; const have=()=>doors.filter(d=>d.ei===e.i).length;
     for(const f of [.5,.2,.8,.35,.65]){ if(have()>=need) break; for(let k=0;k<14;k++){ const c=e.L*f+(k%2?1:-1)*Math.ceil(k/2)*1.5; if(c>3&&c<e.L-3&&open(e,c-2.4,c+2.4,.1)&&door(e,c,1)) break; } } }
   // tall windows high on the walls, the same ones inside (cut through the room's walls) and out (drawn on the brick)
-  const win=[], wb=4.2, wt=Math.min(G.h-1.8,7.4);
+  const win=[], wb=4.2, wt=Math.min(Gp.h-1.8,7.4);
   for(const e of E) for(let s=4.5;s+1.2<e.L-1;s+=8.4){ const s0=s, s1=s+1.2;
     if(!open(e,s0,s1,wb-.2)) continue; if(doors.some(d=>d.ei===e.i&&s0<d.s1+1.2&&s1>d.s0-1.2)) continue;
     win.push({ei:e.i,s0,s1,b:wb,h:wt}); }
   const lng=P[0]+cx/kx, lat=P[1]+cy/ky, xs=p.map(q=>q[0]), ys=p.map(q=>q[1]);
-  return {key:'trj-gym',keys:['trj-gym'],id:null,cx:lng,cy:lat,kx,ky,p,h:G.h,house:false,zone:'school',gym:true,win,doors,garages:[],
+  return {key:'trj-gym',keys:['trj-gym'],id:null,cx:lng,cy:lat,kx,ky,p,h:Gp.h,house:false,zone:'school',gym:true,win,doors,garages:[],
     bb:[lng+Math.min(...xs)/kx,lat+Math.min(...ys)/ky,lng+Math.max(...xs)/kx,lat+Math.max(...ys)/ky]}; }
 
 function layers(){ if(map.getSource('trj')) return;
@@ -225,13 +277,17 @@ function layers(){ if(map.getSource('trj')) return;
 
 function apply(F,P,kx,ky){
   GB=F.gbox||gymBox(); PLAN=makePlan(GB); GYM=PLAN.length-1;
-  T.rec=safe('trj gym',()=>gymRec(F,P,kx,ky))||null;
-  const feats=polysOf(F,P,kx,ky).map((o,k)=>({type:'Feature',properties:{h:o.h,g:k===GYM?1:0},geometry:{type:'Polygon',coordinates:[o.ring]}}));
+  const M=model(F); T.M=M;
+  const ring=g=>{ const r=g.map(([x,y])=>[+(P[0]+x/kx).toFixed(7),+(P[1]+y/ky).toFixed(7)]); r.push(r[0]); return r; };
+  const feats=M.blocks.map(o=>({type:'Feature',properties:{h:o.h,g:0},geometry:{type:'Polygon',coordinates:[ring(o.ring)]}}));
+  if(M.gym) feats.push({type:'Feature',properties:{h:M.gym.h,g:1},geometry:{type:'Polygon',coordinates:[ring(M.gym.ring)]}});
+  if(!feats.length){ console.warn('traughber: no blocks from the footprint'); return; }
+  T.rec=safe('trj gym',()=>gymRec(F,M,P,kx,ky))||null;
   // the map's own pieces of the school that buildings.js should leave out (only those: the houses sharing their id stay)
   T.keys=F.keys; T.sll=F.sll; T.ll=feats.map(f=>f.geometry.coordinates[0]); let a=1e9,b=1e9,c=-1e9,d=-1e9; for(const r of T.ll) for(const q of r){ a=Math.min(a,q[0]); b=Math.min(b,q[1]); c=Math.max(c,q[0]); d=Math.max(d,q[1]); }
   T.bb=[a,b,c,d]; T.ver++;
   layers(); map.getSource('trj').setData({type:'FeatureCollection',features:feats});
-  safe('trj details',()=>map.getSource('trjd').setData({type:'FeatureCollection',features:details(F,P,kx,ky)}));
+  safe('trj details',()=>map.getSource('trjd').setData({type:'FeatureCollection',features:details(F,M,P,kx,ky)}));
   HIDE.pin=F.ids.slice(); applyHides(); if(window.ROOFS&&ROOFS.build) safe('trj rebuild',()=>ROOFS.build()); dirty=true; }
 
 function scan(){
