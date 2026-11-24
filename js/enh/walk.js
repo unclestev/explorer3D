@@ -319,7 +319,7 @@ function roomLook(r,SH){
   else if(kind==='school'){ const w=pickOf([['#efe7cf','#c8b58d'],['#e9eef0','#7f9db5'],['#efe9dd','#8aa58a']],R), chk=R()<.4; L.HC=Math.max(2.6,Math.min(3.6,H-.4));                  // the ground floor of a two-storey school
     L.wallM=imat('block','#ffffff',w[0],w[1]); L.floorM=imat('vct','#ffffff',chk?'chk':'spk',0,.18); L.ceilM=storeMat('ceil');
     if(r.gym){ L.trof=false; L.HC=Math.max(6,Math.min(9.5,H-.9)); L.floorM=imat('planks','#e0b070',0,0,.2); L.ceilM=imat('deck','#e4e4e4'); } }   // the gymnasium: a varnished wood floor under a high roof deck
-  else if(kind==='arena'){ L.trof=false; L.HC=1.15; L.wallM=imat('block','#ffffff','#dfe3e6','#8f9aa3'); L.floorM=imat('concrete','#cfcfcb',0,0,.2); L.ceilM=imat('deck','#d8dde2'); }   // an ice arena: waist-high cut-away walls (you watch from the chase camera), concrete concourse, no ceiling
+  else if(kind==='arena'){ L.trof=false; L.HC=Math.max(7,Math.min(11,H-.8)); L.wallM=imat('block','#ffffff','#dfe3e6','#8f9aa3'); L.floorM=imat('concrete','#cfcfcb',0,0,.2); L.ceilM=imat('deck','#d8dde2'); }   // an ice arena: full-height block walls (nothing outside is drawn from first person), concrete concourse, a roof deck that hides while you skate (chase camera)
   else if(kind==='office'){ L.HC=3; L.wallM=imat('drywall',pickOf(['#f4f3f0','#e6e8ea','#eee9df'],R)); L.floorM=imat('ctile',pickOf(['#9aa0a6','#7b8794','#a39d92','#6a6e73'],R),0,0,.18); L.ceilM=storeMat('ceil'); }
   else if(kind==='industrial'){ L.HC=Math.max(3.4,Math.min(5,H-.6)); L.wallM=imat('metal',pickOf(['#cfd3d6','#d8d0bf','#b9c3cc'],R)); L.floorM=imat('concrete','#d4d4d0',0,0,.18); L.ceilM=imat('deck','#dcdcdc'); }
   else { const f=pickOf([['vct','#ffffff','chk'],['vct','#efe4cc','spk'],['concrete','#d0d0cc'],['planks','#dcc7a6']],R); L.HC=Math.max(2.6,Math.min(3.3,H-.4));   // shop
@@ -415,12 +415,12 @@ function buildRoom(r){
   if(ROOM.key===r.key&&ROOM.g) return; dropRoom();
   const SH=window.STORES&&STORES.own?STORES.own(r):null;      // a Meijer (js/enh/stores.js): high dropped ceiling, troffer lights
   itexTrim(); const LK=roomLook(r,SH);                           // floor, wall and ceiling textures for this kind of building, picked from its key
-  const g=new THREE.Group(), p=r.p, HC=LK.HC, DH=LK.kind==='arena'?HC:2.12, TH2=.2;
+  const g=new THREE.Group(), p=r.p, HC=LK.HC, DH=2.12, TH2=.2;
   const wallM=LK.wallM, ceilM=LK.ceilM, trimM=rmat('trim',0xfbfaf7,0x3a3a3a), floorM=LK.floorM;
   // floor and ceiling from the outline
   const sh=new THREE.Shape(p.map(q=>new THREE.Vector2(q[0],q[1])));
   const fl=new THREE.Mesh(new THREE.ShapeGeometry(sh),floorM); fl.rotation.x=-Math.PI/2; fl.position.y=.01; g.add(fl);   // shape (x, y=north) -> (x, z=-north)
-  const ce=new THREE.Mesh(new THREE.ShapeGeometry(sh),ceilM); ce.rotation.x=-Math.PI/2; ce.position.y=HC; if(LK.kind!=='arena') g.add(ce);
+  const ce=new THREE.Mesh(new THREE.ShapeGeometry(sh),ceilM); ce.rotation.x=-Math.PI/2; ce.position.y=HC; g.add(ce); g.userData.ce=ce;
   // walls along the outline, with the doorways (and garage openings) cut out; jambs give them depth
   const wall=[], wuv=[], trim=[], wq=(a,b,y0,y1,u0,u1)=>{ quad(wall,a,b,y0,y1); wuv.push(u0,y0,u1,y0,u1,y1,u0,y0,u1,y1,u0,y1); }, ways=r.doors.map(d=>({d,h:DH,gar:false})).concat((r.garages||[]).map(d=>({d,h:2.2,gar:true})));
   for(let i=0;i<p.length;i++){ const a=p[i], b=p[(i+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1]); if(L<.05) continue;
@@ -450,7 +450,7 @@ function buildRoom(r){
   LKEY=r.key; { const sv=LSWS[r.key]; LSW[0]=sv?sv[0]:true; LSW[1]=sv?sv[1]:true; }     // each building keeps its own switch positions
   ROOM.dimM=[wallM,floorM,ceilM]; ROOM.gm=r.gym&&GYMM.list?GYMM.list.concat([rmat('truss',0xeeeeea,0x2a2a28)]):null;
   if(LK.trof){ troffers(g,p,HC); switches(g,r,HC,2); if(SH) greeterFig(g,r,SH); }
-  else if(LK.kind!=='arena'){ let cx=0,cy=0; for(const q of p){ cx+=q[0]; cy+=q[1]; } cx/=p.length; cy/=p.length;       // a ceiling light in the middle of the room
+  else { let cx=0,cy=0; for(const q of p){ cx+=q[0]; cy+=q[1]; } cx/=p.length; cy/=p.length;       // a ceiling light in the middle of the room
     if(inP(p,cx,cy)&&!r.gym){ const [x3,z3]=to3(cx,cy);
       const base=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,.03,24),trimM); base.position.set(x3,HC-.015,z3); g.add(base);
       const globe=new THREE.Mesh(new THREE.SphereGeometry(.17,20,10,0,Math.PI*2,Math.PI/2,Math.PI/2),new THREE.MeshBasicMaterial({color:0xfff6df,side:THREE.DoubleSide}));
@@ -464,7 +464,7 @@ function buildRoom(r){
   ROOM.leaves=[];
   const SEE=()=>STX.see||(STX.see=new THREE.MeshLambertMaterial({color:0x9db4c6,transparent:true,opacity:.22,depthWrite:false,side:THREE.DoubleSide}));   // clear glass
   const AUTO=!!r.store;                                              // store entrances are automatic: no knobs, they open by themselves
-  for(const d of (LK.kind==='arena'?[]:r.doors)){ const W0=d.s1-d.s0, two=W0>1.5, lw=two?(W0-.06)/2:W0-.04, glass=two||AUTO;
+  for(const d of r.doors){ const W0=d.s1-d.s0, two=W0>1.5, lw=two?(W0-.06)/2:W0-.04, glass=two||AUTO;
     const leafM=glass?rmat('glassdoor',0x2f3e4e,0x0a1420):rmat('door',0x7a5236,0x1a120c);
     const L=Math.hypot(d.x1-d.x0,d.y1-d.y0)||1, ux=(d.x1-d.x0)/L, uy=(d.y1-d.y0)/L;
     for(const side of two?[0,1]:[0]){
@@ -482,7 +482,7 @@ function buildRoom(r){
       pv.rotation.y=angC; g.add(pv); ROOM.leaves.push({pv,angC,dA,d,o:0,auto:AUTO}); } }
   // lit EXIT signs on the inside, over every way out (owner 2026-11-23). Unlit-material boxes: they are not part of ROOM.tro /
   // ROOM.dimM, so the light switches never touch them — always on, like the real ones on their own circuit.
-  for(const d of (LK.kind==='arena'?[]:r.doors)){ const a=p[d.ei], b=p[(d.ei+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1])||1, ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux, t=(d.s0+d.s1)/2;
+  for(const d of r.doors){ const a=p[d.ei], b=p[(d.ei+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1])||1, ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux, t=(d.s0+d.s1)/2;
     const [x3,z3]=to3(a[0]+ux*t-nx*(TH2+.026),a[1]+uy*t-ny*(TH2+.026)), [dx3,dz3]=to3(-nx,-ny), y3=Math.min(DH+.3,HC-.13), ry=Math.atan2(dx3,dz3);   // facing into the room
     const sg=new THREE.Mesh(new THREE.BoxGeometry(.36,.16,.05),exitMats()); sg.position.set(x3,y3,z3); sg.rotation.y=ry; g.add(sg);
     const gl=new THREE.Mesh(new THREE.PlaneGeometry(.95,.6),exitGlow()); gl.position.set(x3+dx3*.04,y3,z3+dz3*.04); gl.rotation.y=ry; gl.renderOrder=4; g.add(gl); }
@@ -861,7 +861,8 @@ function walkStep(dt,st,gas,now){
     step.near=null; updateBtn();
   }
 
-  const chaseIn=!!(IN.rec&&window.RINK&&RINK.chase(IN.rec));
+  const chaseIn=!!(IN.rec&&W.medium==='ice'&&window.RINK&&RINK.chase(IN.rec));      // first person in the building; the chase camera only once you're on the ice
+  if(ROOM.g&&ROOM.g.userData.ce) ROOM.g.userData.ce.visible=!chaseIn;               // roof off while skating so the camera can see in; the walls stay up
   let camMoved=true;
   if(IN.rec&&!chaseIn) fpCam(dt);                                   // inside: through your own eyes (see fpCam); in an ice arena the chase camera stays (the rink)
   else {
