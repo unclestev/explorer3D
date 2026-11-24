@@ -701,5 +701,5 @@ onTick(700,function roofTick(){
 const prev=window.onPowerChange;
 window.onPowerChange=(on)=>{ if(prev) prev(on); R.at=null; R.last=''; R.parts=null; CACHE.clear(); W.cache.clear(); W.sig=''; glowVis(); };   // also: wall textures off in battery saver   // slice count / unit count change
 // doorsNear: every walk-in building near you, with a store's own way in when it has no door here (js/enh/stores.js)
-window.ROOFS={build,state:R,walls:W,st0:()=>R.reg||[],doorsNear:()=>{ const b=R.reg||[]; return window.STORES&&STORES.list.length?b.filter(r=>!STORES.covers(r)).concat(STORES.recs()):b; },openDoor};
+window.ROOFS={build,state:R,walls:W,st0:()=>R.reg||[],doorsNear:()=>{ const b=R.reg||[]; const o=window.STORES&&STORES.list.length?b.filter(r=>!STORES.covers(r)).concat(STORES.recs()):b; const T=window.TRJ; return T&&T.recs?o.filter(r=>!(T.covers&&T.covers(r))).concat(T.recs()):o; },openDoor};
 })();

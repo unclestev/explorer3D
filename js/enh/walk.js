@@ -163,6 +163,7 @@ function restLayers(){
 }
 function hideBuilding(r){
   const id=r?r.id:null;
+  if(window.TRJ&&TRJ.hide) safe('trj hide',()=>TRJ.hide(!!(r&&r.key==='trj-gym')));
   HIDE.walk=id; applyHides();                                       // js/game.js: with the smashed ones and the redrawn groups
   if(map.getLayer('roof-3d')) safe('inside roofs',()=>map.setFilter('roof-3d',r?['!',['in',['coalesce',['get','bk'],''],['literal',(r.keys||[]).concat([r.key])]]]:null));
   // the rest of the group
@@ -281,12 +282,75 @@ function roomLook(r,SH){
   else if(kind==='store'){ L.HC=Math.max(3.6,Math.min(5,H-1.4)); L.wallM=imat('drywall','#ddd5c0'); L.floorM=storeMat('floor'); L.ceilM=storeMat('ceil'); }
   else if(kind==='school'){ const w=pickOf([['#efe7cf','#c8b58d'],['#e9eef0','#7f9db5'],['#efe9dd','#8aa58a']],R), chk=R()<.4; L.HC=Math.max(2.6,Math.min(3.6,H-.4));                  // the ground floor of a two-storey school
     L.wallM=imat('block','#ffffff',w[0],w[1]); L.floorM=imat('vct','#ffffff',chk?'chk':'spk',0,.18); L.ceilM=storeMat('ceil');
-    if(r.gym){ L.HC=Math.max(6,Math.min(9.5,H-.9)); L.floorM=imat('planks','#e0b070',0,0,.2); L.ceilM=imat('deck','#e4e4e4'); } }   // the gymnasium: a varnished wood floor under a high roof deck
+    if(r.gym){ L.trof=false; L.HC=Math.max(6,Math.min(9.5,H-.9)); L.floorM=imat('planks','#e0b070',0,0,.2); L.ceilM=imat('deck','#e4e4e4'); } }   // the gymnasium: a varnished wood floor under a high roof deck
   else if(kind==='office'){ L.HC=3; L.wallM=imat('drywall',pickOf(['#f4f3f0','#e6e8ea','#eee9df'],R)); L.floorM=imat('ctile',pickOf(['#9aa0a6','#7b8794','#a39d92','#6a6e73'],R),0,0,.18); L.ceilM=storeMat('ceil'); }
   else if(kind==='industrial'){ L.HC=Math.max(3.4,Math.min(5,H-.6)); L.wallM=imat('metal',pickOf(['#cfd3d6','#d8d0bf','#b9c3cc'],R)); L.floorM=imat('concrete','#d4d4d0',0,0,.18); L.ceilM=imat('deck','#dcdcdc'); }
   else { const f=pickOf([['vct','#ffffff','chk'],['vct','#efe4cc','spk'],['concrete','#d0d0cc'],['planks','#dcc7a6']],R); L.HC=Math.max(2.6,Math.min(3.3,H-.4));   // shop
     L.wallM=imat('drywall',pickOf(['#f3f1ec','#e3e5e6','#ece2cf','#dbe6ef'],R)); L.floorM=f[0]==='vct'?imat('vct',f[1],f[2],0,.18):imat(f[0],f[1],0,0,.18); L.ceilM=storeMat('ceil'); }
   return L; }
+/* the gymnasium (owner 2026-11-23, two photos of Traughber's gym): tan block walls with a dark stripe under white upper walls with
+   tall black acoustic panels, tall narrow windows high up, a black wall pad, banners, a flag, folded bleachers along a wall, a
+   scoreboard, a maple floor with the court lines, hoops, and white steel roof trusses with round high-bay lights hung from them */
+function gymDecor(g,p,HC,r,TH2){
+  const o=TH2+.014, tan=[], stripe=[], panel=[], pad=[], win=[], ban=[], gold=[];
+  const gaps=i=>(r.doors||[]).filter(d=>d.ei===i).map(d=>[d.s0-.15,d.s1+.15]).sort((a,b)=>a[0]-b[0]);
+  let best=0, bi=0, minx=1e9,maxx=-1e9,miny=1e9,maxy=-1e9, cx=0, cy=0;
+  for(const q of p){ minx=Math.min(minx,q[0]); maxx=Math.max(maxx,q[0]); miny=Math.min(miny,q[1]); maxy=Math.max(maxy,q[1]); cx+=q[0]; cy+=q[1]; } cx/=p.length; cy/=p.length;
+  for(let i=0;i<p.length;i++){ const a=p[i], b=p[(i+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1]); if(L>best){ best=L; bi=i; } }
+  const PH=Math.min(HC-1.2,7.6);
+  for(let i=0;i<p.length;i++){ const a=p[i], b=p[(i+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1]); if(L<3) continue;
+    const ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux, at=(t,off)=>[a[0]+ux*t-nx*off,a[1]+uy*t-ny*off];
+    const spans=[]; { let t=.2; for(const [g0,g1] of gaps(i)){ if(g0>t) spans.push([t,g0]); t=Math.max(t,g1); } if(L-.2>t) spans.push([t,L-.2]); }
+    for(const [t0,t1] of spans){ quad(tan,at(t0,o),at(t1,o),0,2.9); quad(stripe,at(t0,o),at(t1,o),2.9,3.25); }
+    const free=(s0,s1)=>(r.doors||[]).every(d=>d.ei!==i||s1<d.s0-.3||s0>d.s1+.3);
+    for(let s=2.4,k=0;s+1.3<L-1;s+=4.2,k++){ if(!free(s,s+1.3)) continue; quad(panel,at(s,o+.004),at(s+1.3,o+.004),3.5,PH);                        // the tall black panels
+      if(k%2===0&&s+3.4<L-1&&free(s+2.1,s+3.3)) quad(win,at(s+2.1,o+.004),at(s+3.3,o+.004),4.2,PH-.2); }                                       // a tall window between a pair of them
+    if(i===bi){ const m=L/2; quad(pad,at(m-6,o+.004),at(m+6,o+.004),.15,2.7); }                                                                  // the black wall pad
+    if(i===(bi+2)%p.length||i===bi) for(let s=3;s+.9<L-2;s+=1.7) if(free(s,s+.9)){ quad(ban,at(s,o+.006),at(s+.9,o+.006),3.5,4.6); quad(gold,at(s+.2,o+.008),at(s+.7,o+.008),3.85,4.3); }   // black and gold banners
+  }
+  const mk=(arr,col,emi)=>{ if(arr.length) g.add(meshOf(arr,rmat('gym'+col,col,emi||0x000000))); };
+  mk(tan,0xc9a468,0x4a3c20); mk(stripe,0x1d2026,0x08090b); mk(panel,0x14161a,0x040405); mk(pad,0x111317,0x030304);
+  if(win.length){ const m=new THREE.MeshBasicMaterial({color:0xc9def0,side:THREE.DoubleSide}); g.add(meshOf(win,m)); }                              // daylight in the windows
+  mk(ban,0x15171b,0x050506); mk(gold,0xd7b24a,0x4a3c10);
+  // the floor: court lines on the maple, along the room's long side
+  const W=maxx-minx, Hh=maxy-miny, a0=p[bi], a1=p[(bi+1)%p.length], ang=Math.atan2(a1[1]-a0[1],a1[0]-a0[0]), CL=Math.min(28,best-4), CW=Math.min(15,(Math.min(W,Hh)>0?Math.min(W,Hh):15)-3);
+  { const c=document.createElement('canvas'); c.width=1024; c.height=Math.round(1024*CW/CL); const x=c.getContext('2d'), sx=c.width/CL, sy=c.height/CW;
+    x.strokeStyle='#1d1a16'; x.fillStyle='rgba(0,0,0,0)'; x.lineWidth=5; x.strokeRect(4,4,c.width-8,c.height-8);
+    x.beginPath(); x.moveTo(c.width/2,0); x.lineTo(c.width/2,c.height); x.stroke();
+    x.beginPath(); x.arc(c.width/2,c.height/2,1.8*sx,0,7); x.stroke();
+    for(const e of [0,1]){ const X=e?c.width:0, d=e?-1:1; x.strokeRect(e?X-5.8*sx:X,c.height/2-2.45*sy,5.8*sx,4.9*sy);
+      x.beginPath(); x.arc(X+d*5.8*sx,c.height/2,1.8*sx,e?Math.PI/2:-Math.PI/2,e?Math.PI*1.5:Math.PI/2); x.stroke();
+      x.beginPath(); x.arc(X+d*1.6*sx,c.height/2,6.0*sx,e?Math.PI*.64:-Math.PI*.36,e?Math.PI*1.36:Math.PI*.36); x.stroke(); }
+    const t=new THREE.CanvasTexture(c); t.anisotropy=8;
+    const m=new THREE.Mesh(new THREE.PlaneGeometry(CL,CW),new THREE.MeshBasicMaterial({map:t,transparent:true,opacity:.75,depthWrite:false}));
+    m.rotation.x=-Math.PI/2; m.rotation.z=ang; m.position.set(cx,.016,-cy); m.renderOrder=2; g.add(m); }
+  // folded bleachers along one long wall, a scoreboard high on a short wall, hoops at each end
+  { const i=(bi+2)%p.length, a=p[i], b=p[(i+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1]), ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux;
+    const mx=a[0]+ux*L/2-nx*(TH2+.9), my=a[1]+uy*L/2-ny*(TH2+.9), bl=Math.min(L*.7,40);
+    const bl3=new THREE.Mesh(new THREE.BoxGeometry(bl,3.2,1.5),rmat('bleach',0x1c2433,0x0a0e16)); bl3.position.set(mx,1.6,-my); bl3.rotation.y=Math.atan2(uy,ux); g.add(bl3);
+    for(const y of [.8,1.6,2.4]){ const rl=new THREE.Mesh(new THREE.BoxGeometry(bl,.05,.04),rmat('rail',0x2d5fd0,0x102050)); rl.position.set(mx+nx*.77,y,-(my+ny*.77)); rl.rotation.y=bl3.rotation.y; g.add(rl); } }
+  { const sh=(bi+1)%p.length, a=p[sh], b=p[(sh+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1]), ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux;
+    const c=document.createElement('canvas'); c.width=256; c.height=96; const x=c.getContext('2d'); x.fillStyle='#0c0d10'; x.fillRect(0,0,256,96); x.fillStyle='#e8a43a'; x.font='bold 30px monospace'; x.fillText('GUEST   HOME',22,36); x.font='bold 36px monospace'; x.fillText(' 00  P1  00',22,80);
+    const m=new THREE.Mesh(new THREE.PlaneGeometry(2.6,1),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c)})); const q=[a[0]+ux*L/2-nx*(TH2+.03),a[1]+uy*L/2-ny*(TH2+.03)];
+    m.position.set(q[0],Math.min(HC-2.2,6.2),-q[1]); m.lookAt(cx,m.position.y,-cy); g.add(m); }
+  for(const e of [-1,1]){ const hx=cx+Math.cos(ang)*e*(CL/2-1.2), hy=cy+Math.sin(ang)*e*(CL/2-1.2);
+    const bb=new THREE.Mesh(new THREE.BoxGeometry(.06,1.05,1.8),rmat('board',0xf0f0f0,0x303030)); bb.position.set(hx,3.6,-hy); bb.rotation.y=-ang; g.add(bb);
+    const rim=new THREE.Mesh(new THREE.TorusGeometry(.23,.015,6,20),rmat('rim',0xe8571a,0x401808)); rim.rotation.x=Math.PI/2; rim.position.set(hx-Math.cos(ang)*e*.45,3.05,-(hy-Math.sin(ang)*e*.45)); g.add(rim); }
+  // the roof: white steel trusses across the short way every 6 m, with round high-bay lights hung under them
+  { const sp=Math.min(W,Hh)<best?Math.min(W,Hh):W, ux=Math.cos(ang), uy=Math.sin(ang), vx=-uy, vy=ux, nT=Math.max(2,Math.floor(best/6)), span=Math.max(10,Math.min(Math.hypot(maxx-minx,maxy-miny),sp)), yb=HC-1.4, yt=HC-.2, seg=Math.max(4,Math.round(span/2.4));
+    const trussM=rmat('truss',0xeeeeea,0x2a2a28), boxG=new THREE.BoxGeometry(1,.09,.09), dm=new THREE.Object3D();
+    const chords=new THREE.InstancedMesh(boxG,trussM,nT*2), diags=new THREE.InstancedMesh(boxG,trussM,nT*seg);
+    let ci=0, di=0; const bulbs=[];
+    for(let k=0;k<nT;k++){ const t=-best/2+(k+.5)*best/nT, px=cx+ux*t, py=cy+uy*t;                                                           // this truss's middle
+      for(const y of [yb,yt]){ dm.position.set(px,y,-py); dm.rotation.set(0,Math.atan2(vy,vx),0); dm.scale.set(span,1,1); dm.updateMatrix(); chords.setMatrixAt(ci++,dm.matrix); }
+      for(let j=0;j<seg;j++){ const s0=-span/2+j*span/seg, s1=s0+span/seg, up=j%2===0, ya=up?yb:yt, yc=up?yt:yb, ex=px+vx*(s0+s1)/2, ey=py+vy*(s0+s1)/2, L2=Math.hypot(span/seg,yc-ya);
+        dm.position.set(ex,(ya+yc)/2,-ey); dm.rotation.set(0,Math.atan2(vy,vx),0); dm.rotateZ(Math.atan2(yc-ya,span/seg)); dm.scale.set(L2,1,1); dm.updateMatrix(); diags.setMatrixAt(di++,dm.matrix);
+        if(j%4===1&&k%2===0) bulbs.push([ex,ey]); } }
+    chords.count=ci; diags.count=di; chords.instanceMatrix.needsUpdate=diags.instanceMatrix.needsUpdate=true; chords.frustumCulled=diags.frustumCulled=false; g.add(chords); g.add(diags);
+    const lm=new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide}), lights=new THREE.InstancedMesh(new THREE.CircleGeometry(.34,18),lm,Math.max(1,bulbs.length));
+    bulbs.forEach(([bx,by],i)=>{ dm.position.set(bx,yb-.06,-by); dm.rotation.set(Math.PI/2,0,0); dm.scale.set(1,1,1); dm.updateMatrix(); lights.setMatrixAt(i,dm.matrix); }); lights.instanceMatrix.needsUpdate=true; lights.frustumCulled=false; g.add(lights);
+    ROOM.tro=[lm]; }
+}
 function buildRoom(r){
   if(ROOM.key===r.key&&ROOM.g) return; dropRoom();
   const SH=window.STORES&&STORES.at?STORES.at(r.key):null;      // a Meijer (js/enh/stores.js): high dropped ceiling, troffer lights
@@ -322,11 +386,12 @@ function buildRoom(r){
     quad(trim,at(0,TH2+.005),at(L,TH2+.005),0,.09);                 // skirting board
   }
   g.add(meshOf(wall,wallM,wuv)); g.add(meshOf(trim,trimM));
+  if(r.gym) safe('gym',()=>gymDecor(g,p,HC,r,TH2));
   LKEY=r.key; { const sv=LSWS[r.key]; LSW[0]=sv?sv[0]:true; LSW[1]=sv?sv[1]:true; }     // each building keeps its own switch positions
   ROOM.dimM=[wallM,floorM,ceilM];
   if(LK.trof){ troffers(g,p,HC); switches(g,r,HC,2); if(SH) greeterFig(g,r,SH); }
   else { let cx=0,cy=0; for(const q of p){ cx+=q[0]; cy+=q[1]; } cx/=p.length; cy/=p.length;       // a ceiling light in the middle of the room
-    if(inP(p,cx,cy)){ const [x3,z3]=to3(cx,cy);
+    if(inP(p,cx,cy)&&!r.gym){ const [x3,z3]=to3(cx,cy);
       const base=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,.03,24),trimM); base.position.set(x3,HC-.015,z3); g.add(base);
       const globe=new THREE.Mesh(new THREE.SphereGeometry(.17,20,10,0,Math.PI*2,Math.PI/2,Math.PI/2),new THREE.MeshBasicMaterial({color:0xfff6df,side:THREE.DoubleSide}));
       globe.position.set(x3,HC-.03,z3); g.add(globe); ROOM.tro=[globe.material]; }          // one light, one switch by the door
