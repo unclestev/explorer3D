@@ -115,6 +115,17 @@ function details(F,P,kx,ky){
     for(const z of [-1,1]){ put(a,u,n,z<0?s-1.45:s+.1,z<0?s-.1:s+1.45,.06,.12,.05,2.65,RED); put(a,u,n,z<0?s-1.3:s+.25,z<0?s-.25:s+1.3,.12,.16,.45,2.45,GLASS); }   // two red glass doors flush on the wall
     put(a,u,n,s-hw+.9,s+hw-.9,.06,.12,2.95,3.5,GLASS);                                                  // a window over them
   }
+  // the gym's side entrances (owner 2026-11-24, photo of the gym wall): on its two long sides, a recessed bay under a brick canopy with a pair of red-framed glass doors,
+  // at the same spots as the red door pairs inside the gym (js/enh/walk.js gymDecor: 28% and 72% along the longest wall and the one opposite)
+  safe('trj gym doors',()=>{ const G=T.rec; if(!G) return; const gx=(G.cx-P[0])*kx, gy=(G.cy-P[1])*ky, q=G.p; let bi=0,best=0;
+    for(let i=0;i<q.length;i++){ const L=Math.hypot(q[(i+1)%q.length][0]-q[i][0],q[(i+1)%q.length][1]-q[i][1]); if(L>best){ best=L; bi=i; } }
+    for(const i of [bi,(bi+2)%q.length]){ const A=q[i], B=q[(i+1)%q.length], L=Math.hypot(B[0]-A[0],B[1]-A[1]), u=[(B[0]-A[0])/L,(B[1]-A[1])/L], n=[u[1],-u[0]], a=[gx+A[0],gy+A[1]];
+      for(const f of [.28,.72]){ const c=L*f, hw=2.1, hh=3.4, D=1.5;                                   // a tidy bay: dark recess, two slim piers, one flat canopy, the door pair
+        put(a,u,n,c-hw,c+hw,-.3,.06,0,2.8,DARK);
+        put(a,u,n,c-hw,c-hw+.5,.02,D,0,hh,BRICKC); put(a,u,n,c+hw-.5,c+hw,.02,D,0,hh,BRICKC);
+        put(a,u,n,c-hw,c+hw,.02,D,hh-.5,hh,BRICKC); put(a,u,n,c-hw,c+hw,D-.04,D+.02,hh-.5,hh-.2,BAND);
+        for(const z of [-1,1]){ put(a,u,n,z<0?c-1:c+.04,z<0?c-.04:c+1,.06,.12,.05,2.45,RED); put(a,u,n,z<0?c-.88:c+.16,z<0?c-.16:c+.88,.12,.16,.4,2.25,GLASS); } } }
+  });
   return feats; }
 
 /* the gym is a room you can walk into (js/enh/walk.js furnishes it from the owner's photos): the big block on the left of the plan,
