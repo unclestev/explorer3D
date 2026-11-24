@@ -165,6 +165,10 @@ function ownRec(s){ const kx=111320*Math.cos(s.cy*Math.PI/180), ky=111320;
   const mk=(s0,s1,k)=>({ei:E.ei,s0,s1,x0:E.a[0]+E.ux*s0,y0:E.a[1]+E.uy*s0,x1:E.a[0]+E.ux*s1,y1:E.a[1]+E.uy*s1,nx:E.nx,ny:E.ny,dk:9e8+ST.list.indexOf(s)*2+k});
   const d=mk(sm-2.6,sm-.5,0), d2=mk(sm+.5,sm+2.3,1);       // the left pair a little wider, as in the photo
   // the doors js/enh/buildings.js drew on the store's pieces work too, where they lie on the outline
+  // a big overhead garage door (a loading door) on the parking-lot wall, left of the entrance, that opens with the garage opener and lets you drive in
+  const garages=[]; { const gw=4, gs0=sm-12.5, gs1=gs0+gw;
+    if(gs0>1.2){ let depth=0; const mx=E.a[0]+E.ux*(gs0+gw/2), my=E.a[1]+E.uy*(gs0+gw/2); for(const q of p) depth=Math.max(depth,-((q[0]-mx)*E.nx+(q[1]-my)*E.ny));
+      garages.push({ei:E.ei,s0:gs0,s1:gs1,x0:E.a[0]+E.ux*gs0,y0:E.a[1]+E.uy*gs0,x1:E.a[0]+E.ux*gs1,y1:E.a[1]+E.uy*gs1,nx:E.nx,ny:E.ny,gk:8e8+ST.list.indexOf(s),col:'#e7e4dc',D:Math.max(6,Math.min(70,depth-.4))}); } }
   const doors=[d,d2], base=window.ROOFS&&ROOFS.st0?ROOFS.st0():[];
   for(const r of base){ if(!covers(r)) continue;
     for(const q of r.doors||[]){ const mx=(q.x0+q.x1)/2, my=(q.y0+q.y1)/2, lng=r.cx+mx/r.kx, lat=r.cy+my/r.ky, X=(lng-s.cx)*kx, Y=(lat-s.cy)*ky, hw=Math.hypot(q.x1-q.x0,q.y1-q.y0)/2;
@@ -172,7 +176,7 @@ function ownRec(s){ const kx=111320*Math.cos(s.cy*Math.PI/180), ky=111320;
         const t=(X-a[0])*ux+(Y-a[1])*uy, off=(X-a[0])*uy-(Y-a[1])*ux; if(t<hw+.2||t>L-hw-.2||Math.abs(off)>.8) continue;
         if(doors.some(o=>o.ei===i&&Math.abs((o.s0+o.s1)/2-t)<3.5)) break;
         doors.push({ei:i,s0:t-hw,s1:t+hw,x0:a[0]+ux*(t-hw),y0:a[1]+uy*(t-hw),x1:a[0]+ux*(t+hw),y1:a[1]+uy*(t+hw),nx:uy,ny:-ux,dk:q.dk}); break; } } }
-  return {key:s.key,keys:s.keys,id:s.id,cx:s.cx,cy:s.cy,kx,ky,p,h:s.h||hOf(s),house:false,doors,garages:[],bb:s.bb,store:true,brand:s.brand,E,sm}; }
+  return {key:s.key,keys:s.keys,id:s.id,cx:s.cx,cy:s.cy,kx,ky,p,h:s.h||hOf(s),house:false,doors,garages,bb:s.bb,store:true,brand:s.brand,E,sm}; }
 // the store's pieces come in as their tiles load: look again (at most every 4 s) and grow the outline to take them in
 function regrow(s){ const now=performance.now(); if(now-(s.gT||0)<4000) return; s.gT=now;
   const r=buildingFor(s.cx,s.cy); if(!r) return; const k=keyOf(r); const kk=(r.keys||[]).join('|');
@@ -190,7 +194,7 @@ function hOf(s){ let h=0; try{ for(const f of map.querySourceFeatures(bSrc,{sour
 // the glass double doors on the map (dark frame, two glass leaves, push bars), like buildings.js draws its own
 function drawDoors(){ const feats=[]; ST.cache=[];
   for(const r of recs()){ const E=r.E, sm=r.sm, toLL=q=>[+(r.cx+q[0]/r.kx).toFixed(7),+(r.cy+q[1]/r.ky).toFixed(7)];
-    const o=ST.op[r.key]||0; ST.cache.push({key:r.key,lng:r.cx+(E.a[0]+E.ux*sm)/r.kx,lat:r.cy+(E.a[1]+E.uy*sm)/r.ky});
+    const o=ST.op[r.key]||0; ST.cache.push({gks:[],key:r.key,lng:r.cx+(E.a[0]+E.ux*sm)/r.kx,lat:r.cy+(E.a[1]+E.uy*sm)/r.ky});
     const put=(s0,s1,o0,o1,b,h,c,g)=>{ if(s1-s0<.02) return; const a=[E.a[0]+E.ux*s0,E.a[1]+E.uy*s0], z=[E.a[0]+E.ux*s1,E.a[1]+E.uy*s1];
       const ring=[[a[0]+E.nx*o0,a[1]+E.ny*o0],[z[0]+E.nx*o0,z[1]+E.ny*o0],[z[0]+E.nx*o1,z[1]+E.ny*o1],[a[0]+E.nx*o1,a[1]+E.ny*o1]].map(toLL); ring.push(ring[0]);
       feats.push({type:'Feature',properties:{c,b,h,g:g?1:0},geometry:{type:'Polygon',coordinates:[ring]}}); };
@@ -211,7 +215,14 @@ function drawDoors(){ const feats=[]; ST.cache=[];
       put(cm-.05,cm+.05,.2,.3,0,.95,BK); }                                                               // black post between each pair's doors
     put(sm+.5,sm+.56,.1,1.9,0,1.05,BK); put(sm+2.3,sm+2.36,.1,1.9,0,1.05,BK);                            // the black gates in front of the exit doors
     put(sm+.56,sm+2.3,1.84,1.9,0,1.05,BK);
-    put(sm-2.85,sm+2.85,.06,.9,4.7,4.9,'#c9ccd0'); }                                                     // a little canopy edge over them
+    put(sm-2.85,sm+2.85,.06,.9,4.7,4.9,'#c9ccd0');
+    for(const q of r.garages){ const go=window.GARAGE?GARAGE.openness(q.gk):0, H=2.4, rise=go*(H-.1), a0=q.s0, a1=q.s1;      // the overhead door rolls up out of the opening
+      ST.cache[ST.cache.length-1].gks.push(q.gk);
+      put(a0-.2,a1+.2,.03,.14,0,2.75,AL);                                                                // white surround
+      put(a0,a1,.05,.1,0,H,'#101215');                                                                   // the dark store behind
+      put(a0,a1,.1,.15,rise,H,q.col);                                                                    // the door panel: its bottom rises
+      for(let k=1;k<4;k++){ const y=rise+k*.6; if(y<H-.05) put(a0,a1,.15,.17,y,y+.035,'#a7adb3'); }       // the joints between its panels
+      put(a0-.55,a0-.4,.7,.85,0,1.05,YL); put(a1+.4,a1+.55,.7,.85,0,1.05,YL); } }                        // yellow bollards each side                                                     // a little canopy edge over them
   safe('stores',()=>{ const src=map.getSource('stores'); if(src) src.setData({type:'FeatureCollection',features:feats}); }); }
 function layers(){ safe('stores layer',()=>{ if(map.getSource('stores')) return;
   map.addSource('stores',{type:'geojson',data:{type:'FeatureCollection',features:[]},maxzoom:19,tolerance:0});
@@ -221,9 +232,10 @@ function layers(){ safe('stores layer',()=>{ if(map.getSource('stores')) return;
     map.getLayer('hn-big')?'hn-big':undefined); }); }
 
 // the doors are automatic: a sensor within 5 m opens every Meijer entrance, in about half a second, and they shut again when you leave
-ST.op={}; ST.cache=[]; let lastDraw=0;
+ST.op={}; ST.gop={}; ST.cache=[]; let lastDraw=0;
 FRAME_HOOKS.push(function storeDoors(dt){ if(!ST.cache.length) return false; let ch=false;
   for(const c of ST.cache){ const near=meters(c.lat,c.lng,S.lat,S.lng)<8, o0=ST.op[c.key]||0, o=Math.max(0,Math.min(1,o0+(near?1:-1)*dt/.4)); if(o!==o0){ ST.op[c.key]=o; ch=true; } }
+  for(const c of ST.cache) for(const gk of c.gks){ const go=window.GARAGE?GARAGE.openness(gk):0; if(go!==ST.gop[gk]){ ST.gop[gk]=go; ch=true; } }
   const now=performance.now(); if(ch&&now-lastDraw>45){ lastDraw=now; safe('store doors',drawDoors); } return false; });
 onReady(function stores(){ layers(); setTimeout(()=>safe('stores scan',()=>{ scanTiles(); drawDoors(); }),2500); });
 onTick(1500,function storeTick(){
