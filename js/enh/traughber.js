@@ -117,23 +117,39 @@ function details(F,P,kx,ky){
   }
   return feats; }
 
+/* the gym is a room you can walk into (js/enh/walk.js furnishes it from the owner's photos): the big block on the left of the plan,
+   with a double door at the entrance the plan puts on its south wall */
+function planM(F,px,py){ const [t,fx,fy]=F.T8, pu=(px-X0)/(X1-X0), pv=1-(py-Y0)/(Y1-Y0), [u,v]=t?[fy?1-pv:pv,fx?1-pu:pu]:[fx?1-pu:pu,fy?1-pv:pv], uu=u-.5, vv=v-.5;
+  return [F.R.cx+F.R.ux*uu*F.R.W+F.R.vx*vv*F.R.H, F.R.cy+F.R.uy*uu*F.R.W+F.R.vy*vv*F.R.H]; }
+function gymRec(F,P,kx,ky){
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const b of PLAN) if(b[4]>=10.9&&b[2]<=440){ x0=Math.min(x0,b[0]); y0=Math.min(y0,b[1]); x1=Math.max(x1,b[2]); y1=Math.max(y1,b[3]); }
+  if(x1<0) return null;
+  const M=[[x0,y0],[x1,y0],[x1,y1],[x0,y1]].map(([x,y])=>planM(F,x,y)); let cx=0,cy=0; for(const q of M){ cx+=q[0]/4; cy+=q[1]/4; }
+  let p=M.map(q=>[q[0]-cx,q[1]-cy]); let a=0; for(let i=0,j=p.length-1;i<p.length;j=i++) a+=(p[j][0]-p[i][0])*(p[j][1]+p[i][1]); if(a<0) p.reverse();   // counter-clockwise, as js/enh/stores.js does
+  const D=planM(F,75,y1+2), dp=[D[0]-cx,D[1]-cy]; let best=null;
+  for(let i=0;i<4;i++){ const A=p[i], B=p[(i+1)%4], L=Math.hypot(B[0]-A[0],B[1]-A[1]), ux=(B[0]-A[0])/L, uy=(B[1]-A[1])/L, t=Math.max(2,Math.min(L-2,(dp[0]-A[0])*ux+(dp[1]-A[1])*uy)), off=Math.abs((dp[0]-A[0])*uy-(dp[1]-A[1])*ux);
+    if(!best||off<best.off) best={i,A,L,ux,uy,t,off}; }
+  const d={ei:best.i,s0:best.t-1.5,s1:best.t+1.5,x0:best.A[0]+best.ux*(best.t-1.5),y0:best.A[1]+best.uy*(best.t-1.5),x1:best.A[0]+best.ux*(best.t+1.5),y1:best.A[1]+best.uy*(best.t+1.5),nx:best.uy,ny:-best.ux,dk:9.5e8};
+  const lng=P[0]+cx/kx, lat=P[1]+cy/ky, xs=p.map(q=>q[0]), ys=p.map(q=>q[1]);
+  return {key:'trj-gym',keys:['trj-gym'],id:null,cx:lng,cy:lat,kx,ky,p,h:11,house:false,zone:'school',gym:true,win:[],doors:[d],garages:[],
+    bb:[lng+Math.min(...xs)/kx,lat+Math.min(...ys)/ky,lng+Math.max(...xs)/kx,lat+Math.max(...ys)/ky]}; }
+
 function layers(){ if(map.getSource('trj')) return;
   map.addSource('trj',{type:'geojson',data:{type:'FeatureCollection',features:[]},tolerance:0});
+  if(typeof blockIds!=='undefined'&&!blockIds.includes('trj-wall')) blockIds.push('trj-wall');           // you can't walk or drive through the school
   const pat=map.hasImage&&map.hasImage('hw-trj');
   const wall={'fill-extrusion-base':0,'fill-extrusion-height':['get','h'],'fill-extrusion-vertical-gradient':false};
   if(pat) wall['fill-extrusion-pattern']='hw-trj'; else wall['fill-extrusion-color']=WALL;
   map.addLayer({id:'trj-wall',type:'fill-extrusion',source:'trj',minzoom:12,paint:wall},map.getLayer('hn-big')?'hn-big':undefined);
-  map.addSource('trjw',{type:'geojson',data:{type:'FeatureCollection',features:[]},tolerance:0});
   map.addSource('trjd',{type:'geojson',data:{type:'FeatureCollection',features:[]},tolerance:0});
   map.addLayer({id:'trj-roof',type:'fill-extrusion',source:'trj',minzoom:12,paint:{'fill-extrusion-color':ROOF,'fill-extrusion-base':['get','h'],'fill-extrusion-height':['+',['get','h'],.12],'fill-extrusion-vertical-gradient':false}},map.getLayer('hn-big')?'hn-big':undefined);
-  map.addLayer({id:'trj-win',type:'fill-extrusion',source:'trjw',minzoom:12,paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-base':['get','b'],'fill-extrusion-height':['get','h'],'fill-extrusion-vertical-gradient':false}},map.getLayer('hn-big')?'hn-big':undefined);
   map.addLayer({id:'trj-det',type:'fill-extrusion',source:'trjd',minzoom:14,paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-base':['get','b'],'fill-extrusion-height':['get','h'],'fill-extrusion-vertical-gradient':false}},map.getLayer('hn-big')?'hn-big':undefined); }
 
 function apply(F,P,kx,ky){
+  T.rec=safe('trj gym',()=>gymRec(F,P,kx,ky))||null;
   const feats=polysOf(F,P,kx,ky).map(o=>({type:'Feature',properties:{h:o.h},geometry:{type:'Polygon',coordinates:[o.ring]}}));
   layers(); map.getSource('trj').setData({type:'FeatureCollection',features:feats});
   safe('trj details',()=>map.getSource('trjd').setData({type:'FeatureCollection',features:details(F,P,kx,ky)}));
-  map.getSource('trjw').setData({type:'FeatureCollection',features:winsOf(F,P,kx,ky).map(o=>({type:'Feature',properties:{b:o.b,h:o.h,c:o.c},geometry:{type:'Polygon',coordinates:[o.ring]}}))});
   HIDE.pin=F.ids.slice(); applyHides(); if(window.ROOFS&&ROOFS.build) safe('trj rebuild',()=>ROOFS.build()); dirty=true; }
 
 function scan(){
@@ -150,5 +166,5 @@ function scan(){
   T.fit=F; apply(F,P,kx,ky); }
 
 onTick(3000,function trjTick(){ safe('traughber',scan); });
-window.TRJ={off:()=>{ try{ localStorage.setItem('ydTrjOff','1'); }catch(e){} location.reload(); },on:()=>{ try{ localStorage.removeItem('ydTrjOff'); }catch(e){} location.reload(); },state:T,fit,PLAN};
+window.TRJ={recs:()=>T.rec?[T.rec]:[],covers:r=>{ const g=T.rec; if(!g||!r||r===g||r.cx==null) return false; const x=(r.cx-g.cx)*g.kx, y=(r.cy-g.cy)*g.ky; let c=false; const P=g.p; for(let i=0,j=P.length-1;i<P.length;j=i++){ if((P[i][1]>y)!==(P[j][1]>y)&&x<(P[j][0]-P[i][0])*(y-P[i][1])/(P[j][1]-P[i][1])+P[i][0]) c=!c; } return c; },hide:on=>{ for(const id of ['trj-wall','trj-roof','trj-det']) if(map.getLayer(id)) map.setLayoutProperty(id,'visibility',on?'none':'visible'); dirty=true; },off:()=>{ try{ localStorage.setItem('ydTrjOff','1'); }catch(e){} location.reload(); },on:()=>{ try{ localStorage.removeItem('ydTrjOff'); }catch(e){} location.reload(); },state:T,fit,PLAN};
 })();
