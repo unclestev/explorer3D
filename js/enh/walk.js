@@ -24,9 +24,10 @@ const W={v:0,phase:0,amp:0,run:0,order:0,blockT:0,near:false,lastAnim:false};
 const WALKV=1.4, RUNV=5.4, BACKV=.9;                              // m/s on the speedometer (3.1 / 12 / 2 mph)
 
 /* ---------- the person (metres, front = -z, feet on y = 0) ---------- */
-function buildPerson(){
+function buildPerson(pal){
+  pal=pal||{};
   const mat=c=>new THREE.MeshLambertMaterial({color:c,transparent:true,opacity:1});   // transparent: drawn in order with the car photo
-  const skin=mat(0xc98f6a), hair=mat(0x3b2a1e), top=mat(0x6f7780), jeans=mat(0x2c3a52), shoe=mat(0xe8e6e1), sole=mat(0x6b6b6b);
+  const skin=mat(pal.skin||0xc98f6a), hair=mat(pal.hair||0x3b2a1e), top=mat(pal.top||0x6f7780), jeans=mat(pal.jeans||0x2c3a52), shoe=mat(0xe8e6e1), sole=mat(0x6b6b6b);
   const cyl=(rt,rb,h,m,seg)=>new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg||10),m);
   const root=new THREE.Group(), fig=new THREE.Group(); root.add(fig);
   const parts={};
@@ -219,40 +220,116 @@ const MATS={};
 function rmat(k,c,emi){ if(!MATS[k]) MATS[k]=new THREE.MeshLambertMaterial({color:c,emissive:emi||0x000000,side:THREE.DoubleSide}); return MATS[k]; }
 const to3=(x,y)=>[x,-y];                                           // local (east, north) metres -> car-layer (x, z)
 function quad(pos,a,b,y0,y1){ const [ax,az]=to3(a[0],a[1]), [bx,bz]=to3(b[0],b[1]); pos.push(ax,y0,az, bx,y0,bz, bx,y1,bz, ax,y0,az, bx,y1,bz, ax,y1,az); }
-function meshOf(pos,mat){ const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.computeVertexNormals(); return new THREE.Mesh(g,mat); }
+function meshOf(pos,mat,uv){ const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); if(uv) g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2)); g.computeVertexNormals(); return new THREE.Mesh(g,mat); }
+/* ---------- what the rooms look like (owner 2026-11-23: "floors and walls and ceiling textures inside the buildings, only loaded
+   when you enter... use your best judgement for the building type... the same textures when you enter it multiple times").
+   Nothing here exists until you walk into a building: its textures are painted on a small canvas the first time they're
+   asked for (a handful of 256 px ones, shared by every building of that look, thrown away when too many pile up) and the
+   room's own meshes are dropped when you leave. Which look a building gets comes only from its key (where it stands) —
+   a seeded pick, not Math.random — so the same building looks the same on every visit and on every device.
+   Kinds: house (wood, laminate or carpet floors, painted walls, stippled ceiling), shop (vinyl tile / concrete / wood-look
+   floors, painted drywall, dropped ceiling), school (speckled or checked vinyl tile, painted block walls with a darker
+   lower band, dropped ceiling), office (carpet tile, drywall, dropped ceiling), industrial (sealed concrete, ribbed metal
+   walls, exposed deck), Meijer (js/enh/stores.js: its own tiles). Every non-house gets the troffer lights that were made
+   for Meijer (troffers() below). */
+const ITX={}, IMT={};
+function seedOf(k){ let h=2166136261; k=String(k); for(let i=0;i<k.length;i++){ h^=k.charCodeAt(i); h=Math.imul(h,16777619); } return h>>>0; }
+function prng(s){ return ()=>{ s=(s+0x6D2B79F5)|0; let t=Math.imul(s^(s>>>15),1|s); t=(t+Math.imul(t^(t>>>7),61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; }; }
+const pickOf=(a,R)=>a[Math.floor(R()*a.length)%a.length];
+const gray=v=>'rgb('+(v|0)+','+(v|0)+','+(v|0)+')';
+// name: [pixels w, pixels h, metres w, metres h, draw(ctx,w,h,rnd,a,b), clampV]
+const TXM={
+  planks:[256,256,1.2,1.2,(x,w,h,R)=>{ x.fillStyle='#e6e6e6'; x.fillRect(0,0,w,h); const rows=8, rh=h/rows;
+    for(let i=0;i<rows;i++){ let px=-R()*128; while(px<w){ const L=96+R()*96; x.fillStyle=gray(205+R()*50); x.fillRect(px,i*rh,L,rh);
+      x.strokeStyle='rgba(0,0,0,.24)'; x.lineWidth=1; x.strokeRect(px+.5,i*rh+.5,L,rh);
+      x.strokeStyle='rgba(60,60,60,.13)'; for(let g=0;g<3;g++){ const gy=i*rh+4+R()*(rh-8); x.beginPath(); x.moveTo(px,gy); x.lineTo(px+L,gy+(R()-.5)*3); x.stroke(); }
+      px+=L; } } }],
+  carpet:[128,128,1,1,(x,w,h,R)=>{ x.fillStyle='#d2d2d2'; x.fillRect(0,0,w,h); for(let i=0;i<2600;i++){ x.fillStyle=gray(150+R()*105); x.globalAlpha=.4; x.fillRect(R()*w,R()*h,1.4,1.4); } x.globalAlpha=1; }],
+  ctile:[256,256,1,1,(x,w,h,R)=>{ for(let i=0;i<4;i++){ const X=(i%2)*128, Y=(i>>1)*128; x.fillStyle=gray(198+R()*30); x.fillRect(X,Y,128,128);
+      for(let j=0;j<500;j++){ x.fillStyle=gray(140+R()*115); x.globalAlpha=.35; x.fillRect(X+R()*128,Y+R()*128,1.5,1.5); } x.globalAlpha=1; }
+    x.fillStyle='rgba(0,0,0,.28)'; for(const v of [0,128]){ x.fillRect(v,0,1,h); x.fillRect(0,v,w,1); } }],
+  vct:[256,256,.61,.61,(x,w,h,R,mode)=>{ for(let i=0;i<4;i++){ const X=(i%2)*128, Y=(i>>1)*128; x.fillStyle=mode==='chk'?((i===1||i===2)?gray(168):gray(246)):gray(222+R()*18); x.fillRect(X,Y,128,128);
+      for(let j=0;j<(mode==='chk'?40:170);j++){ x.fillStyle=gray(90+R()*110); x.globalAlpha=.3; x.fillRect(X+R()*128,Y+R()*128,2+R()*2,1+R()); } x.globalAlpha=1; }
+    x.fillStyle='rgba(0,0,0,.2)'; for(const v of [0,128]){ x.fillRect(v,0,1,h); x.fillRect(0,v,w,1); } }],
+  concrete:[256,256,2.4,2.4,(x,w,h,R)=>{ x.fillStyle='#d6d6d6'; x.fillRect(0,0,w,h);
+    for(let i=0;i<70;i++){ const cx=R()*w, cy=R()*h, r=14+R()*40, g=x.createRadialGradient(cx,cy,0,cx,cy,r), d=R()<.5; g.addColorStop(0,d?'rgba(90,90,90,.16)':'rgba(255,255,255,.2)'); g.addColorStop(1,'rgba(128,128,128,0)'); x.fillStyle=g; x.fillRect(cx-r,cy-r,2*r,2*r); }
+    for(let i=0;i<900;i++){ x.fillStyle=gray(120+R()*130); x.globalAlpha=.25; x.fillRect(R()*w,R()*h,1.3,1.3); } x.globalAlpha=1;
+    x.fillStyle='rgba(0,0,0,.4)'; x.fillRect(0,0,2,h); x.fillRect(0,0,w,2); }],
+  drywall:[128,128,2,2,(x,w,h,R)=>{ x.fillStyle='#fbfbfa'; x.fillRect(0,0,w,h); for(let i=0;i<500;i++){ x.fillStyle=gray(228+R()*27); x.globalAlpha=.5; x.fillRect(R()*w,R()*h,2,2); } x.globalAlpha=1; }],
+  stipple:[128,128,1,1,(x,w,h,R)=>{ x.fillStyle='#f6f6f4'; x.fillRect(0,0,w,h); for(let i=0;i<2600;i++){ x.fillStyle=R()<.5?'rgba(150,150,145,.3)':'rgba(255,255,255,.8)'; x.fillRect(R()*w,R()*h,1.6,1.6); } }],
+  // painted concrete block: courses of 0.2 x 0.4 m; the picture is 3.2 m tall, floor at the bottom, a darker band 1.2 m high (a, b = upper, lower colour)
+  block:[256,512,1.6,3.2,(x,w,h,R,a,b)=>{ x.fillStyle=a; x.fillRect(0,0,w,h); const wh=Math.round(1.2*160); x.fillStyle=b; x.fillRect(0,h-wh,w,wh);
+    x.fillStyle='rgba(0,0,0,.28)'; x.fillRect(0,h-wh-5,w,5);                                                 // the stripe where the two colours meet
+    for(let r=0;r<16;r++){ const Y=r*32, off=r&1?32:0; for(let c=-1;c<5;c++){ x.fillStyle=R()<.5?'rgba(0,0,0,.05)':'rgba(255,255,255,.06)'; x.fillRect(c*64+off,Y,64,32); }
+      x.fillStyle='rgba(0,0,0,.2)'; x.fillRect(0,Y,w,2); for(let c=0;c<5;c++) x.fillRect(c*64+off,Y,2,32); } },1],
+  metal:[256,256,1.6,1.6,(x,w,h)=>{ for(let i=0;i<16;i++){ const g=x.createLinearGradient(i*16,0,i*16+16,0); g.addColorStop(0,'#c8c8c8'); g.addColorStop(.35,'#f4f4f4'); g.addColorStop(.7,'#dcdcdc'); g.addColorStop(1,'#a8a8a8'); x.fillStyle=g; x.fillRect(i*16,0,16,h); } }],
+  deck:[256,256,1.6,1.6,(x,w,h)=>{ for(let i=0;i<8;i++){ x.fillStyle=i&1?'#bdbdbd':'#e8e8e8'; x.fillRect(i*32,0,32,h); x.fillStyle='rgba(0,0,0,.18)'; x.fillRect(i*32,0,2,h); } }]
+};
+function itex(name,a,b){ const k=name+'|'+(a||'')+'|'+(b||''); if(ITX[k]) return ITX[k];
+  const D=TXM[name], c=document.createElement('canvas'); c.width=D[0]; c.height=D[1]; D[4](c.getContext('2d'),D[0],D[1],prng(seedOf(k)),a,b);
+  const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; if(D[5]) t.wrapT=THREE.ClampToEdgeWrapping; t.repeat.set(1/D[2],1/D[3]); t.anisotropy=8; return ITX[k]=t; }
+function imat(name,tint,a,b,glow){ const k=name+'|'+tint+'|'+(a||'')+'|'+(b||''); if(IMT[k]) return IMT[k]; const t=itex(name,a,b), col=new THREE.Color(tint);
+  return IMT[k]=new THREE.MeshLambertMaterial({color:col.clone().multiplyScalar(.7),map:t,emissive:col.clone().multiplyScalar(glow||.22),emissiveMap:t,side:THREE.DoubleSide}); }
+function itexTrim(){ if(Object.keys(ITX).length<=14) return; for(const k in IMT) IMT[k].dispose(); for(const k in ITX) ITX[k].dispose(); for(const k in IMT) delete IMT[k]; for(const k in ITX) delete ITX[k]; }
+const WALLS_HOUSE=['#f3eee3','#e9dfcc','#d9e2dc','#dfe6ee','#efe3cf','#e6d6d0','#d8dfc9','#f4f1ea'], FLOORS_HOUSE=[['planks','#d8b27f'],['planks','#8a5a36'],['planks','#b9b3a7'],['carpet','#cdbfa8'],['carpet','#9ba1a9'],['planks','#c99a62']];
+function roomKind(r,SH){ if(SH) return 'store'; if(r.house) return 'house'; if(r.zone==='school') return 'school'; if(r.zone==='industrial') return 'industrial'; return (r.h||0)>12?'office':'shop'; }
+// the look of one building's room, picked from its key alone: {kind, HC (ceiling height), wallM, floorM, ceilM, trof}
+function roomLook(r,SH){
+  const kind=roomKind(r,SH), R=prng(seedOf(r.key)), H=r.h||3, L={kind,trof:kind!=='house'};
+  if(kind==='house'){ const f=pickOf(FLOORS_HOUSE,R); L.HC=Math.max(2.4,Math.min(2.7,H-.3));
+    L.wallM=imat('drywall',pickOf(WALLS_HOUSE,R)); L.floorM=imat(f[0],f[1],0,0,.18); L.ceilM=imat('stipple','#f7f6f2'); }
+  else if(kind==='store'){ L.HC=Math.max(3.6,Math.min(5,H-1.4)); L.wallM=imat('drywall','#ddd5c0'); L.floorM=storeMat('floor'); L.ceilM=storeMat('ceil'); }
+  else if(kind==='school'){ const w=pickOf([['#efe7cf','#c8b58d'],['#e9eef0','#7f9db5'],['#efe9dd','#8aa58a']],R), chk=R()<.4; L.HC=Math.max(2.6,Math.min(3.1,H-.4));
+    L.wallM=imat('block','#ffffff',w[0],w[1]); L.floorM=imat('vct','#ffffff',chk?'chk':'spk',0,.18); L.ceilM=storeMat('ceil'); }
+  else if(kind==='office'){ L.HC=3; L.wallM=imat('drywall',pickOf(['#f4f3f0','#e6e8ea','#eee9df'],R)); L.floorM=imat('ctile',pickOf(['#9aa0a6','#7b8794','#a39d92','#6a6e73'],R),0,0,.18); L.ceilM=storeMat('ceil'); }
+  else if(kind==='industrial'){ L.HC=Math.max(3.4,Math.min(5,H-.6)); L.wallM=imat('metal',pickOf(['#cfd3d6','#d8d0bf','#b9c3cc'],R)); L.floorM=imat('concrete','#d4d4d0',0,0,.18); L.ceilM=imat('deck','#dcdcdc'); }
+  else { const f=pickOf([['vct','#ffffff','chk'],['vct','#efe4cc','spk'],['concrete','#d0d0cc'],['planks','#dcc7a6']],R); L.HC=Math.max(2.6,Math.min(3.3,H-.4));   // shop
+    L.wallM=imat('drywall',pickOf(['#f3f1ec','#e3e5e6','#ece2cf','#dbe6ef'],R)); L.floorM=f[0]==='vct'?imat('vct',f[1],f[2],0,.18):imat(f[0],f[1],0,0,.18); L.ceilM=storeMat('ceil'); }
+  return L; }
 function buildRoom(r){
   if(ROOM.key===r.key&&ROOM.g) return; dropRoom();
   const SH=window.STORES&&STORES.at?STORES.at(r.key):null;      // a Meijer (js/enh/stores.js): high dropped ceiling, troffer lights
-  const g=new THREE.Group(), p=r.p, HC=SH?Math.max(3.6,Math.min(5,(r.h||6)-1.4)):Math.max(2.4,Math.min(2.7,(r.h||3)-.3)), DH=2.12, TH2=.2;
-  const wallM=rmat('wall',0xe8e2d6,0x4a4741), ceilM=SH?storeMat('ceil'):rmat('ceil',0xf4f2ed,0x8a8985), trimM=rmat('trim',0xfbfaf7,0x3a3a3a);
-  const floorM=SH?storeMat('floor'):rmat(r.house?'wood':'tile',r.house?0x7d5a3a:0xc9c6be,r.house?0x1e140c:0x2a2a28);
+  itexTrim(); const LK=roomLook(r,SH);                           // floor, wall and ceiling textures for this kind of building, picked from its key
+  const g=new THREE.Group(), p=r.p, HC=LK.HC, DH=2.12, TH2=.2;
+  const wallM=LK.wallM, ceilM=LK.ceilM, trimM=rmat('trim',0xfbfaf7,0x3a3a3a), floorM=LK.floorM;
   // floor and ceiling from the outline
   const sh=new THREE.Shape(p.map(q=>new THREE.Vector2(q[0],q[1])));
   const fl=new THREE.Mesh(new THREE.ShapeGeometry(sh),floorM); fl.rotation.x=-Math.PI/2; fl.position.y=.01; g.add(fl);   // shape (x, y=north) -> (x, z=-north)
   const ce=new THREE.Mesh(new THREE.ShapeGeometry(sh),ceilM); ce.rotation.x=-Math.PI/2; ce.position.y=HC; g.add(ce);
   // walls along the outline, with the doorways (and garage openings) cut out; jambs give them depth
-  const wall=[], trim=[], ways=r.doors.map(d=>({d,h:DH,gar:false})).concat((r.garages||[]).map(d=>({d,h:2.2,gar:true})));
+  const wall=[], wuv=[], trim=[], wq=(a,b,y0,y1,u0,u1)=>{ quad(wall,a,b,y0,y1); wuv.push(u0,y0,u1,y0,u1,y1,u0,y0,u1,y1,u0,y1); }, ways=r.doors.map(d=>({d,h:DH,gar:false})).concat((r.garages||[]).map(d=>({d,h:2.2,gar:true})));
   for(let i=0;i<p.length;i++){ const a=p[i], b=p[(i+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1]); if(L<.05) continue;
     const ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux, at=(t,o)=>[a[0]+ux*t-nx*o,a[1]+uy*t-ny*o];
     const gaps=ways.filter(w=>w.d.ei===i).map(w=>({s0:w.d.s0,s1:w.d.s1,h:w.h})).sort((x,y)=>x.s0-y.s0);
     const E=TH2+.03;                                                 // walls run on past the corners, so inside corners close up
-    let t=-E; for(const q of gaps){ if(q.s0>t) quad(wall,at(t,TH2),at(q.s0,TH2),0,HC); quad(wall,at(q.s0,TH2),at(q.s1,TH2),q.h,HC);   // wall up to the gap, header over it
-      quad(wall,at(q.s0,0),at(q.s0,TH2),0,q.h); quad(wall,at(q.s1,0),at(q.s1,TH2),0,q.h);                                   // jambs
+    const WN=(LK.kind==='store'?[]:(r.win||[]).filter(w=>w.ei===i&&w.b<HC-.4)).map(w=>({s0:w.s0,s1:w.s1,b:Math.max(.05,w.b),h:Math.min(w.h,HC-.12)})).sort((x,y)=>x.s0-y.s0);
+    // a stretch of wall with the window openings cut out of it (the map building is hidden while you're in, so you see the outside through them)
+    const solid=(a0,a1)=>{ let c=a0; for(const w of WN){ if(w.s0<c-.001||w.s1>a1+.001) continue;
+        wq(at(c,TH2),at(w.s0,TH2),0,HC,c,w.s0); wq(at(w.s0,TH2),at(w.s1,TH2),0,w.b,w.s0,w.s1); wq(at(w.s0,TH2),at(w.s1,TH2),w.h,HC,w.s0,w.s1);
+        wq(at(w.s0,0),at(w.s0,TH2),w.b,w.h,0,TH2); wq(at(w.s1,0),at(w.s1,TH2),w.b,w.h,0,TH2);   // reveals
+        for(const [u0,u1,y0,y1] of [[w.s0-.07,w.s0,w.b-.07,w.h+.07],[w.s1,w.s1+.07,w.b-.07,w.h+.07],[w.s0-.07,w.s1+.07,w.h,w.h+.07],[w.s0-.1,w.s1+.1,w.b-.07,w.b]]) quad(trim,at(u0,TH2+.012),at(u1,TH2+.012),y0,y1);   // casing and sill
+        c=w.s1; }
+      if(a1>c+.001) wq(at(c,TH2),at(a1,TH2),0,HC,c,a1); };
+    let t=-E; for(const q of gaps){ if(q.s0>t) solid(t,q.s0); wq(at(q.s0,TH2),at(q.s1,TH2),q.h,HC,q.s0,q.s1);   // wall up to the gap, header over it
+      wq(at(q.s0,0),at(q.s0,TH2),0,q.h,0,TH2); wq(at(q.s1,0),at(q.s1,TH2),0,q.h,0,TH2);                                   // jambs
       { const P=at(q.s0,0), Q=at(q.s1,0), R2=at(q.s1,TH2), S2=at(q.s0,TH2); const [px,pz]=to3(...P),[qx,qz]=to3(...Q),[rx,rz]=to3(...R2),[sx,sz]=to3(...S2);
-        wall.push(px,q.h,pz, qx,q.h,qz, rx,q.h,rz, px,q.h,pz, rx,q.h,rz, sx,q.h,sz); }                                    // underside of the header
+        wall.push(px,q.h,pz, qx,q.h,qz, rx,q.h,rz, px,q.h,pz, rx,q.h,rz, sx,q.h,sz); wuv.push(0,0,0,0,0,0,0,0,0,0,0,0); }                                    // underside of the header
       for(const [s0,s1] of [[q.s0-.1,q.s0],[q.s1,q.s1+.1]]) quad(trim,at(s0,TH2+.01),at(s1,TH2+.01),0,q.h+.1);                // casing round the opening
       quad(trim,at(q.s0-.1,TH2+.01),at(q.s1+.1,TH2+.01),q.h,q.h+.1);
       t=Math.max(t,q.s1); }
-    if(L+E>t) quad(wall,at(t,TH2),at(L+E,TH2),0,HC);
+    if(L+E>t) solid(t,L+E);
     quad(trim,at(0,TH2+.005),at(L,TH2+.005),0,.09);                 // skirting board
   }
-  g.add(meshOf(wall,wallM)); g.add(meshOf(trim,trimM));
-  if(SH){ troffers(g,p,HC); switches(g,r,HC); }
+  g.add(meshOf(wall,wallM,wuv)); g.add(meshOf(trim,trimM));
+  LKEY=r.key; { const sv=LSWS[r.key]; LSW[0]=sv?sv[0]:true; LSW[1]=sv?sv[1]:true; }     // each building keeps its own switch positions
+  ROOM.dimM=[wallM,floorM,ceilM];
+  if(LK.trof){ troffers(g,p,HC); switches(g,r,HC,2); if(SH) greeterFig(g,r,SH); }
   else { let cx=0,cy=0; for(const q of p){ cx+=q[0]; cy+=q[1]; } cx/=p.length; cy/=p.length;       // a ceiling light in the middle of the room
     if(inP(p,cx,cy)){ const [x3,z3]=to3(cx,cy);
       const base=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,.03,24),trimM); base.position.set(x3,HC-.015,z3); g.add(base);
       const globe=new THREE.Mesh(new THREE.SphereGeometry(.17,20,10,0,Math.PI*2,Math.PI/2,Math.PI/2),new THREE.MeshBasicMaterial({color:0xfff6df,side:THREE.DoubleSide}));
-      globe.position.set(x3,HC-.03,z3); g.add(globe); } }
+      globe.position.set(x3,HC-.03,z3); g.add(globe); ROOM.tro=[globe.material]; }          // one light, one switch by the door
+    switches(g,r,HC,1); }
   // door leaves, hinged at the jamb; double doors on the wide glass entrances
   ROOM.leaves=[];
   const SEE=()=>STX.see||(STX.see=new THREE.MeshLambertMaterial({color:0x9db4c6,transparent:true,opacity:.22,depthWrite:false,side:THREE.DoubleSide}));   // clear glass
@@ -273,6 +350,12 @@ function buildRoom(r){
       const angC=Math.atan2(-to3(cdx,cdy)[1],cdx), angO=Math.atan2(-to3(-d.nx,-d.ny)[1],-d.nx);   // rotation.y for a leaf pointing along / in
       let dA=angO-angC; dA=((dA+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI;
       pv.rotation.y=angC; g.add(pv); ROOM.leaves.push({pv,angC,dA,d,o:0,auto:AUTO}); } }
+  // lit EXIT signs on the inside, over every way out (owner 2026-11-23). Unlit-material boxes: they are not part of ROOM.tro /
+  // ROOM.dimM, so the light switches never touch them — always on, like the real ones on their own circuit.
+  for(const d of r.doors){ const a=p[d.ei], b=p[(d.ei+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1])||1, ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux, t=(d.s0+d.s1)/2;
+    const [x3,z3]=to3(a[0]+ux*t-nx*(TH2+.026),a[1]+uy*t-ny*(TH2+.026)), [dx3,dz3]=to3(-nx,-ny), y3=Math.min(DH+.3,HC-.13), ry=Math.atan2(dx3,dz3);   // facing into the room
+    const sg=new THREE.Mesh(new THREE.BoxGeometry(.36,.16,.05),exitMats()); sg.position.set(x3,y3,z3); sg.rotation.y=ry; g.add(sg);
+    const gl=new THREE.Mesh(new THREE.PlaneGeometry(.95,.6),exitGlow()); gl.position.set(x3+dx3*.04,y3,z3+dz3*.04); gl.rotation.y=ry; gl.renderOrder=4; g.add(gl); }
   // the garage door: a panel across the opening that rolls up with the opener
   ROOM.gar=[];
   for(const q of r.garages||[]){ const [ax,az]=to3(q.x0-q.nx*.08,q.y0-q.ny*.08), [bx,bz]=to3(q.x1-q.nx*.08,q.y1-q.ny*.08), W0=Math.hypot(bx-ax,bz-az);
@@ -280,6 +363,19 @@ function buildRoom(r){
     m.position.set((ax+bx)/2,0,(az+bz)/2); m.rotation.y=-Math.atan2(bz-az,bx-ax); g.add(m); ROOM.gar.push({m,q}); }
   for(const o of g.children) o.traverse(c=>{ if(c.isMesh){ if(!c.renderOrder) c.renderOrder=1; c.frustumCulled=false; } });
   scene.add(g); ROOM.g=g; ROOM.key=r.key; ROOM.r=r; garUpdate(); }
+/* exit signs: a white-faced box with red EXIT letters and a faint red halo, drawn unlit so it glows in a dark room too */
+let EXM=null, EXG=null;
+function exitMats(){ if(EXM) return EXM;
+  const c=document.createElement('canvas'); c.width=256; c.height=112; const x=c.getContext('2d');
+  x.fillStyle='#f6f3ee'; x.fillRect(0,0,256,112); x.strokeStyle='#8f1d1d'; x.lineWidth=5; x.strokeRect(4,4,248,104);
+  x.fillStyle='#e0141b'; x.font='bold 84px Arial, Helvetica, sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText('EXIT',128,60);
+  const tex=new THREE.CanvasTexture(c); tex.anisotropy=4;
+  const side=new THREE.MeshBasicMaterial({color:0xb7b3ab}), face=new THREE.MeshBasicMaterial({map:tex,toneMapped:false});
+  EXM=[side,side,side,side,face,side]; return EXM; }
+function exitGlow(){ if(EXG) return EXG;
+  const c=document.createElement('canvas'); c.width=c.height=64; const x=c.getContext('2d'), gr=x.createRadialGradient(32,32,2,32,32,32);
+  gr.addColorStop(0,'rgba(255,40,40,.55)'); gr.addColorStop(.45,'rgba(255,30,30,.18)'); gr.addColorStop(1,'rgba(255,0,0,0)'); x.fillStyle=gr; x.fillRect(0,0,64,64);
+  EXG=new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false,side:THREE.DoubleSide}); return EXG; }
 /* store ceilings and lights (owner 2026-11-23, a photo of the lights inside Meijer): 2 x 2 ft speckled ceiling tiles in a
    white grid, and 2 x 4 ft parabolic-louvre troffers — a grid of deep shiny cells, bright where they catch the tubes and
    blue-grey in their shadows — in rows across the store */
@@ -358,19 +454,42 @@ function troffers(g,p,HC){
 /* the two light switches: on the wall just inside the way in, at 1.2 m, a white two-gang plate. Walk up to them and a
    button shows (or say "turn off the lights" / "lights on"); each flips its half of the lights (every other one). Remembered while you play. */
 const LSW=[true,true];
-function switches(g,r,HC){ ROOM.sw=[]; const d=r.doors[0]; if(!d) return;
+function switches(g,r,HC,n){ ROOM.sw=[]; const d=r.doors[0]; if(!d){ lightsApply(); return; }
   const p=r.p, a=p[d.ei], b=p[(d.ei+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1])||1, ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux;
   let s=d.s1+.55; if(s+.5>L) s=d.s0-.75;                              // beside the door's latch side, or the other side if it's a corner
   const at=(t,o)=>[a[0]+ux*t-nx*o,a[1]+uy*t-ny*o], ang=Math.atan2(-to3(-nx,-ny)[1],-nx);   // facing into the store
-  const plate=new THREE.Mesh(new THREE.BoxGeometry(.2,.13,.012),rmat('swplate',0xf6f5f1,0x55544f)), [px,pz]=to3(...at(s,.212));
+  const plate=new THREE.Mesh(new THREE.BoxGeometry(n===1?.1:.2,.13,.012),rmat('swplate',0xf6f5f1,0x55544f)), [px,pz]=to3(...at(s,.212));
   plate.position.set(px,1.2,pz); plate.rotation.y=ang+Math.PI/2; g.add(plate);
-  for(const k of [0,1]){ const lv=new THREE.Mesh(new THREE.BoxGeometry(.022,.045,.02),rmat('swlever',0xffffff,0x6a6a66));
-    const [lx,lz]=to3(...at(s+(k?.045:-.045),.225)); lv.position.set(lx,1.2,lz); lv.rotation.y=ang+Math.PI/2; g.add(lv);
-    ROOM.sw.push({lv,k,pos:at(s+(k?.045:-.045),.6)}); }
+  for(const k of n===1?[0]:[0,1]){ const lv=new THREE.Mesh(new THREE.BoxGeometry(.022,.045,.02),rmat('swlever',0xffffff,0x6a6a66)), off=n===1?0:(k?.045:-.045);
+    const [lx,lz]=to3(...at(s+off,.225)); lv.position.set(lx,1.2,lz); lv.rotation.y=ang+Math.PI/2; g.add(lv);
+    ROOM.sw.push({lv,k,pos:at(s+off,.6)}); }
   lightsApply(); }
-function lightsApply(){ for(const k of [0,1]){ const m=ROOM.tro&&ROOM.tro[k]; if(m){ m.color.setHex(LSW[k]?0xffffff:0x3b3f47); m.needsUpdate=true; } for(const o of (ROOM.glow&&ROOM.glow[k])||[]) o.visible=LSW[k]; }
+/* the greeter (owner 2026-11-23: "a greeter at the entrance of every Meijer … and every Walmart"): a plain team member in the
+   store's colour shirt (no logos) standing just inside the front doors, facing them, who waves when you come in. The welcome
+   is spoken by js/enh/stores.js `STORES.greet` when you step inside (⚙️ A/V → Store greeter switches the voice off). */
+function greeterFig(g,r,SH){ let d=null, bd=1e9; const me=loc(r,S.lat,S.lng);                    // the door you came in by: the one nearest you as the room is built
+  for(const q of r.doors){ const dd=Math.hypot(me[0]-(q.x0+q.x1)/2,me[1]-(q.y0+q.y1)/2); if(dd<bd){ bd=dd; d=q; } }
+  if(!d) return;
+  const p=r.p, a=p[d.ei], b=p[(d.ei+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1])||1, ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux;
+  const at=(t,o)=>[a[0]+ux*t-nx*o,a[1]+uy*t-ny*o], mid=(d.s0+d.s1)/2; let pos=null;
+  for(const t of [d.s0-1.1,d.s1+1.1,d.s0-2.2,d.s1+2.2]){ const q=at(t,1.5); if(t>.6&&t<L-.6&&inP(p,q[0],q[1])){ pos=q; break; } }
+  if(!pos) return;
+  const walmart=(SH.brand||'')==='Walmart', who=buildPerson({top:walmart?0x2a6ab3:0xc4343a,jeans:0x2b2e36,hair:walmart?0x4a3426:0x1f1a17,skin:walmart?0xd7a47c:0xa8714f});
+  who.visible=true; who.traverse(o=>{ if(o.isMesh){ o.renderOrder=5; o.frustumCulled=false; if(o.material&&o.material!==shadow.material){ o.material.transparent=false; o.material.opacity=1; } } });   // plain opaque: always drawn with the room
+  const [x3,z3]=to3(pos[0],pos[1]), dm=at(mid,0), fx=dm[0]-pos[0], fy=dm[1]-pos[1];
+  who.position.set(x3,0,z3); who.rotation.y=Math.atan2(-fx,fy);            // front is -z; face the doors
+  const P=who.userData; P.hipL.rotation.x=P.hipR.rotation.x=0; P.kneeL.rotation.x=P.kneeR.rotation.x=0; P.elL.rotation.x=P.elR.rotation.x=.15;
+  g.add(who); ROOM.gr={who,P,pos,w:0,t:Math.random()*6}; }
+function greeterTick(dt,q){ const G=ROOM.gr; if(!G) return; G.t+=dt; const d=Math.hypot(q[0]-G.pos[0],q[1]-G.pos[1]), want=d<9?1:0;
+  G.w+=Math.max(-1,Math.min(1,want-G.w))*dt*2.2; const w=G.w, P=G.P;
+  P.shR.rotation.x=.05+w*2.35; P.shR.rotation.z=-.07+Math.sin(G.t*7)*.32*w; P.elR.rotation.x=.15+w*.5+Math.sin(G.t*7)*.12*w;   // the right arm goes up and waves
+  P.shL.rotation.x=.04; P.up.rotation.x=-.02; P.up.rotation.y=Math.sin(G.t*.8)*.05*(1-w*.5); }
+const LSWS={}; let LKEY=null;                                     // switch positions by building
+function lightsApply(){ if(ROOM.sw&&ROOM.sw.length===1) LSW[1]=LSW[0]; if(LKEY) LSWS[LKEY]=LSW.slice();
+  for(const k of [0,1]){ const m=ROOM.tro&&ROOM.tro[k]; if(m){ m.color.setHex(LSW[k]?0xffffff:0x3b3f47); m.needsUpdate=true; } for(const o of (ROOM.glow&&ROOM.glow[k])||[]) o.visible=LSW[k]; }
   for(const w of ROOM.sw||[]){ w.lv.position.y=1.2+(LSW[w.k]?.012:-.012); w.lv.rotation.x=LSW[w.k]?-.35:.35; }
   const on=(LSW[0]?1:0)+(LSW[1]?1:0), f=on===2?1:on===1?.62:.3;           // the night lights keep a little light          // the room dims as rows go out
+  { const stx=Object.values(STX); for(const m of ROOM.dimM||[]) if(m&&!stx.includes(m)) m.emissiveIntensity=.12+.88*f; }       // the textured walls, floor and ceiling dim with the lights
   for(const k of ['ceil','floor']) if(STX[k]){ STX[k].emissiveIntensity=f; STX[k].color.setScalar(.35+.65*f); }
   if(typeof swLabel==='function'&&swBtn.style.display==='flex') swLabel();
   if(typeof dirty!=='undefined') dirty=true; }
@@ -381,11 +500,11 @@ swBtn.style.cssText='position:absolute;left:50%;bottom:calc(var(--gap,10px) + 12
 for(const k of [0,1]){ const b=document.createElement('button'); b.style.cssText='font:600 15px system-ui;padding:10px 14px;border-radius:12px;border:0;background:rgba(20,24,32,.85);color:#fff;box-shadow:0 3px 10px rgba(0,0,0,.4)';
   b.onclick=e=>{ e.stopPropagation(); flipLights(k); swLabel(); }; swBtn.appendChild(b); }
 document.body.appendChild(swBtn);
-function swLabel(){ [...swBtn.children].forEach((b,k)=>b.textContent=(LSW[k]?'💡':'⚫')+' Switch '+(k+1)+': '+(LSW[k]?'on':'off')); }
+function swLabel(){ const one=ROOM.sw&&ROOM.sw.length===1; [...swBtn.children].forEach((b,k)=>{ b.style.display=one&&k?'none':''; b.textContent=(LSW[k]?'💡':'⚫')+(one?' Light: ':' Switch '+(k+1)+': ')+(LSW[k]?'on':'off'); }); }
 function switchNear(){ const r=ROOM.r; let near=false;
   if(r&&ROOM.sw&&ROOM.sw.length&&mode==='walk'){ const q=loc(r,S.lat,S.lng); near=ROOM.sw.some(w=>Math.hypot(q[0]-w.pos[0],q[1]-w.pos[1])<2.2); }
   if(near!==(swBtn.style.display==='flex')){ swBtn.style.display=near?'flex':'none'; if(near) swLabel(); } }
-function dropRoom(){ ROOM.tro=null; ROOM.glow=null; ROOM.sw=null; swBtn.style.display='none'; if(!ROOM.g) return; scene.remove(ROOM.g); ROOM.g.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); ROOM.g=null; ROOM.key=null; ROOM.r=null; ROOM.leaves=[]; ROOM.gar=[]; }
+function dropRoom(){ ROOM.gr=null; ROOM.tro=null; ROOM.glow=null; ROOM.sw=null; ROOM.dimM=null; LKEY=null; swBtn.style.display='none'; if(!ROOM.g) return; scene.remove(ROOM.g); ROOM.g.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); ROOM.g=null; ROOM.key=null; ROOM.r=null; ROOM.leaves=[]; ROOM.gar=[]; }
 function garUpdate(){ for(const G2 of ROOM.gar){ const o=window.GARAGE?GARAGE.openness(G2.q.gk):0, b0=o*1.95, top=2.2, h=Math.max(.15,top-b0);
   G2.m.scale.y=h; G2.m.position.y=b0+h/2; } }
 // the room sits round the building's middle, turned with the camera, at the map's scale (like the cars)
@@ -394,6 +513,7 @@ function placeRoom(m,b){ const r=ROOM.r; if(!r) return; const kx=111320*cosLat()
   ROOM.g.position.set(rr/m,0,-f/m); ROOM.g.scale.setScalar(1/m); ROOM.g.rotation.y=b; }
 // doors swing open when you're within ~1.8 m of them, and shut again behind you
 function doorSwing(dt){ const r=ROOM.r; if(!r) return; const q=loc(r,S.lat,S.lng);
+  greeterTick(dt,q);
   for(const L of ROOM.leaves){ const mx=(L.d.x0+L.d.x1)/2, my=(L.d.y0+L.d.y1)/2, near=Math.hypot(q[0]-mx,q[1]-my)<(L.auto?3.8:1.8);   // automatic doors sense you from further off, and open quicker
     L.o=Math.max(0,Math.min(1,L.o+(near?1:-1)*dt/(L.auto?.45:.7))); L.pv.rotation.y=L.angC+L.dA*.95*(L.o*L.o*(3-2*L.o)); } }
 function fpCam(dt){
@@ -422,6 +542,7 @@ function setInside(r){
   person.traverse(o=>{ if(o.isMesh&&o.material!==shadow.material) o.material.depthTest=!r; });   // never hidden by the walls round you
   if(window.TRAFFIC&&TRAFFIC.occRebuild) TRAFFIC.occRebuild();                                    // and drop it from the car layer's building blockers
   step.cam=null; dirty=true; step.surf=null;
+  if(r&&window.STORES&&STORES.at){ const st=STORES.at(r.key); if(st) safe('greeter',()=>STORES.greet(st)); }   // "Welcome to Meijer" / "Welcome to Walmart"
   if(r&&!IN.told){ IN.told=true; toast('Inside: the walls are cut away so you can see in'+(mode==='walk'?'. Walk out through a door to leave':''),3800); }
 }
 // work out which building you're in (if any), from where you stand
@@ -573,7 +694,7 @@ function walkStep(dt,st,gas,now){
   W.lastAnim=anim; dirty=false;
   const mph=Math.round(Math.abs(W.v)*2.237); if(mph!==step.mph){ step.mph=mph; mphEl.textContent=mph; }
 }
-window.WALK={inStore:()=>!!(ROOM.tro&&ROOM.tro.length),storeLights:(k,on)=>flipLights(k,on),step:(dt,st,gas,now)=>{ try{ walkStep(dt,st,gas,now); }catch(e){ console.warn('walk',e); renderer.render(scene,camera); } },
+window.WALK={inStore:()=>!!(ROOM.sw&&ROOM.sw.length),storeLights:(k,on)=>flipLights(k,on),step:(dt,st,gas,now)=>{ try{ walkStep(dt,st,gas,now); }catch(e){ console.warn('walk',e); renderer.render(scene,camera); } },
   parked:()=>PK.mode, getOut:()=>safe('walk',getOut), toggle:()=>safe('walk',getOut), state:W, person, parkedAt:PK,   /* toggle: the F key (js/enh/controls.js) */
   insideId:()=>IN.rec?IN.rec.id:null, inside:IN,
   setInside:r=>safe('inside',()=>{ if((r?r.key:null)!==IN.key) setInside(r); }), redrawInside:()=>{ if(IN.rec) safe('inside draw',()=>{ if(ROOM.g) garUpdate(); else drawInterior(IN.rec); }); }, inRec};

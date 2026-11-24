@@ -1,4 +1,5 @@
-/* Meijer stores (owner 2026-11-23: a photo of the lights inside a Meijer — "inside Meijer make the lights look like this";
+/* Meijer and Walmart stores (owner 2026-11-23 asked for Walmart too, with a greeter at the door, and a setting to switch its voice off;
+   Meijer started it: a photo of the lights inside a Meijer — "inside Meijer make the lights look like this";
    then "just forget about the outside … in front of the door there's a wall so I can't get in").
    Which buildings: anything named Meijer near you — a map point in the tiles, OpenStreetMap (Overpass), the place search —
    or a building you marked by saying "this is Meijer"; the big building it stands in (or the big one nearest it).
@@ -12,7 +13,8 @@
 'use strict';
 const {safe,onReady,onTick}=YD;
 const ST={list:[],at:null,busy:false,ovAt:null,ovT:0};
-const NAME=/\bmeijer\b/i, NOT=/gas|fuel|express|station|car ?wash|distribution|warehouse|office|drive|road|avenue|street/i;
+const NAME=/\b(meijer|walmart)\b/i, NOT=/gas|fuel|express|station|car ?wash|distribution|warehouse|office|drive|road|avenue|street|pharmacy|vision|optical|photo|auto care|tire|bank|mobile|money|fulfil+ment|pickup|grocery pickup/i;
+const brandOf=n=>/walmart/i.test(n||'')?'Walmart':'Meijer';   // the name the greeter welcomes you to
 const inRing=(r,x,y)=>{ let c=false; for(let i=0,j=r.length-1;i<r.length;j=i++){ const a=r[i], b=r[j]; if((a[1]>y)!==(b[1]>y)&&x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0]) c=!c; } return c; };
 const keyOf=r=>{ let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const q of r){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
   return {key:((x0+x1)/2).toFixed(6)+','+((y0+y1)/2).toFixed(6),bb:[x0,y0,x1,y1],cx:(x0+x1)/2,cy:(y0+y1)/2}; };
@@ -20,7 +22,7 @@ const areaM=(r,kx)=>{ let a=0; for(let i=0,j=r.length-1;i<r.length;j=i++) a+=(r[
 
 function add(ring,name){ if(!ring||ring.length<4) return null; const k=keyOf(ring);
   if(ST.list.some(s=>s.key===k.key)) return null;
-  const s=Object.assign({ring,name:name||'Meijer',id:ring.id!=null?ring.id:null,keys:ring.keys||[]},k); ST.list.push(s); changed(); found(s); return s; }
+  const s=Object.assign({ring,name:name||'Meijer',brand:brandOf(name),id:ring.id!=null?ring.id:null,keys:ring.keys||[]},k); ST.list.push(s); changed(); found(s); return s; }
 // the building a point stands in (or the biggest one within 90 m), from the map tiles. A big building cut by a tile edge
 // comes in pieces with the same id: they are joined into one outline (union, below).
 // the outline of several buildings that touch (owner 2026-11-23: a convex hull took in the shops next door, so their
@@ -97,7 +99,7 @@ function found(s){ if(ST.told&&ST.told[s.key]) return; (ST.told=ST.told||{})[s.k
 // OpenStreetMap: anything named Meijer within ~5 km (the store may be mapped as the building, a point, or without a shop tag)
 async function scanOverpass(){ if(ST.busy||typeof ovFetch!=='function') return; ST.busy=true; ST.ovAt=[S.lng,S.lat]; ST.ovT=performance.now();
   const dy=.045, dx=.06, bb=`(${(S.lat-dy).toFixed(4)},${(S.lng-dx).toFixed(4)},${(S.lat+dy).toFixed(4)},${(S.lng+dx).toFixed(4)})`;
-  try{ const j=await ovFetch(`[out:json][timeout:25];(nwr["name"~"meijer",i]${bb};nwr["brand"~"meijer",i]${bb};);out geom qt;`);
+  try{ const j=await ovFetch(`[out:json][timeout:25];(nwr["name"~"meijer|walmart",i]${bb};nwr["brand"~"meijer|walmart",i]${bb};);out geom qt;`);
     for(const el of (j&&j.elements)||[]){ const t=el.tags||{}, n=t.name||t.brand||'Meijer'; if(!NAME.test(n)||NOT.test(n)||t.highway||t.amenity==='fuel') continue;
       const ring=el.type==='way'&&el.geometry&&el.geometry.length>3?el.geometry.map(p=>[+p.lon,+p.lat]):null;
       const c=el.type==='node'?[el.lon,el.lat]:el.bounds?[(el.bounds.minlon+el.bounds.maxlon)/2,(el.bounds.minlat+el.bounds.maxlat)/2]:null; if(!c) continue;
@@ -105,15 +107,30 @@ async function scanOverpass(){ if(ST.busy||typeof ovFetch!=='function') return; 
   catch(e){ console.warn('stores overpass',e); } ST.busy=false; resolvePts(); }
 // the place search (Nominatim), as a second source
 async function scanSearch(){ ST.nsAt=[S.lng,S.lat]; const vb=[S.lng-.07,S.lat+.05,S.lng+.07,S.lat-.05].map(v=>v.toFixed(4)).join(',');
-  try{ const r=await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=10&bounded=1&viewbox='+vb+'&q=Meijer'); if(!r.ok) return;
-    for(const x of await r.json()){ const n=(x.name||x.display_name||'').split(',')[0]; if(!NAME.test(n)||NOT.test(n)||x.category==='highway'||x.type==='fuel') continue; addPt(+x.lon,+x.lat,n); } }
-  catch(e){} resolvePts(); }
+  for(const q of ['Meijer','Walmart']){
+    try{ const r=await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=10&bounded=1&viewbox='+vb+'&q='+q); if(!r.ok) continue;
+      for(const x of await r.json()){ const n=(x.name||x.display_name||'').split(',')[0]; if(!NAME.test(n)||NOT.test(n)||x.category==='highway'||x.type==='fuel') continue; addPt(+x.lon,+x.lat,n); } }
+    catch(e){} }
+  resolvePts(); }
 // "this is Meijer": the big building nearest you (or the one you're looking at) becomes one, remembered on this device
-function markHere(){ const h=S.hdg*Math.PI/180, kx=111320*Math.cos(S.lat*Math.PI/180);
+function markHere(brand){ brand=brand||'Meijer'; const h=S.hdg*Math.PI/180, kx=111320*Math.cos(S.lat*Math.PI/180);
   for(const ah of [0,40,80,120]){ const lng=S.lng+Math.sin(h)*ah/kx, lat=S.lat+Math.cos(h)*ah/111320, r=buildingFor(lng,lat);
-    if(r){ const k=keyOf(r); let sv=[]; try{ sv=JSON.parse(localStorage.getItem(SAVE)||'[]'); }catch(e){} sv.push([+k.cx.toFixed(6),+k.cy.toFixed(6),'Meijer']);
-      try{ localStorage.setItem(SAVE,JSON.stringify(sv.slice(-30))); }catch(e){} addPt(k.cx,k.cy,'Meijer',r,true); resolvePts(); return true; } }
+    if(r){ const k=keyOf(r); let sv=[]; try{ sv=JSON.parse(localStorage.getItem(SAVE)||'[]'); }catch(e){} sv.push([+k.cx.toFixed(6),+k.cy.toFixed(6),brand]);
+      try{ localStorage.setItem(SAVE,JSON.stringify(sv.slice(-30))); }catch(e){} addPt(k.cx,k.cy,brand,r,true); resolvePts(); return true; } }
   return false; }
+/* The greeter standing inside the doors (js/enh/walk.js draws the person) says "Welcome to Meijer" / "Welcome to Walmart" when
+   you walk in. ⚙️ A/V → Store greeter turns the voice off (the greeter still stands there); saved as ydGreeter on this device. */
+const GREET={key:'ydGreeter',last:{}};
+const greeterOn=()=>{ try{ return localStorage.getItem(GREET.key)!=='off'; }catch(e){ return true; } };
+function greet(s,delay){ if(!s||!greeterOn()) return false; const now=performance.now(), k=s.key; if(now-(GREET.last[k]||-1e9)<45000) return false;   // not again on a quick step out and in
+  GREET.last[k]=now; const t='Welcome to '+(s.brand||brandOf(s.name))+'.';
+  setTimeout(()=>{ if(!greeterOn()) return;                                  // a short pause first: you've just stepped in, the greeter notices you, then speaks
+    if(typeof toast==='function') toast('👋 '+t,2600);
+    try{ if(window.speechSynthesis){ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(t); u.lang='en-US'; u.rate=.98;
+        const vs=speechSynthesis.getVoices(); u.voice=vs.find(v=>/en[-_]US/i.test(v.lang)&&/Google|Natural|Aria|Jenny|Guy/i.test(v.name))||vs.find(v=>/^en/i.test(v.lang))||null; if(!u.voice) delete u.voice;
+        const d=on=>{ for(const f of [()=>window.MUSIC&&MUSIC.duck&&MUSIC.duck(on),()=>window.SOUND&&SOUND.duck&&SOUND.duck(on)]) try{ f(); }catch(e){} };
+        d(true); u.onend=u.onerror=()=>setTimeout(()=>d(false),200); setTimeout(()=>d(false),4000); speechSynthesis.speak(u); } }catch(e){} },delay==null?1300:delay);
+  return true; }
 function changed(){ ST.dirty=true; }
 // which way the store faces: toward the parking lots round it (area-weighted), else the nearest road that isn't a service
 // drive (that's usually the loading dock). js/enh/buildings.js puts the glass and the way in on that side too.
@@ -155,7 +172,7 @@ function ownRec(s){ const kx=111320*Math.cos(s.cy*Math.PI/180), ky=111320;
         const t=(X-a[0])*ux+(Y-a[1])*uy, off=(X-a[0])*uy-(Y-a[1])*ux; if(t<hw+.2||t>L-hw-.2||Math.abs(off)>.8) continue;
         if(doors.some(o=>o.ei===i&&Math.abs((o.s0+o.s1)/2-t)<3.5)) break;
         doors.push({ei:i,s0:t-hw,s1:t+hw,x0:a[0]+ux*(t-hw),y0:a[1]+uy*(t-hw),x1:a[0]+ux*(t+hw),y1:a[1]+uy*(t+hw),nx:uy,ny:-ux,dk:q.dk}); break; } } }
-  return {key:s.key,keys:s.keys,id:s.id,cx:s.cx,cy:s.cy,kx,ky,p,h:s.h||hOf(s),house:false,doors,garages:[],bb:s.bb,store:true,E,sm}; }
+  return {key:s.key,keys:s.keys,id:s.id,cx:s.cx,cy:s.cy,kx,ky,p,h:s.h||hOf(s),house:false,doors,garages:[],bb:s.bb,store:true,brand:s.brand,E,sm}; }
 // the store's pieces come in as their tiles load: look again (at most every 4 s) and grow the outline to take them in
 function regrow(s){ const now=performance.now(); if(now-(s.gT||0)<4000) return; s.gT=now;
   const r=buildingFor(s.cx,s.cy); if(!r) return; const k=keyOf(r); const kk=(r.keys||[]).join('|');
@@ -217,5 +234,5 @@ onTick(1500,function storeTick(){
   const nm=ST.nsAt?meters(ST.nsAt[1],ST.nsAt[0],S.lat,S.lng):1e9; if(nm>3000) scanSearch();
   if(ST.list.length) safe('store doors',drawDoors);
 });
-window.STORES={list:ST.list,at,recs,covers,add,frontDir,markHere,pts:PTS,state:ST,refresh:()=>{ ST.dirty=true; }};
+window.STORES={list:ST.list,at,recs,covers,add,frontDir,markHere,greet,greeterOn,brandOf,pts:PTS,state:ST,refresh:()=>{ ST.dirty=true; }};
 })();
