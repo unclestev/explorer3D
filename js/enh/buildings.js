@@ -682,6 +682,12 @@ function facades(P,kx,ky,res,rich){
           if(fine&&!(wins&&q===3)) for(const z of [q*ph+ph*.22,q*ph+ph*.78-.04]){ put(E,s0+.12,s0+gw-.12,.06,.072,z,z+.04,shade(gcol,-.12)); rp(); } }   // raised panel edges
         if(wins){ const n=gw>4?8:4, ww=(gw-.5)/n; for(let q=0;q<n;q++){ const xx=s0+.25+q*ww; put(E,xx+.06,xx+ww-.06,.06,.075,3*ph+.14,3*ph+.4,GLASS); rp(); } }
         if(fine){ put(E,s0-.14,s0,-.04,.06,0,GT+.12,trim); put(E,s0+gw,s0+gw+.14,-.04,.06,0,GT+.12,trim); put(E,s0-.14,s0+gw+.14,-.04,.06,GT,GT+.12,trim); } }   // trim round each opening
+      /* the pad in front of the doors (owner 2026-11-24: "make sure the driveways leading to the garage doors meet the garage all the way
+         across"): a mapped driveway is a thin line, so a slab of concrete as wide as the row of doors runs out from them to meet it,
+         stopping short of the street */
+      { let len=5.5; if(ds&&ds.E===E) len=Math.max(5.5,Math.min(9,ds.d+1.5));
+        if(sd&&sd.d){ const nd=E.nx*sd[0]+E.ny*sd[1]; if(nd>.6){ const room=sd.d/nd-(E.a[0]*E.nx+E.a[1]*E.ny)-6.5; if(room>2.5) len=Math.min(len,room); } }
+        put(E,st-.35,st+tw+.35,.04,len,0,.045,'#bdbab3'); }
       for(const xx of [st-.42,st+tw+.42]) lamp(E,xx,1.95,1.2,3.2);                                                   // a light on each side of the whole row
       occupy(E,st-.6,st+tw+.6); }
     // front door on the street side, in the free part of the wall
