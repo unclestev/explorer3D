@@ -120,11 +120,12 @@ function details(F,P,kx,ky){
   safe('trj gym doors',()=>{ const G=T.rec; if(!G) return; const gx=(G.cx-P[0])*kx, gy=(G.cy-P[1])*ky, q=G.p; let bi=0,best=0;
     for(let i=0;i<q.length;i++){ const L=Math.hypot(q[(i+1)%q.length][0]-q[i][0],q[(i+1)%q.length][1]-q[i][1]); if(L>best){ best=L; bi=i; } }
     for(const i of [bi,(bi+2)%q.length]){ const A=q[i], B=q[(i+1)%q.length], L=Math.hypot(B[0]-A[0],B[1]-A[1]), u=[(B[0]-A[0])/L,(B[1]-A[1])/L], n=[u[1],-u[0]], a=[gx+A[0],gy+A[1]];
-      for(const f of [.28,.72]){ const c=L*f, hw=2.3, hh=3.6;
-        put(a,u,n,c-hw,c+hw,-.3,.06,0,2.9,DARK);                                                       // the dark recess
-        put(a,u,n,c-hw,c-hw+.7,.02,1.9,0,hh,BRICKC); put(a,u,n,c+hw-.7,c+hw,.02,1.9,0,hh,BRICKC);       // brick piers
-        put(a,u,n,c-hw,c+hw,.02,1.9,hh-.7,hh,BRICKC); put(a,u,n,c-hw,c+hw,.02,1.92,hh,hh+.2,'#2c2e34'); put(a,u,n,c-hw,c+hw,1.85,1.93,hh-.45,hh-.1,BAND);   // canopy, its dark roof and red edge
-        for(const z of [-1,1]){ put(a,u,n,z<0?c-1.05:c+.05,z<0?c-.05:c+1.05,.06,.12,.05,2.5,RED); put(a,u,n,z<0?c-.93:c+.17,z<0?c-.17:c+.93,.12,.16,.4,2.3,GLASS); } } } });
+      for(const f of [.28,.72]){ const c=L*f, hw=2.1, hh=3.4, D=1.5;                                   // a tidy bay: dark recess, two slim piers, one flat canopy, the door pair
+        put(a,u,n,c-hw,c+hw,-.3,.06,0,2.8,DARK);
+        put(a,u,n,c-hw,c-hw+.5,.02,D,0,hh,BRICKC); put(a,u,n,c+hw-.5,c+hw,.02,D,0,hh,BRICKC);
+        put(a,u,n,c-hw,c+hw,.02,D,hh-.5,hh,BRICKC); put(a,u,n,c-hw,c+hw,D-.04,D+.02,hh-.5,hh-.2,BAND);
+        for(const z of [-1,1]){ put(a,u,n,z<0?c-1:c+.04,z<0?c-.04:c+1,.06,.12,.05,2.45,RED); put(a,u,n,z<0?c-.88:c+.16,z<0?c-.16:c+.88,.12,.16,.4,2.25,GLASS); } } }
+  });
   return feats; }
 
 /* the gym is a room you can walk into (js/enh/walk.js furnishes it from the owner's photos): the big block on the left of the plan,
