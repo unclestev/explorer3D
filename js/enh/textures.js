@@ -26,11 +26,17 @@ function blades(x,s,r,wrap,n,colors,len){
   x.globalAlpha=1;
 }
 function makeTextures(){
-  tex('tx-grass',128,11,(x,s,r,w)=>{ x.fillStyle='#86b35a'; x.fillRect(0,0,s,s);
-    speckle(x,s,r,w,55,['#5f8f38','#a6cf72','#6c9c42'],5,13,.8); blades(x,s,r,w,420,['#5e8f36','#a7cf72','#739f47','#b9d98a'],5); });
-  tex('tx-lawn',128,12,(x,s,r,w)=>{ x.fillStyle='#9cc56d'; x.fillRect(0,0,s,s);
-    for(let i=0;i<2;i++){ x.fillStyle=i%2?'rgba(255,255,255,.16)':'rgba(0,50,0,.12)'; x.fillRect(0,i*s/2,s,s/2); }   // mowing stripes
-    blades(x,s,r,w,300,['#86b35a','#b5d98a','#8fbd5f'],3.5); speckle(x,s,r,w,6,['#f5f0d8','#e9d36b'],1,1.6,.7); });   // a few clover/dandelions
+  /* grass and lawns (owner 2026-11-23: "add a grass texture for grassy areas… mowed grass for in front of houses"): from the chase
+     camera a 128 px tile spans ~14 m, so single blades (a few cm) vanish; what reads as grass is clumps of slightly different
+     greens (blots 4–14 px) over a dense 1 px grain. Lawns add mowing stripes (16 px ≈ 1.8 m) and a few clover/dandelion flecks. */
+  tex('tx-grass',128,11,(x,s,r,w)=>{ x.fillStyle='#7aa64c'; x.fillRect(0,0,s,s);
+    speckle(x,s,r,w,60,['#628f39','#8fb95c','#6f9a44','#9bbf66'],5,14,.6);
+    speckle(x,s,r,w,1100,['#557f32','#97c065','#6a9640','#a7c977','#8a8a4a'],.6,1.4,.75); });
+  tex('tx-lawn',128,12,(x,s,r,w)=>{ x.fillStyle='#7cab4d'; x.fillRect(0,0,s,s);
+    for(let i=0;i<8;i++){ x.fillStyle=i%2?'rgba(255,255,200,.08)':'rgba(0,40,0,.08)'; x.fillRect(0,i*16,s,16); }   // mowing stripes
+    speckle(x,s,r,w,40,['#6c9c40','#8fbd5c','#76a548'],4,10,.5);
+    speckle(x,s,r,w,900,['#5d8c35','#9cc768','#6e9f42','#a9d077'],.6,1.3,.75);
+    speckle(x,s,r,w,5,['#f2efd6','#e8d45a'],.8,1.2,.8); });                                       // a few clover/dandelions
   tex('tx-wood',128,13,(x,s,r,w)=>{ x.fillStyle='#5c7a3a'; x.fillRect(0,0,s,s);
     speckle(x,s,r,w,70,['#3f5a28','#6d8a45','#7a6a3e','#8a7447'],4,11,.85); speckle(x,s,r,w,160,['#9a8350','#3f5a2a','#b09356'],.8,1.8,.7); });
   tex('tx-sand',128,14,(x,s,r,w)=>{ x.fillStyle='#e6d3a0'; x.fillRect(0,0,s,s);
@@ -62,7 +68,7 @@ function makeTextures(){
 // which texture goes on which kind of ground (OpenMapTiles classes)
 const LANDCOVER=['match',['get','class'],'grass','tx-grass','wood','tx-wood','sand','tx-sand','wetland','tx-wet','none'];
 const lotImg=()=>(window.ROADSIDE?ROADSIDE.state.asphalt:(()=>{ try{ return localStorage.getItem('ydAsphalt')!=='0'; }catch(e){ return true; } })())?'tx-lot':'tx-parking';
-const LANDUSE=()=>['match',['get','class'],'residential','tx-lawn','parking',lotImg(),['commercial','retail','industrial','railway','garages'],'tx-paved',
+const LANDUSE=()=>['match',['get','class'],'residential','tx-lawn','parking',lotImg(),['commercial','retail'],'tx-lawn',['industrial','railway','garages'],'tx-paved',
   ['pitch','track','stadium'],'tx-pitch','cemetery','tx-cemetery',['school','college','university','hospital','playground','park'],'tx-grass','none'];
 const TXLAYERS=[], HEAVY=id=>id==='tx-water'||id.startsWith('tx-asph-');   // hidden in battery saver
 
@@ -121,5 +127,12 @@ window.TXLOT={name:lotImg, apply(){ const img=lotImg();
   for(const id of ['pk-base','pk-pad']) safe('lot-'+id,()=>{ if(map.getLayer(id)) map.setPaintProperty(id,'fill-color',on?'#4c4e51':'#5f6368'); });
   safe('lot-curb',()=>{ if(map.getLayer('pk-curb')) map.setPaintProperty('pk-curb','line-color',on?'#9a9a94':'#b9bcc0'); }); }};
 
-onReady(function textures(){ makeTextures(); addTextureLayers(); colourBuildings(); });
+/* the style's own ground fills that our opaque textures cover completely (same source layer, same classes): they were drawn
+   first and then painted over, every frame and once per terrain tile (~6 ms and ~90k triangles a frame in Yorkville).
+   They now stop at zoom 13, where the textures start, so the zoomed-out map still has them. */
+const UNDER_TX=['landuse_residential','landcover_grass','landcover_wood','landcover_wetland','park','landuse_pitch','landuse_track','landuse_cemetery','landuse_school','landuse_hospital','landcover_sand'];
+function dropCovered(){ for(const id of UNDER_TX){ const l=map.getLayer(id); if(!l) continue;
+  safe('under-tx',()=>map.setLayerZoomRange(id,l.minzoom||0,13)); } }
+
+onReady(function textures(){ makeTextures(); addTextureLayers(); colourBuildings(); dropCovered(); });
 })();
