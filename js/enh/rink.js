@@ -47,35 +47,70 @@ function tilePts(){ const now=performance.now(); if(R.tile&&now-R.tileT<3000) re
       if(p.class!=='ice_rink'&&p.subclass!=='ice_rink'&&!/ice (arena|rink|center|centre|complex|palace)|skating (rink|center|centre)/i.test(p.name||'')) continue;
       out.push({lat:g.coordinates[1],lng:g.coordinates[0]}); } }catch(e){}
   R.tile=out; return out; }
-function spec(rec){
+/* Where the rink(s) go (owner 2026-11-24: "it has some of the walls in the middle... make sure the rinks are laid out so they fit
+   entirely"): the building outline is painted onto a 1 m grid, then every angle along its walls (and square to them) and every
+   spot on it is tried for the biggest regulation rink that fits with a metre to spare all round, so an L-shaped or notched building
+   gets its rink in the open part. A second rink goes in too when one at 85 % or more still fits beside the first (Fox Valley has two). */
+function layoutRinks(rec){
+  const p=rec.p; let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9; for(const q of p){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
+  const nx=Math.ceil(x1-x0)+1, ny=Math.ceil(y1-y0)+1, ok=new Uint8Array(nx*ny); let cnt=0, sx=0, sy=0;
+  for(let j=0;j<ny;j++) for(let i=0;i<nx;i++){ const x=x0+i+.5, y=y0+j+.5; if(inP(p,x,y)){ ok[j*nx+i]=1; cnt++; sx+=x; sy+=y; } }
+  if(!cnt) return [];
+  const mx=sx/cnt, my=sy/cnt, at=(x,y)=>{ const i=Math.floor(x-x0), j=Math.floor(y-y0); return i>=0&&j>=0&&i<nx&&j<ny&&ok[j*nx+i]===1; };
+  const angs=new Set(); for(let i=0;i<p.length;i++){ const a=p[i], b=p[(i+1)%p.length]; if(Math.hypot(b[0]-a[0],b[1]-a[1])<2) continue;
+    const d=((Math.round(Math.atan2(b[1]-a[1],b[0]-a[0])*90/Math.PI)*2)%180+180)%180; angs.add(d); angs.add((d+90)%180); }
+  if(!angs.size){ angs.add(0); angs.add(90); }
+  const fit=(c,s,cx,cy,sc)=>{ const A=RL*sc/2+1, B=RW*sc/2+1, P=(u,v)=>at(cx+u*c-v*s,cy+u*s+v*c);
+    for(let u=-A;u<=A;u+=1.2) if(!P(u,-B)||!P(u,B)) return false;
+    for(let v=-B;v<=B;v+=1.2) if(!P(-A,v)||!P(A,v)) return false;
+    for(let u=-A+2.5;u<A;u+=2.5) for(let v=-B+2.5;v<B;v+=2.5) if(!P(u,v)) return false;
+    return true; };
+  const search=minSc=>{ let best=null; const st=cnt>6000?2:1.5;
+    for(const ad of angs){ const c=Math.cos(ad*Math.PI/180), s=Math.sin(ad*Math.PI/180);
+      for(let cy=y0;cy<=y1;cy+=st) for(let cx=x0;cx<=x1;cx+=st){ if(!at(cx,cy)) continue;
+        for(let sc=1;sc>=minSc-1e-6;sc-=.05){ if(best&&sc<best.sc-1e-6) break;
+          if(fit(c,s,cx,cy,sc)){ const d=Math.hypot(cx-mx,cy-my); if(!best||sc>best.sc+1e-6||(Math.abs(sc-best.sc)<1e-6&&d<best.d)) best={sc,c,s,cx,cy,d}; break; } } } }
+    return best; };
+  const out=[], b1=search(.45);
+  if(b1){ out.push(b1);
+    const A=RL*b1.sc/2+3, B=RW*b1.sc/2+3;                                     // keep the second one clear of the first (and a concourse between)
+    for(let j=0;j<ny;j++) for(let i=0;i<nx;i++){ const x=x0+i+.5-b1.cx, y=y0+j+.5-b1.cy, u=x*b1.c+y*b1.s, v=-x*b1.s+y*b1.c; if(Math.abs(u)<A&&Math.abs(v)<B) ok[j*nx+i]=0; }
+    const b2=b1.sc>=.85?search(.85):null; if(b2) out.push(b2); }
+  return out; }
+function mkSpec(rec,b){ const sp={c:b.c,s:b.s,cx:b.cx,cy:b.cy,sc:b.sc,rec}; sp.A=RL*sp.sc/2; sp.B=RW*sp.sc/2; sp.Rr=RC*sp.sc;
+  // the gate in the boards: on the long side nearest the closest door, beside where that door is
+  let bd=null,bdd=1e9; for(const d of rec.doors||[]){ const dx=(d.x0+d.x1)/2-sp.cx, dy=(d.y0+d.y1)/2-sp.cy, dd=Math.hypot(dx,dy); if(dd<bdd){ bdd=dd; bd=[dx*sp.c+dy*sp.s,-dx*sp.s+dy*sp.c]; } }
+  sp.gs=bd&&bd[1]<0?-1:1; sp.gx=Math.max(-(sp.A-sp.Rr-1.5),Math.min(sp.A-sp.Rr-1.5,bd?bd[0]:0)); return sp; }
+// the old way, if nothing fits: the smallest box round the outline, rink shrunk into it
+function boxRink(rec){ let best=null; const p=rec.p;
+  for(let i=0;i<p.length;i++){ const a=p[i], b=p[(i+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1]); if(L<1) continue;
+    const c=(b[0]-a[0])/L, s=(b[1]-a[1])/L, e=ext(p,c,s), A=(e.x1-e.x0)*(e.y1-e.y0); if(!best||A<best.A) best={A,c,s}; }
+  if(!best) return null; let {c,s}=best, e=ext(p,c,s); if(e.y1-e.y0>e.x1-e.x0){ const c2=-s, s2=c; c=c2; s=s2; e=ext(p,c,s); }
+  const u=(e.x0+e.x1)/2, v=(e.y0+e.y1)/2, L=e.x1-e.x0, W=e.y1-e.y0;
+  return {c,s,cx:u*c-v*s,cy:u*s+v*c,sc:Math.max(.45,Math.min(1,(L-4)/RL,(W-4)/RW))}; }
+function spec(rec){                                                   // the rinks in a building: an array, or null when it isn't an arena
   const had=R.specs.get(rec.key);
   if(had!==undefined&&(had||performance.now()-(R.negT.get(rec.key)||0)<6000)) return had;      // a "no" is only believed for 6 s: the tiles may still be loading
   let yes=R.force.has(rec.key);
   if(!yes){ const b=rec.bb; for(const a of R.list.concat(tilePts())){ if(a.lng<b[0]||a.lng>b[2]||a.lat<b[1]||a.lat>b[3]) continue;
       if(inP(rec.p,(a.lng-rec.cx)*rec.kx,(a.lat-rec.cy)*rec.ky)){ yes=true; break; } } }
-  let sp=null;
-  if(yes){
-    let best=null; const p=rec.p;
-    for(let i=0;i<p.length;i++){ const a=p[i], b=p[(i+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1]); if(L<1) continue;
-      const c=(b[0]-a[0])/L, s=(b[1]-a[1])/L, e=ext(p,c,s), A=(e.x1-e.x0)*(e.y1-e.y0); if(!best||A<best.A) best={A,c,s}; }
-    if(best){ let {c,s}=best, e=ext(p,c,s); if(e.y1-e.y0>e.x1-e.x0){ const c2=-s, s2=c; c=c2; s=s2; e=ext(p,c,s); }       // the long way
-      const u=(e.x0+e.x1)/2, v=(e.y0+e.y1)/2, L=e.x1-e.x0, W=e.y1-e.y0;
-      sp={c,s,cx:u*c-v*s,cy:u*s+v*c,sc:Math.max(.45,Math.min(1,(L-4)/RL,(W-4)/RW)),rec};
-      sp.A=RL*sp.sc/2; sp.B=RW*sp.sc/2; sp.Rr=RC*sp.sc;
-      // the gate in the boards: on the long side nearest the closest door, beside where that door is
-      let bd=null,bdd=1e9; for(const d of rec.doors||[]){ const dx=(d.x0+d.x1)/2-sp.cx, dy=(d.y0+d.y1)/2-sp.cy, dd=Math.hypot(dx,dy); if(dd<bdd){ bdd=dd; bd=[dx*c+dy*s,-dx*s+dy*c]; } }
-      sp.gs=bd&&bd[1]<0?-1:1; sp.gx=Math.max(-(sp.A-sp.Rr-1.5),Math.min(sp.A-sp.Rr-1.5,bd?bd[0]:0)); } }
-  R.specs.set(rec.key,sp); if(!sp) R.negT.set(rec.key,performance.now()); return sp; }
+  let rs=null;
+  if(yes){ let bs=[]; try{ bs=layoutRinks(rec); }catch(e){ console.warn('rink layout',e); }
+    if(!bs.length){ const b=boxRink(rec); if(b) bs=[b]; }
+    if(bs.length) rs=bs.map(b=>mkSpec(rec,b)); }
+  R.specs.set(rec.key,rs); if(!rs) R.negT.set(rec.key,performance.now()); return rs; }
 const rc=(sp,x,y)=>{ const dx=x-sp.cx, dy=y-sp.cy; return [dx*sp.c+dy*sp.s,-dx*sp.s+dy*sp.c]; };
 function inside(sp,px,py,m){ m=m||0; const A=sp.A-m, B=sp.B-m, Rr=Math.max(.1,sp.Rr-m), qx=Math.abs(px)-(A-Rr), qy=Math.abs(py)-(B-Rr);
   if(qx>0&&qy>0) return Math.hypot(qx,qy)<=Rr; return Math.abs(px)<=A&&Math.abs(py)<=B; }
 const loc=(r,lat,lng)=>[(lng-r.cx)*r.kx,(lat-r.cy)*r.ky];
-function onIce(rec,lat,lng){ const sp=spec(rec); if(!sp) return false; const q=loc(rec,lat,lng), c=rc(sp,q[0],q[1]); return inside(sp,c[0],c[1]); }
-// a step from a to b that goes over the boards anywhere but the gate is stopped
-function blocks(rec,a,b){ const sp=spec(rec); if(!sp) return false;
-  const qa=loc(rec,a[0],a[1]), qb=loc(rec,b[0],b[1]), ca=rc(sp,qa[0],qa[1]), cb=rc(sp,qb[0],qb[1]), ia=inside(sp,ca[0],ca[1]), ib=inside(sp,cb[0],cb[1]);
-  if(ia===ib) return false;
-  const o=ia?cb:ca; return !(Math.abs(o[0]-sp.gx)<.95&&Math.sign(o[1])===sp.gs&&Math.abs(o[1])>sp.B-1.6); }
+function onIce(rec,lat,lng){ const rs=spec(rec); if(!rs) return false; const q=loc(rec,lat,lng); return rs.some(sp=>{ const c=rc(sp,q[0],q[1]); return inside(sp,c[0],c[1]); }); }
+// a step from a to b that goes over the boards anywhere but a gate is stopped
+function blocks(rec,a,b){ const rs=spec(rec); if(!rs) return false;
+  const qa=loc(rec,a[0],a[1]), qb=loc(rec,b[0],b[1]);
+  for(const sp of rs){ const ca=rc(sp,qa[0],qa[1]), cb=rc(sp,qb[0],qb[1]), ia=inside(sp,ca[0],ca[1]), ib=inside(sp,cb[0],cb[1]);
+    if(ia===ib) continue; const o=ia?cb:ca;
+    if(!(Math.abs(o[0]-sp.gx)<.95&&Math.sign(o[1])===sp.gs&&Math.abs(o[1])>sp.B-1.6)) return true; }
+  return false; }
 
 /* ---------- painting and building ---------- */
 function iceTexture(){
@@ -102,8 +137,7 @@ function board(sp){                                                             
       if(g0>lo+.01) segs.push([[lo,a[1]],[Math.min(g0,hi),a[1]]]); if(g1<hi-.01) segs.push([[Math.max(g1,lo),a[1]],[hi,a[1]]]); }
     else segs.push([a,b]); }
   return segs; }
-function build(g,rec,o){
-  drop(); const sp=spec(rec); if(!sp) return;
+function buildUnit(g,sp){
   const RG=new THREE.Group(); RG.position.set(sp.cx,0,-sp.cy); RG.rotation.y=Math.atan2(sp.s,sp.c); g.add(RG);
   const mk=(c,e,op)=>new THREE.MeshLambertMaterial({color:c,emissive:e||0,side:THREE.DoubleSide,transparent:op!=null,opacity:op==null?1:op,depthWrite:op==null});
   // the ice
@@ -123,20 +157,33 @@ function build(g,rec,o){
     box(.07,.07,GW,0,GH,0,red); box(.012,GH,GW,e*GD,GH/2,0,netM); box(GD,GH,.012,e*GD/2,GH/2,-GW/2,netM); box(GD,GH,.012,e*GD/2,GH/2,GW/2,netM); box(GD,.012,GW,e*GD/2,GH,0,netM); }
   // the puck (a little bigger than real so you can see it down the rink)
   const puck=new THREE.Mesh(new THREE.CylinderGeometry(PUCKR,PUCKR,.035,18),new THREE.MeshLambertMaterial({color:0x111214,emissive:0x050506})); puck.position.set(0,.05,0); puck.renderOrder=4; RG.add(puck);
-  // scoreboard over centre ice
-  const cv=document.createElement('canvas'); cv.width=512; cv.height=200; const sbT=new THREE.CanvasTexture(cv), sbM=new THREE.MeshBasicMaterial({map:sbT});
-  const sb=new THREE.Group(); sb.position.set(0,Math.max(4,o.HC-2.2),0); RG.add(sb);
-  sb.add(new THREE.Mesh(new THREE.BoxGeometry(3.4,1.3,.3),mk(0x1b1d21)));
-  for(const z of[-.16,.16]){ const f=new THREE.Mesh(new THREE.PlaneGeometry(3.2,1.2),sbM); f.position.z=z; if(z<0) f.rotation.y=Math.PI; sb.add(f); }
-  for(const e of[-1,1]) for(const z of[-.3,.3]){ const c=new THREE.Mesh(new THREE.CylinderGeometry(.02,.02,Math.max(1,o.HC-sb.position.y),4),mk(0x444444)); c.position.set(e*1.4,(o.HC-sb.position.y)/2+.6,z*.4); sb.add(c); }
-  R.cur={rec,sp,RG,puck,cv,sbT,P:{x:0,y:0,vx:0,vy:0,in:0,t:0,cd:0}}; R.goals=0; R.shots=0; R.charge=0; score(); reset(0);
   for(const c of RG.children) c.traverse(m=>{ if(m.isMesh) m.frustumCulled=false; });
-  showBtn(true); }
-function score(){ const c=R.cur; if(!c) return; const x=c.cv.getContext('2d'); x.fillStyle='#0b0c0e'; x.fillRect(0,0,512,200);
-  x.fillStyle='#ffb400'; x.font='bold 40px monospace'; x.textAlign='center'; x.fillText('GOALS',140,70); x.fillText('SHOTS',372,70);
-  x.font='bold 96px monospace'; x.fillStyle='#ff3b30'; x.fillText(String(R.goals).padStart(2,' '),140,168); x.fillText(String(R.shots).padStart(2,' '),372,168); c.sbT.needsUpdate=true; }
-function reset(dly){ const c=R.cur; if(!c) return; const P=c.P; P.x=0; P.y=0; P.vx=P.vy=0; P.in=0; P.t=dly||0; P.cd=0; c.puck.visible=!dly; if(!dly) c.puck.position.set(0,.05,0); }
-function drop(){ R.cur=null; showBtn(false); R.charge=0; }
+  const u={sp,RG,puck,P:{x:0,y:0,vx:0,vy:0,in:0,t:0,cd:0},goalT:0}; reset(u,0); return u; }
+function build(g,rec,o){
+  drop(); const rs=spec(rec); if(!rs||!rs.length) return;
+  R.cur={rec,units:rs.map(sp=>buildUnit(g,sp))}; R.goals=0; R.shots=0; R.charge=0; showHud(true,true); score(); showBtn(true); }
+function reset(u,dly){ const P=u.P; P.x=0; P.y=0; P.vx=P.vy=0; P.in=0; P.t=dly||0; P.cd=0; u.puck.visible=!dly; if(!dly) u.puck.position.set(0,.05,0); }
+function drop(){ R.cur=null; showBtn(false); showHud(false); R.charge=0; }
+
+/* ---------- on-screen controls and score (owner 2026-11-24: "show on screen the controls to play") ---------- */
+let hud=null, helpT=0;
+function mkHud(){ if(hud) return hud; hud=document.createElement('div'); hud.id='rinkHud';
+  hud.style.cssText='position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:30;max-width:min(94vw,560px);font:13px/1.4 system-ui,sans-serif;color:#f8fafc;text-align:center;display:none;pointer-events:none';
+  hud.innerHTML='<div id="rkScore" style="display:inline-block;background:rgba(15,23,42,.85);border-radius:999px;padding:5px 14px;pointer-events:auto;cursor:pointer;font-weight:600"></div>'
+   +'<div id="rkHelp" style="margin-top:6px;background:rgba(15,23,42,.88);border-radius:12px;padding:9px 14px;text-align:left;pointer-events:auto"></div>';
+  document.body.appendChild(hud);
+  hud.querySelector('#rkScore').addEventListener('click',e=>{ e.stopPropagation(); const h=hud.querySelector('#rkHelp'); h.style.display=h.style.display==='none'?'':'none'; helpT=h.style.display==='none'?0:1e9; });
+  hud.querySelector('#rkHelp').addEventListener('click',e=>{ e.stopPropagation(); hud.querySelector('#rkHelp').style.display='none'; });
+  return hud; }
+function helpHtml(){ const k=c=>{ try{ return (window.CTRL&&CTRL.keyName)?CTRL.keyName(c):c; }catch(e){ return c; } };
+  return '<div style="font-weight:700;margin-bottom:3px">⛸️ Hockey rink controls <span style="opacity:.6;font-weight:400">(tap here to hide)</span></div>'
+   +'<div><b>Skate</b>: W / ↑ or GAS · <b>Stop</b>, then <b>skate backwards</b>: S / ↓ or BRAKE · <b>Turn</b>: A D / ← →</div>'
+   +'<div><b>Shoot</b>: Space or the 🏒 button · tap = wrist shot, hold up to a second = slap shot</div>'
+   +'<div><b>Carry the puck</b>: skate into it and it rides on your stick · score in either net</div>'
+   +'<div style="opacity:.8">Wheel / controller: gas, brake and steer as usual, ✕ / A shoots · leave through the gate in the boards and a door</div>'; }
+function showHud(v,help){ mkHud(); hud.style.display=v?'':'none'; if(v&&help){ const h=hud.querySelector('#rkHelp'); h.innerHTML=helpHtml(); h.style.display=''; helpT=16; } }
+function score(){ if(!hud) return; hud.querySelector('#rkScore').textContent='🏒 Goals '+R.goals+' · Shots '+R.shots; }
+onTick(1000,function rinkHelp(){ if(!hud||!R.cur||helpT>=1e8) return; if((helpT-=1)<=0){ const h=hud.querySelector('#rkHelp'); if(h) h.style.display='none'; } });
 
 /* ---------- the shoot button ---------- */
 const btn=document.getElementById('shootBtn');
@@ -148,17 +195,20 @@ function horn(){ try{ const AC=window.AudioContext||window.webkitAudioContext; i
 
 /* ---------- the puck ---------- */
 function step(rec,dt,pl){
-  const c=R.cur; if(!c||c.rec.key!==rec.key) return; const sp=c.sp, P=c.P; dt=Math.min(dt,.05);
+  const c=R.cur; if(!c||c.rec.key!==rec.key) return; dt=Math.min(dt,.05);
+  let u=null, ud=1e9; for(const q of c.units){ const cc=rc(q.sp,pl.x,pl.y), d=inside(q.sp,cc[0],cc[1],-1)?-1:Math.hypot(cc[0],cc[1]); if(d<ud){ ud=d; u=q; } }      // the rink you're on (or nearest)
+  if(!u) return; const sp=u.sp, P=u.P;
   const [px,py]=rc(sp,pl.x,pl.y), cosr=sp.c, sinr=sp.s, pvx=pl.vx*cosr+pl.vy*sinr, pvy=-pl.vx*sinr+pl.vy*cosr;
   const fx=Math.sin(pl.h)*cosr+Math.cos(pl.h)*sinr, fy=-Math.sin(pl.h)*sinr+Math.cos(pl.h)*cosr;                    // the way you face, in rink coordinates
   const held=(window.CTRL&&CTRL.held&&CTRL.held('shoot'))||R.touch, onI=inside(sp,px,py,-.2);
   if(held){ R.charge=Math.min(1,R.charge+dt/.9); }
   const fire=R.wasHeld&&!held; R.wasHeld=held; if(btn&&!R.touch) btn.classList.toggle('on',!!held);
   const gx=GOALX*sp.sc, dx=P.x-px, dy=P.y-py, dist=Math.hypot(dx,dy);
-  if(P.t>0){ P.t-=dt; if(P.t<=0){ P.t=0; c.puck.visible=true; P.x=P.y=P.vx=P.vy=0; P.in=0; } else { if(fire) R.charge=0; return; } }
+  if(P.t>0){ P.t-=dt; if(P.t<=0){ P.t=0; u.puck.visible=true; P.x=P.y=P.vx=P.vy=0; P.in=0; } else { if(fire) R.charge=0; return; } }
   if(P.cd>0) P.cd-=dt;
   if(fire){ const q=R.charge; R.charge=0;
-    if(dist<2.1&&onI){ const sp2=13+q*17; P.vx=fx*sp2+pvx*.35; P.vy=fy*sp2+pvy*.35; P.cd=.4; R.shots++; score(); if(q>.7) toast('Slap shot!',900); } }
+    if(dist<2.1&&onI){ const sp2=13+q*17; P.vx=fx*sp2+pvx*.35; P.vy=fy*sp2+pvy*.35; P.cd=.4; R.shots++; score(); if(q>.7) toast('Slap shot!',900); }
+    if(window.WALK) WALK.state.swing=.32; }
   if(!P.in&&P.cd<=0&&onI){
     const bx=px+fx*1.1, by=py+fy*1.1, bd=Math.hypot(P.x-bx,P.y-by);
     if(bd<.6&&Math.hypot(P.vx-pvx,P.vy-pvy)<9){ const k=Math.min(1,dt*16); P.x+=(bx-P.x)*k; P.y+=(by-P.y)*k; P.vx=pvx+(bx-P.x)*8; P.vy=pvy+(by-P.y)*8; }       // on your stick: it rides along
@@ -173,7 +223,7 @@ function step(rec,dt,pl){
       for(const z of[-GW/2,GW/2]){ const ddx=P.x-gl, ddy=P.y-z, d=Math.hypot(ddx,ddy); if(d<PUCKR+.04&&d>1e-6){ const nx=ddx/d, ny=ddy/d, vn=P.vx*nx+P.vy*ny; if(vn<0){ P.vx-=1.7*vn*nx; P.vy-=1.7*vn*ny; } P.x=gl+nx*(PUCKR+.04); P.y=z+ny*(PUCKR+.04); } }   // the posts
       const dep=e*(P.x-gl);                                                                                                               // metres past the goal line, into the net
       if(!P.in&&dep>0&&dep<GD&&Math.abs(P.y)<GW/2-.02){
-        if(e*(ox-gl)<=0&&e*P.vx>0){ P.in=e; R.goals++; score(); toast('🚨 GOAL!',1800); horn(); P.t=0; P.vx*=.3; P.vy*=.3; c.goalT=2.4; }                  // crossed the line between the posts
+        if(e*(ox-gl)<=0&&e*P.vx>0){ P.in=e; R.goals++; score(); toast('🚨 GOAL!',1800); horn(); P.t=0; P.vx*=.3; P.vy*=.3; u.goalT=2.4; }                  // crossed the line between the posts
         else if(Math.abs(oy)>=GW/2-.02){ P.y=Math.sign(oy)*(GW/2-.02+.001); P.vy=-P.vy*.3; }                                                    // through the side netting: no
         else if(e*(ox-gl)>=GD*.5){ P.x=gl+e*(GD+.001); P.vx=-P.vx*.3; }                                                                        // through the back: no
         else { P.x=gl-e*.001; P.vx=-P.vx*.4; } }
@@ -183,12 +233,12 @@ function step(rec,dt,pl){
       if(qx>0&&qy>0){ const d=Math.hypot(qx,qy); if(d>Rr-PUCKR){ const nx=Math.sign(P.x)*qx/d, ny=Math.sign(P.y)*qy/d, vn=P.vx*nx+P.vy*ny; if(vn>0){ P.vx-=1.6*vn*nx; P.vy-=1.6*vn*ny; }
           const k=(Rr-PUCKR)/d; P.x=Math.sign(P.x)*((A-Rr)+qx*k); P.y=Math.sign(P.y)*((B-Rr)+qy*k); } }
       else { if(Math.abs(P.x)>A){ P.x=Math.sign(P.x)*A; if(P.x*P.vx>0) P.vx*=-.62; } if(Math.abs(P.y)>B){ P.y=Math.sign(P.y)*B; if(P.y*P.vy>0) P.vy*=-.62; } } } }
-  if(P.in&&(c.goalT-=dt)<=0){ P.in=0; reset(.001); }
+  if(P.in&&(u.goalT-=dt)<=0){ P.in=0; reset(u,.001); }
   if(Math.hypot(P.vx,P.vy)<.02){ P.vx=P.vy=0; }
-  c.puck.position.set(P.x,.05,-P.y); }
+  u.puck.position.set(P.x,.05,-P.y); }
 // the nearest walk-in building (or the one you're in), for testing
 function forceHere(){ const rs=(window.ROOFS&&ROOFS.doorsNear&&ROOFS.doorsNear())||[]; let best=null,bd=1e9;
   for(const r of rs){ const q=loc(r,S.lat,S.lng); const d=inP(r.p,q[0],q[1])?0:Math.hypot(q[0],q[1]); if(d<bd){ bd=d; best=r; } }
   if(best){ R.force.add(best.key); R.specs.delete(best.key); } return best&&best.key; }
-window.RINK={arena:r=>!!spec(r),onIce,blocks,build,drop,step,force:r=>{ R.force.add(r.key); R.specs.delete(r.key); },forceHere,state:R,list:()=>R.list,reload:load,spec};
+window.RINK={arena:r=>!!spec(r),chase:r=>!!spec(r),onIce,blocks,build,drop,step,force:r=>{ R.force.add(r.key); R.specs.delete(r.key); },forceHere,state:R,list:()=>R.list,reload:load,spec};
 })();

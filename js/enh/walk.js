@@ -20,7 +20,7 @@
 const {safe}=YD;
 const btn=document.getElementById('walkBtn');
 const PK={mode:null,lat:0,lng:0,hdg:0};                          // the parked vehicle while you're on foot
-const W={v:0,phase:0,amp:0,run:0,order:0,blockT:0,near:false,lastAnim:false,medium:null,vx:0,vy:0,push:0};   // medium: null (land), 'swim', 'ice' (skating)
+const W={v:0,phase:0,amp:0,run:0,order:0,blockT:0,near:false,lastAnim:false,medium:null,vx:0,vy:0,push:0,swing:0};   // medium: null (land), 'swim', 'ice' (skating)
 const WALKV=1.4, RUNV=5.4, BACKV=.9;                              // m/s on the speedometer (3.1 / 12 / 2 mph)
 
 /* ---------- the person (metres, front = -z, feet on y = 0) ---------- */
@@ -65,11 +65,11 @@ function buildPerson(pal){
     const hd=new THREE.Mesh(new THREE.SphereGeometry(.046,10,8),skin); hd.scale.set(.8,1.15,1); hd.position.y=-.29; el.add(hd);
     sh.rotation.z=s*.07;
     parts[s<0?'shL':'shR']=sh; parts[s<0?'elL':'elR']=el;
-    if(s>0){ // a hockey stick in the right hand (shown while skating): shaft, a taped blade at the bottom
-      const st=new THREE.Group(); st.position.set(0,-.29,0); st.visible=false; el.add(st); parts.stick=st;
-      const shaft=cyl(.012,.012,1.5,wood,6); shaft.position.y=-.2; st.add(shaft);
-      const blade=new THREE.Mesh(new THREE.BoxGeometry(.02,.07,.3),tape); blade.position.set(0,-.97,-.13); st.add(blade); }
   }
+  { // a hockey stick (shown while skating), held out in front on the right: a shaft angled down and forward, the taped blade flat on the ice about a metre ahead
+    const st=new THREE.Group(); st.position.set(.27,.93,-.18); st.rotation.x=Math.PI/4; st.visible=false; fig.add(st); parts.stick=st;
+    const shaft=cyl(.013,.013,1.5,wood,6); shaft.position.y=-.5; st.add(shaft);
+    const blade=new THREE.Mesh(new THREE.BoxGeometry(.025,.06,.32),tape); blade.position.set(0,-1.27,-.1); blade.rotation.x=-Math.PI/4; st.add(blade); }
   const sh=new THREE.Mesh(new THREE.PlaneGeometry(.95,.75),shadow.material); sh.rotation.x=-Math.PI/2; sh.position.y=.02; root.add(sh);
   root.userData=parts; root.userData.fig=fig; root.visible=false;
   return root;
@@ -88,7 +88,7 @@ setOrder(12);
 // walk / run cycle: swing the legs and arms, bend the knees on the forward swing, bob and lean when running
 function pose(){
   const P=person.userData, a=W.amp, r=W.run, s=Math.sin(W.phase), c=Math.cos(W.phase), med=W.medium;
-  for(const k of P.skates) k.visible=med==='ice'; if(P.stick) P.stick.visible=med==='ice';
+  for(const k of P.skates) k.visible=med==='ice'; if(P.stick){ P.stick.visible=med==='ice'; P.stick.rotation.x=Math.PI/4; } P.up.rotation.y=0;
   if(med==='swim'){                                                   // front crawl: lying on the water, arms windmilling, a flutter kick
     const k=Math.min(1,.35+a*1.2);
     P.fig.rotation.x=-1.32; P.fig.position.set(0,-.12,.85); P.up.rotation.x=.12;
@@ -102,8 +102,10 @@ function pose(){
     P.hipL.rotation.x=-.35-.25*v+sw*.35*stride; P.hipR.rotation.x=-.35-.25*v-sw*.35*stride;
     P.kneeL.rotation.x=-.55-.2*v-.3*Math.max(0,cw)*stride; P.kneeR.rotation.x=-.55-.2*v-.3*Math.max(0,-cw)*stride;
     P.hipL.rotation.z=.05+Math.max(0,-sw)*.28*stride; P.hipR.rotation.z=-.05-Math.max(0,sw)*.28*stride;
-    P.up.rotation.x=-.28-.3*v; P.fig.position.y=-.2-.04*v;
+    P.up.rotation.x=W.v<-.4?-.1:-.28-.3*v; P.fig.position.y=-.2-.04*v;                                                  // upright when skating backwards
     P.shL.rotation.x=-.5+sw*.2*stride; P.shR.rotation.x=-.7-sw*.15*stride; P.elL.rotation.x=.9; P.elR.rotation.x=.8;
+    if(W.swing>0){ const k=Math.sin((1-W.swing/.32)*Math.PI);                                                              // a shot: wind the stick back and sweep it through
+      P.up.rotation.y=-k*.7; P.stick.rotation.x=Math.PI/4+(1-W.swing/.32-.35)*1.5; P.shR.rotation.x-=k*.8; }
     return; }
   P.hipL.rotation.z=P.hipR.rotation.z=0;
   P.hipL.rotation.x=s*a; P.hipR.rotation.x=-s*a;
@@ -317,7 +319,7 @@ function roomLook(r,SH){
   else if(kind==='school'){ const w=pickOf([['#efe7cf','#c8b58d'],['#e9eef0','#7f9db5'],['#efe9dd','#8aa58a']],R), chk=R()<.4; L.HC=Math.max(2.6,Math.min(3.6,H-.4));                  // the ground floor of a two-storey school
     L.wallM=imat('block','#ffffff',w[0],w[1]); L.floorM=imat('vct','#ffffff',chk?'chk':'spk',0,.18); L.ceilM=storeMat('ceil');
     if(r.gym){ L.trof=false; L.HC=Math.max(6,Math.min(9.5,H-.9)); L.floorM=imat('planks','#e0b070',0,0,.2); L.ceilM=imat('deck','#e4e4e4'); } }   // the gymnasium: a varnished wood floor under a high roof deck
-  else if(kind==='arena'){ L.trof=false; L.HC=Math.max(7,Math.min(11,H-.8)); L.wallM=imat('block','#ffffff','#dfe3e6','#8f9aa3'); L.floorM=imat('concrete','#cfcfcb',0,0,.2); L.ceilM=imat('deck','#d8dde2'); }   // an ice arena: block walls, concrete concourse, a high roof deck
+  else if(kind==='arena'){ L.trof=false; L.HC=1.15; L.wallM=imat('block','#ffffff','#dfe3e6','#8f9aa3'); L.floorM=imat('concrete','#cfcfcb',0,0,.2); L.ceilM=imat('deck','#d8dde2'); }   // an ice arena: waist-high cut-away walls (you watch from the chase camera), concrete concourse, no ceiling
   else if(kind==='office'){ L.HC=3; L.wallM=imat('drywall',pickOf(['#f4f3f0','#e6e8ea','#eee9df'],R)); L.floorM=imat('ctile',pickOf(['#9aa0a6','#7b8794','#a39d92','#6a6e73'],R),0,0,.18); L.ceilM=storeMat('ceil'); }
   else if(kind==='industrial'){ L.HC=Math.max(3.4,Math.min(5,H-.6)); L.wallM=imat('metal',pickOf(['#cfd3d6','#d8d0bf','#b9c3cc'],R)); L.floorM=imat('concrete','#d4d4d0',0,0,.18); L.ceilM=imat('deck','#dcdcdc'); }
   else { const f=pickOf([['vct','#ffffff','chk'],['vct','#efe4cc','spk'],['concrete','#d0d0cc'],['planks','#dcc7a6']],R); L.HC=Math.max(2.6,Math.min(3.3,H-.4));   // shop
@@ -413,12 +415,12 @@ function buildRoom(r){
   if(ROOM.key===r.key&&ROOM.g) return; dropRoom();
   const SH=window.STORES&&STORES.own?STORES.own(r):null;      // a Meijer (js/enh/stores.js): high dropped ceiling, troffer lights
   itexTrim(); const LK=roomLook(r,SH);                           // floor, wall and ceiling textures for this kind of building, picked from its key
-  const g=new THREE.Group(), p=r.p, HC=LK.HC, DH=2.12, TH2=.2;
+  const g=new THREE.Group(), p=r.p, HC=LK.HC, DH=LK.kind==='arena'?HC:2.12, TH2=.2;
   const wallM=LK.wallM, ceilM=LK.ceilM, trimM=rmat('trim',0xfbfaf7,0x3a3a3a), floorM=LK.floorM;
   // floor and ceiling from the outline
   const sh=new THREE.Shape(p.map(q=>new THREE.Vector2(q[0],q[1])));
   const fl=new THREE.Mesh(new THREE.ShapeGeometry(sh),floorM); fl.rotation.x=-Math.PI/2; fl.position.y=.01; g.add(fl);   // shape (x, y=north) -> (x, z=-north)
-  const ce=new THREE.Mesh(new THREE.ShapeGeometry(sh),ceilM); ce.rotation.x=-Math.PI/2; ce.position.y=HC; g.add(ce);
+  const ce=new THREE.Mesh(new THREE.ShapeGeometry(sh),ceilM); ce.rotation.x=-Math.PI/2; ce.position.y=HC; if(LK.kind!=='arena') g.add(ce);
   // walls along the outline, with the doorways (and garage openings) cut out; jambs give them depth
   const wall=[], wuv=[], trim=[], wq=(a,b,y0,y1,u0,u1)=>{ quad(wall,a,b,y0,y1); wuv.push(u0,y0,u1,y0,u1,y1,u0,y0,u1,y1,u0,y1); }, ways=r.doors.map(d=>({d,h:DH,gar:false})).concat((r.garages||[]).map(d=>({d,h:2.2,gar:true})));
   for(let i=0;i<p.length;i++){ const a=p[i], b=p[(i+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1]); if(L<.05) continue;
@@ -448,7 +450,7 @@ function buildRoom(r){
   LKEY=r.key; { const sv=LSWS[r.key]; LSW[0]=sv?sv[0]:true; LSW[1]=sv?sv[1]:true; }     // each building keeps its own switch positions
   ROOM.dimM=[wallM,floorM,ceilM]; ROOM.gm=r.gym&&GYMM.list?GYMM.list.concat([rmat('truss',0xeeeeea,0x2a2a28)]):null;
   if(LK.trof){ troffers(g,p,HC); switches(g,r,HC,2); if(SH) greeterFig(g,r,SH); }
-  else { let cx=0,cy=0; for(const q of p){ cx+=q[0]; cy+=q[1]; } cx/=p.length; cy/=p.length;       // a ceiling light in the middle of the room
+  else if(LK.kind!=='arena'){ let cx=0,cy=0; for(const q of p){ cx+=q[0]; cy+=q[1]; } cx/=p.length; cy/=p.length;       // a ceiling light in the middle of the room
     if(inP(p,cx,cy)&&!r.gym){ const [x3,z3]=to3(cx,cy);
       const base=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,.03,24),trimM); base.position.set(x3,HC-.015,z3); g.add(base);
       const globe=new THREE.Mesh(new THREE.SphereGeometry(.17,20,10,0,Math.PI*2,Math.PI/2,Math.PI/2),new THREE.MeshBasicMaterial({color:0xfff6df,side:THREE.DoubleSide}));
@@ -462,7 +464,7 @@ function buildRoom(r){
   ROOM.leaves=[];
   const SEE=()=>STX.see||(STX.see=new THREE.MeshLambertMaterial({color:0x9db4c6,transparent:true,opacity:.22,depthWrite:false,side:THREE.DoubleSide}));   // clear glass
   const AUTO=!!r.store;                                              // store entrances are automatic: no knobs, they open by themselves
-  for(const d of r.doors){ const W0=d.s1-d.s0, two=W0>1.5, lw=two?(W0-.06)/2:W0-.04, glass=two||AUTO;
+  for(const d of (LK.kind==='arena'?[]:r.doors)){ const W0=d.s1-d.s0, two=W0>1.5, lw=two?(W0-.06)/2:W0-.04, glass=two||AUTO;
     const leafM=glass?rmat('glassdoor',0x2f3e4e,0x0a1420):rmat('door',0x7a5236,0x1a120c);
     const L=Math.hypot(d.x1-d.x0,d.y1-d.y0)||1, ux=(d.x1-d.x0)/L, uy=(d.y1-d.y0)/L;
     for(const side of two?[0,1]:[0]){
@@ -480,7 +482,7 @@ function buildRoom(r){
       pv.rotation.y=angC; g.add(pv); ROOM.leaves.push({pv,angC,dA,d,o:0,auto:AUTO}); } }
   // lit EXIT signs on the inside, over every way out (owner 2026-11-23). Unlit-material boxes: they are not part of ROOM.tro /
   // ROOM.dimM, so the light switches never touch them — always on, like the real ones on their own circuit.
-  for(const d of r.doors){ const a=p[d.ei], b=p[(d.ei+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1])||1, ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux, t=(d.s0+d.s1)/2;
+  for(const d of (LK.kind==='arena'?[]:r.doors)){ const a=p[d.ei], b=p[(d.ei+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1])||1, ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux, t=(d.s0+d.s1)/2;
     const [x3,z3]=to3(a[0]+ux*t-nx*(TH2+.026),a[1]+uy*t-ny*(TH2+.026)), [dx3,dz3]=to3(-nx,-ny), y3=Math.min(DH+.3,HC-.13), ry=Math.atan2(dx3,dz3);   // facing into the room
     const sg=new THREE.Mesh(new THREE.BoxGeometry(.36,.16,.05),exitMats()); sg.position.set(x3,y3,z3); sg.rotation.y=ry; g.add(sg);
     const gl=new THREE.Mesh(new THREE.PlaneGeometry(.95,.6),exitGlow()); gl.position.set(x3+dx3*.04,y3,z3+dz3*.04); gl.rotation.y=ry; gl.renderOrder=4; g.add(gl); }
@@ -798,8 +800,8 @@ function walkStep(dt,st,gas,now){
     W.push=gas>.05?Math.min(1,gas):0;
     if(gas>.05&&vf<9.5) vf+=Math.min(1,gas)*(vf<0?9:4.6)*dt;                   // pushing off
     const stop=gas<-.05;
-    vf*=Math.exp(-dt*(stop?(Math.abs(vf)>.8?2.4:6):.09));
-    if(stop&&vf<.3&&vf>-1.2) vf-=1.2*dt;                           // then drift backwards slowly
+    if(stop){ if(vf>.9) vf*=Math.exp(-dt*2.4); else vf=Math.max(-5.5,vf-(vf>0?5:3.4)*dt); }     // hockey stop, then push off backwards: smooth, up to about 12 mph
+    else vf*=Math.exp(-dt*.09);
     vl*=Math.exp(-dt*(stop?3.6:2.4)); if(stop&&Math.abs(vl)>2.5) vl*=Math.exp(-dt*1.5);
     W.vx=vf*fx+vl*lx; W.vy=vf*fy+vl*ly; W.v=vf; sp=Math.hypot(W.vx,W.vy);
     h=sp>.05?Math.atan2(W.vx,W.vy):h; dm=sp*dt*(IN.rec?1:SPEEDUP);
@@ -838,7 +840,7 @@ function walkStep(dt,st,gas,now){
   W.amp+=((moving?.4+.42*W.run:0)-W.amp)*Math.min(1,dt*8);
   if(swim){ W.phase+=dt*(2.2+1.3*Math.abs(W.v)); const t=now/1000;                             // arms keep turning slowly even when treading water
     swimFx.rings.forEach((m,i)=>{ const k=((t*.45+i*.5)%1); m.scale.set(.55+k*.75,1,(.55+k*.75)*1.7); m.material.opacity=.55*(1-k)*(Math.abs(W.v)>.1?1:.5); }); }
-  else if(skate){ W.phase+=dt*(1.2+Math.abs(W.v)*.9)*(W.push>0||Math.abs(W.v)>1.5?1:.25); }
+  else if(skate){ W.phase+=dt*(1.2+Math.abs(W.v)*.9)*(W.push>0||Math.abs(W.v)>1.5?1:.25)*(W.v<-.4?-1:1); W.swing=Math.max(0,W.swing-dt); }
   else if(moving) W.phase+=dt*2*Math.PI*(.95+.24*Math.abs(W.v))*Math.sign(W.v);
   else if(W.amp<.02) W.phase=0;
   const anim=W.amp>.004||!!W.medium; if(anim) pose();
@@ -859,13 +861,14 @@ function walkStep(dt,st,gas,now){
     step.near=null; updateBtn();
   }
 
+  const chaseIn=!!(IN.rec&&window.RINK&&RINK.chase(IN.rec));
   let camMoved=true;
-  if(IN.rec) fpCam(dt);                                             // inside: through your own eyes (see fpCam)
+  if(IN.rec&&!chaseIn) fpCam(dt);                                   // inside: through your own eyes (see fpCam); in an ice arena the chase camera stays (the rink)
   else {
   if(FPV.on) fpOff();
   // camera: closer than driving, follows where you face
   const dB=((S.hdg+LOOK.yaw-S.camB+540)%360)-180; S.camB+=dB*(1-Math.exp(-dt*4));
-  const tz=Math.min(22.4,21.2+zoomOff);   /* closer than before: the person is real size now */ S.zoom+=(tz-S.zoom)*Math.min(1,dt*2.5);
+  const tz=Math.min(22.4,(chaseIn?20.6:21.2)+zoomOff);   /* closer than before: the person is real size now */ S.zoom+=(tz-S.zoom)*Math.min(1,dt*2.5);
   const Wd=innerWidth,H=innerHeight,padTop=H*.34, cm0=step.cam||{}, PIT=viewPitch(68);
   camMoved=dirty||Wd!==cm0.W||H!==cm0.H||PIT!==cm0.p||Math.abs(S.lng-cm0.lng)>1e-8||Math.abs(S.lat-cm0.lat)>1e-8||Math.abs(S.camB-cm0.b)>.005||Math.abs(S.zoom-cm0.z)>.0003;
   if(camMoved){ step.cam={lng:S.lng,lat:S.lat,b:S.camB,z:S.zoom,W:Wd,H,p:PIT};
@@ -877,7 +880,7 @@ function walkStep(dt,st,gas,now){
 
   // car layer: you at the centre, the parked vehicle where you left it (same projection as the traffic)
   const m=mpp(S.lat,S.zoom), sc=WX/m, b=rad(S.camB), sb=Math.sin(b), cb=Math.cos(b);
-  person.scale.setScalar(sc); person.rotation.y=-rad(S.hdg-S.camB); person.visible=!IN.rec;   /* first person indoors: you're the camera */
+  person.scale.setScalar(sc); person.rotation.y=-rad(S.hdg-S.camB); person.visible=!IN.rec||chaseIn;   /* first person indoors: you're the camera (not in an ice arena) */
   if(ROOM.g){ placeRoom(m,b); doorSwing(dt); hoopTick(dt); }
   switchNear();
   const dx=(PK.lng-S.lng)*111320*cosLat(), dy=(PK.lat-S.lat)*111320, f=dx*sb+dy*cb, r=dx*cb-dy*sb;
