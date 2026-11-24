@@ -103,7 +103,14 @@ function plan(P0,steer0){ const lock=lockP(), dt=.05, ds=vSet()*(typeof SPEEDUP!
     h-=yr*dt*180/Math.PI; const hr=h*Math.PI/180; x-=Math.sin(hr)*ds; y-=Math.cos(hr)*ds; }
   return null; }
 const lockP=()=>typeof steerLock==='function'?steerLock(vSet()):.55;
-function finish(){ R.state='done'; R.msgT=performance.now(); say('🅿️ Park Assist complete',2200);
+// the finish chime, like the real car's (owner's video): three soft bell notes, A – E – C#, a beat apart
+function chime(){ try{ const A=window.SOUND&&SOUND.state; let c=A&&A.ctx; if(!c){ const AC=window.AudioContext||window.webkitAudioContext; c=chime.c=chime.c||new AC(); }
+  if(c.state==='suspended') c.resume(); const t0=c.currentTime+.03, out=c.createGain(); out.gain.value=.22; out.connect(c.destination);
+  [[440,0],[659.3,.14],[554.4,.29]].forEach(([f,dt])=>{ for(const [m,g] of [[1,1],[2,.25],[3,.08]]){ const o=c.createOscillator(), e=c.createGain();
+    o.type='sine'; o.frequency.value=f*m; e.gain.setValueAtTime(0,t0+dt); e.gain.linearRampToValueAtTime(g,t0+dt+.012); e.gain.exponentialRampToValueAtTime(.0008,t0+dt+(m===1?.75:.35));
+    o.connect(e); e.connect(out); o.start(t0+dt); o.stop(t0+dt+.8); } });
+}catch(e){} }
+function finish(){ R.state='done'; R.msgT=performance.now(); say('🏁 Park Assist finished',2200); chime();
   setTimeout(()=>{ if(R.state==='done'){ R.state='off'; dirtyScreen(); } },4500); return {st:0,gas:0,brake:1}; }
 function control(dt,inp){
   if(R.state==='scan'||R.state==='found'||R.state==='off'||R.state==='cancel') return null;   // you drive
@@ -164,7 +171,7 @@ function texts(){ const s=R.state;
   if(s==='found') return {title:'Perpendicular Park',lines:['Space found.','Stop'],arrow:'',view:'found'};
   if(s==='ready') return {title:'Perpendicular Park',lines:['Release brake to start.','Hold Park Button'],arrow:'',view:'ready'};
   if(s==='move') return {title:'Perpendicular Park',lines:R.held?['Shift to Cancel','Attention','Check Surroundings.']:['Hold Park Button','to continue'],arrow:R.dir<0?'⬇':'⬆',arrowFill:R.held,view:'move'};
-  if(s==='done') return {title:'Perpendicular Park',lines:['Park Assist Complete'],arrow:'✓',arrowFill:true,view:'done'};
+  if(s==='done') return performance.now()-R.msgT<2200?{title:'Perpendicular Park',lines:['Finished'],arrow:'🏁',flag:true,view:'move'}:{title:'Perpendicular Park',lines:[''],arrow:'🏁',view:'done'};
   if(s==='cancel') return {title:'Park Assist',lines:['Park Assist Cancelled'],arrow:'',view:'cancel'};
   return {lines:[]}; }
 
@@ -177,6 +184,11 @@ function draw(sc){ if(R.state==='off'||!OK()) return false; const x=sc.T.x, W=sc
   const arrow=(cx,cy,s,dir,fill)=>{ x.save(); x.translate(cx,cy); if(dir<0) x.rotate(Math.PI); x.beginPath();
     x.moveTo(0,-s); x.lineTo(s*.85,0); x.lineTo(s*.35,0); x.lineTo(s*.35,s); x.lineTo(-s*.35,s); x.lineTo(-s*.35,0); x.lineTo(-s*.85,0); x.closePath();
     if(fill){ x.fillStyle='#22c55e'; x.fill(); x.strokeStyle='#15803d'; } else { x.fillStyle='#fff'; x.fill(); x.strokeStyle='#5b6472'; } x.lineWidth=Math.max(2,u*.5); x.stroke(); x.restore(); };
+  const flag=(cx,cy,s)=>{ x.save(); x.translate(cx-s*.45,cy-s*.6); const n=5, c=s*1.1/n, r=s*.8/4;   // the chequered finish flag
+    x.strokeStyle='#1b2433'; x.lineWidth=Math.max(2,s*.09); x.beginPath(); x.moveTo(0,0); x.lineTo(0,s*1.5); x.stroke();
+    for(let i=0;i<n;i++) for(let j=0;j<4;j++){ x.fillStyle=(i+j)%2?'#fff':'#111'; const wv=Math.sin((i/n)*Math.PI*1.6)*s*.08;
+      x.fillRect(s*.05+i*c,j*r+wv,c+.5,r+.5); }
+    x.strokeStyle='#111'; x.lineWidth=Math.max(1,s*.04); x.strokeRect(s*.05,0,c*n,r*4); x.restore(); };
   const car=(cx,cy,s,rot,waves)=>{ x.save(); x.translate(cx,cy); x.rotate(rot||0);
     x.fillStyle='#4b5563'; rr(x,-s*.42,-s,s*.84,s*2,s*.3); x.fill(); x.fillStyle='#9ca3af'; rr(x,-s*.32,-s*.55,s*.64,s*.45,s*.12); x.fill(); rr(x,-s*.32,s*.35,s*.64,s*.35,s*.1); x.fill();
     if(waves){ x.strokeStyle='#3b82f6'; x.lineWidth=Math.max(2,u*.45); for(const sd of [-1,1]) for(let k=1;k<=2;k++){ const ph=((now/600)+k*.5)%1;
@@ -196,7 +208,7 @@ function draw(sc){ if(R.state==='off'||!OK()) return false; const x=sc.T.x, W=sc
       for(const [col,a] of [['#ef4444',.24],['#facc15',.33]]){ x.strokeStyle=col; x.beginPath();
         x.moveTo(X+w*a-w*.1,Y+h); x.quadraticCurveTo(X+w*a+bend*.4,Y+h*.7,X+w*(a+.08)+bend,Y+h*.45);
         x.moveTo(X+w*(1-a)+w*.1,Y+h); x.quadraticCurveTo(X+w*(1-a)+bend*.4,Y+h*.7,X+w*(1-a-.08)+bend,Y+h*.45); x.stroke(); }
-      x.fillStyle='rgba(0,0,0,.5)'; x.font='500 '+Math.round(2.8*u)+'px system-ui'; const lab=R.dir<0?'Rear camera':'Front camera', lw=x.measureText(lab).width+3*u;
+      x.fillStyle='rgba(0,0,0,.5)'; x.font='500 '+Math.round(2.8*u)+'px system-ui'; const lab=R.dir>0?'Front camera':'Rear camera', lw=x.measureText(lab).width+3*u;
       rr(x,X+1.5*u,Y+h-5.5*u,lw,4*u,1.2*u); x.fill(); x.fillStyle='#fff'; x.textAlign='left'; x.fillText(lab,X+3*u,Y+h-3.5*u); x.textAlign='center'; x.restore(); }
     // the 360° top view: the stall you're going into (its painted lines) and your car where it really is
     { const [X,Y,w,h]=top; x.save(); x.beginPath(); x.rect(X,Y,w,h); x.clip(); x.fillStyle='#2a2f37'; x.fillRect(X,Y,w,h);
@@ -211,7 +223,7 @@ function draw(sc){ if(R.state==='off'||!OK()) return false; const x=sc.T.x, W=sc
     // below: the words, the big arrow, the little car
     { const [X,Y,w,h]=inf; const mx=X+w/2; x.fillStyle='#1b2433'; x.font='400 '+Math.round(3.6*u)+'px system-ui';
       t.lines.forEach((l,i)=>x.fillText(l,mx,Y+h*.13+i*4.6*u));
-      arrow(mx,Y+h*.55,Math.min(9*u,h*.13),R.dir||-1,t.arrowFill); car(mx,Y+h*.86,Math.min(5*u,h*.08),0,false); }
+      if(t.flag) flag(mx,Y+h*.55,Math.min(8*u,h*.12)); else arrow(mx,Y+h*.55,Math.min(9*u,h*.13),R.dir||-1,t.arrowFill); car(mx,Y+h*.86,Math.min(5*u,h*.08),0,false); }
     x.fillStyle='#e3e6ee'; x.fillRect(0,0,W,T0); x.fillStyle='#1b2433'; x.font='500 '+Math.round(3.4*u)+'px system-ui'; x.fillText('Perpendicular Park',W/2,T0/2);
   } else {
     title(4*u+6); words(H*(tall?.12:.18),4);
@@ -221,7 +233,7 @@ function draw(sc){ if(R.state==='off'||!OK()) return false; const x=sc.T.x, W=sc
         x.beginPath(); x.arc(W/2+5*u,H*(tall?.31:.41),5*u,0,6.3); x.stroke(); x.beginPath(); x.arc(W/2+5*u,H*(tall?.31:.41),1.5*u,0,6.3); x.stroke(); }
       const cy=H*(tall?.58:.68), s=Math.min(6*u,H*.06); car(W/2,cy,s,0,true); parked(W/2,cy+s*1.6,s,R.side,5,2);
       x.strokeStyle='#1b2433'; x.lineWidth=u*.6; x.setLineDash([u*1.5,u*1.2]); x.beginPath(); x.moveTo(W/2,cy+s); x.quadraticCurveTo(W/2,cy+s*2.4,W/2+R.side*s*2.2,cy+s*1.6*0+s*1.6); x.stroke(); x.setLineDash([]); }
-    else if(t.view==='done'){ x.fillStyle='#22c55e'; x.beginPath(); x.arc(W/2,H*.45,10*u,0,6.3); x.fill(); x.strokeStyle='#fff'; x.lineWidth=u*2; x.beginPath(); x.moveTo(W/2-5*u,H*.45); x.lineTo(W/2-1*u,H*.45+4*u); x.lineTo(W/2+6*u,H*.45-4*u); x.stroke(); }
+    else if(t.view==='done'){ flag(W/2,H*.36,Math.min(8*u,H*.06)); car(W/2,H*.56,Math.min(5*u,H*.05),0,false); }
   }
   x.restore(); sc.T.t.needsUpdate=true; return true; }
 // where the camera window sits on the split screen (fractions of the screen): js/enh/cockpit.js puts the real backup camera there
