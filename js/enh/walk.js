@@ -310,7 +310,7 @@ function gymDecor(g,p,HC,r,TH2){
     if(i===bi){ const m=L/2; quad(pad,at(m-6,o+.004),at(m+6,o+.004),.15,2.7); }                                                                  // the black wall pad
     if(i===(bi+2)%p.length||i===bi) for(let s=3;s+.9<L-2;s+=1.7) if(free(s,s+.9)){ quad(ban,at(s,o+.006),at(s+.9,o+.006),3.5,4.6); quad(gold,at(s+.2,o+.008),at(s+.7,o+.008),3.85,4.3); }   // black and gold banners
   }
-  const mk=(arr,col,emi)=>{ if(arr.length) g.add(meshOf(arr,rmat('gym'+col,col,emi||0x000000))); };
+  const mk=(arr,col,emi)=>{ if(arr.length){ const m=rmat('gym'+col,col,emi||0x000000); (GYMM.list=GYMM.list||[]).includes(m)||GYMM.list.push(m); g.add(meshOf(arr,m)); } };
   mk(tan,0xc9a468,0x4a3c20); mk(stripe,0x1d2026,0x08090b); mk(panel,0x14161a,0x040405); mk(pad,0x111317,0x030304);
   if(win.length){ const m=new THREE.MeshBasicMaterial({color:0xc9def0,side:THREE.DoubleSide}); g.add(meshOf(win,m)); }                              // daylight in the windows
   mk(dfr,0x8a2020,0x2a0808); mk(dgl,0x27383d,0x0c1316);
@@ -348,10 +348,20 @@ function gymDecor(g,p,HC,r,TH2){
       for(const y of [yb,yt]){ dm.position.set(px,y,-py); dm.rotation.set(0,Math.atan2(vy,vx),0); dm.scale.set(span,1,1); dm.updateMatrix(); chords.setMatrixAt(ci++,dm.matrix); }
       for(let j=0;j<seg;j++){ const s0=-span/2+j*span/seg, s1=s0+span/seg, up=j%2===0, ya=up?yb:yt, yc=up?yt:yb, ex=px+vx*(s0+s1)/2, ey=py+vy*(s0+s1)/2, L2=Math.hypot(span/seg,yc-ya);
         dm.position.set(ex,(ya+yc)/2,-ey); dm.rotation.set(0,Math.atan2(vy,vx),0); dm.rotateZ(Math.atan2(yc-ya,span/seg)); dm.scale.set(L2,1,1); dm.updateMatrix(); diags.setMatrixAt(di++,dm.matrix);
-        if(j%4===1&&k%2===0) bulbs.push([ex,ey]); } }
+        if(j%2===1) bulbs.push([ex,ey]); } }
     chords.count=ci; diags.count=di; chords.instanceMatrix.needsUpdate=diags.instanceMatrix.needsUpdate=true; chords.frustumCulled=diags.frustumCulled=false; g.add(chords); g.add(diags);
-    const lm=new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide}), lights=new THREE.InstancedMesh(new THREE.CircleGeometry(.34,18),lm,Math.max(1,bulbs.length));
-    bulbs.forEach(([bx,by],i)=>{ dm.position.set(bx,yb-.06,-by); dm.rotation.set(Math.PI/2,0,0); dm.scale.set(1,1,1); dm.updateMatrix(); lights.setMatrixAt(i,dm.matrix); }); lights.instanceMatrix.needsUpdate=true; lights.frustumCulled=false; g.add(lights);
+    // round UFO high-bay lights (owner 2026-11-24, product photo): black finned body with a ring, hook up to the truss, white lens under it, a soft glow
+    const lm=new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide}), n=Math.max(1,bulbs.length), dark=rmat('ufo',0x16181b,0x050506);
+    const prof=[[0,.3],[.12,.3],[.15,.24],[.2,.2],[.26,.16],[.3,.1],[.37,.07],[.37,.02],[.33,0],[0,0]].map(q=>new THREE.Vector2(q[0],q[1]));
+    const body=new THREE.InstancedMesh(new THREE.LatheGeometry(prof,20),dark,n), hook=new THREE.InstancedMesh(new THREE.CylinderGeometry(.015,.015,.3,6),rmat('ufohook',0xb8bcc2,0x30323a),n),
+      lens=new THREE.InstancedMesh(new THREE.CircleGeometry(.31,20),lm,n), halo=new THREE.InstancedMesh(new THREE.CircleGeometry(1.5,20),new THREE.MeshBasicMaterial({map:roundGlow(),transparent:true,opacity:.5,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,toneMapped:false}),n);
+    bulbs.forEach(([bx,by],i)=>{ const y=yb-.62;
+      dm.rotation.set(0,0,0); dm.scale.set(1,1,1); dm.position.set(bx,y,-by); dm.updateMatrix(); body.setMatrixAt(i,dm.matrix);
+      dm.position.set(bx,y+.45,-by); dm.updateMatrix(); hook.setMatrixAt(i,dm.matrix);
+      dm.rotation.set(Math.PI/2,0,0); dm.position.set(bx,y-.005,-by); dm.updateMatrix(); lens.setMatrixAt(i,dm.matrix);
+      dm.position.set(bx,y-.15,-by); dm.updateMatrix(); halo.setMatrixAt(i,dm.matrix); });
+    for(const o of [body,hook,lens,halo]){ o.instanceMatrix.needsUpdate=true; o.frustumCulled=false; g.add(o); } halo.renderOrder=1;
+    ROOM.glow=[[halo]];
     ROOM.tro=[lm]; }
 }
 function buildRoom(r){
@@ -391,7 +401,7 @@ function buildRoom(r){
   g.add(meshOf(wall,wallM,wuv)); g.add(meshOf(trim,trimM));
   if(r.gym) safe('gym',()=>gymDecor(g,p,HC,r,TH2));
   LKEY=r.key; { const sv=LSWS[r.key]; LSW[0]=sv?sv[0]:true; LSW[1]=sv?sv[1]:true; }     // each building keeps its own switch positions
-  ROOM.dimM=[wallM,floorM,ceilM];
+  ROOM.dimM=[wallM,floorM,ceilM]; ROOM.gm=r.gym&&GYMM.list?GYMM.list.concat([rmat('truss',0xeeeeea,0x2a2a28)]):null;
   if(LK.trof){ troffers(g,p,HC); switches(g,r,HC,2); if(SH) greeterFig(g,r,SH); }
   else { let cx=0,cy=0; for(const q of p){ cx+=q[0]; cy+=q[1]; } cx/=p.length; cy/=p.length;       // a ceiling light in the middle of the room
     if(inP(p,cx,cy)&&!r.gym){ const [x3,z3]=to3(cx,cy);
@@ -490,6 +500,7 @@ function trofferTex(){ if(STX.trof) return STX.trof;
   for(let i=0;i<=cols;i++){ const X=m+i*cw; x.fillStyle='rgba(120,122,126,.8)'; x.fillRect(X-1.5,m,3,H-2*m); }
   const t=new THREE.CanvasTexture(c); t.anisotropy=8; STX.trof=t; return t; }
 // a soft glow round a fixture (brightness bleeding onto the ceiling) and its reflection on the shiny floor
+function roundGlow(){ if(STX.rg) return STX.rg; const c=document.createElement('canvas'); c.width=c.height=64; const x=c.getContext('2d'); const g=x.createRadialGradient(32,32,0,32,32,32); g.addColorStop(0,'rgba(255,255,255,.85)'); g.addColorStop(.3,'rgba(255,255,255,.35)'); g.addColorStop(1,'rgba(255,255,255,0)'); x.fillStyle=g; x.fillRect(0,0,64,64); return STX.rg=new THREE.CanvasTexture(c); }
 function glowTex(k){ if(STX['g'+k]) return STX['g'+k]; const c=document.createElement('canvas'); c.width=128; c.height=256; const x=c.getContext('2d');
   const g=x.createRadialGradient(64,64,0,64,64,64); if(k==='halo'){ g.addColorStop(0,'rgba(255,255,255,.9)'); g.addColorStop(.35,'rgba(255,255,255,.45)'); g.addColorStop(1,'rgba(255,255,255,0)'); }
   else { g.addColorStop(0,'rgba(255,255,255,.85)'); g.addColorStop(.3,'rgba(255,255,255,.35)'); g.addColorStop(1,'rgba(255,255,255,0)'); }
@@ -522,7 +533,7 @@ function troffers(g,p,HC){
 }
 /* the two light switches: on the wall just inside the way in, at 1.2 m, a white two-gang plate. Walk up to them and a
    button shows (or say "turn off the lights" / "lights on"); each flips its half of the lights (every other one). Remembered while you play. */
-const LSW=[true,true];
+const LSW=[true,true], GYMM={list:null};
 function switches(g,r,HC,n){ ROOM.sw=[]; const d=r.doors[0]; if(!d){ lightsApply(); return; }
   const p=r.p, a=p[d.ei], b=p[(d.ei+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1])||1, ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux;
   let s=d.s1+.55; if(s+.5>L) s=d.s0-.75;                              // beside the door's latch side, or the other side if it's a corner
@@ -556,6 +567,7 @@ function greeterTick(dt,q){ const G=ROOM.gr; if(!G) return; G.t+=dt; const d=Mat
 const LSWS={}; let LKEY=null;                                     // switch positions by building
 function lightsApply(){ if(ROOM.sw&&ROOM.sw.length===1) LSW[1]=LSW[0]; if(LKEY) LSWS[LKEY]=LSW.slice();
   for(const k of [0,1]){ const m=ROOM.tro&&ROOM.tro[k]; if(m){ m.color.setHex(LSW[k]?0xffffff:0x3b3f47); m.needsUpdate=true; } for(const o of (ROOM.glow&&ROOM.glow[k])||[]) o.visible=LSW[k]; }
+  if(ROOM.gm){ const on0=(LSW[0]?1:0)+(LSW[1]?1:0), ff=on0===2?1:on0===1?.62:.3, mix=.22+.78*ff; for(const m of ROOM.gm){ if(!m.userData.c0){ m.userData.c0=m.color.clone(); m.userData.e0=m.emissive?m.emissive.clone():null; } m.color.copy(m.userData.c0).multiplyScalar(mix); if(m.emissive&&m.userData.e0) m.emissive.copy(m.userData.e0).multiplyScalar(ff); } }
   for(const w of ROOM.sw||[]){ w.lv.position.y=1.2+(LSW[w.k]?.012:-.012); w.lv.rotation.x=LSW[w.k]?-.35:.35; }
   const on=(LSW[0]?1:0)+(LSW[1]?1:0), f=on===2?1:on===1?.62:.3;           // the night lights keep a little light          // the room dims as rows go out
   { const stx=Object.values(STX); for(const m of ROOM.dimM||[]) if(m&&!stx.includes(m)) m.emissiveIntensity=.12+.88*f; }       // the textured walls, floor and ceiling dim with the lights
@@ -573,7 +585,7 @@ function swLabel(){ const one=ROOM.sw&&ROOM.sw.length===1; [...swBtn.children].f
 function switchNear(){ const r=ROOM.r; let near=false;
   if(r&&ROOM.sw&&ROOM.sw.length&&mode==='walk'){ const q=loc(r,S.lat,S.lng); near=ROOM.sw.some(w=>Math.hypot(q[0]-w.pos[0],q[1]-w.pos[1])<2.2); }
   if(near!==(swBtn.style.display==='flex')){ swBtn.style.display=near?'flex':'none'; if(near) swLabel(); } }
-function dropRoom(){ ROOM.gr=null; ROOM.tro=null; ROOM.glow=null; ROOM.sw=null; ROOM.dimM=null; LKEY=null; swBtn.style.display='none'; if(!ROOM.g) return; scene.remove(ROOM.g); ROOM.g.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); ROOM.g=null; ROOM.key=null; ROOM.r=null; ROOM.leaves=[]; ROOM.gar=[]; }
+function dropRoom(){ ROOM.gr=null; ROOM.tro=null; ROOM.glow=null; ROOM.gm=null; ROOM.sw=null; ROOM.dimM=null; LKEY=null; swBtn.style.display='none'; if(!ROOM.g) return; scene.remove(ROOM.g); ROOM.g.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); ROOM.g=null; ROOM.key=null; ROOM.r=null; ROOM.leaves=[]; ROOM.gar=[]; }
 function garUpdate(){ for(const G2 of ROOM.gar){ const o=window.GARAGE?GARAGE.openness(G2.q.gk):0, b0=o*1.95, top=2.2, h=Math.max(.15,top-b0);
   G2.m.scale.y=h; G2.m.position.y=b0+h/2; } }
 // the room sits round the building's middle, turned with the camera, at the map's scale (like the cars)
