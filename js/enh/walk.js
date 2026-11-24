@@ -367,13 +367,15 @@ function switches(g,r,HC){ ROOM.sw=[]; const d=r.doors[0]; if(!d) return;
 /* the greeter (owner 2026-11-23: "a greeter at the entrance of every Meijer … and every Walmart"): a plain team member in the
    store's colour shirt (no logos) standing just inside the front doors, facing them, who waves when you come in. The welcome
    is spoken by js/enh/stores.js `STORES.greet` when you step inside (⚙️ A/V → Store greeter switches the voice off). */
-function greeterFig(g,r,SH){ const d=r.doors[0]; if(!d) return;
+function greeterFig(g,r,SH){ let d=null, bd=1e9; const me=loc(r,S.lat,S.lng);                    // the door you came in by: the one nearest you as the room is built
+  for(const q of r.doors){ const dd=Math.hypot(me[0]-(q.x0+q.x1)/2,me[1]-(q.y0+q.y1)/2); if(dd<bd){ bd=dd; d=q; } }
+  if(!d) return;
   const p=r.p, a=p[d.ei], b=p[(d.ei+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1])||1, ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux;
   const at=(t,o)=>[a[0]+ux*t-nx*o,a[1]+uy*t-ny*o], mid=(d.s0+d.s1)/2; let pos=null;
-  for(const t of [d.s0-1.5,d.s1+2.2,d.s0-2.6,d.s1+3.3]){ const q=at(t,1.8); if(t>.6&&t<L-.6&&inP(p,q[0],q[1])){ pos=q; break; } }
+  for(const t of [d.s0-1.1,d.s1+1.1,d.s0-2.2,d.s1+2.2]){ const q=at(t,1.5); if(t>.6&&t<L-.6&&inP(p,q[0],q[1])){ pos=q; break; } }
   if(!pos) return;
   const walmart=(SH.brand||'')==='Walmart', who=buildPerson({top:walmart?0x2a6ab3:0xc4343a,jeans:0x2b2e36,hair:walmart?0x4a3426:0x1f1a17,skin:walmart?0xd7a47c:0xa8714f});
-  who.visible=true; who.traverse(o=>{ if(o.isMesh) o.renderOrder=5; });
+  who.visible=true; who.traverse(o=>{ if(o.isMesh){ o.renderOrder=5; o.frustumCulled=false; if(o.material&&o.material!==shadow.material){ o.material.transparent=false; o.material.opacity=1; } } });   // plain opaque: always drawn with the room
   const [x3,z3]=to3(pos[0],pos[1]), dm=at(mid,0), fx=dm[0]-pos[0], fy=dm[1]-pos[1];
   who.position.set(x3,0,z3); who.rotation.y=Math.atan2(-fx,fy);            // front is -z; face the doors
   const P=who.userData; P.hipL.rotation.x=P.hipR.rotation.x=0; P.kneeL.rotation.x=P.kneeR.rotation.x=0; P.elL.rotation.x=P.elR.rotation.x=.15;
