@@ -236,7 +236,7 @@ function hiddenByBuilding(a,camX,camY,camH){
    ground is flat there). ---------- */
 const OCC={mesh:null,at:null,t:0,o:null,dirty:true,ter:null};
 function occFeatures(){ const out=[]; const add=(src,sl,hk,bk)=>{ let fs=[]; try{ fs=map.getSource(src)?map.querySourceFeatures(src,sl?{sourceLayer:sl}:{}):[]; }catch(e){} for(const f of fs) out.push([f,hk,bk]); };
-  add(bSrc,'building','b','b'); add('rebuilt',null,'h','b'); add('roofs',null,'h','b'); add('inrest',null,'b','b');            // footprints, redrawn buildings, and the houses' pitched roofs (stacked slices)
+  add(bSrc,'building','b','b'); add('rebuilt',null,'h','b'); add('roofs',null,'h','b'); add('inrest',null,'b','b'); add('trj',null,'h','b');            // footprints, redrawn buildings, and the houses' pitched roofs (stacked slices)
   return out; }
 // built a slice at a time, ~4 ms a frame (owner 2026-11-22: downtown LA froze for ~150 ms each time it rebuilt in one go);
 // the old blockers stay up until the new set is finished
@@ -250,7 +250,7 @@ function* occJob(){
     if(ir&&hk!=='b'&&pr.bk===ir.key) continue;
     if(hk==='b'){ h=+(pr.render_height??pr.height??6)||6; h0=+(pr.render_min_height??pr.min_height??0)||0; } else { h=+pr.h||0; h0=+pr.b||0; }
     if(h<=h0) continue;
-    for(const pl of polys){ const ring=pl[0]; if(!ring||ring.length<4||(ir&&hk!=='h'&&mine(ring))) continue;
+    for(const pl of polys){ const ring=pl[0]; if(!ring||ring.length<4||(ir&&hk!=='h'&&mine(ring))||(hk==='b'&&window.TRJ&&TRJ.skip&&TRJ.skip(ring))) continue;
       const key=hk+ring.length+':'+ring[0][0].toFixed(6)+','+ring[0][1].toFixed(6)+':'+h0; if(seen.has(key)) continue; seen.add(key);   // the same piece from overlapping tiles
       const P=[]; let near=false, cx=0, cy=0; for(let i=0;i<ring.length-1;i++){ const x=ring[i][0]*MLNG-ox, y=ring[i][1]*MLAT-oy; P.push(new THREE.Vector2(x,y)); cx+=ring[i][0]; cy+=ring[i][1]; if(Math.abs(x)<R&&Math.abs(y)<R) near=true; }
       if(!near||P.length<3) continue;

@@ -2093,8 +2093,10 @@ function updateGlare(c){ const sp=YD.AT&&YD.AT.sun; let a=0;
 const BI={cells:new Map(),at:null,t:0,cell:25};
 function buildIndex(){ BI.t=performance.now(); BI.at=[S.lng,S.lat]; BI.cells=new Map();
   let fs=[]; try{ fs=map.querySourceFeatures(bSrc,{sourceLayer:'building'}); }catch(e){ return; }
-  const kx=111320*Math.cos(S.lat*DEG), R=420;
-  for(const f of fs){ const g=f.geometry; if(!g) continue; const parts=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
+  try{ if(map.getSource('trj')) fs=fs.concat(map.querySourceFeatures('trj').map(f=>({geometry:f.geometry,id:null,properties:{render_height:f.properties.h}}))); }catch(e){}   // Traughber as drawn (js/enh/traughber.js)
+  const kx=111320*Math.cos(S.lat*DEG), R=420, TS=window.TRJ&&TRJ.skip;
+  for(const f of fs){ let g=f.geometry; if(!g) continue; let parts=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
+    if(TS&&f.id!=null&&parts.some(pl=>TRJ.skip(pl[0]))){ parts=parts.filter(pl=>!TRJ.skip(pl[0])); if(!parts.length) continue; g={type:'MultiPolygon',coordinates:parts}; }   // the school's own (hidden) pieces
     let a=1e9,b=1e9,c=-1e9,d=-1e9; for(const pl of parts) for(const p of pl[0]||[]){ if(p[0]<a)a=p[0]; if(p[0]>c)c=p[0]; if(p[1]<b)b=p[1]; if(p[1]>d)d=p[1]; }
     if(a>c) continue; const x0=(a-S.lng)*kx, x1=(c-S.lng)*kx, y0=(b-S.lat)*111320, y1=(d-S.lat)*111320;
     if(x1<-R||x0>R||y1<-R||y0>R) continue;
