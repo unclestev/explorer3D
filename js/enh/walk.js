@@ -869,7 +869,7 @@ function walkStep(dt,st,gas,now){
   if(FPV.on) fpOff();
   // camera: closer than driving, follows where you face
   const dB=((S.hdg+LOOK.yaw-S.camB+540)%360)-180; S.camB+=dB*(1-Math.exp(-dt*4));
-  const tz=Math.min(22.4,(chaseIn?20.6:21.2)+zoomOff);   /* closer than before: the person is real size now */ S.zoom+=(tz-S.zoom)*Math.min(1,dt*2.5);
+  const tz=Math.min(22.4,(chaseIn?21.9:21.2)+zoomOff);   /* closer than before: the person is real size now */ S.zoom+=(tz-S.zoom)*Math.min(1,dt*2.5);
   const Wd=innerWidth,H=innerHeight,padTop=H*.34, cm0=step.cam||{}, PIT=viewPitch(68);
   camMoved=dirty||Wd!==cm0.W||H!==cm0.H||PIT!==cm0.p||Math.abs(S.lng-cm0.lng)>1e-8||Math.abs(S.lat-cm0.lat)>1e-8||Math.abs(S.camB-cm0.b)>.005||Math.abs(S.zoom-cm0.z)>.0003;
   if(camMoved){ step.cam={lng:S.lng,lat:S.lat,b:S.camB,z:S.zoom,W:Wd,H,p:PIT};

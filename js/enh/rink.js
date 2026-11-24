@@ -156,7 +156,9 @@ function buildUnit(g,sp){
     for(const z of[-GW/2,GW/2]){ box(.07,GH,.07,0,GH/2,z,red); box(.05,GH,.05,e*GD,GH/2,z,red); box(GD,.05,.05,e*GD/2,.03,z,red); box(GD,.05,.05,e*GD/2,GH,z,red); }
     box(.07,.07,GW,0,GH,0,red); box(.012,GH,GW,e*GD,GH/2,0,netM); box(GD,GH,.012,e*GD/2,GH/2,-GW/2,netM); box(GD,GH,.012,e*GD/2,GH/2,GW/2,netM); box(GD,.012,GW,e*GD/2,GH,0,netM); }
   // the puck (a little bigger than real so you can see it down the rink)
-  const puck=new THREE.Mesh(new THREE.CylinderGeometry(PUCKR,PUCKR,.035,18),new THREE.MeshLambertMaterial({color:0x111214,emissive:0x050506})); puck.position.set(0,.05,0); puck.renderOrder=4; RG.add(puck);
+  const puck=new THREE.Group(); puck.position.set(0,.05,0); RG.add(puck);                       // the puck: drawn bigger than real (the physics stays 5 cm) with a bright orange ring so you can find it
+  const pk=new THREE.Mesh(new THREE.CylinderGeometry(.11,.11,.05,20),new THREE.MeshLambertMaterial({color:0x111214,emissive:0x050506})); pk.renderOrder=4; puck.add(pk);
+  const pr=new THREE.Mesh(new THREE.RingGeometry(.2,.34,28),new THREE.MeshBasicMaterial({color:0xff7a00,transparent:true,opacity:.9,depthWrite:false,side:THREE.DoubleSide})); pr.rotation.x=-Math.PI/2; pr.position.y=-.012; pr.renderOrder=4; puck.add(pr);
   for(const c of RG.children) c.traverse(m=>{ if(m.isMesh) m.frustumCulled=false; });
   const u={sp,RG,puck,P:{x:0,y:0,vx:0,vy:0,in:0,t:0,cd:0},goalT:0}; reset(u,0); return u; }
 function build(g,rec,o){
@@ -179,7 +181,7 @@ function helpHtml(){ const k=c=>{ try{ return (window.CTRL&&CTRL.keyName)?CTRL.k
   return '<div style="font-weight:700;margin-bottom:3px">⛸️ Hockey rink controls <span style="opacity:.6;font-weight:400">(tap here to hide)</span></div>'
    +'<div><b>Skate</b>: W / ↑ or GAS · <b>Stop</b>, then <b>skate backwards</b>: S / ↓ or BRAKE · <b>Turn</b>: A D / ← →</div>'
    +'<div><b>Shoot</b>: Space or the 🏒 button · tap = wrist shot, hold up to a second = slap shot</div>'
-   +'<div><b>Carry the puck</b>: skate into it and it rides on your stick · score in either net</div>'
+   +'<div><b>The puck</b> is the black disc with an orange ring, at centre ice · skate into it and it rides on your stick · score in either net</div>'
    +'<div style="opacity:.8">Wheel / controller: gas, brake and steer as usual, ✕ / A shoots · leave through the gate in the boards and a door</div>'; }
 function showHud(v,help){ mkHud(); hud.style.display=v?'':'none'; if(v&&help){ const h=hud.querySelector('#rkHelp'); h.innerHTML=helpHtml(); h.style.display=''; helpT=16; } }
 function score(){ if(!hud) return; hud.querySelector('#rkScore').textContent='🏒 Goals '+R.goals+' · Shots '+R.shots; }
