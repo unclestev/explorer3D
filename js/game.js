@@ -229,14 +229,16 @@ map.on('load',()=>{ try{ initMini();
     const TW=16, D=new Uint8Array(TW*TW*4);                      // crop-row stripes for farmland
     for(let y=0;y<TW;y++) for(let x=0;x<TW;x++){ const i=(y*TW+x)*4, g=(y%8)<4; D[i]=g?139:214; D[i+1]=g?163:190; D[i+2]=g?82:112; D[i+3]=255; }
     map.addImage('croprows',{width:TW,height:TW,data:D});
-    map.addLayer({id:'lu-tint',type:'fill',source:bSrc,'source-layer':'landuse',
+    // the old map-colour tint, now only where js/enh/textures.js draws no ground texture (over a texture it washed the grass out beige)
+    map.addLayer({id:'lu-tint',type:'fill',source:bSrc,'source-layer':'landuse',filter:['!',['match',['get','class'],['residential','commercial','retail','industrial','parking',
+        'pitch','track','stadium','cemetery','school','college','university','education','kindergarten','hospital','playground','park','railway','garages'],true,false]],
       paint:{'fill-color':['match',['get','class'],['commercial','retail'],'#f1c4c4','industrial','#d6cce6',['farmyard','farm'],'#e2cd96','residential','#ebe4d8','#e3e3e3'],'fill-opacity':.35}},before);
     map.addLayer({id:'lc-farm',type:'fill',source:bSrc,'source-layer':'landcover',filter:['==',['get','class'],'farmland'],
       paint:{'fill-pattern':'croprows','fill-opacity':.8}},before);
     // near-invisible layers used only to ask "what land am I on?"
     map.addLayer({id:'lc-detect',type:'fill',source:bSrc,'source-layer':'landcover',paint:{'fill-color':'#000','fill-opacity':.01}},before);
     map.addLayer({id:'lu-detect',type:'fill',source:bSrc,'source-layer':'landuse',paint:{'fill-color':'#000','fill-opacity':.01}},before);
-    landIds=['lc-detect','lu-detect'].concat(map.getLayer('park')?['park']:[]);
+    landIds=['lc-detect','lu-detect'];                          // + tx-park (js/enh/textures.js) when it's there: the style's own park fill stops at zoom 13
   }catch(e){ console.warn('landcover',e); }
   try{
     const top=map.getLayer('hn-big')?'hn-big':undefined;
@@ -1130,12 +1132,12 @@ function landHere(p,ll){
   S.land='';
   if(ll&&QGEO()){ const o=geoLand(ll[0],ll[1]); if(!o) return ''; if(o.rank===2){ S.land='park'; return o.name||'Park'; } const c=o.cls; if(!c) return ''; S.land=c;
     return LAND[c]||(c.charAt(0).toUpperCase()+c.slice(1).replace(/_/g,' ')); }
-  if(!landIds.length) return '';
-  const fs=hit(p.x,p.y,1,landIds);
+  if(!landIds.length||!p) return '';
+  const fs=hit(p.x,p.y,1,map.getLayer('tx-park')?landIds.concat('tx-park'):landIds);
   const pick=id=>fs.find(f=>f.layer&&f.layer.id===id);
-  const f=pick('lc-detect')||pick('lu-detect')||pick('park');
+  const f=pick('lc-detect')||pick('lu-detect')||pick('tx-park');
   if(!f) return '';
-  if(f.layer.id==='park'){ S.land='park'; return (f.properties&&f.properties.name)||'Park'; }
+  if(f.layer.id==='tx-park'){ S.land='park'; return (f.properties&&f.properties.name)||'Park'; }
   const c=f.properties&&f.properties.class; if(!c) return ''; S.land=c;
   return LAND[c]||(c.charAt(0).toUpperCase()+c.slice(1).replace(/_/g,' '));
 }
@@ -1544,6 +1546,9 @@ function step(now){
       if(mode==='tractor'&&farm&&!realRoad){ onRoad=true; el.textContent='In the field'; el.className=''; }
     }
     if(every('surf',.4)&&!(CKP&&Math.abs(LOOK.yaw)>60)){            // cockpit: only while looking roughly ahead (the probe must be on screen)
+      /* the two near-invisible "what land am I on?" layers cost ~230k triangles a frame; they're only asked when the data check
+         isn't used (terrain off and not in the cockpit), so they're drawn only then */
+      for(const id of ['lc-detect','lu-detect']) if(map.getLayer(id)){ const want=QG?'none':'visible'; if((map.getLayoutProperty(id,'visibility')||'visible')!==want) try{ map.setLayoutProperty(id,'visibility',want); }catch(e){} }   /* checked each time: satellite view's restore can switch them back on */
       const lt=boat?'Water':landHere(QG?null:p,[S.lng,S.lat]);   // from the map data when terrain is on or in the cockpit
       const txt=lt+(mode==='tractor'?' · Tractor':mode==='boat'?' · Bass boat':'');
       if(txt!==step.surf){ step.surf=txt; surfEl.textContent=txt; }
