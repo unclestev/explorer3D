@@ -122,13 +122,14 @@ function markHere(brand){ brand=brand||'Meijer'; const h=S.hdg*Math.PI/180, kx=1
    you walk in. ⚙️ A/V → Store greeter turns the voice off (the greeter still stands there); saved as ydGreeter on this device. */
 const GREET={key:'ydGreeter',last:{}};
 const greeterOn=()=>{ try{ return localStorage.getItem(GREET.key)!=='off'; }catch(e){ return true; } };
-function greet(s){ if(!s||!greeterOn()) return false; const now=performance.now(), k=s.key; if(now-(GREET.last[k]||-1e9)<45000) return false;   // not again on a quick step out and in
+function greet(s,delay){ if(!s||!greeterOn()) return false; const now=performance.now(), k=s.key; if(now-(GREET.last[k]||-1e9)<45000) return false;   // not again on a quick step out and in
   GREET.last[k]=now; const t='Welcome to '+(s.brand||brandOf(s.name))+'.';
-  if(typeof toast==='function') toast('👋 '+t,2600);
-  try{ if(window.speechSynthesis){ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(t); u.lang='en-US'; u.rate=.98;
-      const vs=speechSynthesis.getVoices(); u.voice=vs.find(v=>/en[-_]US/i.test(v.lang)&&/Google|Natural|Aria|Jenny|Guy/i.test(v.name))||vs.find(v=>/^en/i.test(v.lang))||null; if(!u.voice) delete u.voice;
-      const d=on=>{ for(const f of [()=>window.MUSIC&&MUSIC.duck&&MUSIC.duck(on),()=>window.SOUND&&SOUND.duck&&SOUND.duck(on)]) try{ f(); }catch(e){} };
-      d(true); u.onend=u.onerror=()=>setTimeout(()=>d(false),200); setTimeout(()=>d(false),4000); speechSynthesis.speak(u); } }catch(e){}
+  setTimeout(()=>{ if(!greeterOn()) return;                                  // a short pause first: you've just stepped in, the greeter notices you, then speaks
+    if(typeof toast==='function') toast('👋 '+t,2600);
+    try{ if(window.speechSynthesis){ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(t); u.lang='en-US'; u.rate=.98;
+        const vs=speechSynthesis.getVoices(); u.voice=vs.find(v=>/en[-_]US/i.test(v.lang)&&/Google|Natural|Aria|Jenny|Guy/i.test(v.name))||vs.find(v=>/^en/i.test(v.lang))||null; if(!u.voice) delete u.voice;
+        const d=on=>{ for(const f of [()=>window.MUSIC&&MUSIC.duck&&MUSIC.duck(on),()=>window.SOUND&&SOUND.duck&&SOUND.duck(on)]) try{ f(); }catch(e){} };
+        d(true); u.onend=u.onerror=()=>setTimeout(()=>d(false),200); setTimeout(()=>d(false),4000); speechSynthesis.speak(u); } }catch(e){} },delay==null?1300:delay);
   return true; }
 function changed(){ ST.dirty=true; }
 // which way the store faces: toward the parking lots round it (area-weighted), else the nearest road that isn't a service
