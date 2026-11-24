@@ -381,7 +381,7 @@ function wingRoof(p,B,slices,pitch,seed,c,top,toLL){
     const half=sh/2, rise=Math.min(4.2,half*pitch), gable=lg/sh>1.15&&hash(seed+idx*7,3)<(idx?.9:.62), um=(u0+u1)/2, vm=(v0+v1)/2;
     for(let k=0;k<slices;k++){ const t=k/slices, hv=(half+oh)*(1-t), hu=gable?lg/2+oh:Math.max(hv,lg/2+oh-(half+oh)*t); if(hv<.15) break;
       const ring=(alongU?boxRing(B,um-hu,um+hu,vm-hv,vm+hv):boxRing(B,um-hv,um+hv,vm-hu,vm+hu)).map(toLL); ring.push(ring[0]);
-      out.push({type:'Feature',properties:{c,rf:1,b:top+rise*t,h:top+rise*(k+1)/slices},geometry:{type:'Polygon',coordinates:[ring]}}); } });
+      out.push({type:'Feature',properties:{c:shade(c,-.1+.2*t),rf:1,b:top+rise*t,h:top+rise*(k+1)/slices},geometry:{type:'Polygon',coordinates:[ring]}}); } });
   return out.length?out:null;
 }
 function roofFor(P,kx,ky,slices){ return roofParts(P,kx,ky,slices); }
@@ -403,7 +403,7 @@ function roofParts(P,kx,ky,slices){
         for(let k=0;k<slices;k++){ const t=k/slices, hv=(half+oh)*(1-t), hu=gable?L/2+oh:Math.max(hv,L/2+oh-(half+oh)*t);
           if(hv<.15) break;
           const ring=boxRing(B,um-hu,um+hu,vm-hv,vm+hv).map(toLL); ring.push(ring[0]);
-          out.push({type:'Feature',properties:{c,rf:1,b:top+rise*t,h:top+rise*(k+1)/slices},geometry:{type:'Polygon',coordinates:[ring]}}); }
+          out.push({type:'Feature',properties:{c:shade(c,-.1+.2*t),rf:1,b:top+rise*t,h:top+rise*(k+1)/slices},geometry:{type:'Polygon',coordinates:[ring]}}); }
       } else {                                                    // a house with wings: a roof for each wing, or a hip roof following the real outline
         const wr=wingRoof(p,B,slices,pitch,seed,c,top,toLL); if(wr){ for(const f of wr) out.push(f); return res; }
         if(p.length>40) return res;
@@ -413,7 +413,7 @@ function roofParts(P,kx,ky,slices){
         const rise2=Math.min(4.2,lo*pitch); let q=p;
         for(let k=0;k<slices&&q;k++){ const t=k/slices;
           const ring=q.map(toLL); ring.push(ring[0]);
-          out.push({type:'Feature',properties:{c,rf:1,b:top+rise2*t,h:top+rise2*(k+1)/slices},geometry:{type:'Polygon',coordinates:[ring]}});
+          out.push({type:'Feature',properties:{c:shade(c,-.1+.2*t),rf:1,b:top+rise2*t,h:top+rise2*(k+1)/slices},geometry:{type:'Polygon',coordinates:[ring]}});
           q=inset(p,lo*(k+1)/slices); }
       }
       return res;
