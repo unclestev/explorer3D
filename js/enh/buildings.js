@@ -646,26 +646,42 @@ function facades(P,kx,ky,res,rich){
       if(on){ const x=E.a[0]+E.ux*s+E.nx*o, y=E.a[1]+E.uy*s+E.ny*o, L=toLL([E.a[0]+E.ux*s+E.nx*.34,E.a[1]+E.uy*s+E.ny*.34]);
         res.glow.push({type:'Feature',properties:{r:+(r/cl).toFixed(2),lx:L[0],ly:L[1],z},geometry:{type:'Point',coordinates:toLL([x,y])}}); } };
     const trim=hash(seed,61)<.18?'#3b3f44':FRAME, shut=hash(seed,67)<.38?SHUTTER[Math.floor(hash(seed,71)*SHUTTER.length)]:null;
-    // garage: where the driveway meets the house, else (most houses) at one end of the street side
+    /* garage (owner 2026-11-24: "based on the size of the garage and the pad that leads up to it, estimate the number of garage
+       doors"): where the driveway meets the house, else (most houses) at one end of the street side. The number of bays comes from
+       the garage wall's width (a wing that juts out is the garage: its whole face), the width of the paved pad in front of it
+       (a mapped lot / the spread of driveway ends), and how big the house is; 3 bays can be three singles or a single and a double. */
     const ds=driveSpot(P,edges,q=>[(q[0]-P.cx)*kx,(q[1]-P.cy)*ky]);
-    let gE=null, gs0=0, gw=0;
-    if(ds&&ds.E.L>=3.4){ gE=ds.E; gw=ds.E.L>=8&&hash(seed,43)<.6?4.9:2.7; if(gw>gE.L-.8) gw=2.7; gs0=Math.max(.4,Math.min(gE.L-.4-gw,ds.s-gw/2)); }
-    else if(front.L>=9&&hash(seed,31)<.75){ gE=front; gw=front.L>=13?4.9:2.7; gs0=hash(seed,37)<.5?.7:front.L-.7-gw; }
-    if(gE){ const E=gE, s0=gs0, gcol=GARAGE[seed&3], GT=2.15;
-      // a garage you can open (js/enh/garage.js): the dark inside shows behind the panels as they roll up
-      const gk=seed*4+1, a=[E.a[0]+E.ux*s0,E.a[1]+E.uy*s0], mx=a[0]+E.ux*gw/2, my=a[1]+E.uy*gw/2;
-      let depth=0; for(const q of p) depth=Math.max(depth,-((q[0]-mx)*E.nx+(q[1]-my)*E.ny));
-      garages.push({ei:E.ei,s0:s0+E.off,s1:s0+gw+E.off,x0:a[0],y0:a[1],x1:a[0]+E.ux*gw,y1:a[1]+E.uy*gw,nx:E.nx,ny:E.ny,gk,col:gcol,D:Math.max(4,Math.min(7.5,depth-.3))});
-      put(E,s0+.05,s0+gw-.05,-.04,-.02,0,GT-.05,'#141518');
-      // four sectional panels with a thin dark joint between them; some doors have a row of windows in the top panel
-      const ph=GT/4, wins=fine&&hash(seed,73)<.35, rp=(f)=>Object.assign(out[out.length-1].properties,{gk,gr:1.95,gt:GT});
-      for(let k=0;k<4;k++){ put(E,s0,s0+gw,-.04,.06,k*ph+(k?.012:0),(k+1)*ph-.012,gcol); rp();
-        if(fine&&!(wins&&k===3)) for(const z of [k*ph+ph*.22,k*ph+ph*.78-.04]){ put(E,s0+.12,s0+gw-.12,.06,.072,z,z+.04,shade(gcol,-.12)); rp(); } }   // raised panel edges
-      if(wins){ const n=gw>4?8:4, ww=(gw-.5)/n; for(let i=0;i<n;i++){ const x=s0+.25+i*ww; put(E,x+.06,x+ww-.06,.06,.075,3*ph+.14,3*ph+.4,GLASS); rp(); } }
-      if(fine){ put(E,s0-.14,s0,-.04,.06,0,GT+.12,trim); put(E,s0+gw,s0+gw+.14,-.04,.06,0,GT+.12,trim); put(E,s0-.14,s0+gw+.14,-.04,.06,GT,GT+.12,trim);   // trim round the opening
-      }
-      for(const x of [s0-.42,s0+gw+.42]) lamp(E,x,1.95,1.2,3.2);                                                     // a light on each side of the garage door
-      occupy(E,s0-.6,s0+gw+.6); }
+    let gE=null, gC=0, wingG=false;
+    if(ds&&ds.E.L>=3.4){ gE=ds.E; gC=ds.s; }
+    else if(front.L>=9&&hash(seed,31)<.75){ gE=front; gC=hash(seed,37)<.5?-1:-2; }          // -1: at the left end, -2: at the right
+    if(gE){ const E=gE; { const n=p.length, a0=p[(E.ei+n-1)%n], b0=p[(E.ei+2)%n];
+        wingG=E.off===0&&Math.abs(E.L-Math.hypot(p[(E.ei+1)%n][0]-p[E.ei][0],p[(E.ei+1)%n][1]-p[E.ei][1]))<.1&&((a0[0]-E.a[0])*E.nx+(a0[1]-E.a[1])*E.ny)<-1.2&&((b0[0]-E.a[0])*E.nx+(b0[1]-E.a[1])*E.ny)<-1.2&&E.L<=14; }
+      let pw=0;                                                                                    // width of the paved pad in front of the wall
+      if(window.PARKING&&PARKING.at){ let run=0; for(let t=-3;t<=E.L+3;t+=.5){ let hit=false; for(const o of [3,5]){ const q=toLL([E.a[0]+E.ux*t+E.nx*o,E.a[1]+E.uy*t+E.ny*o]); if(PARKING.at(q[0],q[1])){ hit=true; break; } } run=hit?run+.5:0; if(run>pw) pw=run; } }
+      { const xs=[]; const m=12/111320, B=P.bb; for(const D of DRIVES){ const b=D.bb; if(b[2]<B[0]-m*1.4||b[0]>B[2]+m*1.4||b[3]<B[1]-m||b[1]>B[3]+m) continue;
+          for(const end of [D.l[0],D.l[D.l.length-1]]){ const q=toLoc(end), dx=q[0]-E.a[0], dy=q[1]-E.a[1], o=dx*E.nx+dy*E.ny, t=dx*E.ux+dy*E.uy; if(o>-3&&o<9&&t>-2&&t<E.L+2) xs.push(t); } }
+        if(xs.length>1) pw=Math.max(pw,Math.max(...xs)-Math.min(...xs)+2.6); }
+      const avail=wingG?E.L-.8:Math.min(E.L-1.6,E.L*(ds?.75:.6)), nWall=Math.max(1,Math.min(4,Math.floor((avail+.8)/2.9)));
+      const nPad=pw>=2.4?Math.max(1,Math.min(4,Math.round(pw/3))):0, nArea=A<130?1:A<260?2:A<430?3:4;
+      const nB=wingG?nWall:Math.min(nWall,nPad||nArea), r43=hash(seed,43), r44=hash(seed,44), S1=2.7, D1=4.9;
+      let ws=nB===1?[S1]:nB===2?(r43<.55?[D1]:[S1,S1]):nB===3?(r43<.35?[S1,S1,S1]:r44<.5?[D1,S1]:[S1,D1]):(r43<.4?[D1,D1]:r43<.7?(r44<.5?[D1,S1,S1]:[S1,S1,D1]):[S1,S1,S1,S1]);
+      let tw=ws.reduce((x,y)=>x+y,0)+.5*(ws.length-1); if(tw>E.L-.8){ const f=(E.L-.8)/tw; ws=ws.map(x=>Math.max(2.2,x*f)); tw=ws.reduce((x,y)=>x+y,0)+.5*(ws.length-1); }
+      let st=wingG?(E.L-tw)/2:gC>=0?gC-tw/2:gC===-1?.7:E.L-.7-tw; st=Math.max(.4,Math.min(E.L-.4-tw,st));
+      const gcol=GARAGE[seed&3], GT=2.15, GKS=[1,2,3,0]; let x=st;
+      for(let k=0;k<ws.length;k++){ const gw=ws[k], s0=x; x+=gw+.5;
+        // a garage you can open (js/enh/garage.js): the dark inside shows behind the panels as they roll up
+        const gk=seed*4+GKS[k], a=[E.a[0]+E.ux*s0,E.a[1]+E.uy*s0], mx=a[0]+E.ux*gw/2, my=a[1]+E.uy*gw/2;
+        let depth=0; for(const q of p) depth=Math.max(depth,-((q[0]-mx)*E.nx+(q[1]-my)*E.ny));
+        garages.push({ei:E.ei,s0:s0+E.off,s1:s0+gw+E.off,x0:a[0],y0:a[1],x1:a[0]+E.ux*gw,y1:a[1]+E.uy*gw,nx:E.nx,ny:E.ny,gk,col:gcol,D:Math.max(4,Math.min(7.5,depth-.3))});
+        put(E,s0+.05,s0+gw-.05,-.04,-.02,0,GT-.05,'#141518');
+        // four sectional panels with a thin dark joint between them; some doors have a row of windows in the top panel
+        const ph=GT/4, wins=fine&&hash(seed,73+k)<.35, rp=(f)=>Object.assign(out[out.length-1].properties,{gk,gr:1.95,gt:GT});
+        for(let q=0;q<4;q++){ put(E,s0,s0+gw,-.04,.06,q*ph+(q?.012:0),(q+1)*ph-.012,gcol); rp();
+          if(fine&&!(wins&&q===3)) for(const z of [q*ph+ph*.22,q*ph+ph*.78-.04]){ put(E,s0+.12,s0+gw-.12,.06,.072,z,z+.04,shade(gcol,-.12)); rp(); } }   // raised panel edges
+        if(wins){ const n=gw>4?8:4, ww=(gw-.5)/n; for(let q=0;q<n;q++){ const xx=s0+.25+q*ww; put(E,xx+.06,xx+ww-.06,.06,.075,3*ph+.14,3*ph+.4,GLASS); rp(); } }
+        if(fine){ put(E,s0-.14,s0,-.04,.06,0,GT+.12,trim); put(E,s0+gw,s0+gw+.14,-.04,.06,0,GT+.12,trim); put(E,s0-.14,s0+gw+.14,-.04,.06,GT,GT+.12,trim); } }   // trim round each opening
+      for(const xx of [st-.42,st+tw+.42]) lamp(E,xx,1.95,1.2,3.2);                                                   // a light on each side of the whole row
+      occupy(E,st-.6,st+tw+.6); }
     // front door on the street side, in the free part of the wall
     { let E=front, s=null;
       for(const w of wkSpots){ if(w.E.L<2.6) continue; const cs=Math.max(1.2,Math.min(w.E.L-1.2,w.s)); if(free(w.E,cs-1,cs+1.15)){ E=w.E; s=cs; break; } }   // where the front walk reaches the house
