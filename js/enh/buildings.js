@@ -97,7 +97,7 @@ function addCaps(){
     map.addSource('porch-glow',{type:'geojson',data:{type:'FeatureCollection',features:[]},maxzoom:19,tolerance:0});
     const ppm=z=>512*2**z/40075017, rad=['interpolate',['exponential',2],['zoom'],12,['*',['get','r'],ppm(12)],22,['*',['get','r'],ppm(22)]];
     map.addLayer({id:'porch-glow',type:'circle',source:'porch-glow',minzoom:15,layout:{visibility:night&&!POWER?'visible':'none'},
-      paint:{'circle-radius':rad,'circle-color':'#ffcf80','circle-opacity':.42,'circle-blur':1,'circle-pitch-alignment':'map','circle-pitch-scale':'map'}},
+      paint:{'circle-radius':rad,'circle-color':'#ffcf80','circle-opacity':.5,'circle-blur':1,'circle-pitch-alignment':'map','circle-pitch-scale':'map'}},
       map.getLayer('wall-3d')?'wall-3d':'roof-3d');
   }
 }
@@ -417,7 +417,7 @@ function facades(P,kx,ky,res,rich){
       if(wins){ const n=gw>4?8:4, ww=(gw-.5)/n; for(let i=0;i<n;i++){ const x=s0+.25+i*ww; put(E,x+.06,x+ww-.06,.1,.115,3*ph+.14,3*ph+.4,GLASS); rp(); } }
       if(fine){ put(E,s0-.14,s0,.0,.06,0,GT+.12,trim); put(E,s0+gw,s0+gw+.14,.0,.06,0,GT+.12,trim); put(E,s0-.14,s0+gw+.14,.0,.06,GT,GT+.12,trim);   // trim round the opening
       }
-      for(const x of [s0-.42,s0+gw+.42]) lamp(E,x,1.95,1.1,2);                                                     // a light on each side of the garage door
+      for(const x of [s0-.42,s0+gw+.42]) lamp(E,x,1.95,1.2,3.2);                                                     // a light on each side of the garage door
       occupy(E,s0-.6,s0+gw+.6); }
     // front door on the street side, in the free part of the wall
     { const E=front, fr=(busy.get(E)||[])[0], span=fr?(fr[0]>E.L/2?[.8,fr[0]-.3]:[fr[1]+.3,E.L-.8]):[.8,E.L-.8];
@@ -428,7 +428,7 @@ function facades(P,kx,ky,res,rich){
         if(fine){ for(const z of [[.25,.95],[1.15,1.85]]) for(const x of [[-.38,-.06],[.06,.38]]) put(E,s+x[0],s+x[1],.09,.105,z[0],z[1],shade(dc,.14));   // four raised panels
           put(E,s+.3,s+.36,.09,.15,.98,1.04,'#c9a64a');                                                                      // brass knob
           put(E,s-.9,s+.9,.0,1.15,0,.17,'#c4c1ba'); }                                                                        // concrete stoop
-        lamp(E,s+.9,1.9,1.3,2.4);                                                                                          // porch light, matching the garage ones
+        lamp(E,s+.9,1.9,1.4,3.6);                                                                                          // porch light, matching the garage ones
         occupy(E,s-1,s+1.15); } }
     for(const E of edges) for(let f=0;f<floors;f++){
       const n=Math.floor((E.L-1.2)/2.9); if(n<1) continue; const step=(E.L)/(n+1), big=E===front&&f===0;
@@ -487,14 +487,14 @@ function lampsSet(glow){
 }
 FRAME_HOOKS.push(function lampGlow(){
   const P=LG.pts; if(!P) return false;
-  const want=!!night&&!POWER&&LG.n>0&&mode!=='glider'&&!(window.WALK&&WALK.inside);
+  const want=!!night&&!POWER&&LG.n>0&&mode!=='glider'&&!(window.WALK&&WALK.inside&&WALK.inside.rec);
   let changed=LG.dirty; LG.dirty=false;
   if(want!==P.visible){ P.visible=want; changed=true; }
   if(!want) return changed;
   const px=S.lng*MLNG, py=S.lat*MLAT, m=mpp(S.lat,S.zoom), b=rad(S.camB), sb=Math.sin(b), cb=Math.cos(b), e=terrainOn?(map.transform.elevation||0):0;
   const dx=LG.o[0]-px, dy=LG.o[1]-py;
   P.position.set((dx*cb-dy*sb)/m,-e/m,-(dx*sb+dy*cb)/m); P.rotation.set(0,b,0); P.scale.setScalar(1/m);
-  P.material.size=.75/m/Math.tan(rad(camera.fov)/2);                 // about 0.75 m across (three.js sizes points by half the screen height, not the lens)
+  P.material.size=1/m/Math.tan(rad(camera.fov)/2);                 // about 1 m across (three.js sizes points by half the screen height, not the lens)
   return changed;
 });
 
