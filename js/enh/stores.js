@@ -224,13 +224,17 @@ function drawDoors(){ const feats=[]; ST.cache=[];
     put(sm+.5,sm+.56,.1,1.9,0,1.05,BK); put(sm+2.3,sm+2.36,.1,1.9,0,1.05,BK);                            // the black gates in front of the exit doors
     put(sm+.56,sm+2.3,1.84,1.9,0,1.05,BK);
     put(sm-2.85,sm+2.85,.06,.9,4.7,4.9,'#c9ccd0');
-    for(const q of r.garages){ const go=window.GARAGE?GARAGE.openness(q.gk):0, H=2.4, rise=go*(H-.1), a0=q.s0, a1=q.s1;      // the overhead door rolls up out of the opening
+    for(const q of r.garages){ const go=window.GARAGE?GARAGE.openness(q.gk):0, H=2.4, rise=go*(H-.1), gw=Math.hypot(q.x1-q.x0,q.y1-q.y0)||4, ux=(q.x1-q.x0)/gw, uy=(q.y1-q.y0)/gw;      // the overhead door rolls up out of the opening
       ST.cache[ST.cache.length-1].gks.push(q.gk);
-      put(a0-.2,a1+.2,.03,.14,0,2.75,AL);                                                                // white surround
-      put(a0,a1,.05,.1,0,H,'#101215');                                                                   // the dark store behind
-      put(a0,a1,.1,.15,rise,H,q.col);                                                                    // the door panel: its bottom rises
-      for(let k=1;k<4;k++){ const y=rise+k*.6; if(y<H-.05) put(a0,a1,.15,.17,y,y+.035,'#a7adb3'); }       // the joints between its panels
-      put(a0-.55,a0-.4,.7,.85,0,1.05,YL); put(a1+.4,a1+.55,.7,.85,0,1.05,YL); } }                        // yellow bollards each side                                                     // a little canopy edge over them
+      // the door is on ITS wall (not always the entrance wall): s runs along it from the door's left edge, o out from it
+      const pg=(s0,s1,o0,o1,b,h,c)=>{ const a=[q.x0+ux*s0,q.y0+uy*s0], z=[q.x0+ux*s1,q.y0+uy*s1];
+        const ring=[[a[0]+q.nx*o0,a[1]+q.ny*o0],[z[0]+q.nx*o0,z[1]+q.ny*o0],[z[0]+q.nx*o1,z[1]+q.ny*o1],[a[0]+q.nx*o1,a[1]+q.ny*o1]].map(toLL); ring.push(ring[0]);
+        feats.push({type:'Feature',properties:{c,b,h,g:0},geometry:{type:'Polygon',coordinates:[ring]}}); };
+      pg(-.2,gw+.2,.03,.14,0,2.75,AL);                                                                   // white surround
+      pg(0,gw,.05,.1,0,H,'#101215');                                                                     // the dark store behind
+      pg(0,gw,.1,.15,rise,H,q.col);                                                                      // the door panel: its bottom rises
+      for(let k=1;k<4;k++){ const y=rise+k*.6; if(y<H-.05) pg(0,gw,.15,.17,y,y+.035,'#a7adb3'); }        // the joints between its panels
+      pg(-.55,-.4,.7,.85,0,1.05,YL); pg(gw+.4,gw+.55,.7,.85,0,1.05,YL); } }                              // yellow bollards each side
   safe('stores',()=>{ const src=map.getSource('stores'); if(src) src.setData({type:'FeatureCollection',features:feats}); }); }
 function layers(){ safe('stores layer',()=>{ if(map.getSource('stores')) return;
   map.addSource('stores',{type:'geojson',data:{type:'FeatureCollection',features:[]},maxzoom:19,tolerance:0});
