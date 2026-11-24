@@ -329,31 +329,44 @@ function roomLook(r,SH){
    tall black acoustic panels, tall narrow windows high up, a black wall pad, banners, a flag, folded bleachers along a wall, a
    scoreboard, a maple floor with the court lines, hoops, and white steel roof trusses with round high-bay lights hung from them */
 function gymDecor(g,p,HC,r,TH2){
-  const o=TH2+.014, tan=[], stripe=[], panel=[], pad=[], win=[], ban=[], gold=[], dfr=[], dgl=[];
+  /* works for any school gym (owner 2026-11-24), whatever its outline: everything is measured along the room's own long axis
+     (its longest wall) and across it, trusses and lights are cut to the inside of the outline, and the doors and windows are
+     the room's real ones (r.doors, r.win: the same openings the outside shows) — nothing painted on that isn't there */
+  const o=TH2+.014, tan=[], stripe=[], panel=[], pad=[], ban=[], gold=[], dfr=[];
+  const n=p.length, DH=2.12;
   const gaps=i=>(r.doors||[]).filter(d=>d.ei===i).map(d=>[d.s0-.15,d.s1+.15]).sort((a,b)=>a[0]-b[0]);
-  let best=0, bi=0, minx=1e9,maxx=-1e9,miny=1e9,maxy=-1e9, cx=0, cy=0;
-  for(const q of p){ minx=Math.min(minx,q[0]); maxx=Math.max(maxx,q[0]); miny=Math.min(miny,q[1]); maxy=Math.max(maxy,q[1]); cx+=q[0]; cy+=q[1]; } cx/=p.length; cy/=p.length;
-  for(let i=0;i<p.length;i++){ const a=p[i], b=p[(i+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1]); if(L>best){ best=L; bi=i; } }
+  const wins=i=>(r.win||[]).filter(w=>w.ei===i);
+  let best=0, bi=0;
+  for(let i=0;i<n;i++){ const a=p[i], b=p[(i+1)%n], L=Math.hypot(b[0]-a[0],b[1]-a[1]); if(L>best){ best=L; bi=i; } }
+  const a0=p[bi], a1=p[(bi+1)%n], ang=Math.atan2(a1[1]-a0[1],a1[0]-a0[0]), UX=Math.cos(ang), UY=Math.sin(ang), VX=-UY, VY=UX;
+  let u0=1e9,u1=-1e9,v0=1e9,v1=-1e9; for(const q of p){ const u=q[0]*UX+q[1]*UY, v=q[0]*VX+q[1]*VY; u0=Math.min(u0,u); u1=Math.max(u1,u); v0=Math.min(v0,v); v1=Math.max(v1,v); }
+  const LU=u1-u0, LV=v1-v0, um=(u0+u1)/2, vm=(v0+v1)/2, cx=UX*um+VX*vm, cy=UY*um+VY*vm;     // the room's middle and its size along / across
+  // where a line across the room (at u) is inside the outline: the stretch round the middle, from wall to wall
+  const across=u=>{ const hits=[]; for(let i=0;i<n;i++){ const a=p[i], b=p[(i+1)%n], ua=a[0]*UX+a[1]*UY, ub=b[0]*UX+b[1]*UY; if((ua>u)===(ub>u)) continue;
+      const t=(u-ua)/(ub-ua); hits.push((a[0]+(b[0]-a[0])*t)*VX+(a[1]+(b[1]-a[1])*t)*VY); }
+    hits.sort((x,y)=>x-y); let seg=null; for(let k=0;k+1<hits.length;k+=2){ const s0=hits[k], s1=hits[k+1]; if(!seg||s1-s0>seg[1]-seg[0]) seg=[s0,s1]; } return seg; };
+  const wallOf=i=>{ const a=p[i], b=p[(i+1)%n], L=Math.hypot(b[0]-a[0],b[1]-a[1]), ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L; return {i,a,b,L,ux,uy,nx:uy,ny:-ux}; };
+  // the long wall facing the longest one (for the bleachers) and the longest wall across (for the scoreboard)
+  let opp=null, cross=null; for(let i=0;i<n;i++){ if(i===bi) continue; const w=wallOf(i), par=Math.abs(w.ux*UX+w.uy*UY), mid=((w.a[0]+w.b[0])/2)*VX+((w.a[1]+w.b[1])/2)*VY;
+    if(par>.95&&w.L>4&&(!opp||Math.abs(mid-(a0[0]*VX+a0[1]*VY))*w.L>opp.sc)) opp={...w,sc:Math.abs(mid-(a0[0]*VX+a0[1]*VY))*w.L};
+    if(par<.3&&(!cross||w.L>cross.L)) cross=w; }
   const PH=Math.min(HC-1.2,7.6);
-  for(let i=0;i<p.length;i++){ const a=p[i], b=p[(i+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1]); if(L<3) continue;
+  for(let i=0;i<n;i++){ const a=p[i], b=p[(i+1)%n], L=Math.hypot(b[0]-a[0],b[1]-a[1]); if(L<3) continue;
     const ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux, at=(t,off)=>[a[0]+ux*t-nx*off,a[1]+uy*t-ny*off];
     const spans=[]; { let t=.2; for(const [g0,g1] of gaps(i)){ if(g0>t) spans.push([t,g0]); t=Math.max(t,g1); } if(L-.2>t) spans.push([t,L-.2]); }
     for(const [t0,t1] of spans){ quad(tan,at(t0,o),at(t1,o),0,2.9); quad(stripe,at(t0,o),at(t1,o),2.9,3.25); }
-    const free=(s0,s1)=>(r.doors||[]).every(d=>d.ei!==i||s1<d.s0-.3||s0>d.s1+.3);
-    for(let s=2.4,k=0;s+1.3<L-1;s+=4.2,k++){ if(!free(s,s+1.3)) continue; quad(panel,at(s,o+.004),at(s+1.3,o+.004),3.5,PH);                        // the tall black panels
-      if(k%2===0&&s+3.4<L-1&&free(s+2.1,s+3.3)) quad(win,at(s+2.1,o+.004),at(s+3.3,o+.004),4.2,PH-.2); }                                       // a tall window between a pair of them
-    if(i===bi||i===(bi+2)%p.length) for(const f of [.28,.72]){ const s=L*f-1; if(!free(s-.3,s+2.3)) continue;                                      // the pair of red-framed glass doors, on both long sides (as in the photo)
-      for(const k of [0,1]){ const a0=s+k*1.05; quad(dfr,at(a0,o+.016),at(a0+.95,o+.016),0,2.15); quad(dgl,at(a0+.09,o+.024),at(a0+.86,o+.024),.1,2.05); quad(dfr,at(a0+.09,o+.03),at(a0+.86,o+.03),1.05,1.14); } }
-    if(i===bi){ const m=L/2; quad(pad,at(m-6,o+.004),at(m+6,o+.004),.15,2.7); }                                                                  // the black wall pad
-    if(i===(bi+2)%p.length||i===bi) for(let s=3;s+.9<L-2;s+=1.7) if(free(s,s+.9)){ quad(ban,at(s,o+.006),at(s+.9,o+.006),3.5,4.6); quad(gold,at(s+.2,o+.008),at(s+.7,o+.008),3.85,4.3); }   // black and gold banners
+    const W2=wins(i), free=(s0,s1,y0,y1)=>(r.doors||[]).every(d=>d.ei!==i||s1<d.s0-.3||s0>d.s1+.3)&&W2.every(w=>s1<w.s0-.25||s0>w.s1+.25||y1<w.b-.1||y0>w.h+.1);
+    for(let s=2.4;s+1.3<L-1;s+=2.1) if(free(s,s+1.3,3.5,PH)){ quad(panel,at(s,o+.004),at(s+1.3,o+.004),3.5,PH); s+=2.1; }                       // the tall black acoustic panels, between the windows
+    for(const d of (r.doors||[]).filter(d=>d.ei===i)){ const h=DH+.12;                                                                           // a red frame round each real door (the photo's red-framed glass doors)
+      quad(dfr,at(d.s0-.14,o+.02),at(d.s0,o+.02),0,h); quad(dfr,at(d.s1,o+.02),at(d.s1+.14,o+.02),0,h); quad(dfr,at(d.s0-.14,o+.02),at(d.s1+.14,o+.02),DH,h); }
+    if(i===bi){ const m=L/2; if(free(m-6,m+6,.15,2.7)) quad(pad,at(m-6,o+.004),at(m+6,o+.004),.15,2.7); }                                          // the black wall pad
+    if(i===bi||(opp&&i===opp.i)) for(let s=3;s+.9<L-2;s+=1.7) if(free(s,s+.9,3.5,4.6)){ quad(ban,at(s,o+.006),at(s+.9,o+.006),3.5,4.6); quad(gold,at(s+.2,o+.008),at(s+.7,o+.008),3.85,4.3); }   // black and gold banners
   }
   const mk=(arr,col,emi)=>{ if(arr.length){ const m=rmat('gym'+col,col,emi||0x000000); (GYMM.list=GYMM.list||[]).includes(m)||GYMM.list.push(m); g.add(meshOf(arr,m)); } };
   mk(tan,0xc9a468,0x4a3c20); mk(stripe,0x1d2026,0x08090b); mk(panel,0x14161a,0x040405); mk(pad,0x111317,0x030304);
-  if(win.length){ const m=new THREE.MeshBasicMaterial({color:0xc9def0,side:THREE.DoubleSide}); g.add(meshOf(win,m)); }                              // daylight in the windows
-  mk(dfr,0x8a2020,0x2a0808); mk(dgl,0x27383d,0x0c1316);
-  mk(ban,0x15171b,0x050506); mk(gold,0xd7b24a,0x4a3c10);
+  mk(dfr,0x8a2020,0x2a0808); mk(ban,0x15171b,0x050506); mk(gold,0xd7b24a,0x4a3c10);
   // the floor: court lines on the maple, along the room's long side
-  const W=maxx-minx, Hh=maxy-miny, a0=p[bi], a1=p[(bi+1)%p.length], ang=Math.atan2(a1[1]-a0[1],a1[0]-a0[0]), CL=Math.min(28,best-4), CW=Math.min(15,(Math.min(W,Hh)>0?Math.min(W,Hh):15)-3);
+  const CL=Math.max(10,Math.min(28,LU-4)), CW=Math.max(6,Math.min(15,LV-3));
   { const c=document.createElement('canvas'); c.width=1024; c.height=Math.round(1024*CW/CL); const x=c.getContext('2d'), sx=c.width/CL, sy=c.height/CW;
     x.strokeStyle='#1d1a16'; x.fillStyle='rgba(0,0,0,0)'; x.lineWidth=5; x.strokeRect(4,4,c.width-8,c.height-8);
     x.beginPath(); x.moveTo(c.width/2,0); x.lineTo(c.width/2,c.height); x.stroke();
@@ -364,18 +377,22 @@ function gymDecor(g,p,HC,r,TH2){
     const t=new THREE.CanvasTexture(c); t.anisotropy=8;
     const m=new THREE.Mesh(new THREE.PlaneGeometry(CL,CW),new THREE.MeshBasicMaterial({map:t,transparent:true,opacity:.75,depthWrite:false}));
     m.rotation.x=-Math.PI/2; m.rotation.z=ang; m.position.set(cx,.016,-cy); m.renderOrder=2; g.add(m); }
-  // folded bleachers along one long wall, a scoreboard high on a short wall, hoops at each end
-  { const i=(bi+2)%p.length, a=p[i], b=p[(i+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1]), ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux;
-    const mx=a[0]+ux*L/2-nx*(TH2+.9), my=a[1]+uy*L/2-ny*(TH2+.9), bl=Math.min(L*.7,40);
-    const bl3=new THREE.Mesh(new THREE.BoxGeometry(bl,3.2,1.5),rmat('bleach',0x1c2433,0x0a0e16)); bl3.position.set(mx,1.6,-my); bl3.rotation.y=Math.atan2(uy,ux); g.add(bl3);
-    for(const y of [.8,1.6,2.4]){ const rl=new THREE.Mesh(new THREE.BoxGeometry(bl,.05,.04),rmat('rail',0x2d5fd0,0x102050)); rl.position.set(mx+nx*.77,y,-(my+ny*.77)); rl.rotation.y=bl3.rotation.y; g.add(rl); } }
-  { const sh=(bi+1)%p.length, a=p[sh], b=p[(sh+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1]), ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux;
-    const c=document.createElement('canvas'); c.width=256; c.height=96; const x=c.getContext('2d'); x.fillStyle='#0c0d10'; x.fillRect(0,0,256,96); x.fillStyle='#e8a43a'; x.font='bold 30px monospace'; x.fillText('GUEST   HOME',22,36); x.font='bold 36px monospace'; x.fillText(' 00  P1  00',22,80);
-    const m=new THREE.Mesh(new THREE.PlaneGeometry(2.6,1),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c)})); const q=[a[0]+ux*L/2-nx*(TH2+.03),a[1]+uy*L/2-ny*(TH2+.03)];
-    m.position.set(q[0],Math.min(HC-2.2,6.2),-q[1]); m.lookAt(cx,m.position.y,-cy); g.add(m); }
+  // folded bleachers along the opposite long wall, on its longest stretch without a door
+  if(opp){ const ds=(r.doors||[]).filter(d=>d.ei===opp.i).map(d=>[d.s0-1,d.s1+1]).sort((x,y)=>x[0]-y[0]); let sp=null, t=.5;
+    for(const [g0,g1] of ds.concat([[opp.L-.5,opp.L]])){ if(g0-t>(sp?sp[1]-sp[0]:0)) sp=[t,g0]; t=Math.max(t,g1); }
+    const bl=sp?Math.min(sp[1]-sp[0]-.5,opp.L*.7,40):0;
+    if(bl>=5){ const {a,ux,uy,nx,ny}=opp, sm=(sp[0]+sp[1])/2, mx=a[0]+ux*sm-nx*(TH2+.9), my=a[1]+uy*sm-ny*(TH2+.9);
+      const bl3=new THREE.Mesh(new THREE.BoxGeometry(bl,3.2,1.5),rmat('bleach',0x1c2433,0x0a0e16)); bl3.position.set(mx,1.6,-my); bl3.rotation.y=Math.atan2(uy,ux); g.add(bl3);
+      for(const y of [.8,1.6,2.4]){ const rl=new THREE.Mesh(new THREE.BoxGeometry(bl,.05,.04),rmat('rail',0x2d5fd0,0x102050)); rl.position.set(mx-nx*.77,y,-(my-ny*.77)); rl.rotation.y=bl3.rotation.y; g.add(rl); } } }
+  // the scoreboard high on the end wall, beside any window there
+  if(cross){ const {i,a,L,ux,uy,nx,ny}=cross, y=Math.min(HC-2.2,6.2), W2=wins(i); let sm=null;
+    for(let k=0;k<30&&sm==null;k++){ const s=L/2+(k%2?1:-1)*Math.ceil(k/2)*.8; if(s>1.6&&s<L-1.6&&W2.every(w=>s+1.5<w.s0||s-1.5>w.s1||y+.6<w.b||y-.6>w.h)) sm=s; }
+    if(sm!=null){ const c=document.createElement('canvas'); c.width=256; c.height=96; const x=c.getContext('2d'); x.fillStyle='#0c0d10'; x.fillRect(0,0,256,96); x.fillStyle='#e8a43a'; x.font='bold 30px monospace'; x.fillText('GUEST   HOME',22,36); x.font='bold 36px monospace'; x.fillText(' 00  P1  00',22,80);
+      const m=new THREE.Mesh(new THREE.PlaneGeometry(2.6,1),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c)})), q=[a[0]+ux*sm-nx*(TH2+.03),a[1]+uy*sm-ny*(TH2+.03)];
+      m.position.set(q[0],y,-q[1]); m.rotation.y=Math.atan2(-nx,ny); g.add(m); } }
   // the hoops hang up under the trusses on cables; a wall switch lowers them slowly (owner 2026-11-24), another raises them again
   { const list=[], up=Math.max(1.5,HC-1.6-3.6), o0=HOOPO[r.key]||0;
-    for(const e of [-1,1]){ const hx=cx+Math.cos(ang)*e*(CL/2-1.2), hy=cy+Math.sin(ang)*e*(CL/2-1.2), H=new THREE.Group(); H.position.set(hx,0,-hy); H.rotation.y=-ang; g.add(H);
+    for(const e of [-1,1]){ const hx=cx+UX*e*(CL/2-1.2), hy=cy+UY*e*(CL/2-1.2), H=new THREE.Group(); H.position.set(hx,0,-hy); H.rotation.y=-ang; g.add(H);
       const bb=new THREE.Mesh(new THREE.BoxGeometry(.06,1.05,1.8),rmat('board',0xf0f0f0,0x303030)); bb.position.set(0,3.6,0); H.add(bb);
       const sq=new THREE.Mesh(new THREE.BoxGeometry(.065,.36,.6),rmat('boardsq',0xd9d9d9,0x202020)); sq.position.set(0,3.35,0); H.add(sq);
       const rim=new THREE.Mesh(new THREE.TorusGeometry(.23,.015,6,20),rmat('rim',0xe8571a,0x401808)); rim.rotation.x=Math.PI/2; rim.position.set(-.45*e,3.05,0); H.add(rim);
@@ -384,16 +401,19 @@ function gymDecor(g,p,HC,r,TH2){
       const cabs=[-.7,.7].map(z=>{ const c=new THREE.Mesh(new THREE.CylinderGeometry(.015,.015,1,6),rmat('hcab',0x1b1c1f,0x050506)); c.position.set(0,0,z); H.add(c); return c; });
       list.push({H,cabs}); }
     ROOM.hoops={list,up,top:HC-1.4,o:o0,t:o0}; hoopPose(); }
-  // the roof: white steel trusses across the short way every 6 m, with round high-bay lights hung under them
-  { const sp=Math.min(W,Hh)<best?Math.min(W,Hh):W, ux=Math.cos(ang), uy=Math.sin(ang), vx=-uy, vy=ux, nT=Math.max(2,Math.floor(best/6)), span=Math.max(10,Math.min(Math.hypot(maxx-minx,maxy-miny),sp)), yb=HC-1.4, yt=HC-.2, seg=Math.max(4,Math.round(span/2.4));
-    const trussM=rmat('truss',0xeeeeea,0x2a2a28), boxG=new THREE.BoxGeometry(1,.09,.09), dm=new THREE.Object3D();
-    const chords=new THREE.InstancedMesh(boxG,trussM,nT*2), diags=new THREE.InstancedMesh(boxG,trussM,nT*seg);
-    let ci=0, di=0; const bulbs=[];
-    for(let k=0;k<nT;k++){ const t=-best/2+(k+.5)*best/nT, px=cx+ux*t, py=cy+uy*t;                                                           // this truss's middle
-      for(const y of [yb,yt]){ dm.position.set(px,y,-py); dm.rotation.set(0,Math.atan2(vy,vx),0); dm.scale.set(span,1,1); dm.updateMatrix(); chords.setMatrixAt(ci++,dm.matrix); }
-      for(let j=0;j<seg;j++){ const s0=-span/2+j*span/seg, s1=s0+span/seg, up=j%2===0, ya=up?yb:yt, yc=up?yt:yb, ex=px+vx*(s0+s1)/2, ey=py+vy*(s0+s1)/2, L2=Math.hypot(span/seg,yc-ya);
-        dm.position.set(ex,(ya+yc)/2,-ey); dm.rotation.set(0,Math.atan2(vy,vx),0); dm.rotateZ(Math.atan2(yc-ya,span/seg)); dm.scale.set(L2,1,1); dm.updateMatrix(); diags.setMatrixAt(di++,dm.matrix);
-        if(j%3===1) bulbs.push([ex,ey,k%2]); } }
+  /* the roof: white steel trusses across the room every ~6 m, each running wall to wall (cut to the inside of the outline, so
+     none pokes through a wall), with round high-bay lights hung under them, kept 1.8 m clear of the walls */
+  { const nT=Math.max(2,Math.floor(LU/6)), yb=HC-1.4, yt=HC-.2, rows=[];
+    for(let k=0;k<nT;k++){ const u=u0+(k+.5)*LU/nT, seg=across(u); if(!seg) continue; const s0=seg[0]+TH2+.12, s1=seg[1]-TH2-.12; if(s1-s0<4) continue; rows.push({k,u,s0,s1,n:Math.max(4,Math.round((s1-s0)/2.4))}); }
+    const trussM=rmat('truss',0xeeeeea,0x2a2a28), boxG=new THREE.BoxGeometry(1,.09,.09), dm=new THREE.Object3D(), nD=rows.reduce((t,q)=>t+q.n,0)||1;
+    const chords=new THREE.InstancedMesh(boxG,trussM,Math.max(1,rows.length*2)), diags=new THREE.InstancedMesh(boxG,trussM,nD);
+    let ci=0, di=0; const bulbs=[], P=(u,v)=>[UX*u+VX*v,UY*u+VY*v], rotV=Math.atan2(VY,VX);
+    for(const q of rows){ const L=q.s1-q.s0, m=P(q.u,(q.s0+q.s1)/2);
+      for(const y of [yb,yt]){ dm.position.set(m[0],y,-m[1]); dm.rotation.set(0,rotV,0); dm.scale.set(L,1,1); dm.updateMatrix(); chords.setMatrixAt(ci++,dm.matrix); }
+      for(let j=0;j<q.n;j++){ const a=q.s0+j*L/q.n, b=a+L/q.n, up=j%2===0, ya=up?yb:yt, yc=up?yt:yb, e=P(q.u,(a+b)/2), L2=Math.hypot(L/q.n,yc-ya);
+        dm.position.set(e[0],(ya+yc)/2,-e[1]); dm.rotation.set(0,rotV,0); dm.rotateZ(Math.atan2(yc-ya,L/q.n)); dm.scale.set(L2,1,1); dm.updateMatrix(); diags.setMatrixAt(di++,dm.matrix); }
+      const c0=q.s0+1.8, c1=q.s1-1.8, nb=c1<c0?0:Math.max(1,Math.round((c1-c0)/7)+1);                                                       // lights every ~7 m along it
+      for(let j=0;j<nb;j++) bulbs.push([...P(q.u,nb>1?c0+j*(c1-c0)/(nb-1):(c0+c1)/2),q.k%2]); }
     chords.count=ci; diags.count=di; chords.instanceMatrix.needsUpdate=diags.instanceMatrix.needsUpdate=true; chords.frustumCulled=diags.frustumCulled=false; g.add(chords); g.add(diags);
     // round UFO high-bay lights (owner 2026-11-24, product photo): black finned body with a ring, hook up to the truss, white lens under it, a soft glow
     // two banks of lights (every other truss), one per switch (owner 2026-11-24: "add light switches in the gym")
@@ -407,7 +427,7 @@ function gymDecor(g,p,HC,r,TH2){
       dm.rotation.set(Math.PI/2,0,0); dm.position.set(bx,y+.025,-by); dm.updateMatrix(); lens[bk].setMatrixAt(j2,dm.matrix);
       dm.rotation.set(0,0,0); dm.position.set(bx,y-.01,-by); dm.updateMatrix(); knob[bk].setMatrixAt(j2,dm.matrix);
       dm.rotation.set(Math.PI/2,0,0); dm.position.set(bx,y-.15,-by); dm.updateMatrix(); halo[bk].setMatrixAt(j2,dm.matrix); });
-    for(const k of [0,1]){ lens[k].count=knob[k].count=halo[k].count=cnt[k]; halo[k].renderOrder=1; }
+    body.count=hook.count=bulbs.length; for(const k of [0,1]){ lens[k].count=knob[k].count=halo[k].count=cnt[k]; halo[k].renderOrder=1; }
     for(const o of [body,hook,...lens,...knob,...halo]){ o.instanceMatrix.needsUpdate=true; o.frustumCulled=false; g.add(o); }
     ROOM.glow=[[halo[0]],[halo[1]]]; ROOM.tro=lms; }
 }

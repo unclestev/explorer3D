@@ -235,6 +235,7 @@ function schoolH(cx,cy,A,h,b0,kx,ky){ if(b0>0||A<700||!SB.length) return h; if(i
    up / dn = wash slice colours from the fixture outward. Matched by the school's map-point name near the building. */
 const SCHCOL=[{re:/oswego (east |community )?high/i,up:['#ff8a1a','#ff7a00','#f06400','#c24d00'],dn:['#3b63ff','#2d50f0','#2342c8','#1a3290']}];
 function schoolCols(x,y,kx,ky){ for(const q of SCHOOLS){ if(!q[2]||Math.hypot((q[0]-x)*kx,(q[1]-y)*ky)>300) continue; for(const c of SCHCOL) if(c.re.test(q[2])) return c; } return null; }
+const TRJS=r=>{ const T=window.TRJ; return !!(T&&T.skip&&T.skip(r)); }, TRJV=()=>{ const T=window.TRJ; return (HIDE.pin||[]).length+'|'+(T&&T.ver?T.ver():0); };   // (window.TRJ: this file's own TRJ is the colours)   // Traughber's own pieces (js/enh/traughber.js)
 function isTrj(x,y,kx,ky){ for(const q of SCHOOLS) if(q[2]&&/traughber/i.test(q[2])&&Math.hypot((q[0]-x)*kx,(q[1]-y)*ky)<240) return true; return false; }
 function zoneAt(x,y,A,kx,ky){ let z=null;
   if(A>500){ const reach=Math.max(40,Math.sqrt(A)*.8); for(const q of SCHOOLS) if(Math.hypot((q[0]-x)*kx,(q[1]-y)*ky)<reach) return 'school'; } for(const o of ZONES){ if(x<o.bb[0]||x>o.bb[2]||y<o.bb[1]||y>o.bb[3]) continue; let c=false, r=o.r;
@@ -255,6 +256,7 @@ function buildWalls(fs,geo,kx,ky,RW,gone){                          // geo[i]: f
     const h=+(pr.render_height!=null?pr.render_height:pr.height!=null?pr.height:6), b0=+(pr.render_min_height||pr.min_height||0);
     for(const pl of pls){ const r=pl[0]; if(!r||r.length<4) continue;
       const sk=tk+':'+r.length+':'+r[0][0]+','+r[0][1]+':'+h; if(seen.has(sk)) continue; seen.add(sk);
+      if(TRJS(r)) continue;                                            // a piece of Traughber: js/enh/traughber.js draws its own
       const old=W.cache.get(sk); if(old!==undefined){ if(old){ old.id=f.id; feats.push(old); } continue; }
       const outer=clipRing(r,box); if(!outer){ W.cache.set(sk,null); continue; }
       let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const q of r){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
@@ -267,7 +269,7 @@ function buildWalls(fs,geo,kx,ky,RW,gone){                          // geo[i]: f
       const ft={type:'Feature',id:f.id,properties:pr2,geometry:{type:'Polygon',coordinates:rings}};
       W.cache.set(sk,ft); feats.push(ft); } }
   if(W.cache.size>20000) W.cache.clear();
-  const sig=[...hid].sort().join(',')+'|'+[...tiles].sort().join(',');
+  const sig=[...hid].sort().join(',')+'|'+[...tiles].sort().join(',')+'|'+TRJV();
   if(sig!==W.sig){ W.sig=sig; W.hid=hid; W.n=feats.length;
     safe('walls',()=>map.getSource('walls').setData({type:'FeatureCollection',features:feats}));
     // the map's own copies go once the new walls are in (a moment later), so nothing blinks out in between
@@ -280,9 +282,9 @@ function build(){
   if(!map.getSource('roofs')) return;
   const CKV=!!(window.COCKPIT&&COCKPIT.on);                         // cockpit view: you see walls, not roofs from afar — closer, richer
   const radius=CKV?Q3(160,210,250):Q3(200,260,320), maxHouses=Q3(110,170,240), maxBig=Q3(25,40,60), slices=Q3(5,6,8), maxFac=CKV?Q3(45,150,200):Q3(80,110,150);   // windows on the nearest maxFac
-  const kx=111320*Math.cos(S.lat*Math.PI/180), ky=111320, gone=new Set(destroyed.concat(HIDE.pin||[])), seen=new Set(), seenP=new Map();
+  const kx=111320*Math.cos(S.lat*Math.PI/180), ky=111320, gone=new Set(destroyed), seen=new Set(), seenP=new Map();
   let parts=[];
-  const reuse=R.pending&&R.parts&&R.pAt&&meters(R.pAt[1],R.pAt[0],S.lat,S.lng)<40&&R.n===destroyed.length&&R.pin===(HIDE.pin||[]).length;
+  const reuse=R.pending&&R.parts&&R.pAt&&meters(R.pAt[1],R.pAt[0],S.lat,S.lng)<40&&R.n===destroyed.length&&R.pin===TRJV();
   if(reuse) parts=R.parts; else {
   let fs=[]; try{ fs=map.querySourceFeatures(bSrc,{sourceLayer:'building'}); }catch(e){ return; }
   const geo=fs.map(f=>f.geometry);
@@ -297,7 +299,7 @@ function build(){
     const pr=f.properties||{}; if(pr.hide_3d) continue;
     let h=+(pr.render_height!=null?pr.render_height:pr.height!=null?pr.height:6); const b0=+(pr.render_min_height||pr.min_height||0), h0=h;
     const G=geo[i]; if(!G) continue; const polys=G.type==='Polygon'?[G.coordinates]:G.type==='MultiPolygon'?G.coordinates:[];
-    for(const pl of polys){ const ring=pl[0]; if(!ring||ring.length<4) continue;
+    for(const pl of polys){ const ring=pl[0]; if(!ring||ring.length<4||TRJS(ring)) continue;
       let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const q of ring){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
       const cx=(x0+x1)/2, cy=(y0+y1)/2, d=Math.hypot((cx-S.lng)*kx,(cy-S.lat)*ky); if(d>radius) continue;
       h=h0; if(b0===0&&h<=12&&SB.length) h=schoolH(cx,cy,Math.abs(area(ring.slice(0,-1).map(q=>[(q[0]-cx)*kx,(q[1]-cy)*ky]))),h,b0,kx,ky);   // schools: two storeys, a tall gym
@@ -335,7 +337,7 @@ function build(){
     const g=map.getSource('porch-glow'); if(g) safe('porch glow',()=>g.setData({type:'FeatureCollection',features:glow}));
     const aw=map.getSource('accent-wash'); if(aw) safe('accent wash',()=>aw.setData({type:'FeatureCollection',features:wsh}));
     safe('lamp glow',()=>lampsSet(glow)); R.last=key; R.setT=now; R.count=out.length; }
-  R.at=[S.lng,S.lat]; R.t=now; R.n=destroyed.length; R.pin=(HIDE.pin||[]).length; R.tiles=false; R.reg=reg;
+  R.at=[S.lng,S.lat]; R.t=now; R.n=destroyed.length; R.pin=TRJV(); R.tiles=false; R.reg=reg;
 }
 // roof pieces carry rf:1 (js/enh/snowcover.js whitens only those when snow settles); every roof / facade piece carries its own building's key (prop bk, its middle), so walking inside one can hide just
 // that building's pieces (not by id: OpenFreeMap gives a whole group of neighbouring buildings one id)
@@ -709,7 +711,7 @@ onTick(700,function roofTick(){
   if(!map.getSource('roofs')) return;
   if(mode==='glider'){ if(R.count){ safe('roofs off',()=>{ map.getSource('roofs').setData({type:'FeatureCollection',features:[]}); for(const id of ['porch-glow','accent-wash']){ const g=map.getSource(id); if(g) g.setData({type:'FeatureCollection',features:[]}); } }); R.count=0; R.at=null; R.last=''; } return; }
   const moved=R.at?meters(R.at[1],R.at[0],S.lat,S.lng):1e9, age=performance.now()-R.t;
-  if(moved>(POWER?160:120)||destroyed.length!==R.n||(HIDE.pin||[]).length!==R.pin||(R.tiles&&age>(POWER?8000:5000))||R.pending) safe('roofs',build);
+  if(moved>(POWER?160:120)||destroyed.length!==R.n||TRJV()!==R.pin||(R.tiles&&age>(POWER?8000:5000))||R.pending) safe('roofs',build);
 });
 const prev=window.onPowerChange;
 window.onPowerChange=(on)=>{ if(prev) prev(on); R.at=null; R.last=''; R.parts=null; CACHE.clear(); W.cache.clear(); W.sig=''; glowVis(); };   // also: wall textures off in battery saver   // slice count / unit count change

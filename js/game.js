@@ -150,13 +150,16 @@ function destroyBuilding(id){
    smashed ones (destroyed), the one you've walked into (HIDE.walk, js/enh/walk.js), and — only on the map's own
    building layers — the groups js/enh/buildings.js redraws house by house near you (HIDE.vec; its 'walls' source). */
 const HIDE={walk:null,vec:[],pin:[]}; window.HIDE=HIDE;
-const VEC_HIDE=new Set(['building-3d','roof-cap']);
+const VEC_HIDE=new Set(['building-3d','roof-cap']), WALL_LAYERS=new Set(['wall-3d','wall-pat','wall-cap']);
 function applyHides(lids){
   const wk=HIDE.walk==null?[]:Array.isArray(HIDE.walk)?HIDE.walk:[HIDE.walk];      // a store and its entrance pieces are several (js/enh/stores.js)
-  const base=destroyed.concat(wk.filter(i=>!destroyed.includes(i))).concat((HIDE.pin||[]).filter(i=>!destroyed.includes(i)));   // pin: buildings another module redraws itself (js/enh/traughber.js)
+  const base=destroyed.concat(wk.filter(i=>!destroyed.includes(i))), pin=(HIDE.pin||[]).filter(i=>!base.includes(i));
   for(const lid of lids||hideIds){
     if(!map.getLayer(lid)) continue;
-    const ids=VEC_HIDE.has(lid)&&HIDE.vec.length?base.concat(HIDE.vec):base;
+    // pin: a building another module redraws itself (js/enh/traughber.js). Only the map's own layers hide its id: the id is shared
+    // by a whole subdivision, and the redrawn walls (js/enh/buildings.js) leave out just that building's pieces and keep the houses
+    const b2=WALL_LAYERS.has(lid)?base:base.concat(pin);
+    const ids=VEC_HIDE.has(lid)&&HIDE.vec.length?b2.concat(HIDE.vec):b2;
     const f=ids.length?['!',['in',['id'],['literal',ids]]]:null, of=origFilters[lid], nf=f?(of?['all',of,f]:f):(of||null);
     try{ map.setFilter(lid,nf);
       if(f&&of && JSON.stringify(map.getFilter(lid))!==JSON.stringify(nf)) map.setFilter(lid,f); // rejected: drop original
