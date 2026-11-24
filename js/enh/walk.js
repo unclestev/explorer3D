@@ -290,40 +290,32 @@ function storeMat(k){ if(STX[k]) return STX[k]; const c=document.createElement('
   const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(1/1.22,1/1.22); t.anisotropy=8;
   STX[k]=new THREE.MeshLambertMaterial({map:t,emissive:k==='ceil'?0x9a9890:0x55524c,emissiveMap:t,side:THREE.DoubleSide}); return STX[k]; }
 function trofferTex(){ if(STX.trof) return STX.trof;
-  /* drawn after the owner's photo of a Meijer fixture: 3 columns x 10 rows of deep parabolic cells. Each cell is a curved
-     mirror: a bright white band where it catches the tubes, bending across the cell, fading into cool blue-grey shadow;
-     the middle column sits in more shadow than the outer two. A thin dark gap and a light metal trim round it all. */
+  /* drawn after the owner's photo of a Meijer fixture: 3 columns x 10 rows of parabolic cells in a light metal trim, every
+     cell the same bright white */
   const W=512, H=1024, c=document.createElement('canvas'); c.width=W; c.height=H; const x=c.getContext('2d');
-  let seed=7; const rnd=()=>{ seed=(seed*16807)%2147483647; return seed/2147483647; };
-  x.fillStyle='#c9ccce'; x.fillRect(0,0,W,H);                                                   // trim
+    x.fillStyle='#c9ccce'; x.fillRect(0,0,W,H);                                                   // trim
   x.fillStyle='#262a30'; x.fillRect(14,14,W-28,H-28);                                         // the gap inside the trim
   const m=22, cols=3, rows=10, cw=(W-2*m)/cols, ch=(H-2*m)/rows;
-  for(let i=0;i<cols;i++) for(let j=0;j<rows;j++){ const X=m+i*cw, Y=m+j*ch, mid=i===1, v=rnd();
+  // every cell the same bright white (owner 2026-11-23: "make them all the same white"), with only a soft neutral shade
+  // toward the cell's edges and one gentle curved highlight, so the louvre still reads
+  for(let i=0;i<cols;i++) for(let j=0;j<rows;j++){ const X=m+i*cw, Y=m+j*ch;
     x.save(); x.beginPath(); x.rect(X+1,Y+1,cw-2,ch-2); x.clip();
-    // the cell's base: cool grey-blue, brighter toward its top where the tube shines in
-    const g=x.createLinearGradient(0,Y,0,Y+ch);
-    g.addColorStop(0,mid?'#aeb6c8':'#e9edf3'); g.addColorStop(.45,mid?'#6f7890':'#c3cad8'); g.addColorStop(1,mid?'#4a5268':'#9aa3b6');
-    x.fillStyle=g; x.fillRect(X,Y,cw,ch);
-    // the curved mirror's bright bands, bending across the cell (blurred, like the photo)
-    x.filter='blur(6px)'; x.globalCompositeOperation='lighter';
-    for(let b=0;b<2;b++){ const y0=Y+ch*(.3+.25*b+.08*v), amp=ch*(.18+.1*rnd()), ph=rnd()*Math.PI;
-      x.strokeStyle=b?'rgba(255,255,255,.45)':'rgba(255,255,255,'+(mid?.55:.9)+')'; x.lineWidth=ch*(b?.16:.26); x.beginPath();
-      for(let k=0;k<=20;k++){ const t=k/20, xx=X+cw*t, yy=y0-Math.sin(t*Math.PI*1.15+ph)*amp*(.6+.4*Math.sin(t*3+v*6)); k?x.lineTo(xx,yy):x.moveTo(xx,yy); } x.stroke(); }
-    x.filter='none'; x.globalCompositeOperation='source-over';
-    // the shadowed sides of each cell (the louvre blades are deep): darker toward the left and right walls
-    const sg=x.createLinearGradient(X,0,X+cw,0); sg.addColorStop(0,'rgba(40,48,72,.45)'); sg.addColorStop(.14,'rgba(40,48,72,0)'); sg.addColorStop(.86,'rgba(40,48,72,0)'); sg.addColorStop(1,'rgba(40,48,72,.4)');
+    x.fillStyle='#f7f8fa'; x.fillRect(X,Y,cw,ch);
+    x.filter='blur(5px)'; x.strokeStyle='rgba(255,255,255,1)'; x.lineWidth=ch*.3; x.beginPath();
+    for(let k=0;k<=20;k++){ const t=k/20, xx=X+cw*t, yy=Y+ch*.42-Math.sin(t*Math.PI)*ch*.16; k?x.lineTo(xx,yy):x.moveTo(xx,yy); } x.stroke(); x.filter='none';
+    const sg=x.createLinearGradient(X,0,X+cw,0); sg.addColorStop(0,'rgba(150,152,156,.35)'); sg.addColorStop(.12,'rgba(150,152,156,0)'); sg.addColorStop(.88,'rgba(150,152,156,0)'); sg.addColorStop(1,'rgba(150,152,156,.35)');
     x.fillStyle=sg; x.fillRect(X,Y,cw,ch);
-    // a hot white core in the outer columns, where the photo is blown out
-    if(!mid){ const hg=x.createRadialGradient(X+cw*(.35+.3*v),Y+ch*.4,0,X+cw*(.35+.3*v),Y+ch*.4,cw*.45); hg.addColorStop(0,'rgba(255,255,255,.9)'); hg.addColorStop(1,'rgba(255,255,255,0)'); x.fillStyle=hg; x.fillRect(X,Y,cw,ch); }
+    const vg=x.createLinearGradient(0,Y,0,Y+ch); vg.addColorStop(0,'rgba(150,152,156,.25)'); vg.addColorStop(.15,'rgba(150,152,156,0)'); vg.addColorStop(.85,'rgba(150,152,156,0)'); vg.addColorStop(1,'rgba(150,152,156,.3)');
+    x.fillStyle=vg; x.fillRect(X,Y,cw,ch);
     x.restore(); }
   // the blades between the cells: thin bright edges catching the light, with a dark line under each
-  for(let j=0;j<=rows;j++){ const y=m+j*ch; x.fillStyle='rgba(30,34,44,.9)'; x.fillRect(m,y-1.5,W-2*m,3); x.fillStyle='rgba(245,247,250,.9)'; x.fillRect(m,y-3.5,W-2*m,2); }
-  for(let i=0;i<=cols;i++){ const X=m+i*cw; x.fillStyle='rgba(30,34,44,.9)'; x.fillRect(X-1.5,m,3,H-2*m); x.fillStyle='rgba(235,238,244,.8)'; x.fillRect(X+1.5,m,1.5,H-2*m); }
+  for(let j=0;j<=rows;j++){ const y=m+j*ch; x.fillStyle='rgba(120,122,126,.8)'; x.fillRect(m,y-1.5,W-2*m,3); }
+  for(let i=0;i<=cols;i++){ const X=m+i*cw; x.fillStyle='rgba(120,122,126,.8)'; x.fillRect(X-1.5,m,3,H-2*m); }
   const t=new THREE.CanvasTexture(c); t.anisotropy=8; STX.trof=t; return t; }
 // a soft glow round a fixture (brightness bleeding onto the ceiling) and its reflection on the shiny floor
 function glowTex(k){ if(STX['g'+k]) return STX['g'+k]; const c=document.createElement('canvas'); c.width=128; c.height=256; const x=c.getContext('2d');
-  const g=x.createRadialGradient(64,64,0,64,64,64); if(k==='halo'){ g.addColorStop(0,'rgba(255,255,255,.9)'); g.addColorStop(.35,'rgba(240,245,255,.45)'); g.addColorStop(1,'rgba(230,238,255,0)'); }
-  else { g.addColorStop(0,'rgba(255,255,255,.85)'); g.addColorStop(.3,'rgba(235,240,255,.35)'); g.addColorStop(1,'rgba(220,230,255,0)'); }
+  const g=x.createRadialGradient(64,64,0,64,64,64); if(k==='halo'){ g.addColorStop(0,'rgba(255,255,255,.9)'); g.addColorStop(.35,'rgba(255,255,255,.45)'); g.addColorStop(1,'rgba(255,255,255,0)'); }
+  else { g.addColorStop(0,'rgba(255,255,255,.85)'); g.addColorStop(.3,'rgba(255,255,255,.35)'); g.addColorStop(1,'rgba(255,255,255,0)'); }
   x.setTransform(1,0,0,2,0,0); x.fillStyle=g; x.fillRect(0,0,128,128); x.setTransform(1,0,0,1,0,0);   // stretched to the fixture's 1:2
   const t=new THREE.CanvasTexture(c); STX['g'+k]=t; return t; }
 function troffers(g,p,HC){
