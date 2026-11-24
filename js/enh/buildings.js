@@ -452,7 +452,7 @@ function facades(P,kx,ky,res,rich){
     for(const z of [-1,1]){ putD(E,z<0?s-.87:s+.05,z<0?s-.05:s+.87,.1,.125,.06,2.37,GLASS,dk); putD(E,z<0?s-.4:s+.1,z<0?s-.1:s+.4,.125,.16,1,1.06,'#c7ccd1'); } };
   const putD=(E,s0,s1,o0,o1,b,h,c,dk)=>{ put(E,s0,s1,o0,o1,b,h,c); if(dk!=null) out[out.length-1].properties.dk=dk; };
   if(P.f.id!=null) res.bld={key:P.cx.toFixed(6)+','+P.cy.toFixed(6),id:P.f.id,cx:P.cx,cy:P.cy,kx,ky,p,h:P.h,house,doors,garages,bb:P.bb};
-  const sd=streetDir(P);
+  const sd=(window.STORES&&STORES.list.length&&STORES.frontDir(P.cx,P.cy))||streetDir(P);   // a Meijer faces its parking lot (js/enh/stores.js)
   let front=edges[0]; for(const E of edges){ const sc=(sd?E.nx*sd[0]+E.ny*sd[1]:0)+.02*Math.min(E.L,12), fs=(sd?front.nx*sd[0]+front.ny*sd[1]:0)+.02*Math.min(front.L,12); if(sc>fs) front=E; }
   let k=0;
   if(house){
