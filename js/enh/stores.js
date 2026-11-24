@@ -14,7 +14,7 @@
 'use strict';
 const {safe,onReady,onTick}=YD;
 const ST={list:[],at:null,busy:false,ovAt:null,ovT:0};
-const NAME=/\bmeijer\b/i;
+const NAME=/\bmeijer\b/i, NOT=/gas|fuel|express|station|car ?wash|distribution|warehouse|office|drive|road|avenue|street/i;
 const inRing=(r,x,y)=>{ let c=false; for(let i=0,j=r.length-1;i<r.length;j=i++){ const a=r[i], b=r[j]; if((a[1]>y)!==(b[1]>y)&&x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0]) c=!c; } return c; };
 const keyOf=r=>{ let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const q of r){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
   return {key:((x0+x1)/2).toFixed(6)+','+((y0+y1)/2).toFixed(6),bb:[x0,y0,x1,y1],cx:(x0+x1)/2,cy:(y0+y1)/2}; };
@@ -32,7 +32,7 @@ function buildingFor(lng,lat){ let fs=[]; try{ fs=map.querySourceFeatures(bSrc,{
       let d=1e9; for(const q of r) d=Math.min(d,Math.hypot((q[0]-lng)*kx,(q[1]-lat)*111320)); if(d<90&&d-A/1e4<bd){ bd=d-A/1e4; best=r; } } }
   return best; }
 function scanTiles(){ let ps=[]; try{ ps=map.querySourceFeatures(bSrc,{sourceLayer:'poi'}); }catch(e){ return; }
-  for(const p of ps){ const pr=p.properties||{}, n=pr.name||pr['name:latin']||pr.name_en||''; if(!NAME.test(n)) continue;
+  for(const p of ps){ const pr=p.properties||{}, n=pr.name||pr['name:latin']||pr.name_en||''; if(!NAME.test(n)||NOT.test(n)) continue;
     const c=p.geometry&&p.geometry.coordinates; if(!c||typeof c[0]!=='number') continue;
     if(ST.list.some(s=>inRing(s.ring,c[0],c[1])||Math.hypot((s.cx-c[0])*80000,(s.cy-c[1])*111320)<120)) continue;
     const r=buildingFor(c[0],c[1]); if(r) add(r,n.replace(/\s*\(.*\)\s*$/,'')); } }
@@ -40,7 +40,7 @@ function scanTiles(){ let ps=[]; try{ ps=map.querySourceFeatures(bSrc,{sourceLay
 async function scanOverpass(){ if(ST.busy||typeof ovFetch!=='function') return; ST.busy=true; ST.ovAt=[S.lng,S.lat]; ST.ovT=performance.now();
   const dy=.036, dx=.048, bb=`(${(S.lat-dy).toFixed(4)},${(S.lng-dx).toFixed(4)},${(S.lat+dy).toFixed(4)},${(S.lng+dx).toFixed(4)})`;
   try{ const j=await ovFetch(`[out:json][timeout:25];(nwr["name"~"^Meijer",i]["shop"]${bb};nwr["brand"~"^Meijer",i]${bb};);out geom qt;`);
-    for(const el of (j&&j.elements)||[]){ const n=(el.tags&&el.tags.name)||'Meijer'; if(!NAME.test(n)) continue;
+    for(const el of (j&&j.elements)||[]){ const n=(el.tags&&el.tags.name)||'Meijer'; if(!NAME.test(n)||NOT.test(n)) continue;
       if(el.type==='way'&&el.geometry&&el.geometry.length>3&&el.tags&&el.tags.building){ const r=el.geometry.map(p=>[+p.lon,+p.lat]); add(r,n); continue; }
       const c=el.type==='node'?[el.lon,el.lat]:el.bounds?[(el.bounds.minlon+el.bounds.maxlon)/2,(el.bounds.minlat+el.bounds.maxlat)/2]:null; if(!c) continue;
       if(ST.list.some(s=>inRing(s.ring,c[0],c[1]))) continue;
@@ -51,6 +51,28 @@ async function scanOverpass(){ if(ST.busy||typeof ovFetch!=='function') return; 
 function changed(){ ST.dirty=true; try{ const R=window.ROOFS; if(R){ R.walls.cache.clear(); R.walls.sig=''; R.state.at=null; } }catch(e){} }
 // js/enh/buildings.js: the wall look for the building whose middle is (lng,lat)
 function look(lng,lat){ for(const s of ST.list) if(lng>=s.bb[0]&&lng<=s.bb[2]&&lat>=s.bb[1]&&lat<=s.bb[3]&&inRing(s.ring,lng,lat)) return {c:'#d6cfbf',pat:'cw-bk2'}; return null; }
+// which way the store faces: toward the parking lots round it (area-weighted), else the nearest road that isn't a service
+// drive (that's usually the loading dock). js/enh/buildings.js puts the glass and the way in on that side too.
+function frontDir(lng,lat){ const s=ST.list.find(q=>lng>=q.bb[0]&&lng<=q.bb[2]&&lat>=q.bb[1]&&lat<=q.bb[3]&&inRing(q.ring,lng,lat)); if(!s) return null;
+  if(s.fd&&s.fdN===((window.PARKING&&PARKING.state.polys||[]).length)) return s.fd;
+  const kx=111320*Math.cos(s.cy*Math.PI/180); let vx=0, vy=0;
+  for(const pl of (window.PARKING&&PARKING.state.polys)||[]){ const r=pl.rings[0]; if(!r) continue; const b=pl.b;
+    const cx=(b[0]+b[2])/2, cy=(b[1]+b[3])/2, dx=(cx-s.cx)*kx, dy=(cy-s.cy)*111320, d=Math.hypot(dx,dy); if(d>300||d<1) continue;
+    const A=areaM(r,kx); vx+=dx/d*A/(1+d/80); vy+=dy/d*A/(1+d/80); }
+  let fd=null; const L=Math.hypot(vx,vy);
+  if(L>1500) fd=[vx/L,vy/L];
+  else if(typeof roadGeo!=='undefined'&&typeof rebuildRoadGeo==='function'){
+    if(!roadGeo.segs||meters(roadGeo.lat,roadGeo.lng,S.lat,S.lng)>350) rebuildRoadGeo();
+    const kr=111320*Math.cos(roadGeo.lat*Math.PI/180), px=(s.cx-roadGeo.lng)*kr, py=(s.cy-roadGeo.lat)*111320; let best=1e9, bx=0, by=0;
+    for(const g of roadGeo.segs||[]){ if(g[6]==='service'||g[6]==='track') continue; const [x1,y1,x2,y2]=g, dx=x2-x1, dy=y2-y1, L2=dx*dx+dy*dy, t=L2?Math.max(0,Math.min(1,((px-x1)*dx+(py-y1)*dy)/L2)):0;
+      const ex=x1+t*dx-px, ey=y1+t*dy-py, d=ex*ex+ey*ey; if(d<best){ best=d; bx=ex; by=ey; } }
+    best=Math.sqrt(best); if(best>1&&best<400) fd=[bx/best,by/best]; }
+  if(fd){ fd.d=60; s.fd=fd; s.fdN=((window.PARKING&&PARKING.state.polys||[]).length); } return fd; }
+// the front wall and the way in, in metres round the store's middle (the same pick as js/enh/buildings.js makes)
+function frontOf(s,p){ const fd=frontDir(s.cx,s.cy); let best=null, bs=-1e9;
+  for(let i=0;i<p.length;i++){ const a=p[i], b=p[(i+1)%p.length], ex=b[0]-a[0], ey=b[1]-a[1], L=Math.hypot(ex,ey); if(L<2.4) continue;
+    const nx=ey/L, ny=-ex/L, sc=(fd?nx*fd[0]+ny*fd[1]:0)+.02*Math.min(L,12)+(fd?0:L/1e3); if(sc>bs){ bs=sc; best={a,L,ux:ex/L,uy:ey/L,nx,ny,ei:i}; } }
+  return best; }
 const at=key=>{ if(!key) return null; const e=ST.list.find(s=>s.key===key); if(e) return e; const [x,y]=String(key).split(',').map(Number);
   return ST.list.find(s=>x>=s.bb[0]&&x<=s.bb[2]&&y>=s.bb[1]&&y<=s.bb[3]&&inRing(s.ring,x,y))||null; };
 const recKey=s=>{ const regs=window.ROOFS&&ROOFS.doorsNear?ROOFS.doorsNear():[]; return regs.find(r=>r.key===s.key)||regs.find(r=>at(r.key)===s)||null; };
@@ -62,7 +84,7 @@ function outside(){
   const feats=[], kx0=111320*Math.cos(S.lat*Math.PI/180);
   for(const s of ST.list){ if(Math.hypot((s.cx-S.lng)*kx0,(s.cy-S.lat)*111320)>900) continue;
     const kx=111320*Math.cos(s.cy*Math.PI/180), ky=111320, toLL=q=>[+(s.cx+q[0]/kx).toFixed(7),+(s.cy+q[1]/ky).toFixed(7)];
-    let p=s.ring.slice(0,-1).map(q=>[(q[0]-s.cx)*kx,(q[1]-s.cy)*ky]); let a=0; for(let i=0,j=p.length-1;i<p.length;j=i++) a+=(p[j][0]-p[i][0])*(p[j][1]+p[i][1]); if(a>0) p.reverse();   // counter-clockwise
+    let p=s.ring.slice(0,-1).map(q=>[(q[0]-s.cx)*kx,(q[1]-s.cy)*ky]); let a=0; for(let i=0,j=p.length-1;i<p.length;j=i++) a+=(p[j][0]-p[i][0])*(p[j][1]+p[i][1]); if(a<0) p.reverse();   // counter-clockwise (this sum is +2A for counter-clockwise)
     const R=rec(s), h=s.h||(R&&R.h)||(s.h=hOf(s))||8;
     // the band: the outline pushed out 0.25 m, with the wall's own outline as the hole
     const grow=p.map((q,i)=>{ const A=p[(i+p.length-1)%p.length], B=p[(i+1)%p.length]; let nx=0,ny=0;
@@ -70,19 +92,20 @@ function outside(){
       const L=Math.hypot(nx,ny)||1; return [q[0]+nx/L*.28,q[1]+ny/L*.28]; });
     const ring=o=>{ const r=o.map(toLL); r.push(r[0]); return r; };
     feats.push({type:'Feature',properties:{c:BLUE,b:h-1.1,h:h+.25},geometry:{type:'Polygon',coordinates:[ring(grow),ring(p.slice().reverse())]}});
-    // canopies over the doors buildings.js gave the store (so the way in is under them)
-    const doors=R&&R.doors||[]; s.front=null; const rc=R?{cx:R.cx,cy:R.cy,kx:R.kx,ky:R.ky}:null, toLR=q=>[+(rc.cx+q[0]/rc.kx).toFixed(7),+(rc.cy+q[1]/rc.ky).toFixed(7)], ringR=o=>{ const r=o.map(toLR); r.push(r[0]); return r; };
-    for(const d of doors.slice(0,3)){ const L=Math.hypot(d.x1-d.x0,d.y1-d.y0)||1, ux=(d.x1-d.x0)/L, uy=(d.y1-d.y0)/L, mx=(d.x0+d.x1)/2, my=(d.y0+d.y1)/2;
-      if(!s.front) s.front={mx,my,ux,uy,nx:d.nx,ny:d.ny,ei:d.ei,rc};
-      const at=(al,out)=>[mx+ux*al+d.nx*out,my+uy*al+d.ny*out], box=(a0,a1,o0,o1,b,hh,c)=>feats.push({type:'Feature',properties:{c,b,h:hh},
-        geometry:{type:'Polygon',coordinates:[ringR([at(a0,o0),at(a1,o0),at(a1,o1),at(a0,o1)])]}});
-      const HW=4.2, D=4.6, top=Math.min(4.4,h-1.4);
-      for(const z of [-1,1]){ box(z*HW-.38,z*HW+.38,D-.76,D,0,top-.55,BRICK); box(z*HW-.48,z*HW+.48,D-.86,D+.1,0,.35,'#b9b2a4'); }   // brick piers on a stone base
-      box(-HW-.6,HW+.6,0,D+.5,top-.55,top,BEIGE);                                                          // the canopy's beam / soffit
-      box(-HW-.7,HW+.7,0,D+.6,top,top+.22,BLUE2);                                                          // blue fascia
-      for(let k=0;k<6;k++){ const t=k/6, w=(HW+.7)*(1-t*.55), o1=(D+.6)*(1-t*.75);                        // blue standing-seam hip roof, in slices
-        box(-w,w,0,o1,top+.22+t*1.5,top+.22+(k+1)/6*1.5,BLUE); }
-    }
+    // the canopy over the way in: the middle of the front wall (where js/enh/buildings.js puts the doors), and on a long
+    // front a second one, like the pharmacy / garden-centre end in the photo
+    const E=frontOf(s,p); s.front=null; s.E=E; s.p=p;
+    if(E){ const ins=E.L>90?[E.L*.5,E.L*.85]:[E.L/2];
+      for(const sm of ins){ const mx=E.a[0]+E.ux*sm, my=E.a[1]+E.uy*sm, ux=E.ux, uy=E.uy, nx=E.nx, ny=E.ny;
+        if(!s.front) s.front={mx,my,ux,uy,nx,ny,sm,rc:{cx:s.cx,cy:s.cy,kx,ky}};
+        const at=(al,out)=>[mx+ux*al+nx*out,my+uy*al+ny*out], box=(a0,a1,o0,o1,b,hh,c)=>feats.push({type:'Feature',properties:{c,b,h:hh},
+          geometry:{type:'Polygon',coordinates:[ring([at(a0,o0),at(a1,o0),at(a1,o1),at(a0,o1)])]}});
+        const HW=4.2, D=4.6, top=Math.min(4.4,h-1.4);
+        for(const z of [-1,1]){ box(z*HW-.38,z*HW+.38,D-.76,D,0,top-.55,BRICK); box(z*HW-.48,z*HW+.48,D-.86,D+.1,0,.35,'#b9b2a4'); }   // brick piers on a stone base
+        box(-HW-.6,HW+.6,0,D+.5,top-.55,top,BEIGE);                                                          // the canopy's beam / soffit
+        box(-HW-.7,HW+.7,0,D+.6,top,top+.22,BLUE2);                                                          // blue fascia
+        for(let k=0;k<6;k++){ const t=k/6, w=(HW+.7)*(1-t*.55), o1=(D+.6)*(1-t*.75);                        // blue standing-seam hip roof, in slices
+          box(-w,w,0,o1,top+.22+t*1.5,top+.22+(k+1)/6*1.5,BLUE); } } }
   }
   safe('stores',()=>{ const src=map.getSource('stores'); if(src) src.setData({type:'FeatureCollection',features:feats}); });
   signs();
@@ -109,10 +132,10 @@ function signs(){ if(typeof THREE==='undefined'||typeof scene==='undefined') ret
   if(!SG.g){ SG.g=new THREE.Group(); SG.g.renderOrder=4; scene.add(SG.g); }
   for(const it of SG.items){ SG.g.remove(it.m); SG.g.remove(it.hal); it.m.geometry.dispose(); }
   SG.items=[]; const night=isNight(); SG.night=night; SG.o=[S.lng*MLNG,S.lat*MLAT];
-  for(const s of ST.list){ if(!s.front) continue; const R=rec(s); const h=s.h||8;
+  for(const s of ST.list){ if(!s.front||!s.E) continue; const h=s.h||8;
     // on the front wall, to one side of the entrance, high up
-    const f=s.front, kx=f.rc.kx, E=R&&R.p?edgeOf(R.p,f.ei):null;
-    let al=-Math.min(16,E?E.L*.22:12); if(E){ const sm=(f.mx-E.a[0])*E.ux+(f.my-E.a[1])*E.uy; if(sm+al<5) al=Math.min(14,E.L*.22); }
+    const f=s.front, kx=f.rc.kx, E=s.E;
+    let al=-Math.min(16,E.L*.22); if(f.sm+al<5) al=Math.min(14,E.L*.22);
     const text=s.name, hgt=Math.max(1.6,Math.min(3.2,h*.3)), T=signTex(text,night,false), G=signTex(text,night,true), wid=hgt*T.ar;
     const wx=f.mx+f.ux*al+f.nx*.32, wy=f.my+f.uy*al+f.ny*.32, z=Math.min(h-1.4-hgt/2,h*.62);
     const lng=f.rc.cx+wx/kx, lat=f.rc.cy+wy/f.rc.ky, px=lng*MLNG-SG.o[0], pz=-(lat*MLAT-SG.o[1]), ry=Math.atan2(f.nx,-f.ny);
@@ -140,5 +163,5 @@ onTick(1500,function storeTick(){
   else if(ST.list.some(s=>!s.front)&&performance.now()-(ST.recT||0)>3000){ ST.recT=performance.now(); safe('stores out',outside); }   // waiting for the doors (js/enh/buildings.js)
   const om=ST.ovAt?meters(ST.ovAt[1],ST.ovAt[0],S.lat,S.lng):1e9; if(om>2500&&performance.now()-ST.ovT>60000) scanOverpass();
 });
-window.STORES={list:ST.list,look,at,add,state:ST,refresh:()=>{ ST.dirty=true; }};
+window.STORES={list:ST.list,look,at,add,frontDir,state:ST,refresh:()=>{ ST.dirty=true; }};
 })();
