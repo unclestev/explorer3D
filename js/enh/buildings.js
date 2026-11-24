@@ -204,10 +204,9 @@ function clipRing(r,b){                                           // Sutherland-
 }
 /* school / industrial grounds near the car (vector landuse), for otherLook; refreshed with each build */
 let ZONES=[], SCHOOLS=[], POIS=[], ZSIG='';
-const SCHCLS=new Set(['school','college','university','kindergarten']);
-/* map points that are not a building you'd call a shop or office (parks, stops, furniture, nature): everything else is a business or
-   institution, whatever the region calls it */
-const NOTBLD=new Set(['parking','bus','bus_stop','railway','harbor','ferry_terminal','picnic_site','playground','park','pitch','dog_park','camp_site','toilets','bench','drinking_water','information','charging_station','attraction','viewpoint','peak','monument','bicycle_parking','ice_rink','swimming','garden','zoo','theme_park','stadium','shelter','grave_yard','cemetery','recycling','waste_basket','post_box','fountain','golf','sports_centre','campsite','atm','telephone','ev_charging','bicycle_rental','taxi','aerialway','entrance']);
+/* map points that sit in a business or institution building (the OpenMapTiles poi classes seen round Yorkville and Joliet; gates, bollards,
+   pools, parking, pitches and the like are points too, but not buildings) */
+const BLDCLS=new Set(['shop','grocery','fast_food','restaurant','cafe','bar','pub','bank','pharmacy','dentist','doctors','clinic','hospital','office','car','car_repair','car_wash','fuel','hairdresser','beauty','laundry','library','post','town_hall','fire_station','police','courthouse','music','art_gallery','ice_cream','beer','alcohol_shop','clothing_store','department_store','bakery','butcher','florist','jewelry','furniture','hardware','convenience','lodging','hotel','motel','cinema','theatre','museum','veterinary','place_of_worship','fitness_centre','gym','bicycle','books','electronics','mobile_phone','optician','travel_agent','real_estate','insurance','marketplace','community_centre','social_facility','childcare','castle']);
 function zones(kx,ky,R){ const out=[], sp=[];
   /* school points too: many school grounds aren't mapped as land use (Yorkville Grade School isn't), but the school is a map point */
   try{ for(const f of map.querySourceFeatures(bSrc,{sourceLayer:'poi',filter:['match',['get','class'],['school','college','university','kindergarten'],true,false]})){
@@ -217,7 +216,7 @@ function zones(kx,ky,R){ const out=[], sp=[];
      the globe as possible"): shop / restaurant / bank / office points sitting in a footprint, and residential / commercial land use */
   const pp=[], seenP=new Set();
   try{ for(const f of map.querySourceFeatures(bSrc,{sourceLayer:'poi'})){ const c=f.geometry&&f.geometry.coordinates, k=f.properties&&f.properties.class;
-      if(!c||typeof c[0]!=='number'||!k||NOTBLD.has(k)||SCHCLS.has(k)) continue; if(Math.abs(c[0]-S.lng)*kx>R||Math.abs(c[1]-S.lat)*ky>R) continue;
+      if(!c||typeof c[0]!=='number'||!BLDCLS.has(k)) continue; if(Math.abs(c[0]-S.lng)*kx>R||Math.abs(c[1]-S.lat)*ky>R) continue;
       const key=c[0].toFixed(6)+','+c[1].toFixed(6); if(seenP.has(key)) continue; seenP.add(key); pp.push([c[0],c[1],k]); } }catch(e){}
   POIS=pp;
   try{ for(const f of map.querySourceFeatures(bSrc,{sourceLayer:'landuse',filter:['match',['get','class'],['school','college','university','kindergarten','education','industrial','commercial','retail','residential','suburb','neighbourhood','quarter'],true,false]})){
