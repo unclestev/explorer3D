@@ -665,7 +665,9 @@ function facades(P,kx,ky,res,rich){
       const nPad=pw>=2.4?Math.max(1,Math.min(4,Math.round(pw/3))):0, nArea=A<130?1:A<260?2:A<430?3:4;
       const nB=wingG?nWall:Math.min(nWall,nPad||nArea), r43=hash(seed,43), r44=hash(seed,44), S1=2.7, D1=4.9;
       let ws=nB===1?[S1]:nB===2?(r43<.55?[D1]:[S1,S1]):nB===3?(r43<.35?[S1,S1,S1]:r44<.5?[D1,S1]:[S1,D1]):(r43<.4?[D1,D1]:r43<.7?(r44<.5?[D1,S1,S1]:[S1,S1,D1]):[S1,S1,S1,S1]);
-      let tw=ws.reduce((x,y)=>x+y,0)+.5*(ws.length-1); if(tw>E.L-.8){ const f=(E.L-.8)/tw; ws=ws.map(x=>Math.max(2.2,x*f)); tw=ws.reduce((x,y)=>x+y,0)+.5*(ws.length-1); }
+      let tw=ws.reduce((x,y)=>x+y,0)+.5*(ws.length-1);
+      while(tw>E.L-.8){ const k=ws.findIndex((x,i)=>x<3&&ws[i+1]<3); if(k<0) break; ws.splice(k,2,D1); tw=ws.reduce((x,y)=>x+y,0)+.5*(ws.length-1); }   // too wide for singles: pair them into doubles
+      if(tw>E.L-.8){ const f=(E.L-.8)/tw; ws=ws.map(x=>Math.max(2.2,x*f)); tw=ws.reduce((x,y)=>x+y,0)+.5*(ws.length-1); }
       let st=wingG?(E.L-tw)/2:gC>=0?gC-tw/2:gC===-1?.7:E.L-.7-tw; st=Math.max(.4,Math.min(E.L-.4-tw,st));
       const gcol=GARAGE[seed&3], GT=2.15, GKS=[1,2,3,0]; let x=st;
       for(let k=0;k<ws.length;k++){ const gw=ws[k], s0=x; x+=gw+.5;
