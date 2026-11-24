@@ -157,6 +157,10 @@ function frontOf(s,p){ const fd=frontDir(s.cx,s.cy); let best=null, bs=-1e9;
 const at=key=>{ if(!key) return null; const e=ST.list.find(s=>s.key===key); if(e) return e; const [x,y]=String(key).split(',').map(Number);
   return ST.list.find(s=>x>=s.bb[0]&&x<=s.bb[2]&&y>=s.bb[1]&&y<=s.bb[3]&&inRing(s.ring,x,y))||null; };
 
+// the store you are really in: the walk-in record is the store's own (`ownRec`, same key). `at()` also matches any building whose
+// middle lies inside a store's (grown) outline, which can take in neighbours — so greeters and store interiors use this instead.
+const own=r=>{ if(!r||!r.store||!r.key) return null; return ST.list.find(s=>s.key===r.key)||null; };
+
 /* ---------- the way in, when buildings.js gave the store none ---------- */
 function ownRec(s){ const kx=111320*Math.cos(s.cy*Math.PI/180), ky=111320;
   let p=s.ring.slice(0,-1).map(q=>[(q[0]-s.cx)*kx,(q[1]-s.cy)*ky]); let a=0; for(let i=0,j=p.length-1;i<p.length;j=i++) a+=(p[j][0]-p[i][0])*(p[j][1]+p[i][1]); if(a<0) p.reverse();   // counter-clockwise
@@ -258,5 +262,5 @@ onTick(1500,function storeTick(){
   const nm=ST.nsAt?meters(ST.nsAt[1],ST.nsAt[0],S.lat,S.lng):1e9; if(nm>3000) scanSearch();
   if(ST.list.length) safe('store doors',drawDoors);
 });
-window.STORES={list:ST.list,at,recs,covers,add,frontDir,markHere,greet,greeterOn,brandOf,pts:PTS,state:ST,refresh:()=>{ ST.dirty=true; }};
+window.STORES={list:ST.list,at,own,recs,covers,add,frontDir,markHere,greet,greeterOn,brandOf,pts:PTS,state:ST,refresh:()=>{ ST.dirty=true; }};
 })();
