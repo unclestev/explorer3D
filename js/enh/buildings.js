@@ -247,7 +247,7 @@ function build(){
   if(!map.getSource('roofs')) return;
   const CKV=!!(window.COCKPIT&&COCKPIT.on);                         // cockpit view: you see walls, not roofs from afar — closer, richer
   const radius=CKV?Q3(160,210,250):Q3(200,260,320), maxHouses=Q3(110,170,240), maxBig=Q3(25,40,60), slices=Q3(5,6,8), maxFac=CKV?Q3(45,150,200):Q3(80,110,150);   // windows on the nearest maxFac
-  const kx=111320*Math.cos(S.lat*Math.PI/180), ky=111320, gone=new Set(destroyed), seen=new Set();
+  const kx=111320*Math.cos(S.lat*Math.PI/180), ky=111320, gone=new Set(destroyed), seen=new Set(), seenP=new Map();
   let parts=[];
   const reuse=R.pending&&R.parts&&R.pAt&&meters(R.pAt[1],R.pAt[0],S.lat,S.lng)<40&&R.n===destroyed.length;
   if(reuse) parts=R.parts; else {
@@ -267,8 +267,10 @@ function build(){
     for(const pl of polys){ const ring=pl[0]; if(!ring||ring.length<4) continue;
       let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const q of ring){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
       const cx=(x0+x1)/2, cy=(y0+y1)/2, d=Math.hypot((cx-S.lng)*kx,(cy-S.lat)*ky); if(d>radius) continue;
-      const key=cx.toFixed(6)+','+cy.toFixed(6); if(seen.has(key)) continue; seen.add(key);     // same building in two tiles
-      parts.push({f,ring,h,b0,cx,cy,d,bb:[x0,y0,x1,y1],holes:pl.length>1}); }
+      const key=cx.toFixed(6)+','+cy.toFixed(6); if(seen.has(key)){ const o=seenP.get(key); if(o&&o.ring.length===ring.length) o.intact=true; continue; } seen.add(key);     // same building in two tiles
+      /* intact: two tiles each hold the whole outline (same corners), so it only crosses a tile edge — it isn't a clipped fragment
+         (a school 140 m wide on a tile edge got no windows, doors or lights: owner 2026-11-23, Traughber Junior High) */
+      const part={f,ring,h,b0,cx,cy,d,bb:[x0,y0,x1,y1],holes:pl.length>1}; seenP.set(key,part); parts.push(part); }
   }
   parts.sort((a,b)=>a.d-b.d); R.parts=parts; R.pAt=[S.lng,S.lat]; }
   if(CACHE.size>4000) CACHE.clear();
@@ -279,7 +281,7 @@ function build(){
   // as a smooth roof rather than a staircase (owner 2026-11-23: "sharpen the roofs so that they don't look like jagged shapes")
   const fine=Q3(14,20,26), nFine=Q3(20,35,50);
   for(const P of parts){
-    if(P.b0>0||P.holes||crossesTile(P.bb)) continue;              // building parts, courtyards, tile-clipped pieces: flat
+    if(P.b0>0||P.holes||(crossesTile(P.bb)&&!P.intact)) continue;              // building parts, courtyards, tile-clipped pieces: flat
     const sl=P.h<=12&&near++<nFine&&P.d<130?fine:slices;
     const key=P.cx.toFixed(6)+','+P.cy.toFixed(6)+','+P.h+','+sl;
     let C=CACHE.get(key);
