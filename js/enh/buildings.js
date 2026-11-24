@@ -349,7 +349,7 @@ function streetDir(P){                                            // unit vector
   let best=1e9, bx=0, by=0;
   for(const [x1,y1,x2,y2] of segs){ const dx=x2-x1, dy=y2-y1, L2=dx*dx+dy*dy, t=L2?Math.max(0,Math.min(1,((px-x1)*dx+(py-y1)*dy)/L2)):0;
     const ex=x1+t*dx-px, ey=y1+t*dy-py, d=ex*ex+ey*ey; if(d<best){ best=d; bx=ex; by=ey; } }
-  best=Math.sqrt(best); return best>2&&best<70?[bx/best,by/best]:null;
+  best=Math.sqrt(best); return best>2&&best<70?Object.assign([bx/best,by/best],{d:best}):null;   // .d: metres to that road
 }
 /* the garage goes where a driveway reaches the house (owner 2026-11-23: "make sure that garage doors line up with the
    driveways"): OpenStreetMap often maps driveways (service=driveway) up to the house. The driveway end nearest the house
@@ -362,6 +362,24 @@ function driveSpot(P,edges,toLoc){
         if(s<-1||s>E.L+1||out<-3||out>9) continue;                // in front of this wall (or just inside it)
         const d=Math.abs(out); if(!best||d<best.d) best={E,s,d}; } } }
   return best;
+}
+/* a spot in the front yard (js/enh/snowmen.js): between the street-side wall and the road, clear of the garage, the
+   front door's walk and any mapped driveway. Local metres around the house middle, plus the way to the street. */
+function yardSpot(P,E,sd,free,seed,kx,ky){
+  if(!sd||!sd.d) return null; const nd=E.nx*sd[0]+E.ny*sd[1]; if(nd<.6) return null;
+  const wall=E.a[0]*E.nx+E.a[1]*E.ny, yard=sd.d/nd-wall-6.5;        // 6.5 m: half the street and the sidewalk
+  if(yard<3.5) return null;
+  const out=Math.min(9,Math.max(2.2,yard*(.35+.3*hash(seed,81))));
+  const near=DRIVES.filter(D=>{ const b=D.bb, m=25/111320; return !(b[2]<P.bb[0]-m*1.4||b[0]>P.bb[2]+m*1.4||b[3]<P.bb[1]-m||b[1]>P.bb[3]+m); })
+    .map(D=>D.l.map(q=>[(q[0]-P.cx)*kx,(q[1]-P.cy)*ky]));
+  const clear=(x,y)=>{ for(const l of near) for(let i=1;i<l.length;i++){ const [x1,y1]=l[i-1],[x2,y2]=l[i], dx=x2-x1, dy=y2-y1, L2=dx*dx+dy*dy,
+      t=L2?Math.max(0,Math.min(1,((x-x1)*dx+(y-y1)*dy)/L2)):0; if(Math.hypot(x1+t*dx-x,y1+t*dy-y)<2.8) return false; } return true; };
+  for(const f of [.15+.7*hash(seed,83),.2,.8,.35,.65]){ const s=E.L*f;
+    if(s<.8||s>E.L-.8||!free(E,s-.9,s+.9)) continue;
+    const x=E.a[0]+E.ux*s+E.nx*out, y=E.a[1]+E.uy*s+E.ny*out; if(!clear(x,y)) continue;
+    const tw=(hash(seed,87)-.5)*.9, c=Math.cos(tw), sn=Math.sin(tw);     // turned a little, not all square to the street
+    return {x,y,fx:E.nx*c-E.ny*sn,fy:E.nx*sn+E.ny*c}; }
+  return null;
 }
 function facades(P,kx,ky,res,rich){
   if(P.b0>0) return;
@@ -435,6 +453,7 @@ function facades(P,kx,ky,res,rich){
         if(fine){ put(E,s-.02,s+.02,.08,.1,b,h,trim); put(E,s-w/2,s+w/2,.08,.1,(b+h)/2-.02,(b+h)/2+.02,trim);          // muntins
           put(E,s-w/2-.14,s+w/2+.14,.0,.15,b-.14,b-.06,'#d9dbdc');                                                         // sill
           if(shut&&E===front&&!big) for(const z of [-1,1]){ const x=s+z*(w/2+.13); put(E,Math.min(x,x+z*.42),Math.max(x,x+z*.42),.02,.07,b-.02,h+.02,shut); } } } }
+    if(res.bld) res.bld.yard=yardSpot(P,front,sd,free,seed,kx,ky);    // where a snowman could stand (js/enh/snowmen.js)
   } else if(P.h<=12){
     // storefront: glass band on the street side (the middle 60% of very long walls), mullions every ~1.6 m
     const E=front, s0=E.L>40?E.L*.2:1, s1=E.L>40?E.L*.8:E.L-1;
