@@ -1392,7 +1392,7 @@ function glideStep(dt,st,gas,now){
   if(every('place',1)) updatePlace(); if(every('house',.25)) updateHouseFilter(false);
   if(every('compass',POWER?.12:.05)) updateCompass(); if(every('roadx',.25)) updateRoadX();
   if(every('clouds',2)) buildClouds(false);
-  if(every('decor',.5) && styleReady && (!decorAt || meters(decorAt[1],decorAt[0],S.lat,S.lng)>250)) buildDecor();
+  if(every('decor',.5) && styleReady && (!window.GLIDELOD||GLIDELOD.treesOn()) && (!decorAt || meters(decorAt[1],decorAt[0],S.lat,S.lng)>250)) buildDecor();
 }
 const tick={};
 // next to "On road" in the top-left panel (owner 2026-11-21): · the street you're on (when on a road) · heading N / NE / E…

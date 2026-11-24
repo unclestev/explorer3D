@@ -516,13 +516,11 @@ function facades(P,kx,ky,res,rich){
     for(const dz of [-.1,.1]) put(E,s-bw-.02,s+bw+.02,.2,.3,z+dz-.015,z+dz+.015,'#55585d');    // louvres
     put(E,s-bw*.8,s+bw*.8,.12,.27,z+.13,z+.22,lu,2); put(E,s-bw*.8,s+bw*.8,.12,.27,z-.22,z-.13,ld,2);   // lens strips
     put(E,s-bw-.02,s+bw+.02,.24,.34,z+.22,z+.25,fxc); put(E,s-bw-.02,s+bw+.02,.24,.34,z-.25,z-.22,fxc);  // hoods
-    const nu=Math.min(9,Math.ceil((top-z-.3)/sh)), nd=Math.min(9,Math.ceil((z-.3-.1)/sh));
-    for(let i=0;i<nu;i++) wash(E,s,ws(i),z+.3+i*sh,Math.min(top-.05,z+.3+(i+1)*sh),i,'up');
-    for(let i=0;i<nd;i++) wash(E,s,ws(i),Math.max(.1,z-.3-(i+1)*sh),z-.3-i*sh,i,'dn');
-    gpt(E,s,z+.18,0,0,lu); gpt(E,s,z-.18,0,0,ld);
-    // the map layer can't glow at night, so the beam is also a chain of soft lights (car layer) running up to the roof and down to the ground
-    for(let i=1;i<=nu+1;i++){ const zz=z+.18+i*.9; if(zz<top-.2) gpt(E,s,zz,0,0,SPAL.up[Math.min(i,9)]); }
-    for(let i=1;i<=nd+1;i++){ const zz=z-.18-i*.9; if(zz>.2) gpt(E,s,zz,0,0,SPAL.dn[Math.min(i,9)]); } };
+    /* the light itself is a soft cone of colour on the wall, drawn in the car layer (lampsSet) because the map layer can't glow
+       at night: a fan that starts at each lens and widens and fades as it goes, up to the roofline and down to the ground */
+    const c0=toLL([E.a[0]+E.ux*s+E.nx*.3,E.a[1]+E.uy*s+E.ny*.3]);
+    res.glow.push({type:'Feature',properties:{r:0,lx:c0[0],ly:c0[1],z,beam:1,tx:E.ux,ty:E.uy,nx:E.nx,ny:E.ny,top:+(top-.05).toFixed(2),bot:.1,ku:lu,kd:ld},geometry:{type:'Point',coordinates:c0}});
+    gpt(E,s,z+.18,0,0,lu); gpt(E,s,z-.18,0,0,ld); };
   // a gooseneck light over a shop sign: an arm out from the wall, the lamp head shining down onto the wall below
   const gooseneck=(E,s,zt)=>{ if(!frames||s<.5||s>E.L-.5) return;
     put(E,s-.03,s+.03,0,.5,zt-.03,zt+.03,fxc); put(E,s-.13,s+.13,.3,.58,zt-.1,zt+.04,fxc); put(E,s-.1,s+.1,.34,.54,zt-.13,zt-.1,LGL,2);
@@ -660,7 +658,7 @@ onTick(2000,function litTick(){ const A=YD.AT; setNight(!!(A&&A.k>.55)); });
    map shape can't look bright. Each lit one also gets a soft warm point of light in the car layer (drawn over the map,
    like the traffic), one draw call for all of them; the building blockers there (js/enh/traffic.js OCC) hide the ones
    behind a house. Positions are kept in metres from where the set was made, and the set is moved with the camera. */
-const LG={pts:null,o:null,n:0,dirty:false,vis:false};
+const LG={pts:null,bm:null,o:null,n:0,dirty:false,vis:false};
 function lampTex(){ const c=document.createElement('canvas'); c.width=c.height=64; const x=c.getContext('2d'), g=x.createRadialGradient(32,32,0,32,32,32);
   g.addColorStop(0,'rgba(255,250,232,1)'); g.addColorStop(.12,'rgba(255,236,180,.95)'); g.addColorStop(.35,'rgba(255,200,110,.35)'); g.addColorStop(1,'rgba(255,170,70,0)');
   x.fillStyle=g; x.fillRect(0,0,64,64); return new THREE.CanvasTexture(c); }
@@ -669,20 +667,35 @@ function lampsSet(glow){
   if(!LG.pts){ LG.pts=new THREE.Points(new THREE.BufferGeometry(),new THREE.PointsMaterial({map:lampTex(),vertexColors:true,size:1,sizeAttenuation:true,transparent:true,
       depthWrite:false,blending:THREE.AdditiveBlending,color:0xffffff})); LG.pts.frustumCulled=false; LG.pts.renderOrder=5; LG.pts.visible=false; scene.add(LG.pts); }
   const ox=S.lng*MLNG, oy=S.lat*MLAT, e0=terrainOn?(map.transform.elevation||0):0, pos=[], col=[];
-  for(const f of glow){ const q=f.properties; let el=0; if(terrainOn){ try{ el=(map.queryTerrainElevation([q.lx,q.ly])||0)+e0; }catch(e){} }
+  const BP=[], BC=[], BI=[], hex=k=>[(k>>16&255)/255,(k>>8&255)/255,(k&255)/255];
+  for(const f of glow){ const q=f.properties; if(q.beam){ beam(q,ox,oy,e0,BP,BC,BI,hex); continue; } let el=0; if(terrainOn){ try{ el=(map.queryTerrainElevation([q.lx,q.ly])||0)+e0; }catch(e){} }
     pos.push(q.lx*MLNG-ox,q.z+el,-(q.ly*MLAT-oy)); const k=q.k?parseInt(q.k.slice(1),16):0xffffff; col.push((k>>16&255)/255,(k>>8&255)/255,(k&255)/255); }
   const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setAttribute('color',new THREE.Float32BufferAttribute(col,3));
   LG.pts.geometry.dispose(); LG.pts.geometry=g; LG.o=[ox,oy]; LG.n=glow.length; LG.dirty=true;
+  if(!LG.bm){ LG.bm=new THREE.Mesh(new THREE.BufferGeometry(),new THREE.MeshBasicMaterial({vertexColors:true,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide})); LG.bm.frustumCulled=false; LG.bm.renderOrder=4; LG.bm.visible=false; scene.add(LG.bm); }
+  const bg=new THREE.BufferGeometry(); bg.setAttribute('position',new THREE.Float32BufferAttribute(BP,3)); bg.setAttribute('color',new THREE.Float32BufferAttribute(BC,3)); bg.setIndex(BI);
+  LG.bm.geometry.dispose(); LG.bm.geometry=bg;
+}
+// one light beam on a wall: a fan of 5 columns x rows, bright at the lens and fading with distance, soft at the sides (vertex colours, added to the picture)
+function beam(q,ox,oy,e0,BP,BC,BI,hex){
+  let el=0; if(terrainOn){ try{ el=(map.queryTerrainElevation([q.lx,q.ly])||0)+e0; }catch(e){} }
+  const cx=q.lx*MLNG-ox, cy=q.ly*MLAT-oy, COLS=[-1,-.5,0,.5,1], CI=[0,.55,1,.55,0];
+  for(const d of [1,-1]){ const col=hex(parseInt((d>0?q.ku:q.kd).slice(1),16)), z0=q.z+d*.26, z1=d>0?q.top:q.bot, span=Math.abs(z1-z0); if(span<.3) continue;
+    const rows=Math.max(3,Math.min(9,Math.ceil(span/1.1))), base=BP.length/3;
+    for(let r=0;r<=rows;r++){ const t=r/rows, h=z0+(z1-z0)*t, w=.3+Math.min(3.1,t*span*.34+.2*t), f=Math.pow(1-t,1.25)*.95+.05;
+      for(let c=0;c<5;c++){ const o=COLS[c]*w; BP.push(cx+q.tx*o+q.nx*.0,h+el,-(cy+q.ty*o)); const I=CI[c]*f*(r===0?.9:1); BC.push(col[0]*I,col[1]*I,col[2]*I); } }
+    for(let r=0;r<rows;r++) for(let c=0;c<4;c++){ const a=base+r*5+c, b=a+1, e=a+5, g=e+1; BI.push(a,b,e,b,g,e); } }
 }
 FRAME_HOOKS.push(function lampGlow(){
   const P=LG.pts; if(!P) return false;
   const want=!!night&&!POWER&&LG.n>0&&mode!=='glider'&&!(window.WALK&&WALK.inside&&WALK.inside.rec);
   let changed=LG.dirty; LG.dirty=false;
-  if(want!==P.visible){ P.visible=want; changed=true; }
+  if(want!==P.visible){ P.visible=want; if(LG.bm) LG.bm.visible=want; changed=true; }
   if(!want) return changed;
   const px=S.lng*MLNG, py=S.lat*MLAT, m=mpp(S.lat,S.zoom), b=rad(S.camB), sb=Math.sin(b), cb=Math.cos(b), e=terrainOn?(map.transform.elevation||0):0;
   const dx=LG.o[0]-px, dy=LG.o[1]-py;
   P.position.set((dx*cb-dy*sb)/m,-e/m,-(dx*sb+dy*cb)/m); P.rotation.set(0,b,0); P.scale.setScalar(1/m);
+  const B=LG.bm; if(B){ B.visible=true; B.position.copy(P.position); B.rotation.set(0,b,0); B.scale.setScalar(1/m); }
   P.material.size=1/m/Math.tan(rad(camera.fov)/2);                 // about 1 m across (three.js sizes points by half the screen height, not the lens)
   return changed;
 });

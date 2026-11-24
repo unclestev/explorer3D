@@ -15,7 +15,7 @@ const {safe,onReady}=YD;
 const SRC='sat-src', LAYER='sat-img';
 const TILES='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 const ATTR='Imagery © <a href="https://www.esri.com/">Esri</a>, Maxar, Earthstar Geographics';
-let on=false, hidden=[];                                        // layers we switched off, restored when satellite goes off
+let on=false, hidden=[], saved=null;                           // saved: while hang gliding, the choice you had before takeoff                                        // layers we switched off, restored when satellite goes off
 try{ on=localStorage.getItem('ydSat')==='1'; }catch(e){}
 
 // the photo goes just under the first road layer: above the ground fills, below roads, bridges, buildings and signs
@@ -45,7 +45,8 @@ function remove(){
 }
 function apply(){ safe('satellite',()=>{ if(on) add(); else remove(); }); if(typeof dirty!=='undefined') dirty=true; }
 
-function setOn(v){ on=v; try{ localStorage.setItem('ydSat',v?'1':'0'); }catch(e){}
+function setOn(v){ if(saved!==null){ try{ toast('Satellite view stays on while hang gliding'); }catch(e){} return; }
+  on=v; try{ localStorage.setItem('ydSat',v?'1':'0'); }catch(e){}
   if(btn) btn.classList.toggle('on',on); apply(); }
 const btn=document.getElementById('satBtn');
 if(btn){ btn.classList.toggle('on',on); btn.addEventListener('click',e=>{ e.stopPropagation(); setOn(!on); }); }
@@ -55,5 +56,10 @@ const prev=window.onPowerChange;
 window.onPowerChange=(p)=>{ if(prev) prev(p); if(on) safe('satellite',()=>{ remove(); add(); }); };
 
 onReady(function satellite(){ if(on) apply(); });
-window.SAT={setOn,get on(){ return on; }};
+// hang gliding (js/enh/glidelod.js): forced on for the flight; afterwards back to what it was (never saved to localStorage)
+function glide(v){
+  if(v){ if(saved!==null) return; saved=on; if(!on){ on=true; if(btn) btn.classList.toggle('on',true); apply(); } }
+  else { if(saved===null) return; const was=saved; saved=null; if(!was){ on=false; if(btn) btn.classList.toggle('on',false); apply(); } }
+}
+window.SAT={setOn,glide,get on(){ return on; }};
 })();

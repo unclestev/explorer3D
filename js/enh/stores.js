@@ -157,6 +157,10 @@ function frontOf(s,p){ const fd=frontDir(s.cx,s.cy); let best=null, bs=-1e9;
 const at=key=>{ if(!key) return null; const e=ST.list.find(s=>s.key===key); if(e) return e; const [x,y]=String(key).split(',').map(Number);
   return ST.list.find(s=>x>=s.bb[0]&&x<=s.bb[2]&&y>=s.bb[1]&&y<=s.bb[3]&&inRing(s.ring,x,y))||null; };
 
+// the store you are really in: the walk-in record is the store's own (`ownRec`, same key). `at()` also matches any building whose
+// middle lies inside a store's (grown) outline, which can take in neighbours — so greeters and store interiors use this instead.
+const own=r=>{ if(!r||!r.store||!r.key) return null; return ST.list.find(s=>s.key===r.key)||null; };
+
 /* ---------- the way in, when buildings.js gave the store none ---------- */
 function ownRec(s){ const kx=111320*Math.cos(s.cy*Math.PI/180), ky=111320;
   let p=s.ring.slice(0,-1).map(q=>[(q[0]-s.cx)*kx,(q[1]-s.cy)*ky]); let a=0; for(let i=0,j=p.length-1;i<p.length;j=i++) a+=(p[j][0]-p[i][0])*(p[j][1]+p[i][1]); if(a<0) p.reverse();   // counter-clockwise
@@ -170,13 +174,10 @@ function ownRec(s){ const kx=111320*Math.cos(s.cy*Math.PI/180), ky=111320;
      the longest other wall (owner 2026-11-23: it didn't open at the Oswego Meijer — its front wall is short, so no door was
      made). No driveway is needed: a store's opener works from anywhere in front of the door (js/enh/garage.js). */
   const garages=[]; { const gw=4, cand=[];
-    if(sm-12.5>1.2) cand.push({ei:E.ei,a:E.a,ux:E.ux,uy:E.uy,nx:E.nx,ny:E.ny,s0:sm-12.5});
     const others=[]; for(let i=0;i<p.length;i++){ if(i===E.ei) continue; const a=p[i], b=p[(i+1)%p.length], ex=b[0]-a[0], ey=b[1]-a[1], L=Math.hypot(ex,ey); if(L>=12) others.push({ei:i,a,ux:ex/L,uy:ey/L,nx:ey/L,ny:-ex/L,s0:L/2-gw/2,L}); }
-    /* the front of a big store is several wall pieces facing the same way (the entrance bay is only one of them): a loading door
-       belongs on the parking-lot side, so try the pieces facing the way the entrance does first, nearest the entrance, left of it first */
-    const ex0=E.a[0]+E.ux*sm, ey0=E.a[1]+E.uy*sm;
-    const fr=others.filter(o=>o.nx*E.nx+o.ny*E.ny>.9).map(o=>{ const mx=o.a[0]+o.ux*o.L/2, my=o.a[1]+o.uy*o.L/2, al=(mx-ex0)*E.ux+(my-ey0)*E.uy; return Object.assign({},o,{d:Math.hypot(mx-ex0,my-ey0)+(al>0?25:0)}); }).filter(o=>o.d<150);
-    fr.sort((u,v)=>u.d-v.d); for(const o of fr) cand.push(o);
+    /* a loading door goes at the BACK of a big store (owner 2026-11-23: move it from the front to the back): the longest wall
+       facing away from the entrance, in its middle; failing that, the longest wall there is */
+    const bk=others.filter(o=>o.nx*E.nx+o.ny*E.ny<-.6); bk.sort((u,v)=>v.L-u.L); for(const o of bk) cand.push(o);
     others.sort((u,v)=>v.L-u.L); for(const o of others) cand.push(o);
     const F=cand[0]; if(F){ const gs0=F.s0, gs1=gs0+gw; let depth=0; const mx=F.a[0]+F.ux*(gs0+gw/2), my=F.a[1]+F.uy*(gs0+gw/2); for(const q of p) depth=Math.max(depth,-((q[0]-mx)*F.nx+(q[1]-my)*F.ny));
       garages.push({ei:F.ei,s0:gs0,s1:gs1,x0:F.a[0]+F.ux*gs0,y0:F.a[1]+F.uy*gs0,x1:F.a[0]+F.ux*gs1,y1:F.a[1]+F.uy*gs1,nx:F.nx,ny:F.ny,gk:8e8+ST.list.indexOf(s),col:'#e7e4dc',D:Math.max(6,Math.min(70,depth-.4))}); } }
@@ -227,13 +228,17 @@ function drawDoors(){ const feats=[]; ST.cache=[];
     put(sm+.5,sm+.56,.1,1.9,0,1.05,BK); put(sm+2.3,sm+2.36,.1,1.9,0,1.05,BK);                            // the black gates in front of the exit doors
     put(sm+.56,sm+2.3,1.84,1.9,0,1.05,BK);
     put(sm-2.85,sm+2.85,.06,.9,4.7,4.9,'#c9ccd0');
-    for(const q of r.garages){ const go=window.GARAGE?GARAGE.openness(q.gk):0, H=2.4, rise=go*(H-.1), a0=q.s0, a1=q.s1;      // the overhead door rolls up out of the opening
+    for(const q of r.garages){ const go=window.GARAGE?GARAGE.openness(q.gk):0, H=2.4, rise=go*(H-.1), gw=Math.hypot(q.x1-q.x0,q.y1-q.y0)||4, ux=(q.x1-q.x0)/gw, uy=(q.y1-q.y0)/gw;      // the overhead door rolls up out of the opening
       ST.cache[ST.cache.length-1].gks.push(q.gk);
-      put(a0-.2,a1+.2,.03,.14,0,2.75,AL);                                                                // white surround
-      put(a0,a1,.05,.1,0,H,'#101215');                                                                   // the dark store behind
-      put(a0,a1,.1,.15,rise,H,q.col);                                                                    // the door panel: its bottom rises
-      for(let k=1;k<4;k++){ const y=rise+k*.6; if(y<H-.05) put(a0,a1,.15,.17,y,y+.035,'#a7adb3'); }       // the joints between its panels
-      put(a0-.55,a0-.4,.7,.85,0,1.05,YL); put(a1+.4,a1+.55,.7,.85,0,1.05,YL); } }                        // yellow bollards each side                                                     // a little canopy edge over them
+      // the door is on ITS wall (not always the entrance wall): s runs along it from the door's left edge, o out from it
+      const pg=(s0,s1,o0,o1,b,h,c)=>{ const a=[q.x0+ux*s0,q.y0+uy*s0], z=[q.x0+ux*s1,q.y0+uy*s1];
+        const ring=[[a[0]+q.nx*o0,a[1]+q.ny*o0],[z[0]+q.nx*o0,z[1]+q.ny*o0],[z[0]+q.nx*o1,z[1]+q.ny*o1],[a[0]+q.nx*o1,a[1]+q.ny*o1]].map(toLL); ring.push(ring[0]);
+        feats.push({type:'Feature',properties:{c,b,h,g:0},geometry:{type:'Polygon',coordinates:[ring]}}); };
+      pg(-.2,gw+.2,.03,.14,0,2.75,AL);                                                                   // white surround
+      pg(0,gw,.05,.1,0,H,'#101215');                                                                     // the dark store behind
+      pg(0,gw,.1,.15,rise,H,q.col);                                                                      // the door panel: its bottom rises
+      for(let k=1;k<4;k++){ const y=rise+k*.6; if(y<H-.05) pg(0,gw,.15,.17,y,y+.035,'#a7adb3'); }        // the joints between its panels
+      pg(-.55,-.4,.7,.85,0,1.05,YL); pg(gw+.4,gw+.55,.7,.85,0,1.05,YL); } }                              // yellow bollards each side
   safe('stores',()=>{ const src=map.getSource('stores'); if(src) src.setData({type:'FeatureCollection',features:feats}); }); }
 function layers(){ safe('stores layer',()=>{ if(map.getSource('stores')) return;
   map.addSource('stores',{type:'geojson',data:{type:'FeatureCollection',features:[]},maxzoom:19,tolerance:0});
@@ -257,5 +262,5 @@ onTick(1500,function storeTick(){
   const nm=ST.nsAt?meters(ST.nsAt[1],ST.nsAt[0],S.lat,S.lng):1e9; if(nm>3000) scanSearch();
   if(ST.list.length) safe('store doors',drawDoors);
 });
-window.STORES={list:ST.list,at,recs,covers,add,frontDir,markHere,greet,greeterOn,brandOf,pts:PTS,state:ST,refresh:()=>{ ST.dirty=true; }};
+window.STORES={list:ST.list,at,own,recs,covers,add,frontDir,markHere,greet,greeterOn,brandOf,pts:PTS,state:ST,refresh:()=>{ ST.dirty=true; }};
 })();
