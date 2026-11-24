@@ -54,15 +54,18 @@ const Line=(pts,props)=>({type:'Feature',properties:props,geometry:{type:'LineSt
    gaps at bends or between segments), with a slab joint every SLAB metres and a slightly different tone on some slabs.
    Joints and tones are keyed to the distance along the street, so they stay put when the strip is rebuilt as you drive. */
 const SLAB=1.6, WALKW=1.6;
-function sidewalks(WK,L,ox,oy,out){
+function sidewalks(WK,L,ox,oy,out,mapped){
   const by=new Map(); for(const w of WK){ let a=by.get(w.lid); if(!a) by.set(w.lid,a=[]); a.push(w); }
   const jointR=Q3(120,170,220), slabR=Q3(60,90,120);
   for(const [lid,arr] of by){ arr.sort((a,b)=>a.along-b.along);
+    for(const sd of [-1,1]){
+    // pieces of this street side that already have a mapped sidewalk beside them are left to the map's own footway
+    const mine=arr.filter(w=>!mapped(w.x1+w.ux*w.len/2+w.nx*sd*w.o,w.y1+w.uy*w.len/2+w.ny*sd*w.o));
     // chains: neighbours that share an end point and don't turn sharply
     const chains=[]; let cur=null;
-    for(const w of arr){ const p=cur&&cur[cur.length-1];
+    for(const w of mine){ const p=cur&&cur[cur.length-1];
       if(p&&Math.hypot(p.x2-w.x1,p.y2-w.y1)<1.2&&p.ux*w.ux+p.uy*w.uy>.2) cur.push(w); else chains.push(cur=[w]); }
-    for(const sd of [-1,1]) for(const ch of chains){
+    for(const ch of chains){
       // offset polyline with mitred corners
       const pts=[]; const n=ch.length;
       const vtx=(w,x,y,nbx,nby)=>{ let mx=w.nx*sd+(nbx==null?0:nbx*sd), my=w.ny*sd+(nby==null?0:nby*sd); const ml=Math.hypot(mx,my)||1; mx/=ml; my/=ml;
@@ -82,13 +85,31 @@ function sidewalks(WK,L,ox,oy,out){
       if(joints.length) out.push({type:'Feature',properties:{k:'wjoint'},geometry:{type:'MultiLineString',coordinates:joints}});
       if(lighter.length) out.push({type:'Feature',properties:{k:'wslab',t:1},geometry:{type:'MultiLineString',coordinates:lighter}});
       if(darker.length) out.push({type:'Feature',properties:{k:'wslab',t:2},geometry:{type:'MultiLineString',coordinates:darker}});
-    } }
+    } } }
 }
-const WALK_C=()=>RS.asphalt?'#a9a8a2':'#c9c7c0';
+const WALK_C=()=>RS.asphalt?'#b4b3ac':'#cfcdc6';
 function walkTones(){
   if(map.getLayer('rs-walk')) map.setPaintProperty('rs-walk','line-color',WALK_C());
-  if(map.getLayer('rs-wslab')) map.setPaintProperty('rs-wslab','line-color',RS.asphalt?['match',['get','t'],1,'#b6b5ae','#9a9993']:['match',['get','t'],1,'#d6d4cd','#b9b7b0']);
-  if(map.getLayer('rs-wjoint')) map.setPaintProperty('rs-wjoint','line-color',RS.asphalt?'#75746f':'#9a978f');
+  if(map.getLayer('rs-fw')) map.setPaintProperty('rs-fw','line-color',WALK_C());
+  const jc=RS.asphalt?'#7c7b76':'#9a978f';
+  if(map.getLayer('rs-wslab')) map.setPaintProperty('rs-wslab','line-color',RS.asphalt?['match',['get','t'],1,'#c3c2bb','#a2a19b']:['match',['get','t'],1,'#dddbd4','#bebcb5']);
+  for(const id of ['rs-wjoint','rs-fwj']) if(map.getLayer(id)) map.setPaintProperty(id,'line-color',jc);
+}
+
+// the map's own sidewalks (footways) as a test: is a point within 6 m of one? Local metres, 25 m grid.
+function mappedWalks(ox,oy,R,kx,C){
+  const FG=new Map(), lyr=map.getLayer('road_path_pedestrian'); if(!lyr) return ()=>false;
+  const put=(a,b)=>{ const n=Math.ceil(Math.hypot(b[0]-a[0],b[1]-a[1])/C)+1;
+    for(let j=0;j<=n;j++){ const k=Math.floor((a[0]+(b[0]-a[0])*j/n)/C)+','+Math.floor((a[1]+(b[1]-a[1])*j/n)/C); let c=FG.get(k); if(!c) FG.set(k,c=[]); c.push([a,b]); } };
+  try{
+    for(const f of map.querySourceFeatures(lyr.source,{filter:['all',['==',['get','class'],'path'],['==',['get','subclass'],'footway']]})){
+      const g=f.geometry, lines=g.type==='LineString'?[g.coordinates]:g.type==='MultiLineString'?g.coordinates:[];
+      for(const ln of lines){ const P=ln.map(q=>[(q[0]-roadGeo.lng)*kx,(q[1]-roadGeo.lat)*111320]);
+        for(let i=1;i<P.length;i++){ if(Math.abs(P[i][0]-ox)>R+80||Math.abs(P[i][1]-oy)>R+80) continue; put(P[i-1],P[i]); } } }
+  }catch(e){}
+  return (x,y)=>{ for(let i=-1;i<=1;i++) for(let j=-1;j<=1;j++) for(const [a,b] of FG.get((Math.floor(x/C)+i)+','+(Math.floor(y/C)+j))||[]){
+      const dx=b[0]-a[0], dy=b[1]-a[1], L2=dx*dx+dy*dy||1, t=Math.max(0,Math.min(1,((x-a[0])*dx+(y-a[1])*dy)/L2));
+      if(Math.hypot(a[0]+t*dx-x,a[1]+t*dy-y)<6) return true; } return false; };
 }
 
 function build(){
@@ -161,7 +182,7 @@ function build(){
         out.push(F(rect(L,x,y,ux,uy,.1,.1),{k:'mail',b:0,h:1.02,c:'#3a2f26'})); obs.push([x,y,.25]);
         out.push(F(rect(L,x,y,nx,ny,.48,.2),{k:'mail',b:1.0,h:1.22,c:['#202326','#2b3a55','#5a5d61','#7a2321'][Math.floor(hash(b.cx|0,b.cy|0)*4)]})); }
     } }
-  safe('sidewalks',()=>sidewalks(WK,L,ox,oy,out));
+  safe('sidewalks',()=>sidewalks(WK,L,ox,oy,out,mappedWalks(ox,oy,R,kx,C)));
   RS.n=out.length; RS.obs=obs.map(([x,y,r])=>{ const q=L(x,y); return [q[0]*MLNG,q[1]*MLAT,r]; });   // street lights, hydrants and mailboxes, for the parking sensors (m)
   const src=map.getSource('roadside'); if(src) src.setData({type:'FeatureCollection',features:out});
   RS.at=[S.lng,S.lat]; RS.geoT=roadGeo.t; dirty=true;
@@ -174,9 +195,20 @@ onReady(function roadside(){
     map.addLayer({id:'rs-walk',type:'line',source:'roadside',filter:['==',['get','k'],'walk'],minzoom:14,
       layout:{'line-cap':'butt','line-join':'miter','line-miter-limit':3},paint:{'line-color':WALK_C(),'line-width':mz(WALKW,1)}},firstRoad);
     map.addLayer({id:'rs-wslab',type:'line',source:'roadside',filter:['==',['get','k'],'wslab'],minzoom:16,
-      layout:{'line-cap':'butt'},paint:{'line-color':'#b6b5ae','line-width':mz(WALKW,1)}},firstRoad);
+      layout:{'line-cap':'butt'},paint:{'line-color':'#c3c2bb','line-width':mz(WALKW,1)}},firstRoad);
     map.addLayer({id:'rs-wjoint',type:'line',source:'roadside',filter:['==',['get','k'],'wjoint'],minzoom:16,
-      layout:{'line-cap':'butt'},paint:{'line-color':'#75746f','line-width':mz(.06,.5),'line-opacity':.85}},firstRoad);
+      layout:{'line-cap':'butt'},paint:{'line-color':'#7c7b76','line-width':mz(.06,.5),'line-opacity':.85}},firstRoad);
+    // the map's own sidewalks / footways: the style draws them as a white dashed line (the "spaced out sections of cement");
+    // draw them as one continuous strip of concrete instead, with a slab joint every SLAB metres (a very short dash is a joint)
+    const pp=map.getLayer('road_path_pedestrian');
+    if(pp){ const SUB=['match',['get','subclass'],['footway','cycleway','pedestrian'],true,false];
+      const walkF=['all',['match',['geometry-type'],['LineString','MultiLineString'],true,false],['==',['get','class'],'path'],SUB,['match',['get','brunnel'],['bridge','tunnel'],false,true]];
+      map.addLayer({id:'rs-fw',type:'line',source:pp.source,filter:walkF,minzoom:15,layout:{'line-cap':'butt','line-join':'round'},
+        paint:{'line-color':WALK_C(),'line-width':mz(WALKW+.1,1)}},'road_path_pedestrian');
+      map.addLayer({id:'rs-fwj',type:'line',source:pp.source,filter:walkF,minzoom:17,layout:{'line-cap':'butt','line-join':'round'},
+        paint:{'line-color':'#7c7b76','line-width':mz(WALKW+.1,1),'line-opacity':.8,'line-dasharray':[.05,SLAB/(WALKW+.1)-.05]}},'road_path_pedestrian');
+      // trails keep the old dashed look; mapped sidewalks no longer get it
+      const old=map.getFilter('road_path_pedestrian'); map.setFilter('road_path_pedestrian',['all',old,['!',walkF]]); }
     const top=map.getLayer('tree-trunk')?'tree-trunk':undefined;
     map.addLayer({id:'rs-3d',type:'fill-extrusion',source:'roadside',filter:['all',['==',['geometry-type'],'Polygon'],['!=',['get','k'],'crown']],minzoom:14,
       paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-height':['get','h'],'fill-extrusion-base':['get','b'],'fill-extrusion-vertical-gradient':false}},top);
