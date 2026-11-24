@@ -13,6 +13,9 @@ const WALL='#b98056', ROOF='#2c2e34';
 const PLAN=[[270,110,515,350,8],[525,98,628,162,5],[495,150,620,302,6],[618,115,842,362,8],[430,300,655,575,6.4],
   [0,462,432,770,11],[135,770,355,860,6.2],[190,855,305,915,4],[365,575,600,860,6.6],[596,515,885,765,10],
   [865,548,1140,765,10.4],[600,760,1155,915,7],[725,895,840,945,4.2],[645,470,955,545,5.2]];   // every wing overlaps its neighbours, so the school is one connected building
+/* the windows and doors that show in the photo, each on the wall it is on: [x0, x1, wall y (the south face of that wing), how many, kind]
+   kind w: a row of windows (dark glass, 1.0-2.6 m up); d: doors (0-2.4 m) */
+const WINS=[[345,425,350,5,'w'],[648,712,362,3,'w'],[445,585,575,4,'w'],[418,538,860,3,'d'],[738,830,945,3,'d']];
 const X0=0,X1=1155,Y0=98,Y1=945;
 const T={ids:[],sig:'',fit:null,tries:0,at:0};
 const N=48;
@@ -60,13 +63,21 @@ function fit(P,kx,ky){
     const iou=inter/Math.max(1,nPl+nReal-inter); if(!best||iou>best.iou) best={iou,T8}; }
   return {R,ids:[...ids],iou:best.iou,T8:best.T8,nReal}; }
 
+function toLL(F,P,kx,ky,px,py){        // a photo-plan point -> lng/lat, through the fitted rectangle
+  const [t,fx,fy]=F.T8, pu=(px-X0)/(X1-X0), pv=1-(py-Y0)/(Y1-Y0);
+  const [u,v]=t?[fy?1-pv:pv,fx?1-pu:pu]:[fx?1-pu:pu,fy?1-pv:pv], uu=u-.5, vv=v-.5;
+  const x=F.R.cx+F.R.ux*uu*F.R.W+F.R.vx*vv*F.R.H, y=F.R.cy+F.R.uy*uu*F.R.W+F.R.vy*vv*F.R.H;
+  return [+(P[0]+x/kx).toFixed(7),+(P[1]+y/ky).toFixed(7)]; }
 function polysOf(F,P,kx,ky){            // the plan's wings as lng/lat rings, with their heights
-  const out=[], [t,fx,fy]=F.T8;
-  const back=(pu,pv)=>t?[fy?1-pv:pv,fx?1-pu:pu]:[fx?1-pu:pu,fy?1-pv:pv];    // the plan point -> the rectangle point (undoing tf)
-  PLAN.forEach((b,k)=>{ const n=norm(b), corners=[[n[0],n[1]],[n[2],n[1]],[n[2],n[3]],[n[0],n[3]]];
-    const ring=corners.map(([pu,pv])=>{ const [u,v]=back(pu,pv), uu=u-.5, vv=v-.5, x=F.R.cx+F.R.ux*uu*F.R.W+F.R.vx*vv*F.R.H, y=F.R.cy+F.R.uy*uu*F.R.W+F.R.vy*vv*F.R.H;
-      return [+(P[0]+x/kx).toFixed(7),+(P[1]+y/ky).toFixed(7)]; });
+  const out=[];
+  PLAN.forEach((b,k)=>{ const ring=[[b[0],b[3]],[b[2],b[3]],[b[2],b[1]],[b[0],b[1]]].map(c=>toLL(F,P,kx,ky,c[0],c[1]));
     ring.push(ring[0]); out.push({ring,h:b[4]+k*.01}); });
+  return out; }
+function winsOf(F,P,kx,ky){            // windows and doors standing a hand's width proud of the wall they are on
+  const out=[];
+  for(const [x0,x1,y,n,kind] of WINS){ const w=kind==='d'?9:6;
+    for(let i=0;i<n;i++){ const cx=n>1?x0+(x1-x0)*i/(n-1):(x0+x1)/2, ring=[[cx-w/2,y],[cx+w/2,y],[cx+w/2,y+1.4],[cx-w/2,y+1.4]].map(c=>toLL(F,P,kx,ky,c[0],c[1]));
+      ring.push(ring[0]); out.push(kind==='d'?{ring,b:0,h:2.4,c:'#3b2f2a'}:{ring,b:1.0,h:2.6,c:'#26323f'}); } }
   return out; }
 
 function layers(){ if(map.getSource('trj')) return;
@@ -75,11 +86,14 @@ function layers(){ if(map.getSource('trj')) return;
   const wall={'fill-extrusion-base':0,'fill-extrusion-height':['get','h'],'fill-extrusion-vertical-gradient':false};
   if(pat) wall['fill-extrusion-pattern']='hw-trj'; else wall['fill-extrusion-color']=WALL;
   map.addLayer({id:'trj-wall',type:'fill-extrusion',source:'trj',minzoom:12,paint:wall},map.getLayer('hn-big')?'hn-big':undefined);
-  map.addLayer({id:'trj-roof',type:'fill-extrusion',source:'trj',minzoom:12,paint:{'fill-extrusion-color':ROOF,'fill-extrusion-base':['get','h'],'fill-extrusion-height':['+',['get','h'],.4],'fill-extrusion-vertical-gradient':false}},map.getLayer('hn-big')?'hn-big':undefined); }
+  map.addSource('trjw',{type:'geojson',data:{type:'FeatureCollection',features:[]},tolerance:0});
+  map.addLayer({id:'trj-roof',type:'fill-extrusion',source:'trj',minzoom:12,paint:{'fill-extrusion-color':ROOF,'fill-extrusion-base':['get','h'],'fill-extrusion-height':['+',['get','h'],.4],'fill-extrusion-vertical-gradient':false}},map.getLayer('hn-big')?'hn-big':undefined);
+  map.addLayer({id:'trj-win',type:'fill-extrusion',source:'trjw',minzoom:12,paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-base':['get','b'],'fill-extrusion-height':['get','h'],'fill-extrusion-vertical-gradient':false}},map.getLayer('hn-big')?'hn-big':undefined); }
 
 function apply(F,P,kx,ky){
   const feats=polysOf(F,P,kx,ky).map(o=>({type:'Feature',properties:{h:o.h},geometry:{type:'Polygon',coordinates:[o.ring]}}));
   layers(); map.getSource('trj').setData({type:'FeatureCollection',features:feats});
+  map.getSource('trjw').setData({type:'FeatureCollection',features:winsOf(F,P,kx,ky).map(o=>({type:'Feature',properties:{b:o.b,h:o.h,c:o.c},geometry:{type:'Polygon',coordinates:[o.ring]}}))});
   HIDE.pin=F.ids.slice(); applyHides(); if(window.ROOFS&&ROOFS.build) safe('trj rebuild',()=>ROOFS.build()); dirty=true; }
 
 function scan(){
@@ -96,5 +110,5 @@ function scan(){
   T.fit=F; apply(F,P,kx,ky); }
 
 onTick(3000,function trjTick(){ safe('traughber',scan); });
-window.TRJ={off:()=>{ try{ localStorage.setItem('ydTrjOff','1'); }catch(e){} location.reload(); },on:()=>{ try{ localStorage.removeItem('ydTrjOff'); }catch(e){} location.reload(); },state:T,fit,PLAN};
+window.TRJ={off:()=>{ try{ localStorage.setItem('ydTrjOff','1'); }catch(e){} location.reload(); },on:()=>{ try{ localStorage.removeItem('ydTrjOff'); }catch(e){} location.reload(); },state:T,fit,PLAN,WINS};
 })();
