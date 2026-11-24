@@ -63,7 +63,7 @@ const HELP='You can ask me to: start or turn off the car, lock or unlock it, hon
 // settings switches: [what you say, button, name]
 const SW=[[/\breal speed\b/,'rsBtn','Real speed in the cockpit'],[/\brealistic\b|\breal driving\b/,'realBtn','Realistic driving'],[/\btraffic\b/,'trafficBtn','Traffic'],
   [/\b(hud|heads? ?up( display)?)\b/,'hudBtn','The head-up display'],[/\b(info|information|location|speed) panel\b/,'infoBtn','The location panel'],
-  [/\bpop ?-?ups?\b/,'popBtn','Pop-ups'],[/\basphalt\b/,'asphaltBtn','Asphalt roads'],[/\bsatellite\b/,'satBtn','Satellite view'],
+  [/\bpop ?-?ups?\b/,'popBtn','Pop-ups'],[/\b(store )?greeter\b/,'greetBtn','Store greeter'],[/\basphalt\b/,'asphaltBtn','Asphalt roads'],[/\bsatellite\b/,'satBtn','Satellite view'],
   [/\b(trail|purple line)\b/,'trailBtn','The trail'],[/^(un)?mute\b|\b(game |engine )?(sound|sounds|audio)\b(?!.*start)/,'audioBtn','Sound']];
 const CARN=[[/^(the )?(70'?s |seventies )?muscle( car)?$/,'muscle70','the 70\'s muscle car'],[/^(amc )?javelin( amx)?( ?3 ?d)?( ?(v(ersion)? ?)?2)?$/,'javelin3d2','the Javelin'],
   [/^(lincoln )?navigator$|^lincoln$/,'navigator','the Navigator'],[/^(tesla )?model ?y$|^tesla$/,'modely','the Model Y'],[/^(ford )?expedition$/,'expedition','the Expedition'],
@@ -200,6 +200,8 @@ async function handle(raw){
   if(window.WALK&&WALK.inStore&&WALK.inStore()&&/\b(lights?|switch)\b/.test(t)){   // in a store (js/enh/walk.js): its ceiling lights
     const one=/\b(one|1|first)\b/.test(t)?0:/\b(two|2|second)\b/.test(t)?1:null, on=!(OFF.test(t)||/\b(off|out|dark)\b/.test(t));
     WALK.storeLights(one,on); return say((one==null?'Lights ':'Switch '+(one+1)+' ')+(on?'on.':'off.')); }
+  if(window.STORES&&STORES.markHere&&/\b(this is (a |the )?(walmart|wal-mart|wall ?mart)|make (this|that|it) (a |the )?(walmart|wal-mart|wall ?mart))\b/.test(t)){   // js/enh/stores.js
+    return say(STORES.markHere('Walmart')?'Okay, this building is Walmart now.':'I can\'t find a big building here. Pull up in front of it and try again.'); }
   if(window.STORES&&STORES.markHere&&/\b(this is (a |the )?(meijer|major|mayor|meyer)|make (this|that|it) (a |the )?(meijer|major|mayor|meyer))\b/.test(t)){   // js/enh/stores.js
     return say(STORES.markHere()?'Okay, this building is Meijer now.':'I can\'t find a big building here. Pull up in front of it and try again.'); }
   if(window.PARK&&/\b(park assist|self[- ]?park|park (the|my) (car|truck)|park it|parallel park|perpendicular park)\b/.test(t)){   // js/enh/park.js

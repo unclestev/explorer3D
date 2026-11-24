@@ -53,6 +53,12 @@ mapEl.addEventListener('pointerup',lift); mapEl.addEventListener('pointercancel'
   const b=document.getElementById('infoBtn'), show=()=>{ document.body.classList.toggle('noinfo',!on); if(b) b.classList.toggle('on',on); };
   if(b) b.addEventListener('click',e=>{ e.stopPropagation(); on=!on; try{ localStorage.setItem('ydInfo',on?'on':'off'); }catch(e){} show(); });
   show(); }
+// ⚙️ Store greeter (owner 2026-11-23): the greeter inside Meijer / Walmart doors says "Welcome to …" when you walk in; on by default.
+// js/enh/stores.js reads the same key (ydGreeter) each time you walk in, so the switch works at once.
+{ let on=true; try{ on=localStorage.getItem('ydGreeter')!=='off'; }catch(e){}
+  const b=document.getElementById('greetBtn'), show=()=>{ if(b) b.classList.toggle('on',on); };
+  if(b) b.addEventListener('click',e=>{ e.stopPropagation(); on=!on; try{ localStorage.setItem('ydGreeter',on?'on':'off'); }catch(e){} if(!on){ try{ speechSynthesis.cancel(); }catch(e){} } show(); });
+  show(); }
 // ⚙️ Driving side: Auto (by country), Right or Left (game.js driveSide)
 { const pk=document.getElementById('sidePick'), st=document.getElementById('sideStat');
   const show=()=>{ let v='auto'; try{ v=localStorage.getItem('ydSide')||'auto'; }catch(e){}
