@@ -14,14 +14,14 @@
 'use strict';
 const {safe,onReady,onTick}=YD;
 const FT=.3048, RL=200*FT, RW=85*FT, RC=28*FT, BLUE=25*FT, GOALX=89*FT, CIRX=69*FT, CIRY=22*FT, CIRR=15*FT, GW=1.83, GH=1.22, GD=1.0, PUCKR=.05;
-const R={list:[],at:null,busy:false,force:new Set(),specs:new Map(),cur:null,goals:0,shots:0,charge:0,touch:false,wasHeld:false,ac:null};
+const R={list:[],at:null,busy:false,force:new Set(),specs:new Map(),negT:new Map(),cur:null,goals:0,shots:0,charge:0,touch:false,wasHeld:false,ac:null};
 const inP=(p,x,y)=>{ let c=false; for(let i=0,j=p.length-1;i<p.length;j=i++){ const a=p[i],b=p[j]; if(((a[1]>y)!==(b[1]>y))&&(x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0])) c=!c; } return c; };
 
 /* ---------- which buildings are arenas ---------- */
 async function load(){
   if(R.busy||typeof ovFetch!=='function'||typeof S==='undefined') return; R.busy=true;
   const lat=S.lat,lng=S.lng, d=.03, dl=d/Math.cos(lat*Math.PI/180), bb=`(${(lat-d).toFixed(4)},${(lng-dl).toFixed(4)},${(lat+d).toFixed(4)},${(lng+dl).toFixed(4)})`;
-  const q=`[out:json][timeout:20];(nwr["leisure"="ice_rink"]${bb};nwr["sport"="ice_hockey"]${bb};nwr["building"]["name"~"ice (arena|rink|center|centre|complex|palace)|skating (rink|center|centre)|hockey",i]${bb};);out center tags;`;
+  const q=`[out:json][timeout:20];(nwr["leisure"="ice_rink"]${bb};nwr["sport"="ice_hockey"]${bb};nwr["building"]["name"~"ice (arena|rink|center|centre|complex|palace)|skating (rink|center|centre)",i]${bb};);out center tags;`;
   try{ const j=await Promise.race([ovFetch(q),new Promise((_,no)=>setTimeout(()=>no(new Error('slow')),20000))]);
     const seen=new Set(R.list.map(a=>a.id)); let n=0;
     for(const e of (j&&j.elements)||[]){ const c=e.center||(e.lat!=null?{lat:e.lat,lon:e.lon}:null); if(!c) continue; const id=e.type+e.id; if(seen.has(id)) continue; seen.add(id);
@@ -39,10 +39,19 @@ onTick(5000,function rinkTick(){ if(R.busy||performance.now()<(R.nextTry||0)) re
 
 /* ---------- the rink laid into a building ---------- */
 function ext(p,c,s){ let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9; for(const q of p){ const u=q[0]*c+q[1]*s, v=-q[0]*s+q[1]*c; if(u<x0)x0=u; if(u>x1)x1=u; if(v<y0)y0=v; if(v>y1)y1=v; } return {x0,x1,y0,y1}; }
+/* the map's own tiles already carry the rink: a 'poi' point of class ice_rink (OpenFreeMap), so no Overpass is needed (it is often
+   down: owner 2026-11-24, All Seasons Ice Rinks in Naperville showed no rink). Re-read every 3 s; names that look like an arena too. */
+function tilePts(){ const now=performance.now(); if(R.tile&&now-R.tileT<3000) return R.tile; R.tileT=now; const out=[];
+  try{ if(typeof map!=='undefined'&&typeof bSrc!=='undefined') for(const f of map.querySourceFeatures(bSrc,{sourceLayer:'poi'})){ const p=f.properties||{}, g=f.geometry;
+      if(!g||g.type!=='Point') continue;
+      if(p.class!=='ice_rink'&&p.subclass!=='ice_rink'&&!/ice (arena|rink|center|centre|complex|palace)|skating (rink|center|centre)/i.test(p.name||'')) continue;
+      out.push({lat:g.coordinates[1],lng:g.coordinates[0]}); } }catch(e){}
+  R.tile=out; return out; }
 function spec(rec){
-  if(R.specs.has(rec.key)) return R.specs.get(rec.key);
+  const had=R.specs.get(rec.key);
+  if(had!==undefined&&(had||performance.now()-(R.negT.get(rec.key)||0)<6000)) return had;      // a "no" is only believed for 6 s: the tiles may still be loading
   let yes=R.force.has(rec.key);
-  if(!yes){ const b=rec.bb; for(const a of R.list){ if(a.lng<b[0]||a.lng>b[2]||a.lat<b[1]||a.lat>b[3]) continue;
+  if(!yes){ const b=rec.bb; for(const a of R.list.concat(tilePts())){ if(a.lng<b[0]||a.lng>b[2]||a.lat<b[1]||a.lat>b[3]) continue;
       if(inP(rec.p,(a.lng-rec.cx)*rec.kx,(a.lat-rec.cy)*rec.ky)){ yes=true; break; } } }
   let sp=null;
   if(yes){
@@ -56,7 +65,7 @@ function spec(rec){
       // the gate in the boards: on the long side nearest the closest door, beside where that door is
       let bd=null,bdd=1e9; for(const d of rec.doors||[]){ const dx=(d.x0+d.x1)/2-sp.cx, dy=(d.y0+d.y1)/2-sp.cy, dd=Math.hypot(dx,dy); if(dd<bdd){ bdd=dd; bd=[dx*c+dy*s,-dx*s+dy*c]; } }
       sp.gs=bd&&bd[1]<0?-1:1; sp.gx=Math.max(-(sp.A-sp.Rr-1.5),Math.min(sp.A-sp.Rr-1.5,bd?bd[0]:0)); } }
-  R.specs.set(rec.key,sp); return sp; }
+  R.specs.set(rec.key,sp); if(!sp) R.negT.set(rec.key,performance.now()); return sp; }
 const rc=(sp,x,y)=>{ const dx=x-sp.cx, dy=y-sp.cy; return [dx*sp.c+dy*sp.s,-dx*sp.s+dy*sp.c]; };
 function inside(sp,px,py,m){ m=m||0; const A=sp.A-m, B=sp.B-m, Rr=Math.max(.1,sp.Rr-m), qx=Math.abs(px)-(A-Rr), qy=Math.abs(py)-(B-Rr);
   if(qx>0&&qy>0) return Math.hypot(qx,qy)<=Rr; return Math.abs(px)<=A&&Math.abs(py)<=B; }
