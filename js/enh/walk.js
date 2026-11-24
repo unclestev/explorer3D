@@ -255,6 +255,7 @@ function buildRoom(r){
       globe.position.set(x3,HC-.03,z3); g.add(globe); } }
   // door leaves, hinged at the jamb; double doors on the wide glass entrances
   ROOM.leaves=[];
+  const SEE=()=>STX.see||(STX.see=new THREE.MeshLambertMaterial({color:0x9db4c6,transparent:true,opacity:.22,depthWrite:false,side:THREE.DoubleSide}));   // clear glass
   const AUTO=!!r.store;                                              // store entrances are automatic: no knobs, they open by themselves
   for(const d of r.doors){ const W0=d.s1-d.s0, two=W0>1.5, lw=two?(W0-.06)/2:W0-.04, glass=two||AUTO;
     const leafM=glass?rmat('glassdoor',0x2f3e4e,0x0a1420):rmat('door',0x7a5236,0x1a120c);
@@ -264,8 +265,9 @@ function buildRoom(r){
       const cdx=side?-ux:ux, cdy=side?-uy:uy;                        // closed: along the wall, from the hinge
       const pv=new THREE.Group(); const [hx3,hz3]=to3(hx-d.nx*.06,hy-d.ny*.06); pv.position.set(hx3,0,hz3);
       const leaf=new THREE.Mesh(new THREE.BoxGeometry(lw,2.04,.045),AUTO?rmat('alu',0xdfe2e4,0x282a2c):leafM); leaf.position.set(lw/2,1.03,0); pv.add(leaf);
-      if(AUTO){ const gl=new THREE.Mesh(new THREE.BoxGeometry(lw-.16,1.5,.05),rmat('glassdoor',0x2f3e4e,0x0a1420)); gl.position.set(lw/2,1.3,0); pv.add(gl);   // a white aluminium door round dark glass...
-        for(const [y,h,w] of [[.85,.07,lw-.16],[.2,.14,lw-.1]]){ const bar=new THREE.Mesh(new THREE.BoxGeometry(w,h,.07),rmat('blackbar',0x16181b,0x050505)); bar.position.set(lw/2,y,0); pv.add(bar); } }   // ...with the photo's two black bars
+      if(AUTO){ const gl=new THREE.Mesh(new THREE.BoxGeometry(lw-.16,1.5,.05),SEE()); gl.position.set(lw/2,1.3,0); pv.add(gl);   // a white aluminium door round dark glass...
+        for(const [y,h,w] of [[.85,.07,lw-.16],[.2,.14,lw-.1]]){ const bar=new THREE.Mesh(new THREE.BoxGeometry(w,h,.07),rmat('blackbar',0x16181b,0x050505)); bar.position.set(lw/2,y,0); pv.add(bar); }
+        const st=new THREE.Mesh(new THREE.BoxGeometry(.18,.18,.056),new THREE.MeshBasicMaterial({color:0xf1d21c})); st.position.set(lw/2,1.3,0); pv.add(st); }   // ...with the photo's two black bars
       else { const kn=new THREE.Mesh(new THREE.SphereGeometry(.03,8,6),rmat('knob',0xc9a14a,0x30240c)); kn.position.set(lw-.08,1.0,.04); pv.add(kn);
         const kn2=kn.clone(); kn2.position.z=-.04; pv.add(kn2); }
       const angC=Math.atan2(-to3(cdx,cdy)[1],cdx), angO=Math.atan2(-to3(-d.nx,-d.ny)[1],-d.nx);   // rotation.y for a leaf pointing along / in
