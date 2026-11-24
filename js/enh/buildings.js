@@ -670,7 +670,7 @@ function facades(P,kx,ky,res,rich){
       if(wingG&&tw<(E.L-.8)*.85){ const f=Math.min(1.3,(E.L-.8)/tw); ws=ws.map(x=>x*f); tw=ws.reduce((x,y)=>x+y,0)+.5*(ws.length-1); }   // a wing wider than its doors: fill it
       if(tw>E.L-.8){ const f=(E.L-.8)/tw; ws=ws.map(x=>Math.max(2.2,x*f)); tw=ws.reduce((x,y)=>x+y,0)+.5*(ws.length-1); }
       let st=wingG?(E.L-tw)/2:gC>=0?gC-tw/2:gC===-1?.7:E.L-.7-tw; st=Math.max(.4,Math.min(E.L-.4-tw,st));
-      const gcol=GARAGE[seed&3], GT=2.15, GKS=[1,2,3,0]; let x=st;
+      const gcol=GARAGE[seed&3], GT=2.15, GKS=[1,2,3,0], gWins=fine&&hash(seed,73)<.35; let x=st;   // one colour, one panel style and one window choice for every door of the garage (owner 2026-11-24)
       for(let k=0;k<ws.length;k++){ const gw=ws[k], s0=x; x+=gw+.5;
         // a garage you can open (js/enh/garage.js): the dark inside shows behind the panels as they roll up
         const gk=seed*4+GKS[k], a=[E.a[0]+E.ux*s0,E.a[1]+E.uy*s0], mx=a[0]+E.ux*gw/2, my=a[1]+E.uy*gw/2;
@@ -678,7 +678,7 @@ function facades(P,kx,ky,res,rich){
         garages.push({ei:E.ei,s0:s0+E.off,s1:s0+gw+E.off,x0:a[0],y0:a[1],x1:a[0]+E.ux*gw,y1:a[1]+E.uy*gw,nx:E.nx,ny:E.ny,gk,col:gcol,D:Math.max(4,Math.min(7.5,depth-.3))});
         put(E,s0+.05,s0+gw-.05,-.04,-.02,0,GT-.05,'#141518');
         // four sectional panels with a thin dark joint between them; some doors have a row of windows in the top panel
-        const ph=GT/4, wins=fine&&hash(seed,73+k)<.35, rp=(f)=>Object.assign(out[out.length-1].properties,{gk,gr:1.95,gt:GT});
+        const ph=GT/4, wins=gWins, rp=(f)=>Object.assign(out[out.length-1].properties,{gk,gr:1.95,gt:GT});
         for(let q=0;q<4;q++){ put(E,s0,s0+gw,-.04,.06,q*ph+(q?.012:0),(q+1)*ph-.012,gcol); rp();
           if(fine&&!(wins&&q===3)) for(const z of [q*ph+ph*.22,q*ph+ph*.78-.04]){ put(E,s0+.12,s0+gw-.12,.06,.072,z,z+.04,shade(gcol,-.12)); rp(); } }   // raised panel edges
         if(wins){ const n=gw>4?8:4, ww=(gw-.5)/n; for(let q=0;q<n;q++){ const xx=s0+.25+q*ww; put(E,xx+.06,xx+ww-.06,.06,.075,3*ph+.14,3*ph+.4,GLASS); rp(); } }
