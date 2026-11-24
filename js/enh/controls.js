@@ -55,6 +55,7 @@ const A=[
   {id:'volDn',   g:'Music & voice', label:'Volume down',    t:'press', rep:true, run:()=>window.MUSIC&&MUSIC.volStep&&MUSIC.volStep(-1)},
   {id:'voice',   g:'Music & voice', label:'Voice command',  t:'press', run:()=>window.VOICE&&VOICE.listen()},
   {id:'walk',    g:'Getting around', label:'Get out and walk / back in', t:'press', run:()=>window.WALK&&WALK.toggle&&WALK.toggle()},
+  {id:'shoot',   g:'Getting around', label:'Shoot the puck (hold for a slap shot)', t:'hold', note:'On a hockey rink; shares its button with the handbrake'},
   {id:'glider',  g:'Getting around', label:'Hang glider',   t:'press', run:()=>typeof toggleGlider==='function'&&toggleGlider()},
   {id:'park',    g:'Car', label:'Park Assist (Explorer / Expedition): tap to scan, hold to park', t:'hold'},
   {id:'plowL',   g:'Snow plow', label:'Turn the blade left (hold)',  t:'hold'},
@@ -74,7 +75,7 @@ const ACT={}; for(const a of A) ACT[a.id]=a;
    left, 23 Enter (middle of the dial), 24 PS; D-pad = one "hat" axis. */
 const DEFAULTS={
   keyboard:{
-    steerL:['KeyA','ArrowLeft'], steerR:['KeyD','ArrowRight'], gas:['KeyW','ArrowUp'], brake:['KeyS','ArrowDown'], handbrake:['Space'],
+    steerL:['KeyA','ArrowLeft'], steerR:['KeyD','ArrowRight'], gas:['KeyW','ArrowUp'], brake:['KeyS','ArrowDown'], handbrake:['Space'],shoot:['Space'],
     engine:['KeyI'], horn:['KeyB'], wipers:['KeyP'], washer:['KeyO'], lights:['KeyL'], garage:['KeyK'],
     sigL:['BracketLeft'], sigR:['BracketRight'], hazard:['Backslash'],
     view:['KeyC'], hud:['KeyH'], lookL:['KeyQ'], lookR:['KeyE'], recenter:['KeyR'],
@@ -88,7 +89,7 @@ const DEFAULTS={
     view:[{b:2}], hud:[{b:11}], recenter:[{b:3}], look:[{hat:1}],
     music:[{b:7}], next:[{b:21}], prev:[{b:22}], volUp:[{b:19}], volDn:[{b:20}], voice:[{b:9}], park:[{b:24}] },
   pad:{
-    steer:[{axis:0}], gas:[{b:7}], brake:[{b:6}], handbrake:[{b:1}],
+    steer:[{axis:0}], gas:[{b:7}], brake:[{b:6}], handbrake:[{b:1}], shoot:[{b:0}],
     gearToggle:[{b:3}],
     engine:[{b:2}], horn:[{b:0}], wipers:[{b:12}], washer:[{b:13}], lights:[{b:10}],
     sigL:[{b:4}], sigR:[{b:5}], hazard:[{b:[4,5]}],

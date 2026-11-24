@@ -306,7 +306,7 @@ function imat(name,tint,a,b,glow){ const k=name+'|'+tint+'|'+(a||'')+'|'+(b||'')
   return IMT[k]=new THREE.MeshLambertMaterial({color:col.clone().multiplyScalar(.7),map:t,emissive:col.clone().multiplyScalar(glow||.22),emissiveMap:t,side:THREE.DoubleSide}); }
 function itexTrim(){ if(Object.keys(ITX).length<=14) return; for(const k in IMT) IMT[k].dispose(); for(const k in ITX) ITX[k].dispose(); for(const k in IMT) delete IMT[k]; for(const k in ITX) delete ITX[k]; }
 const WALLS_HOUSE=['#f3eee3','#e9dfcc','#d9e2dc','#dfe6ee','#efe3cf','#e6d6d0','#d8dfc9','#f4f1ea'], FLOORS_HOUSE=[['planks','#d8b27f'],['planks','#8a5a36'],['planks','#b9b3a7'],['carpet','#cdbfa8'],['carpet','#9ba1a9'],['planks','#c99a62']];
-function roomKind(r,SH){ if(SH) return 'store'; if(r.house) return 'house'; if(r.zone==='school') return 'school'; if(r.zone==='industrial') return 'industrial'; return (r.h||0)>12?'office':'shop'; }
+function roomKind(r,SH){ if(SH) return 'store'; if(window.RINK&&RINK.arena(r)) return 'arena'; if(r.house) return 'house'; if(r.zone==='school') return 'school'; if(r.zone==='industrial') return 'industrial'; return (r.h||0)>12?'office':'shop'; }
 // the look of one building's room, picked from its key alone: {kind, HC (ceiling height), wallM, floorM, ceilM, trof}
 function roomLook(r,SH){
   const kind=roomKind(r,SH), R=prng(seedOf(r.key)), H=r.h||3, L={kind,trof:kind!=='house'};
@@ -316,6 +316,7 @@ function roomLook(r,SH){
   else if(kind==='school'){ const w=pickOf([['#efe7cf','#c8b58d'],['#e9eef0','#7f9db5'],['#efe9dd','#8aa58a']],R), chk=R()<.4; L.HC=Math.max(2.6,Math.min(3.6,H-.4));                  // the ground floor of a two-storey school
     L.wallM=imat('block','#ffffff',w[0],w[1]); L.floorM=imat('vct','#ffffff',chk?'chk':'spk',0,.18); L.ceilM=storeMat('ceil');
     if(r.gym){ L.HC=Math.max(6,Math.min(9.5,H-.9)); L.floorM=imat('planks','#e0b070',0,0,.2); L.ceilM=imat('deck','#e4e4e4'); } }   // the gymnasium: a varnished wood floor under a high roof deck
+  else if(kind==='arena'){ L.HC=Math.max(7,Math.min(11,H-.8)); L.wallM=imat('block','#ffffff','#dfe3e6','#8f9aa3'); L.floorM=imat('concrete','#cfcfcb',0,0,.2); L.ceilM=imat('deck','#d8dde2'); }   // an ice arena: block walls, concrete concourse, a high roof deck
   else if(kind==='office'){ L.HC=3; L.wallM=imat('drywall',pickOf(['#f4f3f0','#e6e8ea','#eee9df'],R)); L.floorM=imat('ctile',pickOf(['#9aa0a6','#7b8794','#a39d92','#6a6e73'],R),0,0,.18); L.ceilM=storeMat('ceil'); }
   else if(kind==='industrial'){ L.HC=Math.max(3.4,Math.min(5,H-.6)); L.wallM=imat('metal',pickOf(['#cfd3d6','#d8d0bf','#b9c3cc'],R)); L.floorM=imat('concrete','#d4d4d0',0,0,.18); L.ceilM=imat('deck','#dcdcdc'); }
   else { const f=pickOf([['vct','#ffffff','chk'],['vct','#efe4cc','spk'],['concrete','#d0d0cc'],['planks','#dcc7a6']],R); L.HC=Math.max(2.6,Math.min(3.3,H-.4));   // shop
@@ -397,6 +398,7 @@ function buildRoom(r){
     const m=new THREE.Mesh(new THREE.BoxGeometry(W0,1,.05),rmat('gar'+q.col,new THREE.Color(q.col||'#e5dfd3').getHex(),0x202020));
     m.position.set((ax+bx)/2,0,(az+bz)/2); m.rotation.y=-Math.atan2(bz-az,bx-ax); g.add(m); ROOM.gar.push({m,q}); }
   for(const o of g.children) o.traverse(c=>{ if(c.isMesh){ if(!c.renderOrder) c.renderOrder=1; c.frustumCulled=false; } });
+  if(LK.kind==='arena') safe('rink',()=>RINK.build(g,r,{HC}));       // the hockey rink (js/enh/rink.js)
   scene.add(g); ROOM.g=g; ROOM.key=r.key; ROOM.r=r; garUpdate(); }
 /* exit signs: a white-faced box with red EXIT letters and a faint red halo, drawn unlit so it glows in a dark room too */
 let EXM=null, EXG=null;
@@ -539,7 +541,7 @@ function swLabel(){ const one=ROOM.sw&&ROOM.sw.length===1; [...swBtn.children].f
 function switchNear(){ const r=ROOM.r; let near=false;
   if(r&&ROOM.sw&&ROOM.sw.length&&mode==='walk'){ const q=loc(r,S.lat,S.lng); near=ROOM.sw.some(w=>Math.hypot(q[0]-w.pos[0],q[1]-w.pos[1])<2.2); }
   if(near!==(swBtn.style.display==='flex')){ swBtn.style.display=near?'flex':'none'; if(near) swLabel(); } }
-function dropRoom(){ ROOM.gr=null; ROOM.tro=null; ROOM.glow=null; ROOM.sw=null; ROOM.dimM=null; LKEY=null; swBtn.style.display='none'; if(!ROOM.g) return; scene.remove(ROOM.g); ROOM.g.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); ROOM.g=null; ROOM.key=null; ROOM.r=null; ROOM.leaves=[]; ROOM.gar=[]; }
+function dropRoom(){ if(window.RINK) RINK.drop(); ROOM.gr=null; ROOM.tro=null; ROOM.glow=null; ROOM.sw=null; ROOM.dimM=null; LKEY=null; swBtn.style.display='none'; if(!ROOM.g) return; scene.remove(ROOM.g); ROOM.g.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); ROOM.g=null; ROOM.key=null; ROOM.r=null; ROOM.leaves=[]; ROOM.gar=[]; }
 function garUpdate(){ for(const G2 of ROOM.gar){ const o=window.GARAGE?GARAGE.openness(G2.q.gk):0, b0=o*1.95, top=2.2, h=Math.max(.15,top-b0);
   G2.m.scale.y=h; G2.m.position.y=b0+h/2; } }
 // the room sits round the building's middle, turned with the camera, at the map's scale (like the cars)
@@ -642,11 +644,9 @@ window.onModeChange=(m,was)=>{ if(prevMode) prevMode(m,was);
    In water you swim (slow crawl, the person lies on the water); when the air is at or below freezing (js/enh/ice.js) the
    water is ice and you skate on it in hockey skates: the same gas and brake, but you glide (sideways grip is good, forward
    friction is low), speed builds up to about 20 mph and the brake is a hockey stop. Rinks inside arenas (js/enh/rink.js)
-   are ice too: window.RINK.floor(rec) says so. */
+   are ice too: RINK.onIce(rec,lat,lng) says so. */
 function mediumNow(){
-  const rk=IN.rec&&window.RINK&&RINK.floor(IN.rec);
-  if(rk) return 'ice';
-  if(IN.rec) return null;
+  if(IN.rec) return window.RINK&&RINK.arena(IN.rec)&&RINK.onIce(IN.rec,S.lat,S.lng)?'ice':null;            // inside the boards of an arena's rink
   if(!landCache.at) safe('land',rebuildLandCache);
   return safe('medium',()=>inWater(S.lat,S.lng))?(window.ICE&&ICE.frozen?'ice':'swim'):null; }
 function setMedium(m){
@@ -693,7 +693,8 @@ function walkStep(dt,st,gas,now){
     if(!landCache.at||every('landcache',3)||meters(landCache.at[1],landCache.at[0],S.lat,S.lng)>400) safe('land',rebuildLandCache);
     let thru=null; for(const r of recs){ if(doorCross(r,[S.lat,S.lng],probe)){ thru=r; break; } }   // through a doorway: in or out
     const wall=!thru&&IN.rec&&!inRec(IN.rec,probe[0],probe[1]);                                     // inside: its walls keep you in
-    const block=!thru&&(wall||safe('walk block',()=>(inBuilding(probe[0],probe[1])&&!inBuilding(S.lat,S.lng))));
+    const boards=!thru&&!wall&&IN.rec&&window.RINK&&RINK.arena(IN.rec)&&safe('boards',()=>RINK.blocks(IN.rec,[S.lat,S.lng],probe));      // the boards of a rink: use the gate
+    const block=!thru&&(wall||boards||safe('walk block',()=>(inBuilding(probe[0],probe[1])&&!inBuilding(S.lat,S.lng))));
     if(block){
       // walking at a wall right by a door: slide along it into the doorway
       const nd=wall||!inAny(landCache.water,probe[1],probe[0])?nearDoor(recs,S.lat,S.lng):null;
@@ -701,10 +702,12 @@ function walkStep(dt,st,gas,now){
         const sl=-Math.sign(nd.al)*Math.min(Math.abs(nd.al),1.2*dt*SPEEDUP), ex=nd.ux*sl/nd.r.kx, ey=nd.uy*sl/nd.r.ky;
         S.lng+=ex; S.lat+=ey; W.v*=.9;
       } else {
-        W.v=0; W.vx=W.vy=0; if(now-W.blockT>4000){ W.blockT=now; toast(wall?'A wall: walk out through a door':inAny(landCache.water,probe[1],probe[0])?"Water ahead: you can't swim here":'A building is in the way: walk in through a door',1600); } }
+        W.v=0; W.vx=W.vy=0; if(now-W.blockT>4000){ W.blockT=now; toast(boards?'The boards: skate through the gate':wall?'A wall: walk out through a door':inAny(landCache.water,probe[1],probe[0])?"Water ahead: you can't swim here":'A building is in the way: walk in through a door',1600); } }
     }
     else { S.lat=n[0]; S.lng=n[1]; safe('inside',()=>updInside(recs)); }
   }
+  if(IN.rec&&window.RINK&&RINK.arena(IN.rec)) safe('rink',()=>{ const q=loc(IN.rec,S.lat,S.lng), ice=W.medium==='ice', hh=rad(S.hdg);
+    RINK.step(IN.rec,dt,{x:q[0],y:q[1],vx:ice?W.vx:Math.sin(hh)*W.v,vy:ice?W.vy:Math.cos(hh)*W.v,h:hh}); });
   // the door you're at shows open
   if(window.ROOFS&&ROOFS.openDoor){ const nd=recs.length?nearDoor(recs,S.lat,S.lng):null, dk=nd&&nd.dist<2.2?nd.d.dk:null;
     if(dk!==IN.open){ IN.open=dk; ROOFS.openDoor(dk); } }
