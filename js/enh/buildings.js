@@ -210,7 +210,24 @@ function zones(kx,ky,R){ const out=[], sp=[];
       const z=f.properties.class==='industrial'?'industrial':'school', g=f.geometry, pls=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
       for(const pl of pls){ const r=pl[0]; if(!r) continue; let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const q of r){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
         if(x1<S.lng-R/kx||x0>S.lng+R/kx||y1<S.lat-R/ky||y0>S.lat+R/ky) continue; out.push({z,r,bb:[x0,y0,x1,y1]}); } } }catch(e){}
-  ZONES=out; }
+  ZONES=out;
+  /* the school buildings round you, for the heights (owner 2026-11-23: "make a structure 2 story and even the gymnasium ceiling
+     the proper height for schools"): a school is two storeys (the map's default 5 m is one), and the gymnasium — the one
+     compact 700-3500 m2 building beside a school at least 2.5 times as big, the data doesn't say which one it is — is tall */
+  SB=[]; GYM=new Set();
+  try{ for(const f of map.querySourceFeatures(bSrc,{sourceLayer:'building'})){ const g=f.geometry, pls=!g?[]:g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
+      for(const pl of pls){ const r=pl[0]; if(!r||r.length<4) continue; let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const q of r){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
+        const cx=(x0+x1)/2, cy=(y0+y1)/2; if(Math.abs(cx-S.lng)*kx>R||Math.abs(cy-S.lat)*ky>R) continue;
+        const A=Math.abs(area(r.slice(0,-1).map(q=>[(q[0]-cx)*kx,(q[1]-cy)*ky]))); if(A<700||(f.properties&&+f.properties.render_min_height>0)) continue;
+        if(zoneAt(cx,cy,A,kx,ky)!=='school') continue; const k=cx.toFixed(5)+','+cy.toFixed(5); if(SB.some(e=>e.k===k)) continue; SB.push({k,cx,cy,A,n:r.length-1}); } } }catch(e){}
+  for(const e of SB){ if(e.A>3500||e.n>26) continue; if(!SB.some(b=>b!==e&&b.A>=e.A*2.5&&Math.hypot((b.cx-e.cx)*kx,(b.cy-e.cy)*ky)<250)) continue;
+    if(SB.some(o=>o!==e&&o.A<=3500&&o.A>=700&&o.n<=26&&o.A>e.A&&Math.hypot((o.cx-e.cx)*kx,(o.cy-e.cy)*ky)<200)) continue; GYM.add(e.k); }
+  const sg=SB.map(e=>e.k+(GYM.has(e.k)?'g':'')).sort().join(';'); if(sg!==SBSIG){ SBSIG=sg; try{ W.cache.clear(); W.sig=''; }catch(e){} } }
+let SB=[], GYM=new Set(), SBSIG='';
+const isGym=(cx,cy)=>GYM.has(cx.toFixed(5)+','+cy.toFixed(5));
+// a school's height: two storeys where the map has the one-storey default, the gymnasium taller
+function schoolH(cx,cy,A,h,b0,kx,ky){ if(b0>0||A<700||!SB.length) return h; if(isGym(cx,cy)) return Math.max(h,11.5);
+  if(h>7||zoneAt(cx,cy,A,kx,ky)!=='school') return h; return 8.2; }
 /* school colours (owner 2026-11-23): Oswego High School's accent lights are its colours, orange shining up and navy down.
    up / dn = wash slice colours from the fixture outward. Matched by the school's map-point name near the building. */
 const SCHCOL=[{re:/oswego (east |community )?high/i,up:['#ff8a1a','#ff7a00','#f06400','#c24d00'],dn:['#3b63ff','#2d50f0','#2342c8','#1a3290']}];
@@ -237,11 +254,11 @@ function buildWalls(fs,geo,kx,ky,RW,gone){                          // geo[i]: f
       const old=W.cache.get(sk); if(old!==undefined){ if(old){ old.id=f.id; feats.push(old); } continue; }
       const outer=clipRing(r,box); if(!outer){ W.cache.set(sk,null); continue; }
       let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const q of r){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
-      const cx=(x0+x1)/2, cy=(y0+y1)/2, A=Math.abs(area(r.slice(0,-1).map(q=>[(q[0]-cx)*kx,(q[1]-cy)*ky]))), seed=seedOf(cx,cy);
+      const cx=(x0+x1)/2, cy=(y0+y1)/2, A=Math.abs(area(r.slice(0,-1).map(q=>[(q[0]-cx)*kx,(q[1]-cy)*ky]))), seed=seedOf(cx,cy), hS=schoolH(cx,cy,A,h,b0,kx,ky);
       const house=h<=12&&b0===0&&A>=25&&A<=450, L=house?houseLook(seed):null;
       const c=house?L.wall:h<=12?LOWC[Math.floor(hash(seed,59)*LOWC.length)]:h<=30?['#c8c4bc','#b3b8be','#d2c8b5','#bdb7ad','#a89f93'][seed%5]:['#9fb3c6','#8b9fb2','#a7b4bf'][seed%3];
       const rings=[outer]; for(const hr of pl.slice(1)){ const c2=clipRing(hr,box); if(c2) rings.push(c2); }
-      const pr2={c,cc:house?L.roof:FLAT[seed%2],b:b0,h}; if(!POWER) pr2.pat=house?L.pat:otherLook(seed,h,zoneAt(cx,cy,A,kx,ky));
+      const pr2={c,cc:house?L.roof:FLAT[seed%2],b:b0,h:hS}; if(!POWER) pr2.pat=house?L.pat:otherLook(seed,h,zoneAt(cx,cy,A,kx,ky));
       const ft={type:'Feature',id:f.id,properties:pr2,geometry:{type:'Polygon',coordinates:rings}};
       W.cache.set(sk,ft); feats.push(ft); } }
   if(W.cache.size>20000) W.cache.clear();
@@ -273,11 +290,12 @@ function build(){
   for(let i=0;i<fs.length;i++){ const f=fs[i];
     if(f.id!=null&&gone.has(f.id)) continue;
     const pr=f.properties||{}; if(pr.hide_3d) continue;
-    const h=+(pr.render_height!=null?pr.render_height:pr.height!=null?pr.height:6), b0=+(pr.render_min_height||pr.min_height||0);
+    let h=+(pr.render_height!=null?pr.render_height:pr.height!=null?pr.height:6); const b0=+(pr.render_min_height||pr.min_height||0), h0=h;
     const G=geo[i]; if(!G) continue; const polys=G.type==='Polygon'?[G.coordinates]:G.type==='MultiPolygon'?G.coordinates:[];
     for(const pl of polys){ const ring=pl[0]; if(!ring||ring.length<4) continue;
       let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const q of ring){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
       const cx=(x0+x1)/2, cy=(y0+y1)/2, d=Math.hypot((cx-S.lng)*kx,(cy-S.lat)*ky); if(d>radius) continue;
+      h=h0; if(b0===0&&h<=12&&SB.length) h=schoolH(cx,cy,Math.abs(area(ring.slice(0,-1).map(q=>[(q[0]-cx)*kx,(q[1]-cy)*ky]))),h,b0,kx,ky);   // schools: two storeys, a tall gym
       const key=cx.toFixed(6)+','+cy.toFixed(6); if(seen.has(key)){ const o=seenP.get(key); if(o&&o.ring.length===ring.length) o.intact=true; continue; } seen.add(key);     // same building in two tiles
       /* intact: two tiles each hold the whole outline (same corners), so it only crosses a tile edge — it isn't a clipped fragment
          (a school 140 m wide on a tile edge got no windows, doors or lights: owner 2026-11-23, Traughber Junior High) */
@@ -483,7 +501,7 @@ function facades(P,kx,ky,res,rich){
     putD(E,s-.95,s+.95,-.04,.05,0,2.45,'#3b4048',dk);
     for(const z of [-1,1]){ putD(E,z<0?s-.87:s+.05,z<0?s-.05:s+.87,-.02,.03,.06,2.37,GLASS,dk); putD(E,z<0?s-.4:s+.1,z<0?s-.1:s+.4,.03,.07,1,1.06,'#c7ccd1'); } };
   const putD=(E,s0,s1,o0,o1,b,h,c,dk)=>{ put(E,s0,s1,o0,o1,b,h,c); if(dk!=null) out[out.length-1].properties.dk=dk; };
-  if(P.f.id!=null) res.bld={key:P.cx.toFixed(6)+','+P.cy.toFixed(6),id:P.f.id,cx:P.cx,cy:P.cy,kx,ky,p,h:P.h,house,doors,garages,bb:P.bb,zone,area:A,win:wins};
+  if(P.f.id!=null) res.bld={key:P.cx.toFixed(6)+','+P.cy.toFixed(6),id:P.f.id,cx:P.cx,cy:P.cy,kx,ky,p,h:P.h,house,doors,garages,bb:P.bb,zone,area:A,win:wins,gym:school&&isGym(P.cx,P.cy)};
   const sd=(window.STORES&&STORES.list.length&&STORES.frontDir(P.cx,P.cy))||streetDir(P);   // a Meijer faces its parking lot (js/enh/stores.js)
   let front=edges[0]; for(const E of edges){ const sc=(sd?E.nx*sd[0]+E.ny*sd[1]:0)+.02*Math.min(E.L,12), fs=(sd?front.nx*sd[0]+front.ny*sd[1]:0)+.02*Math.min(front.L,12); if(sc>fs) front=E; }
   let k=0;
@@ -544,15 +562,27 @@ function facades(P,kx,ky,res,rich){
           if(shut&&E===front&&!big) for(const z of [-1,1]){ const x=s+z*(w/2+.13); put(E,Math.min(x,x+z*.42),Math.max(x,x+z*.42),.02,.07,b-.02,h+.02,shut); } } } }
     if(res.bld) res.bld.yard=yardSpot(P,front,sd,free,seed,kx,ky);    // where a snowman could stand (js/enh/snowmen.js)
   } else if(school){
-    // schools: a window on every floor of every wall (a pair of them 1.6+ m apart), an up-and-down accent light on the wall
-    // between each two windows, glass doors in the middle of the street side with a light on each side of them
-    const floors=Math.max(1,Math.round(P.h/3.8)), fh=P.h/floors, mid=front.L/2, sl=fine?3:2;
+    /* schools (owner 2026-11-23: Traughber had a wall of windows and no doors): a main entrance at the middle of the street
+       side, then the doors a real school has — at the ends of the wings (where the walls turn), and one every ~35 m along
+       the long walls — each with a light either side. Windows are spaced wider (every ~6.4 m on the street side, 5 m round
+       the others, in pairs of floors), never over a door, with the up-and-down accent light between each two. The gym
+       (the one tall block) gets only a row of high windows under the roof and a couple of doors. */
+    const gym=isGym(P.cx,P.cy), floors=gym?1:Math.max(1,Math.round(P.h/3.8)), fh=gym?P.h:P.h/floors, mid=front.L/2, sl=fine?3:2, dpos=new Map(); let nd=0;
+    const doorsAt=(E)=>{ const L=[]; if(E.L<9) return L;
+      if(E===front&&E.L>=6&&!gym) L.push(mid);
+      if(E.L>=14&&!(E===front&&E.L<26)) for(const s0 of [4.5,E.L-4.5]) L.push(s0);
+      if(!gym&&E.L>=34){ const n=Math.floor(E.L/35); for(let i=1;i<=n;i++) L.push(E.L*i/(n+1)); }
+      L.sort((u,v)=>u-v); const out=[]; for(const s0 of L) if(!out.length||s0-out[out.length-1]>7) out.push(s0); return out; };
+    const byLen=edges.slice().sort((u,v)=>v.L-u.L);
+    for(const E of byLen){ const L=doorsAt(E); if(gym&&nd>=2) break; const keep=[]; for(const s0 of L){ if(nd>=22||(gym&&nd>=2)) break; keep.push(s0); nd++; } if(keep.length) dpos.set(E,keep); }
+    if(!dpos.size&&front.L>=6){ dpos.set(front,[mid]); }
+    const nearDoor=(E,s0,m)=>(dpos.get(E)||[]).some(d=>Math.abs(d-s0)<m);
     for(const E of edges){ if(E.L<5) continue;
-      const n=Math.max(1,Math.floor((E.L-1)/3.4)), step=E.L/n, w=Math.min(1.8,step-1.3);
-      for(let f=0;f<floors;f++){ const b=f*fh+(fh>=3.3?1:.8), h=b+Math.min(1.6,fh-1.3); if(h<b+.5) continue;
-        for(let i=0;i<n;i++){ const s=(i+.5)*step; if(E===front&&f===0&&front.L>=6&&Math.abs(s-mid)<1.7) continue; window1(E,s,w,b,h,k++,FRAME); }
-        for(let i=1;i<n;i++){ const s=i*step; if(E===front&&f===0&&front.L>=6&&Math.abs(s-mid)<1.9) continue; accent(E,s,(b+h)/2,{up:sl,dn:sl}); } } }
-    if(front.L>=6){ entrance(front,mid); for(const z of [-1,1]) accent(front,mid+z*1.7,2.7,{dn:3,pool:3.5,po:1.6}); }
+      const pitch=gym?6:E===front?6.4:5, n=Math.max(1,Math.floor((E.L-1)/pitch)), step=E.L/n, w=Math.min(E===front?2.2:1.8,step-2.2);
+      for(let f=0;f<floors;f++){ const b=gym?Math.max(5,P.h-3.6):f*fh+(fh>=3.3?1:.8), h=gym?b+1.6:b+Math.min(1.6,fh-1.3); if(h<b+.5) continue;
+        for(let i=0;i<n;i++){ const s=(i+.5)*step; if(f===0&&!gym&&nearDoor(E,s,w/2+1.5)) continue; window1(E,s,w,b,h,k++,FRAME); }
+        for(let i=1;i<n;i++){ const s=i*step; if(f===0&&nearDoor(E,s,2.6)) continue; if(gym&&i%2) continue; accent(E,s,(b+h)/2,{up:sl,dn:sl}); } } }
+    for(const [E,list] of dpos) for(const s0 of list){ entrance(E,s0); for(const z of [-1,1]) accent(E,s0+z*1.7,2.7,{dn:3,pool:3.5,po:1.6}); }
   } else if(P.h<=12){
     // storefront: glass band on the street side (the middle 60% of very long walls), mullions every ~1.6 m
     const E=front, s0=E.L>40?E.L*.2:1, s1=E.L>40?E.L*.8:E.L-1;

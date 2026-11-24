@@ -166,9 +166,15 @@ function ownRec(s){ const kx=111320*Math.cos(s.cy*Math.PI/180), ky=111320;
   const d=mk(sm-2.6,sm-.5,0), d2=mk(sm+.5,sm+2.3,1);       // the left pair a little wider, as in the photo
   // the doors js/enh/buildings.js drew on the store's pieces work too, where they lie on the outline
   // a big overhead garage door (a loading door) on the parking-lot wall, left of the entrance, that opens with the garage opener and lets you drive in
-  const garages=[]; { const gw=4, gs0=sm-12.5, gs1=gs0+gw;
-    if(gs0>1.2){ let depth=0; const mx=E.a[0]+E.ux*(gs0+gw/2), my=E.a[1]+E.uy*(gs0+gw/2); for(const q of p) depth=Math.max(depth,-((q[0]-mx)*E.nx+(q[1]-my)*E.ny));
-      garages.push({ei:E.ei,s0:gs0,s1:gs1,x0:E.a[0]+E.ux*gs0,y0:E.a[1]+E.uy*gs0,x1:E.a[0]+E.ux*gs1,y1:E.a[1]+E.uy*gs1,nx:E.nx,ny:E.ny,gk:8e8+ST.list.indexOf(s),col:'#e7e4dc',D:Math.max(6,Math.min(70,depth-.4))}); } }
+  /* The door goes where a loading door would: left of the entrance on the front wall when that wall is long enough, else on
+     the longest other wall (owner 2026-11-23: it didn't open at the Oswego Meijer — its front wall is short, so no door was
+     made). No driveway is needed: a store's opener works from anywhere in front of the door (js/enh/garage.js). */
+  const garages=[]; { const gw=4, cand=[];
+    if(sm-12.5>1.2) cand.push({ei:E.ei,a:E.a,ux:E.ux,uy:E.uy,nx:E.nx,ny:E.ny,s0:sm-12.5});
+    const others=[]; for(let i=0;i<p.length;i++){ if(i===E.ei) continue; const a=p[i], b=p[(i+1)%p.length], ex=b[0]-a[0], ey=b[1]-a[1], L=Math.hypot(ex,ey); if(L>=12) others.push({ei:i,a,ux:ex/L,uy:ey/L,nx:ey/L,ny:-ex/L,s0:L/2-gw/2,L}); }
+    others.sort((u,v)=>v.L-u.L); for(const o of others) cand.push(o);
+    const F=cand[0]; if(F){ const gs0=F.s0, gs1=gs0+gw; let depth=0; const mx=F.a[0]+F.ux*(gs0+gw/2), my=F.a[1]+F.uy*(gs0+gw/2); for(const q of p) depth=Math.max(depth,-((q[0]-mx)*F.nx+(q[1]-my)*F.ny));
+      garages.push({ei:F.ei,s0:gs0,s1:gs1,x0:F.a[0]+F.ux*gs0,y0:F.a[1]+F.uy*gs0,x1:F.a[0]+F.ux*gs1,y1:F.a[1]+F.uy*gs1,nx:F.nx,ny:F.ny,gk:8e8+ST.list.indexOf(s),col:'#e7e4dc',D:Math.max(6,Math.min(70,depth-.4))}); } }
   const doors=[d,d2], base=window.ROOFS&&ROOFS.st0?ROOFS.st0():[];
   for(const r of base){ if(!covers(r)) continue;
     for(const q of r.doors||[]){ const mx=(q.x0+q.x1)/2, my=(q.y0+q.y1)/2, lng=r.cx+mx/r.kx, lat=r.cy+my/r.ky, X=(lng-s.cx)*kx, Y=(lat-s.cy)*ky, hw=Math.hypot(q.x1-q.x0,q.y1-q.y0)/2;
