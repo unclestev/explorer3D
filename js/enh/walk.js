@@ -163,12 +163,13 @@ function restLayers(){
 function hideBuilding(r){
   const id=r?r.id:null;
   HIDE.walk=id; applyHides();                                       // js/game.js: with the smashed ones and the redrawn groups
-  if(map.getLayer('roof-3d')) safe('inside roofs',()=>map.setFilter('roof-3d',r?['!=',['coalesce',['get','bk'],''],r.key]:null));
+  if(map.getLayer('roof-3d')) safe('inside roofs',()=>map.setFilter('roof-3d',r?['!',['in',['coalesce',['get','bk'],''],['literal',(r.keys||[]).concat([r.key])]]]:null));
   // the rest of the group
   REST.features=[];
-  if(r&&!destroyed.includes(id)){ const seen=new Set(), lim=800/111320, kx=Math.cos(rad(S.lat));
+  const idl=id==null?[]:Array.isArray(id)?id:[id];
+  if(r&&idl.some(i=>!destroyed.includes(i))){ const seen=new Set(), lim=800/111320, kx=Math.cos(rad(S.lat));
     let fs=[]; try{ fs=map.querySourceFeatures(bSrc,{sourceLayer:'building'}); }catch(e){}
-    for(const q of fs){ if(q.id!==id) continue; const g=q.geometry, pls=!g?[]:g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
+    for(const q of fs){ if(!idl.includes(q.id)) continue; const g=q.geometry, pls=!g?[]:g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
       for(const pl of pls){ const ring=pl[0]; if(!ring||ring.length<4) continue;
         let x=0,y=0; const n=ring.length-1; for(let i=0;i<n;i++){ x+=ring[i][0]; y+=ring[i][1]; } x/=n; y/=n;
         if(Math.abs(y-S.lat)>lim||Math.abs(x-S.lng)*kx>lim) continue;
