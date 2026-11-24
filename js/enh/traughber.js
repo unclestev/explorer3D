@@ -107,12 +107,14 @@ function details(F,P,kx,ky){
     } });
   for(const [wi,f,kind] of PORTALS){ const w=W[wi]; if(!w) continue; const r=w.ring, ccw=area(r)<0, a=r[0], b=r[1], L=Math.hypot(b[0]-a[0],b[1]-a[1]), u=[(b[0]-a[0])/L,(b[1]-a[1])/L], n=ccw?[u[1],-u[0]]:[-u[1],u[0]], s=L*f;
     if(cover(a[0]+u[0]*s+n[0]*2.8,a[1]+u[1]*s+n[1]*2.8,wi)>0) continue;                              // something already stands there
-    const hw=kind==='main'?3.2:2.6, hh=kind==='main'?4.6:4;
-    put(a,u,n,s-hw,s+hw,.05,2.5,0,hh,BRICKC);                                                         // the brick portal sticking out of the wall
-    put(a,u,n,s-hw,s+hw,.05,2.52,hh,hh+.25,'#2c2e34');                                                 // its dark flat roof
-    put(a,u,n,s-hw+.1,s+hw-.1,2.5,2.56,hh-.55,hh-.2,BAND);                                             // red band over the opening
-    put(a,u,n,s-hw+.4,s+hw-.4,2.5,2.55,0,2.75,DARK);                                                   // the recess
-    for(const z of [-1,1]){ put(a,u,n,z<0?s-1.35:s+.1,z<0?s-.1:s+1.35,2.55,2.6,.05,2.6,RED); put(a,u,n,z<0?s-1.2:s+.25,z<0?s-.25:s+1.2,2.6,2.64,.45,2.4,GLASS); }   // two red doors with glass
+    const hw=kind==='main'?3.2:2.6, hh=kind==='main'?4.6:4, D=2.4;
+    // a covered entrance like the photo's: two brick piers and a roof slab over open space, the red doors sit in the brick wall itself
+    put(a,u,n,s-hw,s-hw+.8,.05,D,0,hh,BRICKC); put(a,u,n,s+hw-.8,s+hw,.05,D,0,hh,BRICKC);            // the piers
+    put(a,u,n,s-hw,s+hw,.05,D,hh-.9,hh,BRICKC); put(a,u,n,s-hw,s+hw,.05,D+.02,hh,hh+.25,'#2c2e34');    // the canopy and its dark roof
+    put(a,u,n,s-hw,s+hw,D-.05,D+.03,hh-.5,hh-.15,BAND);                                                 // red band on its edge
+    put(a,u,n,s-hw+.8,s+hw-.8,.02,.06,0,2.9,DARK);                                                      // the dark recess on the wall
+    for(const z of [-1,1]){ put(a,u,n,z<0?s-1.45:s+.1,z<0?s-.1:s+1.45,.06,.12,.05,2.65,RED); put(a,u,n,z<0?s-1.3:s+.25,z<0?s-.25:s+1.3,.12,.16,.45,2.45,GLASS); }   // two red glass doors flush on the wall
+    put(a,u,n,s-hw+.9,s+hw-.9,.06,.12,2.95,3.5,GLASS);                                                  // a window over them
   }
   return feats; }
 
