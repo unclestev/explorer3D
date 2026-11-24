@@ -663,6 +663,7 @@ function facades(P,kx,ky,res,rich){
         if(xs.length>1) pw=Math.max(pw,Math.max(...xs)-Math.min(...xs)+2.6); }
       const avail=wingG?E.L-.8:Math.min(E.L-1.6,E.L*(ds?.75:.6)), nWall=Math.max(1,Math.min(4,Math.floor((avail+.8)/3.3)));   // 3.3 m a bay: 2 bays from ~6 m, 3 from ~9 m, 4 from ~12.4 m of wall
       const nPad=pw>=2.4?Math.max(1,Math.min(4,Math.round(pw/3))):0, nArea=A<130?1:A<260?2:A<430?3:4;
+      if(res.bld) res.bld.gm={A:Math.round(A),L:+E.L.toFixed(1),full:E.off===0,wingG,ds:!!ds,nWall,nPad,nArea,pw:+pw.toFixed(1)};
       const nB=wingG?nWall:Math.min(nWall,nPad||nArea), r43=hash(seed,43), r44=hash(seed,44), S1=2.7, D1=4.9;
       let ws=nB===1?[S1]:nB===2?(r43<.55?[D1]:[S1,S1]):nB===3?(r43<.35?[S1,S1,S1]:r44<.5?[D1,S1]:[S1,D1]):(r43<.4?[D1,D1]:r43<.7?(r44<.5?[D1,S1,S1]:[S1,S1,D1]):[S1,S1,S1,S1]);
       let tw=ws.reduce((x,y)=>x+y,0)+.5*(ws.length-1);
