@@ -221,9 +221,10 @@ function quad(pos,a,b,y0,y1){ const [ax,az]=to3(a[0],a[1]), [bx,bz]=to3(b[0],b[1
 function meshOf(pos,mat){ const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.computeVertexNormals(); return new THREE.Mesh(g,mat); }
 function buildRoom(r){
   if(ROOM.key===r.key&&ROOM.g) return; dropRoom();
-  const g=new THREE.Group(), p=r.p, HC=Math.max(2.4,Math.min(2.7,(r.h||3)-.3)), DH=2.12, TH2=.2;
-  const wallM=rmat('wall',0xe8e2d6,0x4a4741), ceilM=rmat('ceil',0xf4f2ed,0x8a8985), trimM=rmat('trim',0xfbfaf7,0x3a3a3a);
-  const floorM=rmat(r.house?'wood':'tile',r.house?0x7d5a3a:0xc9c6be,r.house?0x1e140c:0x2a2a28);
+  const SH=window.STORES&&STORES.at?STORES.at(r.key):null;      // a Meijer (js/enh/stores.js): high dropped ceiling, troffer lights
+  const g=new THREE.Group(), p=r.p, HC=SH?Math.max(3.6,Math.min(5,(r.h||6)-1.4)):Math.max(2.4,Math.min(2.7,(r.h||3)-.3)), DH=2.12, TH2=.2;
+  const wallM=rmat('wall',0xe8e2d6,0x4a4741), ceilM=SH?storeMat('ceil'):rmat('ceil',0xf4f2ed,0x8a8985), trimM=rmat('trim',0xfbfaf7,0x3a3a3a);
+  const floorM=SH?storeMat('floor'):rmat(r.house?'wood':'tile',r.house?0x7d5a3a:0xc9c6be,r.house?0x1e140c:0x2a2a28);
   // floor and ceiling from the outline
   const sh=new THREE.Shape(p.map(q=>new THREE.Vector2(q[0],q[1])));
   const fl=new THREE.Mesh(new THREE.ShapeGeometry(sh),floorM); fl.rotation.x=-Math.PI/2; fl.position.y=.01; g.add(fl);   // shape (x, y=north) -> (x, z=-north)
@@ -245,7 +246,8 @@ function buildRoom(r){
     quad(trim,at(0,TH2+.005),at(L,TH2+.005),0,.09);                 // skirting board
   }
   g.add(meshOf(wall,wallM)); g.add(meshOf(trim,trimM));
-  { let cx=0,cy=0; for(const q of p){ cx+=q[0]; cy+=q[1]; } cx/=p.length; cy/=p.length;       // a ceiling light in the middle of the room
+  if(SH) troffers(g,p,HC);
+  else { let cx=0,cy=0; for(const q of p){ cx+=q[0]; cy+=q[1]; } cx/=p.length; cy/=p.length;       // a ceiling light in the middle of the room
     if(inP(p,cx,cy)){ const [x3,z3]=to3(cx,cy);
       const base=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,.03,24),trimM); base.position.set(x3,HC-.015,z3); g.add(base);
       const globe=new THREE.Mesh(new THREE.SphereGeometry(.17,20,10,0,Math.PI*2,Math.PI/2,Math.PI/2),new THREE.MeshBasicMaterial({color:0xfff6df,side:THREE.DoubleSide}));
@@ -272,6 +274,49 @@ function buildRoom(r){
     m.position.set((ax+bx)/2,0,(az+bz)/2); m.rotation.y=-Math.atan2(bz-az,bx-ax); g.add(m); ROOM.gar.push({m,q}); }
   for(const o of g.children) o.traverse(c=>{ if(c.isMesh){ c.renderOrder=1; c.frustumCulled=false; } });
   scene.add(g); ROOM.g=g; ROOM.key=r.key; ROOM.r=r; garUpdate(); }
+/* store ceilings and lights (owner 2026-11-23, a photo of the lights inside Meijer): 2 x 2 ft speckled ceiling tiles in a
+   white grid, and 2 x 4 ft parabolic-louvre troffers — a grid of deep shiny cells, bright where they catch the tubes and
+   blue-grey in their shadows — in rows across the store */
+const STX={};
+function storeMat(k){ if(STX[k]) return STX[k]; const c=document.createElement('canvas'), x=c.getContext('2d');
+  if(k==='ceil'){ c.width=c.height=256; x.fillStyle='#e9e7e1'; x.fillRect(0,0,256,256);                    // 2 tiles x 2 tiles = 1.22 m
+    for(let i=0;i<900;i++){ x.fillStyle=Math.random()<.5?'rgba(150,145,135,.35)':'rgba(255,255,255,.7)'; x.fillRect(Math.random()*256,Math.random()*256,1.4,1.4); }
+    x.fillStyle='#f7f6f2'; for(const v of [0,128]){ x.fillRect(v,0,5,256); x.fillRect(0,v,256,5); } x.fillStyle='rgba(0,0,0,.12)'; for(const v of [5,133]){ x.fillRect(v,0,1,256); x.fillRect(0,v,256,1); } }
+  else { c.width=c.height=256; x.fillStyle='#e4e1d8'; x.fillRect(0,0,256,256);                              // 12 in vinyl tile, 2 x 2
+    for(let i=0;i<4;i++){ const X=(i%2)*128, Y=(i>>1)*128; x.fillStyle=i===1||i===2?'#ddd9cf':'#e8e5dd'; x.fillRect(X,Y,128,128);
+      for(let j=0;j<160;j++){ x.fillStyle='rgba(120,112,100,.18)'; x.fillRect(X+Math.random()*128,Y+Math.random()*128,2,1); } }
+    x.fillStyle='rgba(0,0,0,.1)'; for(const v of [0,128]){ x.fillRect(v,0,1,256); x.fillRect(0,v,256,1); } }
+  const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(1/1.22,1/1.22); t.anisotropy=8;
+  STX[k]=new THREE.MeshLambertMaterial({map:t,emissive:k==='ceil'?0x9a9890:0x55524c,emissiveMap:t,side:THREE.DoubleSide}); return STX[k]; }
+function trofferTex(){ if(STX.trof) return STX.trof; const c=document.createElement('canvas'); c.width=256; c.height=512; const x=c.getContext('2d');
+  x.fillStyle='#eef0f2'; x.fillRect(0,0,256,512);                                                            // the frame
+  const cols=3, rows=8, X0=14, Y0=14, cw=(256-2*X0)/cols, ch=(512-2*Y0)/rows;
+  for(let i=0;i<cols;i++) for(let j=0;j<rows;j++){ const X=X0+i*cw, Y=Y0+j*ch;
+    // a cell: bright reflection in the middle fading to blue-grey shadow at its sides, a hot streak along the tube
+    const g=x.createLinearGradient(X,0,X+cw,0); g.addColorStop(0,'#9aa3b8'); g.addColorStop(.22,'#e6ebf5'); g.addColorStop(.5,'#ffffff'); g.addColorStop(.78,'#e2e7f2'); g.addColorStop(1,'#8f98ad');
+    x.fillStyle=g; x.fillRect(X,Y,cw,ch);
+    const v=x.createLinearGradient(0,Y,0,Y+ch); v.addColorStop(0,'rgba(60,70,95,.4)'); v.addColorStop(.3,'rgba(255,255,255,0)'); v.addColorStop(.7,'rgba(255,255,255,.35)'); v.addColorStop(1,'rgba(60,70,95,.3)');
+    x.fillStyle=v; x.fillRect(X,Y,cw,ch);
+    x.strokeStyle='rgba(255,255,255,.9)'; x.lineWidth=3; x.beginPath(); x.moveTo(X+cw*.2,Y+ch*.55); x.quadraticCurveTo(X+cw*.5,Y+ch*.25,X+cw*.8,Y+ch*.55); x.stroke(); }
+  x.strokeStyle='#b4bac3'; x.lineWidth=2.5; for(let i=0;i<=cols;i++){ x.beginPath(); x.moveTo(X0+i*cw,Y0); x.lineTo(X0+i*cw,512-Y0); x.stroke(); }   // the louvre blades
+  for(let j=0;j<=rows;j++){ x.beginPath(); x.moveTo(X0,Y0+j*ch); x.lineTo(256-X0,Y0+j*ch); x.stroke(); }
+  x.strokeStyle='#7d838b'; x.lineWidth=6; x.strokeRect(X0-3,Y0-3,256-2*X0+6,512-2*Y0+6);
+  const t=new THREE.CanvasTexture(c); t.anisotropy=8; STX.trof=t; return t; }
+function troffers(g,p,HC){
+  // rows along the building's long side: a 2 x 4 ft fixture every 2.44 m across and 3.66 m along (a common store layout)
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const q of p){ x0=Math.min(x0,q[0]); x1=Math.max(x1,q[0]); y0=Math.min(y0,q[1]); y1=Math.max(y1,q[1]); }
+  const along=(x1-x0)>=(y1-y0), sx=along?3.66:2.44, sy=along?2.44:3.66, pts=[];
+  for(let x=x0+sx/2;x<x1;x+=sx) for(let y=y0+sy/2;y<y1;y+=sy){ if(!inP(p,x,y)) continue; let ok=true;
+    for(const [dx,dy] of [[-.8,-.8],[.8,-.8],[.8,.8],[-.8,.8]]) if(!inP(p,x+dx,y+dy)){ ok=false; break; } if(ok) pts.push([x,y]); }
+  if(!pts.length) return;
+  const geo=new THREE.PlaneGeometry(.61,1.22); geo.rotateX(Math.PI/2); if(along) geo.rotateY(Math.PI/2);   // facing down
+  const lens=new THREE.InstancedMesh(geo,new THREE.MeshBasicMaterial({map:trofferTex(),side:THREE.DoubleSide,toneMapped:false}),pts.length);
+  const rim=new THREE.InstancedMesh(new THREE.BoxGeometry(along?1.28:.67,.05,along?.67:1.28),rmat('trofrim',0xdfe2e5,0x6a6c70),pts.length);
+  const M=new THREE.Matrix4();
+  pts.forEach(([x,y],i)=>{ const [x3,z3]=to3(x,y); M.makeTranslation(x3,HC-.055,z3); lens.setMatrixAt(i,M); M.makeTranslation(x3,HC-.025,z3); rim.setMatrixAt(i,M); });
+  g.add(rim); g.add(lens);
+  // the fixtures light the floor a little: a soft bright pool under each row would cost too much, so the floor's own glow does it
+}
 function dropRoom(){ if(!ROOM.g) return; scene.remove(ROOM.g); ROOM.g.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); ROOM.g=null; ROOM.key=null; ROOM.r=null; ROOM.leaves=[]; ROOM.gar=[]; }
 function garUpdate(){ for(const G2 of ROOM.gar){ const o=window.GARAGE?GARAGE.openness(G2.q.gk):0, b0=o*1.95, top=2.2, h=Math.max(.15,top-b0);
   G2.m.scale.y=h; G2.m.position.y=b0+h/2; } }
