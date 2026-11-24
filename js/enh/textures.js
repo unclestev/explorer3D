@@ -69,7 +69,7 @@ function makeTextures(){
 const LANDCOVER=['match',['get','class'],'grass','tx-grass','wood','tx-wood','sand','tx-sand','wetland','tx-wet','none'];
 const lotImg=()=>(window.ROADSIDE?ROADSIDE.state.asphalt:(()=>{ try{ return localStorage.getItem('ydAsphalt')!=='0'; }catch(e){ return true; } })())?'tx-lot':'tx-parking';
 const LANDUSE=()=>['match',['get','class'],'residential','tx-lawn','parking',lotImg(),['commercial','retail'],'tx-lawn',['industrial','railway','garages'],'tx-paved',
-  ['pitch','track','stadium'],'tx-pitch','cemetery','tx-cemetery',['school','college','university','hospital','playground','park'],'tx-grass','none'];
+  ['pitch','track','stadium'],'tx-pitch','cemetery','tx-cemetery',['school','college','university','education','kindergarten','hospital','playground','park'],'tx-grass','none'];
 const TXLAYERS=[], HEAVY=id=>id==='tx-water'||id.startsWith('tx-asph-');   // hidden in battery saver
 
 function addTextureLayers(){

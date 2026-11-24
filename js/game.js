@@ -231,7 +231,7 @@ map.on('load',()=>{ try{ initMini();
     map.addImage('croprows',{width:TW,height:TW,data:D});
     // the old map-colour tint, now only where js/enh/textures.js draws no ground texture (over a texture it washed the grass out beige)
     map.addLayer({id:'lu-tint',type:'fill',source:bSrc,'source-layer':'landuse',filter:['!',['match',['get','class'],['residential','commercial','retail','industrial','parking',
-        'pitch','track','stadium','cemetery','school','college','university','hospital','playground','park','railway','garages'],true,false]],
+        'pitch','track','stadium','cemetery','school','college','university','education','kindergarten','hospital','playground','park','railway','garages'],true,false]],
       paint:{'fill-color':['match',['get','class'],['commercial','retail'],'#f1c4c4','industrial','#d6cce6',['farmyard','farm'],'#e2cd96','residential','#ebe4d8','#e3e3e3'],'fill-opacity':.35}},before);
     map.addLayer({id:'lc-farm',type:'fill',source:bSrc,'source-layer':'landcover',filter:['==',['get','class'],'farmland'],
       paint:{'fill-pattern':'croprows','fill-opacity':.8}},before);
