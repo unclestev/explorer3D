@@ -317,9 +317,9 @@ function troffers(g,p,HC){
   pts.forEach((P,k)=>{ if(!P.length) return;
     const mat=new THREE.MeshBasicMaterial({map:trofferTex(),side:THREE.DoubleSide,toneMapped:false});
     const lens=new THREE.InstancedMesh(geo,mat,P.length);
-    const rim=new THREE.InstancedMesh(new THREE.BoxGeometry(along?1.28:.67,.05,along?.67:1.28),rmat('trofrim',0xdfe2e5,0x6a6c70),P.length);
-    P.forEach(([x,y],i)=>{ const [x3,z3]=to3(x,y); M.makeTranslation(x3,HC-.055,z3); lens.setMatrixAt(i,M); M.makeTranslation(x3,HC-.025,z3); rim.setMatrixAt(i,M); });
-    g.add(rim); g.add(lens); ROOM.tro[k]=mat; });
+    // set into the ceiling (owner 2026-11-23: "make the lights in the ceiling"): flush with the tiles, no box hanging below
+    P.forEach(([x,y],i)=>{ const [x3,z3]=to3(x,y); M.makeTranslation(x3,HC-.006,z3); lens.setMatrixAt(i,M); });
+    g.add(lens); ROOM.tro[k]=mat; });
 }
 /* the two light switches: on the wall just inside the way in, at 1.2 m, a white two-gang plate. Walk up to them and a
    button shows (or say "turn off the lights" / "lights on"); each flips its half of the lights (every other one). Remembered while you play. */
