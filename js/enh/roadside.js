@@ -117,7 +117,10 @@ function mappedWalks(ox,oy,R,kx,C){
 // The road layers come from js/enh/smooth.js a little later, so this is retried from the tick until they exist.
 function footways(){
   const pp=map.getLayer('road_path_pedestrian'); if(!pp) return;
+  // smooth.js moves the style's road layers onto the 'roads-smooth' geojson source a moment after load: wait for that
+  const so=map.getSource(pp.source); if(!so||so.type!=='geojson') return;
   safe('footways',()=>{
+    for(const id of ['rs-fw','rs-fwj']) if(map.getLayer(id)&&map.getLayer(id).source!==pp.source) map.removeLayer(id);
     const SUB=['match',['get','subclass'],['footway','cycleway','pedestrian'],true,false];
     const walkF=['all',['match',['geometry-type'],['LineString','MultiLineString'],true,false],['==',['get','class'],'path'],SUB,['match',['get','brunnel'],['bridge','tunnel'],false,true]];
     if(!map.getLayer('rs-fw')) map.addLayer({id:'rs-fw',type:'line',source:pp.source,filter:walkF,minzoom:15,layout:{'line-cap':'butt','line-join':'round'},
