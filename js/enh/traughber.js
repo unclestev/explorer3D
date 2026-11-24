@@ -17,7 +17,8 @@ const X0=0,X1=1164,Y0=84,Y1=948;
 const cutOut=(b,G)=>{ if(b[2]<=G[0]||b[0]>=G[2]||b[3]<=G[1]||b[1]>=G[3]) return [b]; const o=[];
   if(b[1]<G[1]) o.push([b[0],b[1],b[2],G[1],b[4]]); if(b[3]>G[3]) o.push([b[0],G[3],b[2],b[3],b[4]]);
   const y0=Math.max(b[1],G[1]), y1=Math.min(b[3],G[3]); if(b[0]<G[0]) o.push([b[0],y0,G[0],y1,b[4]]); if(b[2]>G[2]) o.push([G[2],y0,b[2],y1,b[4]]); return o; };
-const PLAN=(G=>PLAN0.filter(b=>!(b[4]>=10.9&&b[2]<=440)).flatMap(b=>cutOut(b,G)).concat([G]))(gymBox()), GYM=PLAN.length-1;
+const makePlan=G=>PLAN0.filter(b=>!(b[4]>=10.9&&b[2]<=440)).flatMap(b=>cutOut(b,G)).concat([G]);
+let PLAN=makePlan(gymBox()), GYM=PLAN.length-1, GB=gymBox();        // GB: where the gym box sits now (slid onto the real building by fit())
 const T={ids:[],sig:'',fit:null,tries:0,at:0,ver:0,keys:null,ll:null,bb:null};
 const N=48;
 let off=false; try{ off=localStorage.getItem('ydTrjOff')==='1'; }catch(e){}
@@ -74,7 +75,7 @@ function fit(P,kx,ky){
     for(const p of polys) if(inPoly(p,x,y)){ real[i*N+j]=1; nReal++; break; } }
   const fits=[];
   for(const T8 of TR){ const pl=new Uint8Array(N*N); let nPl=0;
-    for(const b of PLAN){ const n=norm(b); for(let i=0;i<N;i++) for(let j=0;j<N;j++){ if(pl[i*N+j]) continue; const [u,v]=tf((i+.5)/N,(j+.5)/N,T8);
+    for(const b of PLAN0){ const n=norm(b); for(let i=0;i<N;i++) for(let j=0;j<N;j++){ if(pl[i*N+j]) continue; const [u,v]=tf((i+.5)/N,(j+.5)/N,T8);
       if(u>=n[0]&&u<=n[2]&&v>=n[1]&&v<=n[3]){ pl[i*N+j]=1; nPl++; } } }
     let inter=0; for(let k=0;k<N*N;k++) if(pl[k]&&real[k]) inter++;
     fits.push({iou:inter/Math.max(1,nPl+nReal-inter),T8}); }
@@ -85,7 +86,14 @@ function fit(P,kx,ky){
   for(const f of fits){ if(f.iou<top-.04) continue; const [t,fx,fy]=f.T8, [u,v]=t?[fy?1-gv:gv,fx?1-gu:gu]:[fx?1-gu:gu,fy?1-gv:gv], uu=u-.5, vv=v-.5;
     const x=R.ux*uu*R.W+R.vx*vv*R.H, y=R.uy*uu*R.W+R.vy*vv*R.H; f.sw=-(x+y);
     if(!best||f.sw>best.sw) best=f; }
-  return {R,ids:[...ids],keys,sll,iou:best.iou,T8:best.T8,nReal}; }
+  /* the photo plan's proportions are only roughly right, so the gym box can hang off the real building (onto the bus loop at
+     Traughber). Slide it (within the plan) to where most of it stands on the real footprint; the wings it lands on are cut back. */
+  let gb={sc:-1,box:G};
+  for(let dx=-360;dx<=360;dx+=24) for(let dy=-240;dy<=240;dy+=24){ const B=[G[0]+dx,G[1]+dy,G[2]+dx,G[3]+dy,G[4]]; if(B[0]<X0||B[2]>X1||B[1]<Y0||B[3]>Y1) continue;
+    const n=norm(B); let a=0, inR=0;
+    for(let i=0;i<N;i++) for(let j=0;j<N;j++){ const [u,v]=tf((i+.5)/N,(j+.5)/N,best.T8); if(u>=n[0]&&u<=n[2]&&v>=n[1]&&v<=n[3]){ a++; if(real[i*N+j]) inR++; } }
+    const sc=a?inR/a-Math.hypot(dx,dy)*2e-4:0; if(sc>gb.sc) gb={sc,box:B}; }
+  return {R,ids:[...ids],keys,sll,iou:best.iou,T8:best.T8,nReal,gbox:gb.box,gfit:gb.sc}; }
 
 function toLL(F,P,kx,ky,px,py){        // a photo-plan point -> lng/lat, through the fitted rectangle
   const [t,fx,fy]=F.T8, pu=(px-X0)/(X1-X0), pv=1-(py-Y0)/(Y1-Y0);
@@ -179,7 +187,7 @@ function gymRec(F,P,kx,ky){
   const door=(e,c,hw)=>{ const s0=c-hw, s1=c+hw; if(s0<1.5||s1>e.L-1.5||doors.some(d=>d.ei===e.i&&s0<d.s1+3&&s1>d.s0-3)) return false;
     doors.push({ei:e.i,s0,s1,x0:e.A[0]+e.ux*s0,y0:e.A[1]+e.uy*s0,x1:e.A[0]+e.ux*s1,y1:e.A[1]+e.uy*s1,nx:e.nx,ny:e.ny,dk:9.5e8+dk++}); return true; };
   // the main double door, on the wall nearest the plan's gym entrance (or the nearest open bit of it)
-  const D=planM(F,75,gymBox()[3]+2), dp=[D[0]-cx,D[1]-cy];
+  const D=planM(F,GB[0]+75,GB[3]+2), dp=[D[0]-cx,D[1]-cy];
   const dist=e=>Math.abs((dp[0]-e.A[0])*e.uy-(dp[1]-e.A[1])*e.ux);
   const me=E.slice().sort((x,y)=>dist(x)-dist(y))[0], t0=Math.max(4,Math.min(me.L-4,(dp[0]-me.A[0])*me.ux+(dp[1]-me.A[1])*me.uy));
   for(let k=0;k<40;k++){ const c=t0+(k%2?1:-1)*Math.ceil(k/2)*1.5; if(c>4&&c<me.L-4&&open(me,c-3.4,c+3.4,.1)&&door(me,c,1.5)) break; }
@@ -207,6 +215,7 @@ function layers(){ if(map.getSource('trj')) return;
   map.addLayer({id:'trj-det',type:'fill-extrusion',source:'trjd',minzoom:14,paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-base':['get','b'],'fill-extrusion-height':['get','h'],'fill-extrusion-vertical-gradient':false}},map.getLayer('hn-big')?'hn-big':undefined); }
 
 function apply(F,P,kx,ky){
+  GB=F.gbox||gymBox(); PLAN=makePlan(GB); GYM=PLAN.length-1;
   T.rec=safe('trj gym',()=>gymRec(F,P,kx,ky))||null;
   const feats=polysOf(F,P,kx,ky).map((o,k)=>({type:'Feature',properties:{h:o.h,g:k===GYM?1:0},geometry:{type:'Polygon',coordinates:[o.ring]}}));
   // the map's own pieces of the school that buildings.js should leave out (only those: the houses sharing their id stay)
