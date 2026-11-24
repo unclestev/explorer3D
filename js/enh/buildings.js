@@ -123,7 +123,7 @@ function addCaps(){
   if(!map.getSource('accent-wash')){
     map.addSource('accent-wash',{type:'geojson',data:{type:'FeatureCollection',features:[]},maxzoom:19,tolerance:0});
     map.addLayer({id:'accent-wash',type:'fill-extrusion',source:'accent-wash',layout:{visibility:night&&!POWER?'visible':'none'},
-      paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-base':['get','b'],'fill-extrusion-height':['get','h'],'fill-extrusion-opacity':.85,'fill-extrusion-vertical-gradient':false}},before);
+      paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-base':['get','b'],'fill-extrusion-height':['get','h'],'fill-extrusion-opacity':1,'fill-extrusion-vertical-gradient':false}},before);
   }
   // after dark, a soft warm pool of light on the ground under each lit porch / garage light (owner 2026-11-23). Radius
   // in metres: prop r is metres / cos(latitude), turned into pixels by zoom (a map pixel is 2x smaller each zoom level)
@@ -213,7 +213,24 @@ function zones(kx,ky,R){ const out=[], sp=[];
       const z=f.properties.class==='industrial'?'industrial':'school', g=f.geometry, pls=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
       for(const pl of pls){ const r=pl[0]; if(!r) continue; let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const q of r){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
         if(x1<S.lng-R/kx||x0>S.lng+R/kx||y1<S.lat-R/ky||y0>S.lat+R/ky) continue; out.push({z,r,bb:[x0,y0,x1,y1]}); } } }catch(e){}
-  ZONES=out; }
+  ZONES=out;
+  /* the school buildings round you, for the heights (owner 2026-11-23: "make a structure 2 story and even the gymnasium ceiling
+     the proper height for schools"): a school is two storeys (the map's default 5 m is one), and the gymnasium — the one
+     compact 700-3500 m2 building beside a school at least 2.5 times as big, the data doesn't say which one it is — is tall */
+  SB=[]; GYM=new Set();
+  try{ for(const f of map.querySourceFeatures(bSrc,{sourceLayer:'building'})){ const g=f.geometry, pls=!g?[]:g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
+      for(const pl of pls){ const r=pl[0]; if(!r||r.length<4) continue; let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const q of r){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
+        const cx=(x0+x1)/2, cy=(y0+y1)/2; if(Math.abs(cx-S.lng)*kx>R||Math.abs(cy-S.lat)*ky>R) continue;
+        const A=Math.abs(area(r.slice(0,-1).map(q=>[(q[0]-cx)*kx,(q[1]-cy)*ky]))); if(A<700||(f.properties&&+f.properties.render_min_height>0)) continue;
+        if(zoneAt(cx,cy,A,kx,ky)!=='school') continue; const k=cx.toFixed(5)+','+cy.toFixed(5); if(SB.some(e=>e.k===k)) continue; SB.push({k,cx,cy,A,n:r.length-1}); } } }catch(e){}
+  for(const e of SB){ if(e.A>3500||e.n>26) continue; if(!SB.some(b=>b!==e&&b.A>=e.A*2.5&&Math.hypot((b.cx-e.cx)*kx,(b.cy-e.cy)*ky)<250)) continue;
+    if(SB.some(o=>o!==e&&o.A<=3500&&o.A>=700&&o.n<=26&&o.A>e.A&&Math.hypot((o.cx-e.cx)*kx,(o.cy-e.cy)*ky)<200)) continue; GYM.add(e.k); }
+  const sg=SB.map(e=>e.k+(GYM.has(e.k)?'g':'')).sort().join(';'); if(sg!==SBSIG){ SBSIG=sg; try{ W.cache.clear(); W.sig=''; }catch(e){} } }
+let SB=[], GYM=new Set(), SBSIG='';
+const isGym=(cx,cy)=>GYM.has(cx.toFixed(5)+','+cy.toFixed(5));
+// a school's height: two storeys where the map has the one-storey default, the gymnasium taller
+function schoolH(cx,cy,A,h,b0,kx,ky){ if(b0>0||A<700||!SB.length) return h; if(isGym(cx,cy)) return Math.max(h,11.5);
+  if(h>7||zoneAt(cx,cy,A,kx,ky)!=='school') return h; return 8.2; }
 /* school colours (owner 2026-11-23): Oswego High School's accent lights are its colours, orange shining up and navy down.
    up / dn = wash slice colours from the fixture outward. Matched by the school's map-point name near the building. */
 const SCHCOL=[{re:/oswego (east |community )?high/i,up:['#ff8a1a','#ff7a00','#f06400','#c24d00'],dn:['#3b63ff','#2d50f0','#2342c8','#1a3290']}];
@@ -241,12 +258,12 @@ function buildWalls(fs,geo,kx,ky,RW,gone){                          // geo[i]: f
       const old=W.cache.get(sk); if(old!==undefined){ if(old){ old.id=f.id; feats.push(old); } continue; }
       const outer=clipRing(r,box); if(!outer){ W.cache.set(sk,null); continue; }
       let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const q of r){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
-      const cx=(x0+x1)/2, cy=(y0+y1)/2, A=Math.abs(area(r.slice(0,-1).map(q=>[(q[0]-cx)*kx,(q[1]-cy)*ky]))), seed=seedOf(cx,cy);
+      const cx=(x0+x1)/2, cy=(y0+y1)/2, A=Math.abs(area(r.slice(0,-1).map(q=>[(q[0]-cx)*kx,(q[1]-cy)*ky]))), seed=seedOf(cx,cy), hS=schoolH(cx,cy,A,h,b0,kx,ky);
       const house=h<=12&&b0===0&&A>=25&&A<=450, L=house?houseLook(seed):null;
       const c=house?L.wall:h<=12?LOWC[Math.floor(hash(seed,59)*LOWC.length)]:h<=30?['#c8c4bc','#b3b8be','#d2c8b5','#bdb7ad','#a89f93'][seed%5]:['#9fb3c6','#8b9fb2','#a7b4bf'][seed%3];
       const rings=[outer]; for(const hr of pl.slice(1)){ const c2=clipRing(hr,box); if(c2) rings.push(c2); }
       const trj=!house&&A>=60&&isTrj(cx,cy,kx,ky);
-      const pr2={c:trj?TRJ.wall:c,cc:house?L.roof:trj?TRJ.roof:FLAT[seed%2],b:b0,h}; if(!POWER) pr2.pat=house?L.pat:trj?'hw-trj':otherLook(seed,h,zoneAt(cx,cy,A,kx,ky));
+      const pr2={c:trj?TRJ.wall:c,cc:house?L.roof:trj?TRJ.roof:FLAT[seed%2],b:b0,h:hS}; if(!POWER) pr2.pat=house?L.pat:trj?'hw-trj':otherLook(seed,h,zoneAt(cx,cy,A,kx,ky));
       const ft={type:'Feature',id:f.id,properties:pr2,geometry:{type:'Polygon',coordinates:rings}};
       W.cache.set(sk,ft); feats.push(ft); } }
   if(W.cache.size>20000) W.cache.clear();
@@ -278,11 +295,12 @@ function build(){
   for(let i=0;i<fs.length;i++){ const f=fs[i];
     if(f.id!=null&&gone.has(f.id)) continue;
     const pr=f.properties||{}; if(pr.hide_3d) continue;
-    const h=+(pr.render_height!=null?pr.render_height:pr.height!=null?pr.height:6), b0=+(pr.render_min_height||pr.min_height||0);
+    let h=+(pr.render_height!=null?pr.render_height:pr.height!=null?pr.height:6); const b0=+(pr.render_min_height||pr.min_height||0), h0=h;
     const G=geo[i]; if(!G) continue; const polys=G.type==='Polygon'?[G.coordinates]:G.type==='MultiPolygon'?G.coordinates:[];
     for(const pl of polys){ const ring=pl[0]; if(!ring||ring.length<4) continue;
       let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const q of ring){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
       const cx=(x0+x1)/2, cy=(y0+y1)/2, d=Math.hypot((cx-S.lng)*kx,(cy-S.lat)*ky); if(d>radius) continue;
+      h=h0; if(b0===0&&h<=12&&SB.length) h=schoolH(cx,cy,Math.abs(area(ring.slice(0,-1).map(q=>[(q[0]-cx)*kx,(q[1]-cy)*ky]))),h,b0,kx,ky);   // schools: two storeys, a tall gym
       const key=cx.toFixed(6)+','+cy.toFixed(6); if(seen.has(key)){ const o=seenP.get(key); if(o&&o.ring.length===ring.length) o.intact=true; continue; } seen.add(key);     // same building in two tiles
       /* intact: two tiles each hold the whole outline (same corners), so it only crosses a tile edge — it isn't a clipped fragment
          (a school 140 m wide on a tile edge got no windows, doors or lights: owner 2026-11-23, Traughber Junior High) */
@@ -442,6 +460,16 @@ function facades(P,kx,ky,res,rich){
   const wins=[];                                                   // openings for the room inside (js/enh/walk.js cuts them in its walls)
   const window1=(E,s,w,b,h,k,tc)=>{ wins.push({ei:E.ei,s0:+(s-w/2+E.off).toFixed(2),s1:+(s+w/2+E.off).toFixed(2),b:+b.toFixed(2),h:+h.toFixed(2)}); if(frames) put(E,s-w/2-.08,s+w/2+.08,-.04,.06,b-.08,h+.08,tc||FRAME);
     put(E,s-w/2,s+w/2,-.04,.03,b,h,GLASS,hash(seed,k)<(house?.45:.7)?1:0); };
+  // a school window (owner 2026-11-23: "make the windows look more like appropriate windows"): dark aluminium frame, a mullion
+  // down the middle, a transom across the top third, tinted glass (the upper lights a shade darker) and a stone sill and head
+  const SFR='#43484e', SSILL='#d9d5c9', SGL=['#2d4558','#223645'];
+  const swin=(E,s,w,b,h,k)=>{ wins.push({ei:E.ei,s0:+(s-w/2+E.off).toFixed(2),s1:+(s+w/2+E.off).toFixed(2),b:+b.toFixed(2),h:+h.toFixed(2)}); if(!frames) return;
+    const lit=hash(seed,k)<.6?1:0, tr=b+(h-b)*.7, f=.07;
+    put(E,s-w/2-.1,s+w/2+.1,-.05,.06,b-.1,h+.1,SFR);                                  // frame
+    put(E,s-w/2-.16,s+w/2+.16,-.05,.15,b-.17,b-.1,SSILL); put(E,s-w/2-.14,s+w/2+.14,-.05,.1,h+.1,h+.16,SSILL);   // sill, head
+    put(E,s-w/2,s-f/2,-.02,.04,b,tr-f/2,SGL[0],lit); put(E,s+f/2,s+w/2,-.02,.04,b,tr-f/2,SGL[0],lit);          // lower panes
+    put(E,s-w/2,s+w/2,-.02,.04,tr+f/2,h,SGL[1],lit);                                                            // transom light
+    put(E,s-f/2,s+f/2,-.05,.08,b,h,SFR); put(E,s-w/2,s+w/2,-.05,.08,tr-f/2,tr+f/2,SFR); };                     // mullion, transom bar
   /* walls shared with a neighbouring building (a Meijer is several map pieces; shops and townhouses share party walls)
      are inside, not outside: nothing is drawn on them. Each edge is cut to the stretches that open to the outside. */
   const nb=[]; { const m=1.5/111320;
@@ -462,9 +490,14 @@ function facades(P,kx,ky,res,rich){
      dark body with a warm lens on the side it shines to, plus a scalloped pool of light on the wall (night-only layer
      'accent-wash', slices that widen away from the fixture) and a bright point in the car layer (see lampsSet). */
   const clA=Math.cos(P.cy*Math.PI/180), fxc=['#1d1e20','#2a2b2e','#3a2c22','#2e3236'][Math.floor(hash(seed,101)*4)], WASH=['#ffd48a','#f2c479','#d9a85e','#b8884a'];
-  const SC=school?schoolCols(P.cx,P.cy,kx,ky):null, wash=(E,s,w,b,h,i,dir)=>put(E,s-w/2,s+w/2,.012,.03,b,h,(SC&&dir?SC[dir]:WASH)[Math.min(i,3)],null,res.wash);
-  const gpt=(E,s,z,o,r)=>{ const L=toLL([E.a[0]+E.ux*s+E.nx*.34,E.a[1]+E.uy*s+E.ny*.34]), q=toLL([E.a[0]+E.ux*s+E.nx*o,E.a[1]+E.uy*s+E.ny*o]);
-    res.glow.push({type:'Feature',properties:{r:+(r/clA).toFixed(2),lx:L[0],ly:L[1],z},geometry:{type:'Point',coordinates:q}}); };
+  const SC=school?schoolCols(P.cx,P.cy,kx,ky):null;
+  /* a school's up / down lights: orange up and navy down at Oswego High, plain white anywhere else, each pool fading as it
+     climbs or falls (a palette per direction, bright at the fixture) */
+  const shade=(h,f)=>'#'+[1,3,5].map(i=>Math.round(parseInt(h.substr(i,2),16)*f).toString(16).padStart(2,'0')).join('');
+  const SPAL=!school?null:(()=>{ const base=SC?{up:SC.up[0],dn:SC.dn[0]}:{up:'#fffdf2',dn:'#fffdf2'}, o={}; for(const d of ['up','dn']){ o[d]=[]; for(let i=0;i<10;i++) o[d].push(shade(base[d],1-i*.035)); } return o; })();
+  const wash=(E,s,w,b,h,i,dir)=>put(E,s-w/2,s+w/2,.05,.09,b,h,(SPAL&&dir?SPAL[dir][Math.min(i,9)]:WASH[Math.min(i,3)]),null,res.wash);
+  const gpt=(E,s,z,o,r,col)=>{ const L=toLL([E.a[0]+E.ux*s+E.nx*.34,E.a[1]+E.uy*s+E.ny*.34]), q=toLL([E.a[0]+E.ux*s+E.nx*o,E.a[1]+E.uy*s+E.ny*o]);
+    res.glow.push({type:'Feature',properties:Object.assign({r:+(r/clA).toFixed(2),lx:L[0],ly:L[1],z},col?{k:col}:{}),geometry:{type:'Point',coordinates:q}}); };
   // z: fixture middle height; up / dn: slices of light above / below it (sh m tall each, widths ws); pool: ground pool radius at po m out
   const accent=(E,s,z,o)=>{ if(!frames||s<.35||s>E.L-.35) return;
     const up=o.up||0, dn=o.dn||0, sh=o.sh||.3, bw=o.bw||.07, bh=o.bh||.14, ws=o.ws||[.26,.6,1,1.4];
@@ -474,6 +507,22 @@ function facades(P,kx,ky,res,rich){
     for(let i=0;i<up;i++) wash(E,s,ws[i],z+bh+.04+i*sh,z+bh+.04+(i+1)*sh,i,'up');
     for(let i=0;i<dn;i++) wash(E,s,ws[i],z-bh-.04-(i+1)*sh,z-bh-.04-i*sh,i,'dn');
     gpt(E,s,z,o.po||0,o.pool||0); };
+  /* the school's accent light (owner 2026-11-23): a louvred housing with a lens strip on top and bottom — coloured at Oswego,
+     white elsewhere, nothing in the middle — set between the first and second floor. Its light fills the wall right up to
+     the roofline and down to the ground, in slices that widen away from the lens and fade. */
+  const sfix=(E,s,z,top)=>{ if(!frames||s<.5||s>E.L-.5) return; const lu=SPAL.up[0], ld=SPAL.dn[0], bw=.13, sh=1.05, ws=i=>Math.min(3.2,.9+i*.42);
+    put(E,s-bw-.04,s+bw+.04,0,.05,z-.3,z+.3,fxc);                                       // back plate
+    put(E,s-bw,s+bw,.04,.26,z-.24,z+.24,fxc);                                            // housing
+    for(const dz of [-.1,.1]) put(E,s-bw-.02,s+bw+.02,.2,.3,z+dz-.015,z+dz+.015,'#55585d');    // louvres
+    put(E,s-bw*.8,s+bw*.8,.12,.27,z+.13,z+.22,lu,2); put(E,s-bw*.8,s+bw*.8,.12,.27,z-.22,z-.13,ld,2);   // lens strips
+    put(E,s-bw-.02,s+bw+.02,.24,.34,z+.22,z+.25,fxc); put(E,s-bw-.02,s+bw+.02,.24,.34,z-.25,z-.22,fxc);  // hoods
+    const nu=Math.min(9,Math.ceil((top-z-.3)/sh)), nd=Math.min(9,Math.ceil((z-.3-.1)/sh));
+    for(let i=0;i<nu;i++) wash(E,s,ws(i),z+.3+i*sh,Math.min(top-.05,z+.3+(i+1)*sh),i,'up');
+    for(let i=0;i<nd;i++) wash(E,s,ws(i),Math.max(.1,z-.3-(i+1)*sh),z-.3-i*sh,i,'dn');
+    gpt(E,s,z+.18,0,0,lu); gpt(E,s,z-.18,0,0,ld);
+    // the map layer can't glow at night, so the beam is also a chain of soft lights (car layer) running up to the roof and down to the ground
+    for(let i=1;i<=nu+1;i++){ const zz=z+.18+i*.9; if(zz<top-.2) gpt(E,s,zz,0,0,SPAL.up[Math.min(i,9)]); }
+    for(let i=1;i<=nd+1;i++){ const zz=z-.18-i*.9; if(zz>.2) gpt(E,s,zz,0,0,SPAL.dn[Math.min(i,9)]); } };
   // a gooseneck light over a shop sign: an arm out from the wall, the lamp head shining down onto the wall below
   const gooseneck=(E,s,zt)=>{ if(!frames||s<.5||s>E.L-.5) return;
     put(E,s-.03,s+.03,0,.5,zt-.03,zt+.03,fxc); put(E,s-.13,s+.13,.3,.58,zt-.1,zt+.04,fxc); put(E,s-.1,s+.1,.34,.54,zt-.13,zt-.1,LGL,2);
@@ -488,7 +537,7 @@ function facades(P,kx,ky,res,rich){
     putD(E,s-.95,s+.95,-.04,.05,0,2.45,'#3b4048',dk);
     for(const z of [-1,1]){ putD(E,z<0?s-.87:s+.05,z<0?s-.05:s+.87,-.02,.03,.06,2.37,GLASS,dk); putD(E,z<0?s-.4:s+.1,z<0?s-.1:s+.4,.03,.07,1,1.06,'#c7ccd1'); } };
   const putD=(E,s0,s1,o0,o1,b,h,c,dk)=>{ put(E,s0,s1,o0,o1,b,h,c); if(dk!=null) out[out.length-1].properties.dk=dk; };
-  if(P.f.id!=null) res.bld={key:P.cx.toFixed(6)+','+P.cy.toFixed(6),id:P.f.id,cx:P.cx,cy:P.cy,kx,ky,p,h:P.h,house,doors,garages,bb:P.bb,zone,area:A,win:wins};
+  if(P.f.id!=null) res.bld={key:P.cx.toFixed(6)+','+P.cy.toFixed(6),id:P.f.id,cx:P.cx,cy:P.cy,kx,ky,p,h:P.h,house,doors,garages,bb:P.bb,zone,area:A,win:wins,gym:school&&isGym(P.cx,P.cy)};
   const sd=(window.STORES&&STORES.list.length&&STORES.frontDir(P.cx,P.cy))||streetDir(P);   // a Meijer faces its parking lot (js/enh/stores.js)
   let front=edges[0]; for(const E of edges){ const sc=(sd?E.nx*sd[0]+E.ny*sd[1]:0)+.02*Math.min(E.L,12), fs=(sd?front.nx*sd[0]+front.ny*sd[1]:0)+.02*Math.min(front.L,12); if(sc>fs) front=E; }
   let k=0;
@@ -549,15 +598,27 @@ function facades(P,kx,ky,res,rich){
           if(shut&&E===front&&!big) for(const z of [-1,1]){ const x=s+z*(w/2+.13); put(E,Math.min(x,x+z*.42),Math.max(x,x+z*.42),.02,.07,b-.02,h+.02,shut); } } } }
     if(res.bld) res.bld.yard=yardSpot(P,front,sd,free,seed,kx,ky);    // where a snowman could stand (js/enh/snowmen.js)
   } else if(school){
-    // schools: a window on every floor of every wall (a pair of them 1.6+ m apart), an up-and-down accent light on the wall
-    // between each two windows, glass doors in the middle of the street side with a light on each side of them
-    const floors=Math.max(1,Math.round(P.h/3.8)), fh=P.h/floors, mid=front.L/2, sl=fine?3:2;
+    /* schools (owner 2026-11-23: Traughber had a wall of windows and no doors): a main entrance at the middle of the street
+       side, then the doors a real school has — at the ends of the wings (where the walls turn), and one every ~35 m along
+       the long walls — each with a light either side. Windows are spaced wider (every ~6.4 m on the street side, 5 m round
+       the others, in pairs of floors), never over a door, with the up-and-down accent light between each two. The gym
+       (the one tall block) gets only a row of high windows under the roof and a couple of doors. */
+    const gym=isGym(P.cx,P.cy), floors=gym?1:Math.max(1,Math.round(P.h/3.8)), fh=gym?P.h:P.h/floors, mid=front.L/2, sl=fine?3:2, dpos=new Map(); let nd=0;
+    const doorsAt=(E)=>{ const L=[]; if(E.L<9) return L;
+      if(E===front&&E.L>=6&&!gym) L.push(mid);
+      if(E.L>=14&&!(E===front&&E.L<26)) for(const s0 of [4.5,E.L-4.5]) L.push(s0);
+      if(!gym&&E.L>=34){ const n=Math.floor(E.L/35); for(let i=1;i<=n;i++) L.push(E.L*i/(n+1)); }
+      L.sort((u,v)=>u-v); const out=[]; for(const s0 of L) if(!out.length||s0-out[out.length-1]>7) out.push(s0); return out; };
+    const byLen=edges.slice().sort((u,v)=>v.L-u.L);
+    for(const E of byLen){ const L=doorsAt(E); if(gym&&nd>=2) break; const keep=[]; for(const s0 of L){ if(nd>=22||(gym&&nd>=2)) break; keep.push(s0); nd++; } if(keep.length) dpos.set(E,keep); }
+    if(!dpos.size&&front.L>=6){ dpos.set(front,[mid]); }
+    const nearDoor=(E,s0,m)=>(dpos.get(E)||[]).some(d=>Math.abs(d-s0)<m);
     for(const E of edges){ if(E.L<5) continue;
-      const n=Math.max(1,Math.floor((E.L-1)/3.4)), step=E.L/n, w=Math.min(1.8,step-1.3);
-      for(let f=0;f<floors;f++){ const b=f*fh+(fh>=3.3?1:.8), h=b+Math.min(1.6,fh-1.3); if(h<b+.5) continue;
-        for(let i=0;i<n;i++){ const s=(i+.5)*step; if(E===front&&f===0&&front.L>=6&&Math.abs(s-mid)<1.7) continue; window1(E,s,w,b,h,k++,FRAME); }
-        for(let i=1;i<n;i++){ const s=i*step; if(E===front&&f===0&&front.L>=6&&Math.abs(s-mid)<1.9) continue; accent(E,s,(b+h)/2,{up:sl,dn:sl}); } } }
-    if(front.L>=6){ entrance(front,mid); for(const z of [-1,1]) accent(front,mid+z*1.7,2.7,{dn:3,pool:3.5,po:1.6}); }
+      const pitch=gym?6:E===front?6.4:5, n=Math.max(1,Math.floor((E.L-1)/pitch)), step=E.L/n, w=Math.min(E===front?2.2:1.8,step-2.2);
+      for(let f=0;f<floors;f++){ const b=gym?Math.max(5,P.h-3.6):f*fh+(fh>=3.3?1:.8), h=gym?b+1.6:b+Math.min(1.6,fh-1.3); if(h<b+.5) continue;
+        for(let i=0;i<n;i++){ const s=(i+.5)*step; if(f===0&&!gym&&nearDoor(E,s,w/2+1.5)) continue; swin(E,s,w,b,h,k++); }
+        if(f===0) for(let i=1;i<n;i++){ const s=i*step; if(nearDoor(E,s,2.6)) continue; if(gym&&i%2) continue; sfix(E,s,gym?P.h*.5:floors>1?fh:P.h*.55,P.h); } } }
+    for(const [E,list] of dpos) for(const s0 of list){ entrance(E,s0); for(const z of [-1,1]) accent(E,s0+z*1.7,2.7,{dn:3,pool:3.5,po:1.6}); }
   } else if(P.h<=12){
     // storefront: glass band on the street side (the middle 60% of very long walls), mullions every ~1.6 m
     const E=front, s0=E.L>40?E.L*.2:1, s1=E.L>40?E.L*.8:E.L-1;
@@ -605,12 +666,12 @@ function lampTex(){ const c=document.createElement('canvas'); c.width=c.height=6
   x.fillStyle=g; x.fillRect(0,0,64,64); return new THREE.CanvasTexture(c); }
 function lampsSet(glow){
   if(typeof THREE==='undefined'||typeof scene==='undefined') return;
-  if(!LG.pts){ LG.pts=new THREE.Points(new THREE.BufferGeometry(),new THREE.PointsMaterial({map:lampTex(),size:1,sizeAttenuation:true,transparent:true,
+  if(!LG.pts){ LG.pts=new THREE.Points(new THREE.BufferGeometry(),new THREE.PointsMaterial({map:lampTex(),vertexColors:true,size:1,sizeAttenuation:true,transparent:true,
       depthWrite:false,blending:THREE.AdditiveBlending,color:0xffffff})); LG.pts.frustumCulled=false; LG.pts.renderOrder=5; LG.pts.visible=false; scene.add(LG.pts); }
-  const ox=S.lng*MLNG, oy=S.lat*MLAT, e0=terrainOn?(map.transform.elevation||0):0, pos=[];
+  const ox=S.lng*MLNG, oy=S.lat*MLAT, e0=terrainOn?(map.transform.elevation||0):0, pos=[], col=[];
   for(const f of glow){ const q=f.properties; let el=0; if(terrainOn){ try{ el=(map.queryTerrainElevation([q.lx,q.ly])||0)+e0; }catch(e){} }
-    pos.push(q.lx*MLNG-ox,q.z+el,-(q.ly*MLAT-oy)); }
-  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+    pos.push(q.lx*MLNG-ox,q.z+el,-(q.ly*MLAT-oy)); const k=q.k?parseInt(q.k.slice(1),16):0xffffff; col.push((k>>16&255)/255,(k>>8&255)/255,(k&255)/255); }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setAttribute('color',new THREE.Float32BufferAttribute(col,3));
   LG.pts.geometry.dispose(); LG.pts.geometry=g; LG.o=[ox,oy]; LG.n=glow.length; LG.dirty=true;
 }
 FRAME_HOOKS.push(function lampGlow(){
