@@ -120,7 +120,7 @@ function addCaps(){
   if(!map.getSource('accent-wash')){
     map.addSource('accent-wash',{type:'geojson',data:{type:'FeatureCollection',features:[]},maxzoom:19,tolerance:0});
     map.addLayer({id:'accent-wash',type:'fill-extrusion',source:'accent-wash',layout:{visibility:night&&!POWER?'visible':'none'},
-      paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-base':['get','b'],'fill-extrusion-height':['get','h'],'fill-extrusion-opacity':.95,'fill-extrusion-vertical-gradient':false}},before);
+      paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-base':['get','b'],'fill-extrusion-height':['get','h'],'fill-extrusion-opacity':1,'fill-extrusion-vertical-gradient':false}},before);
   }
   // after dark, a soft warm pool of light on the ground under each lit porch / garage light (owner 2026-11-23). Radius
   // in metres: prop r is metres / cos(latitude), turned into pixels by zoom (a map pixel is 2x smaller each zoom level)
@@ -489,8 +489,8 @@ function facades(P,kx,ky,res,rich){
   /* a school's up / down lights: orange up and navy down at Oswego High, plain white anywhere else, each pool fading as it
      climbs or falls (a palette per direction, bright at the fixture) */
   const shade=(h,f)=>'#'+[1,3,5].map(i=>Math.round(parseInt(h.substr(i,2),16)*f).toString(16).padStart(2,'0')).join('');
-  const SPAL=!school?null:(()=>{ const base=SC?{up:SC.up[0],dn:SC.dn[0]}:{up:'#fffdf2',dn:'#fffdf2'}, o={}; for(const d of ['up','dn']){ o[d]=[]; for(let i=0;i<10;i++) o[d].push(shade(base[d],1-i*.055)); } return o; })();
-  const wash=(E,s,w,b,h,i,dir)=>put(E,s-w/2,s+w/2,.012,.03,b,h,(SPAL&&dir?SPAL[dir][Math.min(i,9)]:WASH[Math.min(i,3)]),null,res.wash);
+  const SPAL=!school?null:(()=>{ const base=SC?{up:SC.up[0],dn:SC.dn[0]}:{up:'#fffdf2',dn:'#fffdf2'}, o={}; for(const d of ['up','dn']){ o[d]=[]; for(let i=0;i<10;i++) o[d].push(shade(base[d],1-i*.035)); } return o; })();
+  const wash=(E,s,w,b,h,i,dir)=>put(E,s-w/2,s+w/2,.05,.09,b,h,(SPAL&&dir?SPAL[dir][Math.min(i,9)]:WASH[Math.min(i,3)]),null,res.wash);
   const gpt=(E,s,z,o,r,col)=>{ const L=toLL([E.a[0]+E.ux*s+E.nx*.34,E.a[1]+E.uy*s+E.ny*.34]), q=toLL([E.a[0]+E.ux*s+E.nx*o,E.a[1]+E.uy*s+E.ny*o]);
     res.glow.push({type:'Feature',properties:Object.assign({r:+(r/clA).toFixed(2),lx:L[0],ly:L[1],z},col?{k:col}:{}),geometry:{type:'Point',coordinates:q}}); };
   // z: fixture middle height; up / dn: slices of light above / below it (sh m tall each, widths ws); pool: ground pool radius at po m out
@@ -505,7 +505,7 @@ function facades(P,kx,ky,res,rich){
   /* the school's accent light (owner 2026-11-23): a louvred housing with a lens strip on top and bottom — coloured at Oswego,
      white elsewhere, nothing in the middle — set between the first and second floor. Its light fills the wall right up to
      the roofline and down to the ground, in slices that widen away from the lens and fade. */
-  const sfix=(E,s,z,top)=>{ if(!frames||s<.5||s>E.L-.5) return; const lu=SPAL.up[0], ld=SPAL.dn[0], bw=.13, sh=1.05, ws=i=>Math.min(2.6,.5+i*.36);
+  const sfix=(E,s,z,top)=>{ if(!frames||s<.5||s>E.L-.5) return; const lu=SPAL.up[0], ld=SPAL.dn[0], bw=.13, sh=1.05, ws=i=>Math.min(3.2,.9+i*.42);
     put(E,s-bw-.04,s+bw+.04,0,.05,z-.3,z+.3,fxc);                                       // back plate
     put(E,s-bw,s+bw,.04,.26,z-.24,z+.24,fxc);                                            // housing
     for(const dz of [-.1,.1]) put(E,s-bw-.02,s+bw+.02,.2,.3,z+dz-.015,z+dz+.015,'#55585d');    // louvres
@@ -514,7 +514,10 @@ function facades(P,kx,ky,res,rich){
     const nu=Math.min(9,Math.ceil((top-z-.3)/sh)), nd=Math.min(9,Math.ceil((z-.3-.1)/sh));
     for(let i=0;i<nu;i++) wash(E,s,ws(i),z+.3+i*sh,Math.min(top-.05,z+.3+(i+1)*sh),i,'up');
     for(let i=0;i<nd;i++) wash(E,s,ws(i),Math.max(.1,z-.3-(i+1)*sh),z-.3-i*sh,i,'dn');
-    gpt(E,s,z+.18,0,0,lu); gpt(E,s,z-.18,0,0,ld); gpt(E,s,z+.9,0,0,lu); gpt(E,s,z-.9,0,0,ld); };
+    gpt(E,s,z+.18,0,0,lu); gpt(E,s,z-.18,0,0,ld);
+    // the map layer can't glow at night, so the beam is also a chain of soft lights (car layer) running up to the roof and down to the ground
+    for(let i=1;i<=nu+1;i++){ const zz=z+.18+i*.9; if(zz<top-.2) gpt(E,s,zz,0,0,SPAL.up[Math.min(i,9)]); }
+    for(let i=1;i<=nd+1;i++){ const zz=z-.18-i*.9; if(zz>.2) gpt(E,s,zz,0,0,SPAL.dn[Math.min(i,9)]); } };
   // a gooseneck light over a shop sign: an arm out from the wall, the lamp head shining down onto the wall below
   const gooseneck=(E,s,zt)=>{ if(!frames||s<.5||s>E.L-.5) return;
     put(E,s-.03,s+.03,0,.5,zt-.03,zt+.03,fxc); put(E,s-.13,s+.13,.3,.58,zt-.1,zt+.04,fxc); put(E,s-.1,s+.1,.34,.54,zt-.13,zt-.1,LGL,2);
