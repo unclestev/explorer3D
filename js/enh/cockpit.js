@@ -561,7 +561,7 @@ if(typeof FRAME_HOOKS!=="undefined") FRAME_HOOKS.push(function parkSensors(dt){
     else if(BC.beepT<=0){ beep(.07); BC.beepT=lerp(.09,.6,(d-.3)/1.5); } }
   return false; });
 function backupCam(dt){ const p=CK.cab&&CK.cab.parts&&CK.cab.parts.screen; if(!p||!p.grp) return;
-  const on=!!((reversing()||BC.hold)&&bcCar()&&powered()&&CK.cab.P&&CK.cab.P.style!=='ev');   // a real true / false: three.js only skips objects whose visible is exactly false (0 still drew the camera)                              // (the Model Y's screen layout draws its own; the sensors still beep)
+  const on=!!((reversing()||BC.hold)&&bcCar()&&powered()&&CK.cab.P&&CK.cab.P.style!=='ev'&&!(window.PARK&&PARK.active));   // Park Assist keeps its own screen while it backs in (owner 2026-11-23)   // a real true / false: three.js only skips objects whose visible is exactly false (0 still drew the camera)                              // (the Model Y's screen layout draws its own; the sensors still beep)
   if(!p.bc){ if(!on) return;
     BC.rt=BC.rt||new THREE.WebGLRenderTarget(640,Math.round(640*p.h/p.w),{minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter});
     BC.cam=BC.cam||new THREE.PerspectiveCamera(100,p.w/p.h,1,1e6);

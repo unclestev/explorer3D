@@ -89,6 +89,7 @@ function* stallJob(){                                            // spread over 
   const greens=(P.greenR||[]).map(r=>{ const q=r.map(p=>L(p[0],p[1])); let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const [x,y] of q){ if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; } return {r:q,b:[x0-.3,y0-.3,x1+.3,y1+.3]}; });
   const onGreen=(x,y)=>greens.some(o=>x>=o.b[0]&&x<=o.b[2]&&y>=o.b[1]&&y<=o.b[3]&&inRing(o.r,x,y));
   const lotAt=(x,y)=>{ for(const o of lots){ const b=o.b; if(x<b[0]||x>b[2]||y<b[1]||y>b[3]) continue; if(inRing(o.r,x,y)&&!o.holes.some(h=>inRing(h,x,y))) return o; } return null; };
+  const stalls=[], stall=(cx,cy,ix,iy)=>{ const c=G(cx,cy); stalls.push({lng:c[0],lat:c[1],into:Math.atan2(ix,iy)*180/Math.PI}); };   // for Park Assist (js/enh/park.js)
   const out=[], pads=[], line=(p,q)=>out.push({type:'Feature',properties:{},geometry:{type:'LineString',coordinates:[G(p[0],p[1]),G(q[0],q[1])]}});
   const ok=(p,q,lot)=>{ const m=[(p[0]+q[0])/2,(p[1]+q[1])/2];
     if(lot){ if(lotAt(p[0],p[1])!==lot||lotAt(q[0],q[1])!==lot) return false; }
@@ -100,10 +101,10 @@ function* stallJob(){                                            // spread over 
     const ux=(s.b[0]-s.a[0])/s.len, uy=(s.b[1]-s.a[1])/s.len, nx=uy, ny=-ux, mid=[(s.a[0]+s.b[0])/2,(s.a[1]+s.b[1])/2];
     const lot=lotAt(mid[0],mid[1]); if(lot) lot.aisle=true;
     const n=Math.floor((s.len-2)/SW), st=(s.len-n*SW)/2; let any=false;
-    for(const side of [1,-1]) for(let k=0;k<=n;k++){ const t=st+k*SW, bx=s.a[0]+ux*t, by=s.a[1]+uy*t;
+    for(const side of [1,-1]){ let prevOk=false; for(let k=0;k<=n;k++){ const t=st+k*SW, bx=s.a[0]+ux*t, by=s.a[1]+uy*t;
       const p=[bx+nx*side*AH,by+ny*side*AH], q=[bx+nx*side*(AH+SD),by+ny*side*(AH+SD)];
-      if(near(AG,(p[0]+q[0])/2,(p[1]+q[1])/2,.3,s)) continue;   // where another aisle crosses
-      if(ok(p,q,lot)){ line(p,q); any=true; } }
+      if(near(AG,(p[0]+q[0])/2,(p[1]+q[1])/2,.3,s)){ prevOk=false; continue; }   // where another aisle crosses
+      if(ok(p,q,lot)){ line(p,q); any=true; if(prevOk){ const tm=t-SW/2, o=AH+SD/2; stall(s.a[0]+ux*tm+nx*side*o,s.a[1]+uy*tm+ny*side*o,nx*side,ny*side); } prevOk=true; } else prevOk=false; } }
     if(any&&!lot){ const w=AH+SD+.3, c=[[-w,-.4],[w,-.4],[w,s.len+.4],[-w,s.len+.4]].map(([o,t])=>G(s.a[0]+ux*t+nx*o,s.a[1]+uy*t+ny*o)); c.push(c[0]);
       pads.push({type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[c]}}); } }
   // 2. lots with no aisle in the map: rows along the long side
@@ -116,11 +117,12 @@ function* stallJob(){                                            // spread over 
     if(best.u1-best.u0<best.v1-best.v0) best={A:best.A,c:-best.sn,sn:best.c,u0:best.v0,u1:best.v1,v0:-best.u1,v1:-best.u0};   // u: the long side
     const B=best, W2=(u,v)=>[u*B.c-v*B.sn,u*B.sn+v*B.c];
     let v=B.v0+.4, row=0;
-    while(v+SD<=B.v1-.3){ for(let u=B.u0+1.2;u<=B.u1-1.2;u+=SW){ const p=W2(u,v), q=W2(u,v+SD); if(ok(p,q,lot)) line(p,q); }
+    while(v+SD<=B.v1-.3){ let prevOk=false; const iv=row%2===0?-1:1, iw=W2(0,iv);
+      for(let u=B.u0+1.2;u<=B.u1-1.2;u+=SW){ const p=W2(u,v), q=W2(u,v+SD); if(ok(p,q,lot)){ line(p,q); if(prevOk){ const c=W2(u-SW/2,v+SD/2); stall(c[0],c[1],iw[0],iw[1]); } prevOk=true; } else prevOk=false; }
       v+=SD; if(row%2===0) v+=AISLE; row++; }                     // stalls, aisle, stalls | back to back | stalls, aisle, stalls ...
   }
   safe('pk lines',()=>{ map.getSource('pk-lines').setData({type:'FeatureCollection',features:out}); map.getSource('pk-pads').setData({type:'FeatureCollection',features:pads}); });
-  P.nLines=out.length; P.nPads=pads.length; P.ms=performance.now()-t0;
+  P.stalls=stalls; P.nLines=out.length; P.nPads=pads.length; P.ms=performance.now()-t0;
 }
 function layers(){ safe('parking layers',()=>{
   if(!map.getSource('parking')) map.addSource('parking',{type:'geojson',data:EMPTY});
@@ -167,5 +169,5 @@ onTick(50,function parkingJob(){ if(!P.job) return; const t=performance.now();
   try{ while(performance.now()-t<6){ if(P.job.next().done){ P.job=null; break; } } }catch(e){ console.warn('parking lines',e); P.job=null; } });
 onTick(2000,function parkingTick(){ if(!P.ready||P.busy||Date.now()<P.retry) return;
   if(!P.at||meters(P.at[1],P.at[0],S.lat,S.lng)>1500) load(); });
-window.PARKING={at,state:P};
+window.PARKING={at,state:P,get stalls(){ return P.stalls||[]; }};   // stalls: {lng,lat,into: compass heading from the aisle into the space}
 })();
