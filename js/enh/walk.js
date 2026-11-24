@@ -20,14 +20,14 @@
 const {safe}=YD;
 const btn=document.getElementById('walkBtn');
 const PK={mode:null,lat:0,lng:0,hdg:0};                          // the parked vehicle while you're on foot
-const W={v:0,phase:0,amp:0,run:0,order:0,blockT:0,near:false,lastAnim:false};
+const W={v:0,phase:0,amp:0,run:0,order:0,blockT:0,near:false,lastAnim:false,medium:null,vx:0,vy:0,push:0};   // medium: null (land), 'swim', 'ice' (skating)
 const WALKV=1.4, RUNV=5.4, BACKV=.9;                              // m/s on the speedometer (3.1 / 12 / 2 mph)
 
 /* ---------- the person (metres, front = -z, feet on y = 0) ---------- */
 function buildPerson(pal){
   pal=pal||{};
   const mat=c=>new THREE.MeshLambertMaterial({color:c,transparent:true,opacity:1});   // transparent: drawn in order with the car photo
-  const skin=mat(pal.skin||0xc98f6a), hair=mat(pal.hair||0x3b2a1e), top=mat(pal.top||0x6f7780), jeans=mat(pal.jeans||0x2c3a52), shoe=mat(0xe8e6e1), sole=mat(0x6b6b6b);
+  const skin=mat(pal.skin||0xc98f6a), hair=mat(pal.hair||0x3b2a1e), top=mat(pal.top||0x6f7780), jeans=mat(pal.jeans||0x2c3a52), shoe=mat(0xe8e6e1), sole=mat(0x6b6b6b), skb=mat(0x1a1c20), steel=mat(0xc9ced4), wood=mat(0x8a6a3d), tape=mat(0x15171a);
   const cyl=(rt,rb,h,m,seg)=>new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg||10),m);
   const root=new THREE.Group(), fig=new THREE.Group(); root.add(fig);
   const parts={};
@@ -39,6 +39,11 @@ function buildPerson(pal){
     const sh=cyl(.062,.048,.44,jeans); sh.position.y=-.22; knee.add(sh);
     const ft=new THREE.Mesh(new THREE.BoxGeometry(.11,.075,.27),shoe); ft.position.set(0,-.48,-.05); knee.add(ft);
     const so=new THREE.Mesh(new THREE.BoxGeometry(.115,.02,.28),sole); so.position.set(0,-.515,-.05); knee.add(so);
+    // hockey skates (shown on ice): a black boot cuff, a holder and a steel blade a little longer than the boot
+    const sk=new THREE.Group(); sk.visible=false; knee.add(sk); (parts.skates=parts.skates||[]).push(sk);
+    const cuff=new THREE.Mesh(new THREE.BoxGeometry(.12,.16,.13),skb); cuff.position.set(0,-.4,0); sk.add(cuff);
+    const hold=new THREE.Mesh(new THREE.BoxGeometry(.03,.07,.26),skb); hold.position.set(0,-.565,-.05); sk.add(hold);
+    const bl=new THREE.Mesh(new THREE.BoxGeometry(.012,.03,.33),steel); bl.position.set(0,-.62,-.05); sk.add(bl);
     parts[s<0?'hipL':'hipR']=hip; parts[s<0?'kneeL':'kneeR']=knee;
   }
   // upper body leans from the hips
@@ -60,18 +65,47 @@ function buildPerson(pal){
     const hd=new THREE.Mesh(new THREE.SphereGeometry(.046,10,8),skin); hd.scale.set(.8,1.15,1); hd.position.y=-.29; el.add(hd);
     sh.rotation.z=s*.07;
     parts[s<0?'shL':'shR']=sh; parts[s<0?'elL':'elR']=el;
+    if(s>0){ // a hockey stick in the right hand (shown while skating): shaft, a taped blade at the bottom
+      const st=new THREE.Group(); st.position.set(0,-.29,0); st.visible=false; el.add(st); parts.stick=st;
+      const shaft=cyl(.012,.012,1.5,wood,6); shaft.position.y=-.2; st.add(shaft);
+      const blade=new THREE.Mesh(new THREE.BoxGeometry(.02,.07,.3),tape); blade.position.set(0,-.97,-.13); st.add(blade); }
   }
   const sh=new THREE.Mesh(new THREE.PlaneGeometry(.95,.75),shadow.material); sh.rotation.x=-Math.PI/2; sh.position.y=.02; root.add(sh);
   root.userData=parts; root.userData.fig=fig; root.visible=false;
   return root;
 }
 const person=buildPerson(); scene.add(person);
+// the water round a swimmer: a translucent pool of blue drawn over the lower body, with two ripple rings that spread and fade
+const swimFx=(()=>{ const g=new THREE.Group(); g.visible=false; person.add(g);
+  const pool=new THREE.Mesh(new THREE.CircleGeometry(1,28),new THREE.MeshBasicMaterial({color:0x3f86b8,transparent:true,opacity:.5,depthTest:false,depthWrite:false}));
+  pool.rotation.x=-Math.PI/2; pool.scale.set(.75,1.35,1); pool.position.set(0,.04,0); pool.renderOrder=14; g.add(pool);
+  const rings=[0,1].map(()=>{ const m=new THREE.Mesh(new THREE.RingGeometry(.92,1,28),new THREE.MeshBasicMaterial({color:0xe6f3fb,transparent:true,opacity:.6,depthTest:false,depthWrite:false}));
+    m.rotation.x=-Math.PI/2; m.position.y=.05; m.renderOrder=15; g.add(m); return m; });
+  return {g,rings}; })();
 function setOrder(n){ if(W.order===n) return; W.order=n; person.traverse(o=>{ if(o.isMesh) o.renderOrder=n; }); }
 setOrder(12);
 
 // walk / run cycle: swing the legs and arms, bend the knees on the forward swing, bob and lean when running
 function pose(){
-  const P=person.userData, a=W.amp, r=W.run, s=Math.sin(W.phase), c=Math.cos(W.phase);
+  const P=person.userData, a=W.amp, r=W.run, s=Math.sin(W.phase), c=Math.cos(W.phase), med=W.medium;
+  for(const k of P.skates) k.visible=med==='ice'; if(P.stick) P.stick.visible=med==='ice';
+  if(med==='swim'){                                                   // front crawl: lying on the water, arms windmilling, a flutter kick
+    const k=Math.min(1,.35+a*1.2);
+    P.fig.rotation.x=-1.32; P.fig.position.set(0,-.12,.85); P.up.rotation.x=.12;
+    P.shL.rotation.x=-W.phase*1+0; P.shR.rotation.x=-W.phase*1+Math.PI; P.shL.rotation.z=.12; P.shR.rotation.z=-.12;
+    P.elL.rotation.x=.25+.25*Math.max(0,Math.cos(W.phase)); P.elR.rotation.x=.25+.25*Math.max(0,-Math.cos(W.phase));
+    P.hipL.rotation.x=Math.sin(W.phase*2)*.3*k; P.hipR.rotation.x=-Math.sin(W.phase*2)*.3*k; P.kneeL.rotation.x=P.kneeR.rotation.x=-.08;
+    return; }
+  P.fig.rotation.x=0; P.fig.position.z=0; P.shL.rotation.z=-.07; P.shR.rotation.z=.07;
+  if(med==='ice'){                                                    // skating: knees bent, leaning in, long alternating strides with the push leg out to the side
+    const v=Math.min(1,Math.abs(W.v)/7), sw=Math.sin(W.phase*.55), cw=Math.cos(W.phase*.55), stride=Math.min(1,.15+W.push*.9+v*.5);
+    P.hipL.rotation.x=-.35-.25*v+sw*.35*stride; P.hipR.rotation.x=-.35-.25*v-sw*.35*stride;
+    P.kneeL.rotation.x=-.55-.2*v-.3*Math.max(0,cw)*stride; P.kneeR.rotation.x=-.55-.2*v-.3*Math.max(0,-cw)*stride;
+    P.hipL.rotation.z=.05+Math.max(0,-sw)*.28*stride; P.hipR.rotation.z=-.05-Math.max(0,sw)*.28*stride;
+    P.up.rotation.x=-.28-.3*v; P.fig.position.y=-.2-.04*v;
+    P.shL.rotation.x=-.5+sw*.2*stride; P.shR.rotation.x=-.7-sw*.15*stride; P.elL.rotation.x=.9; P.elR.rotation.x=.8;
+    return; }
+  P.hipL.rotation.z=P.hipR.rotation.z=0;
   P.hipL.rotation.x=s*a; P.hipR.rotation.x=-s*a;
   const kb=a*(1.1+r*.9);
   P.kneeL.rotation.x=-kb*Math.max(0,c)-.05; P.kneeR.rotation.x=-kb*Math.max(0,-c)-.05;
@@ -598,23 +632,60 @@ window.onModeChange=(m,was)=>{ if(prevMode) prevMode(m,was);
   if(m!=='walk'&&FPV.on) fpOff();
   if(IN.rec&&(m==='walk'||was==='walk')) safe('inside draw',()=>drawInterior(IN.rec));   /* car <-> foot in a garage: cut-away <-> the room */
   if(m!=='walk'){ if(IN.rec&&(m==='glider'||!inRec(IN.rec,S.lat,S.lng))) setInside(null);   /* got back in the car in the garage: stay inside */ if(IN.open!=null&&window.ROOFS){ IN.open=null; ROOFS.openDoor(null); } IN.ip=68; }
-  if(m==='walk'){ car.visible=true; W.v=0; S.zoom=Math.max(S.zoom,19.3); }
+  if(m==='walk'){ car.visible=true; W.v=0; W.vx=W.vy=0; S.zoom=Math.max(S.zoom,19.3); }
+  if(m!=='walk'&&W.medium){ W.medium=null; swimFx.g.visible=false; pose(); }
   updateBtn();
 };
 
 /* ---------- every frame on foot (called from js/game.js step()) ---------- */
+/* ---------- water and ice (owner 2026-11-24) ----------
+   In water you swim (slow crawl, the person lies on the water); when the air is at or below freezing (js/enh/ice.js) the
+   water is ice and you skate on it in hockey skates: the same gas and brake, but you glide (sideways grip is good, forward
+   friction is low), speed builds up to about 20 mph and the brake is a hockey stop. Rinks inside arenas (js/enh/rink.js)
+   are ice too: window.RINK.floor(rec) says so. */
+function mediumNow(){
+  const rk=IN.rec&&window.RINK&&RINK.floor(IN.rec);
+  if(rk) return 'ice';
+  if(IN.rec) return null;
+  if(!landCache.at) safe('land',rebuildLandCache);
+  return safe('medium',()=>inWater(S.lat,S.lng))?(window.ICE&&ICE.frozen?'ice':'swim'):null; }
+function setMedium(m){
+  if(m===W.medium) return; const was=W.medium; W.medium=m;
+  if(m==='swim'){ swimFx.g.visible=true; toast('🏊 Swimming: you can cross the water, slowly',2600); }
+  else swimFx.g.visible=false;
+  if(m==='ice'){ W.vx=Math.sin(rad(S.hdg))*W.v; W.vy=Math.cos(rad(S.hdg))*W.v; toast(IN.rec?'⛸️ On the ice: hockey skates on. Shoot with the 🏒 button':'⛸️ Frozen water: hockey skates on (gas pushes off, brake stops)',3000); }
+  else if(was==='ice'){ W.v=Math.min(Math.abs(W.v),RUNV)*Math.sign(W.v); W.vx=W.vy=0; toast('Skates off',1200); }
+  else if(was==='swim') toast('Out of the water',1200);
+  pose(); }
 function walkStep(dt,st,gas,now){
+  if(every('wmed',.1)) setMedium(mediumNow());
+  const swim=W.medium==='swim', skate=W.medium==='ice';
   // speed: any press walks, the upper part of the pedal jogs and runs; brake steps backwards
   let tv=0;
   if(gas>.05) tv=gas<=.55?WALKV:WALKV+(Math.min(gas,.85)-.55)/.3*(RUNV-WALKV);
   else if(gas<-.05) tv=-BACKV;
+  if(swim) tv=tv>0?1+(tv-WALKV)/(RUNV-WALKV)*1.4:tv<0?-.5:0;       // front crawl: about 2 mph, 5 mph flat out
   W.v+=(tv-W.v)*Math.min(1,dt*(Math.abs(tv)<Math.abs(W.v)?7:3.5));
   if(!tv&&Math.abs(W.v)<.03) W.v=0;
   // turning: on the spot or on the move (a bit wider when running)
-  const sp=Math.abs(W.v);
-  S.hdg=(S.hdg+st*(sp>3?110:160)*dt+360)%360;
-  // move; buildings and water stop you (unless you're already inside one, e.g. got out in a building)
-  const dm=W.v*dt*(IN.rec?1:SPEEDUP), h=rad(S.hdg);                // indoors at real walking speed (rooms are small)
+  let sp=Math.abs(W.v);
+  S.hdg=(S.hdg+st*(skate?150/(1+sp*.3):sp>3?110:160)*dt+360)%360;
+  let h=rad(S.hdg);
+  let dm=W.v*dt*(IN.rec?1:SPEEDUP);                                // indoors at real walking speed (rooms are small)
+  if(skate){                                                       // a velocity vector: gliding, blades grip sideways, brake = hockey stop
+    const fx=Math.sin(h), fy=Math.cos(h), lx=fy, ly=-fx;
+    let vf=W.vx*fx+W.vy*fy, vl=W.vx*lx+W.vy*ly;
+    W.push=gas>.05?Math.min(1,gas):0;
+    if(gas>.05&&vf<9.5) vf+=Math.min(1,gas)*(vf<0?9:4.6)*dt;                   // pushing off
+    const stop=gas<-.05;
+    vf*=Math.exp(-dt*(stop?(Math.abs(vf)>.8?2.4:6):.09));
+    if(stop&&vf<.3&&vf>-1.2) vf-=1.2*dt;                           // then drift backwards slowly
+    vl*=Math.exp(-dt*(stop?3.6:2.4)); if(stop&&Math.abs(vl)>2.5) vl*=Math.exp(-dt*1.5);
+    W.vx=vf*fx+vl*lx; W.vy=vf*fy+vl*ly; W.v=vf; sp=Math.hypot(W.vx,W.vy);
+    h=sp>.05?Math.atan2(W.vx,W.vy):h; dm=sp*dt*(IN.rec?1:SPEEDUP);
+    if(sp<.04){ W.vx=W.vy=0; dm=0; } }
+  else W.push=0;
+  // move; buildings stop you (unless you're already inside one, e.g. got out in a building); water doesn't any more: you swim or skate
   const recs=safe('doors',()=>recsNear(S.lat,S.lng))||[];
   safe('inside',()=>updInside(recs));
   if(dm){
@@ -622,7 +693,7 @@ function walkStep(dt,st,gas,now){
     if(!landCache.at||every('landcache',3)||meters(landCache.at[1],landCache.at[0],S.lat,S.lng)>400) safe('land',rebuildLandCache);
     let thru=null; for(const r of recs){ if(doorCross(r,[S.lat,S.lng],probe)){ thru=r; break; } }   // through a doorway: in or out
     const wall=!thru&&IN.rec&&!inRec(IN.rec,probe[0],probe[1]);                                     // inside: its walls keep you in
-    const block=!thru&&(wall||safe('walk block',()=>(inBuilding(probe[0],probe[1])&&!inBuilding(S.lat,S.lng))||(inWater(probe[0],probe[1])&&!inWater(S.lat,S.lng))));
+    const block=!thru&&(wall||safe('walk block',()=>(inBuilding(probe[0],probe[1])&&!inBuilding(S.lat,S.lng))));
     if(block){
       // walking at a wall right by a door: slide along it into the doorway
       const nd=wall||!inAny(landCache.water,probe[1],probe[0])?nearDoor(recs,S.lat,S.lng):null;
@@ -630,7 +701,7 @@ function walkStep(dt,st,gas,now){
         const sl=-Math.sign(nd.al)*Math.min(Math.abs(nd.al),1.2*dt*SPEEDUP), ex=nd.ux*sl/nd.r.kx, ey=nd.uy*sl/nd.r.ky;
         S.lng+=ex; S.lat+=ey; W.v*=.9;
       } else {
-        W.v=0; if(now-W.blockT>4000){ W.blockT=now; toast(wall?'A wall: walk out through a door':inAny(landCache.water,probe[1],probe[0])?"Water ahead: you can't swim here":'A building is in the way: walk in through a door',1600); } }
+        W.v=0; W.vx=W.vy=0; if(now-W.blockT>4000){ W.blockT=now; toast(wall?'A wall: walk out through a door':inAny(landCache.water,probe[1],probe[0])?"Water ahead: you can't swim here":'A building is in the way: walk in through a door',1600); } }
     }
     else { S.lat=n[0]; S.lng=n[1]; safe('inside',()=>updInside(recs)); }
   }
@@ -642,9 +713,12 @@ function walkStep(dt,st,gas,now){
   const moving=Math.abs(W.v)>.05, run=Math.max(0,Math.min(1,(Math.abs(W.v)-1.8)/2.6));
   W.run+=(run-W.run)*Math.min(1,dt*5);
   W.amp+=((moving?.4+.42*W.run:0)-W.amp)*Math.min(1,dt*8);
-  if(moving) W.phase+=dt*2*Math.PI*(.95+.24*Math.abs(W.v))*Math.sign(W.v);
+  if(swim){ W.phase+=dt*(2.2+1.3*Math.abs(W.v)); const t=now/1000;                             // arms keep turning slowly even when treading water
+    swimFx.rings.forEach((m,i)=>{ const k=((t*.45+i*.5)%1); m.scale.set(.55+k*.75,1,(.55+k*.75)*1.7); m.material.opacity=.55*(1-k)*(Math.abs(W.v)>.1?1:.5); }); }
+  else if(skate){ W.phase+=dt*(1.2+Math.abs(W.v)*.9)*(W.push>0||Math.abs(W.v)>1.5?1:.25); }
+  else if(moving) W.phase+=dt*2*Math.PI*(.95+.24*Math.abs(W.v))*Math.sign(W.v);
   else if(W.amp<.02) W.phase=0;
-  const anim=W.amp>.004; if(anim) pose();
+  const anim=W.amp>.004||!!W.medium; if(anim) pose();
 
   // HUD + background jobs (same as driving)
   if(every('place',1)) updatePlace(); if(every('house',.25)) updateHouseFilter(false);
@@ -655,7 +729,7 @@ function walkStep(dt,st,gas,now){
     if(styleReady){ const p=map.project([S.lng,S.lat]), f=QGEO()?geoRoads(S.lng,S.lat,4):hitRoad(p.x,p.y,8);
 
       roadEl.textContent=IN.rec?'Indoors':'On foot'; roadEl.className=''; /* the street shows next to it: game.js updateRoadX */ }
-    const st2=Math.abs(W.v)<.05?'Standing':W.v<0?'Stepping back':W.run>.6?'Running':W.run>.15?'Jogging':'Walking';
+    const st2=swim?(Math.abs(W.v)<.1?'Treading water':'Swimming'):skate?(Math.abs(W.v)<.3?'On the ice':W.push>0?'Skating':'Gliding'):Math.abs(W.v)<.05?'Standing':W.v<0?'Stepping back':W.run>.6?'Running':W.run>.15?'Jogging':'Walking';
     if(st2!==step.surf){ step.surf=st2; surfEl.textContent=st2; surfEl.style.color=''; }
     const c=carInfo(); W.near=c.d<=reach()&&(!IN.rec||inRec(IN.rec,PK.lat,PK.lng));
     nearEl.textContent=W.near?'Tap 🚗 to get back in':IN.rec?'Inside · walk out through a door to leave':W.near?'Tap 🚗 to get back in':(PK.mode==='tractor'?'🚜':'🚗')+' Your '+vehName()+': '+c.dist+' '+c.where;
