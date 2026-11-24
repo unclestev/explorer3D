@@ -306,11 +306,12 @@ function trofferTex(){ if(STX.trof) return STX.trof; const c=document.createElem
 function troffers(g,p,HC){
   // rows along the building's long side: a 2 x 4 ft fixture every 2.44 m across and 3.66 m along (a common store layout).
   // Two switches (owner 2026-11-23): in a chequerboard pattern, every other light on the first switch and the ones between
-  // on the second, so either one alone leaves the store evenly lit
+  // on the second, so either one alone leaves the store evenly lit. A few (one in sixteen, spread out) are night lights on
+  // no switch: they stay on when both switches are off (owner 2026-11-23), like a real store after hours
   let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const q of p){ x0=Math.min(x0,q[0]); x1=Math.max(x1,q[0]); y0=Math.min(y0,q[1]); y1=Math.max(y1,q[1]); }
-  const along=(x1-x0)>=(y1-y0), sx=along?3.66:2.44, sy=along?2.44:3.66, pts=[[],[]];
+  const along=(x1-x0)>=(y1-y0), sx=along?3.66:2.44, sy=along?2.44:3.66, pts=[[],[],[]];
   let xi=0; for(let x=x0+sx/2;x<x1;x+=sx,xi++){ let yi=0; for(let y=y0+sy/2;y<y1;y+=sy,yi++){ if(!inP(p,x,y)) continue; let ok=true;
-    for(const [dx,dy] of [[-.8,-.8],[.8,-.8],[.8,.8],[-.8,.8]]) if(!inP(p,x+dx,y+dy)){ ok=false; break; } if(ok) pts[(xi+yi)%2].push([x,y]); } }
+    for(const [dx,dy] of [[-.8,-.8],[.8,-.8],[.8,.8],[-.8,.8]]) if(!inP(p,x+dx,y+dy)){ ok=false; break; } if(ok) pts[xi%4===1&&yi%4===1?2:(xi+yi)%2].push([x,y]); } }
   ROOM.tro=[];
   const geo=new THREE.PlaneGeometry(.61,1.22); geo.rotateX(Math.PI/2); if(along) geo.rotateY(Math.PI/2);   // facing down
   const M=new THREE.Matrix4();
@@ -336,8 +337,9 @@ function switches(g,r,HC){ ROOM.sw=[]; const d=r.doors[0]; if(!d) return;
   lightsApply(); }
 function lightsApply(){ for(const k of [0,1]){ const m=ROOM.tro&&ROOM.tro[k]; if(m){ m.color.setHex(LSW[k]?0xffffff:0x3b3f47); m.needsUpdate=true; } }
   for(const w of ROOM.sw||[]){ w.lv.position.y=1.2+(LSW[w.k]?.012:-.012); w.lv.rotation.x=LSW[w.k]?-.35:.35; }
-  const on=(LSW[0]?1:0)+(LSW[1]?1:0), f=on===2?1:on===1?.62:.2;          // the room dims as rows go out
+  const on=(LSW[0]?1:0)+(LSW[1]?1:0), f=on===2?1:on===1?.62:.3;           // the night lights keep a little light          // the room dims as rows go out
   for(const k of ['ceil','floor']) if(STX[k]){ STX[k].emissiveIntensity=f; STX[k].color.setScalar(.35+.65*f); }
+  if(typeof swLabel==='function'&&swBtn.style.display==='flex') swLabel();
   if(typeof dirty!=='undefined') dirty=true; }
 function flipLights(k,on){ if(k==null){ LSW[0]=LSW[1]=on; } else LSW[k]=on==null?!LSW[k]:on; lightsApply(); return LSW.slice(); }
 // the button by the switches
