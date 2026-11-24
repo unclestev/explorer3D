@@ -8,7 +8,7 @@
 (()=>{
 'use strict';
 const {safe,onReady,onTick}=YD;
-const WALL='#b88862', ROOF='#2c2e34';
+const WALL='#c58a5c', ROOF='#2c2e34';
 // the wings, in photo pixels [x0,y0,x1,y1, height m] (the photo is looked at from the south-east, so this is a flattened plan)
 // traced from the owner's aerial photo: its roof outline cut into rectangles (photo pixels x0,y0,x1,y1) with each one's height in metres
 const PLAN=[[528,84,552,144,5],[612,84,624,120,5],[516,96,528,144,5],[552,96,612,144,5],[624,96,636,108,5],[420,108,516,348,8],[624,108,636,360,8],[408,120,420,372,8],[612,120,624,360,8],[636,120,744,360,8],[384,132,408,360,8],[744,132,756,372,8],[348,144,384,360,8],[516,144,612,300,6],[756,144,804,372,8],[324,156,348,360,8],[804,156,816,372,8],[312,168,324,360,8],[816,168,828,372,8],[300,192,312,360,8],[288,204,300,360,8],[276,252,288,360,8],[264,288,276,360,8],[828,288,840,372,8],[516,300,612,516,6.4],[420,348,432,360,8],[432,348,516,576,6.4],[420,360,432,456,6.4],[612,360,660,384,6.4],[660,360,744,372,8],[612,384,648,516,6.4],[648,420,672,456,6.4],[36,444,48,756,11],[204,444,216,768,11],[48,456,60,756,11],[168,456,204,768,11],[216,456,240,768,11],[336,456,432,768,11],[648,456,660,516,6.4],[660,456,720,516,5.2],[24,468,36,756,11],[60,468,168,756,11],[240,468,336,768,11],[720,468,792,516,5.2],[792,480,948,516,5.2],[12,492,24,756,11],[948,504,960,552,5.2],[516,516,600,576,6.4],[600,516,888,552,10],[888,516,948,552,5.2],[960,516,972,540,5.2],[0,528,12,744,11],[972,528,984,768,10.4],[960,540,972,768,10.4],[984,540,1044,768,10.4],[600,552,864,768,10],[864,552,960,768,10.4],[1044,552,1056,768,10.4],[1056,564,1092,768,10.4],[432,576,600,864,6.6],[1092,612,1104,768,10.4],[1104,648,1116,768,10.4],[1116,696,1128,768,10.4],[1128,744,1140,768,10.4],[120,756,168,768,11],[120,768,132,780,11],[132,768,360,852,6.2],[360,768,432,852,6.6],[600,768,1140,792,7],[120,780,132,804,6.2],[600,792,1128,888,7],[1128,828,1140,924,7],[180,852,360,864,6.2],[360,852,372,864,6.6],[180,864,312,888,4],[312,864,360,876,6.2],[1140,864,1152,924,7],[312,876,324,888,4],[192,888,312,912,4],[612,888,1128,900,7],[1152,888,1164,924,7],[720,900,1128,912,7],[204,912,216,924,4],[240,912,312,924,4],[720,912,840,948,4.2],[840,912,852,924,7],[900,912,1128,924,7],[840,924,852,948,4.2]];
@@ -79,7 +79,7 @@ function polysOf(F,P,kx,ky){            // ... as lng/lat rings
    roof edge, rows of small square windows high on the walls (two rows on the two-storey wings), and three recessed entrances with
    brick canopies and red doors on the parking-lot side. Drawn flat on the faces of the wings, and only where no other wing
    covers the wall, so nothing floats. */
-const BASE='#7a4a38', BAND='#8b3a32', GLASS='#1f2a36', RED='#8a1f26', DARK='#3a1a1a', BRICKC='#b88862';
+const BASE='#7a4a38', BAND='#8b3a32', GLASS='#1f2a36', RED='#8a1f26', DARK='#3a1a1a', BRICKC='#c58a5c';
 const PORTALS=[[480,860,'main'],[655,912,'aud'],[75,772,'gym']];      // [photo x, y on a south wall, kind]: found among the wings at run time
 function details(F,P,kx,ky){
   const W=polysM(F), feats=[], ll=([x,y])=>[+(P[0]+x/kx).toFixed(7),+(P[1]+y/ky).toFixed(7)];
@@ -114,6 +114,10 @@ function details(F,P,kx,ky){
     put(a,u,n,s-hw+.8,s+hw-.8,.02,.06,0,2.9,DARK);                                                      // the dark recess on the wall
     for(const z of [-1,1]){ put(a,u,n,z<0?s-1.45:s+.1,z<0?s-.1:s+1.45,.06,.12,.05,2.65,RED); put(a,u,n,z<0?s-1.3:s+.25,z<0?s-.25:s+1.3,.12,.16,.45,2.45,GLASS); }   // two red glass doors flush on the wall
     put(a,u,n,s-hw+.9,s+hw-.9,.06,.12,2.95,3.5,GLASS);                                                  // a window over them
+    if(kind==='main'){ for(const z of [-1,1]){ put(a,u,n,s+z*(hw+.9)-.4,s+z*(hw+.9)+.4,D+.3,D+1.1,0,.8,'#b5603f'); put(a,u,n,s+z*(hw+.9)-.25,s+z*(hw+.9)+.25,D+.45,D+.95,.8,1.3,'#4d7a2c');   // terracotta planters with plants
+        put(a,u,n,s+z*(hw+3.6)-1,s+z*(hw+3.6)+1,D+.3,D+.8,0,.5,'#2b2f3a'); put(a,u,n,s+z*(hw+3.6)-1,s+z*(hw+3.6)+1,D+.3,D+.4,.5,1.1,'#2b2f3a'); }                                  // benches
+      put(a,u,n,s+hw+6,s+hw+6.18,6,6.18,0,13,'#d6d8da'); put(a,u,n,s+hw+6.18,s+hw+8,6,6.05,11.2,12.6,'#b22234');                      // the flagpole and its flag
+      for(const z of [-1,1]){ put(a,u,n,s+z*(hw+9)-.12,s+z*(hw+9)+.12,9,9.24,0,9,'#5a5f66'); put(a,u,n,s+z*(hw+9)-.9,s+z*(hw+9)+.9,8.9,9.3,9,9.35,'#2a2c30'); } }   // two tall parking-lot light poles with a double head
   }
   // the gym's side entrances (owner 2026-11-24, photo of the gym wall): on its two long sides, a recessed bay under a brick canopy with a pair of red-framed glass doors,
   // at the same spots as the red door pairs inside the gym (js/enh/walk.js gymDecor: 28% and 72% along the longest wall and the one opposite)
