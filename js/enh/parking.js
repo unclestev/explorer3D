@@ -14,12 +14,24 @@
 (()=>{
 'use strict';
 const {onReady,onTick,safe}=YD;
-const P={feats:new Map(),polys:[],at:null,busy:false,retry:0,ready:false,lineAt:null,lineT:0,lineKey:'',nLines:0,ms:0};
+const P={feats:new Map(),polys:[],gRaw:new Map(),green:[],at:null,busy:false,retry:0,ready:false,lineAt:null,lineT:0,lineKey:'',nLines:0,ms:0};
 const EMPTY={type:'FeatureCollection',features:[]};
 
 function ringOf(geom){ const r=(geom||[]).map(p=>[+p.lon,+p.lat]).filter(p=>isFinite(p[0])&&isFinite(p[1]));
   if(r.length<4) return null; const a=r[0], b=r[r.length-1]; if(a[0]!==b[0]||a[1]!==b[1]) return null; return r; }
-function add(el){ const k=el.type[0]+el.id; if(P.feats.has(k)) return;
+/* grass islands and planting strips (owner 2026-11-23: "if there is greenspace in parking lots, give it the grass texture"):
+   OSM landuse=grass / flowerbed, leisure=garden. Only the small ones that sit in a lot are kept (a big grass area with a lot
+   inside it must not cover the lot); drawn as lawn over the asphalt, with a curb, and stall lines stay off them. */
+function addGreen(el){ const k='g'+el.id; if(P.gRaw.has(k)) return; const r=ringOf(el.geometry); if(r) P.gRaw.set(k,r); }
+function sortGreen(){ const out=[];
+  for(const r of P.gRaw.values()){ let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9,cx=0,cy=0; for(const [x,y] of r){ if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; cx+=x; cy+=y; }
+    cx/=r.length; cy/=r.length; const kx=111320*Math.cos(cy*Math.PI/180), A=(x1-x0)*kx*(y1-y0)*111320;
+    if(A>6000) continue;
+    const mid=[(x0+x1)/2,(y0+y1)/2]; if(!(at(cx,cy)||at(mid[0],mid[1])||at(r[0][0],r[0][1]))) continue;
+    out.push({type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[r]}}); }
+  P.green=out; P.greenR=out.map(f=>f.geometry.coordinates[0]); }
+function add(el){ if(el.g||(el.tags&&!el.tags.amenity)) return addGreen(el);
+  const k=el.type[0]+el.id; if(P.feats.has(k)) return;
   let rings=[];
   if(el.type==='way'){ const r=ringOf(el.geometry); if(r) rings=[r]; }
   else if(el.members){ const outs=[], ins=[];
@@ -33,7 +45,8 @@ function inRing(r,x,y){ let c=false; for(let i=0,j=r.length-1;i<r.length;j=i++){
 function at(lng,lat){ for(const p of P.polys){ const b=p.b; if(lng<b[0]||lng>b[2]||lat<b[1]||lat>b[3]) continue;
     if(inRing(p.rings[0],lng,lat)&&!p.rings.slice(1).some(r=>inRing(r,lng,lat))) return true; } return false; }
 
-function draw(){ safe('parking draw',()=>{ const s=map.getSource('parking'); if(s) s.setData({type:'FeatureCollection',features:[...P.feats.values()]}); }); P.lineKey=''; P.lineT=0; }
+function draw(){ sortGreen(); safe('parking draw',()=>{ const s=map.getSource('parking'); if(s) s.setData({type:'FeatureCollection',features:[...P.feats.values()]});
+    const g=map.getSource('pk-green'); if(g) g.setData({type:'FeatureCollection',features:P.green}); }); P.lineKey=''; P.lineT=0; }
 
 /* ---------- stall lines ---------- */
 const SW=2.75, SD=5.4, AH=3.2, AISLE=6.6;                         // stall width / depth, half an aisle, a full aisle (m)
@@ -73,10 +86,13 @@ function* stallJob(){                                            // spread over 
   const lots=[]; let nl=0; for(const p of P.polys){ if(++nl%60===0) yield; const r0=p.rings[0].map(q=>L(q[0],q[1])); let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
     for(const q of r0){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
     if(x1<-R||x0>R||y1<-R||y0>R) continue; lots.push({r:r0,holes:p.rings.slice(1).map(h=>h.map(q=>L(q[0],q[1]))),b:[x0,y0,x1,y1],aisle:false}); }
+  const greens=(P.greenR||[]).map(r=>{ const q=r.map(p=>L(p[0],p[1])); let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const [x,y] of q){ if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; } return {r:q,b:[x0-.3,y0-.3,x1+.3,y1+.3]}; });
+  const onGreen=(x,y)=>greens.some(o=>x>=o.b[0]&&x<=o.b[2]&&y>=o.b[1]&&y<=o.b[3]&&inRing(o.r,x,y));
   const lotAt=(x,y)=>{ for(const o of lots){ const b=o.b; if(x<b[0]||x>b[2]||y<b[1]||y>b[3]) continue; if(inRing(o.r,x,y)&&!o.holes.some(h=>inRing(h,x,y))) return o; } return null; };
   const out=[], pads=[], line=(p,q)=>out.push({type:'Feature',properties:{},geometry:{type:'LineString',coordinates:[G(p[0],p[1]),G(q[0],q[1])]}});
   const ok=(p,q,lot)=>{ const m=[(p[0]+q[0])/2,(p[1]+q[1])/2];
     if(lot){ if(lotAt(p[0],p[1])!==lot||lotAt(q[0],q[1])!==lot) return false; }
+    if(greens.length&&(onGreen(p[0],p[1])||onGreen(q[0],q[1])||onGreen(m[0],m[1]))) return false;
     return !inBld(p[0],p[1])&&!inBld(q[0],q[1])&&!inBld(m[0],m[1])&&!near(RG,q[0],q[1],.6)&&!near(RG,m[0],m[1],.6); };
   // 1. along the aisles
   let nA=0;
@@ -116,6 +132,10 @@ function layers(){ safe('parking layers',()=>{
   if(!map.getSource('pk-pads')) map.addSource('pk-pads',{type:'geojson',data:EMPTY,tolerance:0});
   if(!map.getLayer('pk-pad')) map.addLayer({id:'pk-pad',type:'fill',source:'pk-pads',minzoom:14,paint:{'fill-color':'#5f6368','fill-opacity':1}},before);
   if(!map.getLayer('pk-padtx')&&map.hasImage(lot())) map.addLayer({id:'pk-padtx',type:'fill',source:'pk-pads',minzoom:14,paint:{'fill-pattern':lot(),'fill-opacity':1}},before);
+  if(!map.getSource('pk-green')) map.addSource('pk-green',{type:'geojson',data:{type:'FeatureCollection',features:P.green}});
+  if(!map.getLayer('pk-grass')&&map.hasImage('tx-lawn')) map.addLayer({id:'pk-grass',type:'fill',source:'pk-green',minzoom:14,paint:{'fill-pattern':'tx-lawn','fill-opacity':1}},before);
+  if(!map.getLayer('pk-gcurb')) map.addLayer({id:'pk-gcurb',type:'line',source:'pk-green',minzoom:15,layout:{'line-join':'round'},
+    paint:{'line-color':'#c9c7c0','line-width':['interpolate',['exponential',2],['zoom'],15,.3,22,20],'line-opacity':.95}},before);
   if(!map.getLayer('pk-curb')) map.addLayer({id:'pk-curb',type:'line',source:'parking',minzoom:14,layout:{'line-join':'round'},
     paint:{'line-color':'#b9bcc0','line-width':['interpolate',['exponential',2],['zoom'],14,.5,18,2,22,14],'line-opacity':.9}},before);
   // painted lines ~12 cm wide at any zoom (world-scaled width)
@@ -124,16 +144,16 @@ function layers(){ safe('parking layers',()=>{
   if(window.TXLOT) TXLOT.apply();
   draw(); }); }
 
-const KEY=(lat,lng)=>'ydPark:'+lat.toFixed(2)+','+lng.toFixed(2);
-function take(j){ if(P.feats.size>4000){ P.feats.clear(); P.polys=[]; }   // a long drive: start over with what's near
+const KEY=(lat,lng)=>'ydPark2:'+lat.toFixed(2)+','+lng.toFixed(2);
+function take(j){ if(P.feats.size>4000){ P.feats.clear(); P.polys=[]; } if(P.gRaw.size>20000) P.gRaw.clear();   // a long drive: start over with what's near
   for(const el of (j&&j.elements)||[]) add(el); draw(); }
 async function load(){ if(P.busy||typeof ovFetch!=='function') return; P.busy=true;
   const cy=S.lat, cx=S.lng, dy=.023, dx=.031, bb=`(${(cy-dy).toFixed(4)},${(cx-dx).toFixed(4)},${(cy+dy).toFixed(4)},${(cx+dx).toFixed(4)})`;
-  const q=`[out:json][timeout:25];(way["amenity"="parking"]["parking"!~"underground|multi-storey|rooftop"]${bb};relation["amenity"="parking"]["type"="multipolygon"]["parking"!~"underground|multi-storey|rooftop"]${bb};);out geom;`;
+  const q=`[out:json][timeout:25];(way["amenity"="parking"]["parking"!~"underground|multi-storey|rooftop"]${bb};relation["amenity"="parking"]["type"="multipolygon"]["parking"!~"underground|multi-storey|rooftop"]${bb};way["landuse"~"^(grass|flowerbed)$"]${bb};way["leisure"="garden"]${bb};);out geom;`;
   const ck=KEY(cy,cx);
   try{ const c=JSON.parse(localStorage.getItem(ck)||'null'); if(c) take(c); }catch(e){}
   try{ const j=await ovFetch(q); take(j); P.at=[cx,cy];
-    try{ localStorage.setItem(ck,JSON.stringify({elements:(j.elements||[]).map(e=>({type:e.type,id:e.id,geometry:e.geometry,members:e.members&&e.members.map(m=>({type:m.type,role:m.role,geometry:m.geometry}))}))})); }catch(e){} }
+    try{ localStorage.setItem(ck,JSON.stringify({elements:(j.elements||[]).map(e=>({type:e.type,id:e.id,g:e.tags&&!e.tags.amenity?1:0,geometry:e.geometry,members:e.members&&e.members.map(m=>({type:m.type,role:m.role,geometry:m.geometry}))}))})); }catch(e){} }
   catch(e){ console.warn('parking',e); P.retry=Date.now()+120000; }
   finally{ P.busy=false; } }
 
