@@ -289,7 +289,7 @@ function roomLook(r,SH){
   return L; }
 function buildRoom(r){
   if(ROOM.key===r.key&&ROOM.g) return; dropRoom();
-  const SH=window.STORES&&STORES.at?STORES.at(r.key):null;      // a Meijer (js/enh/stores.js): high dropped ceiling, troffer lights
+  const SH=window.STORES&&STORES.own?STORES.own(r):null;      // a Meijer (js/enh/stores.js): high dropped ceiling, troffer lights
   itexTrim(); const LK=roomLook(r,SH);                           // floor, wall and ceiling textures for this kind of building, picked from its key
   const g=new THREE.Group(), p=r.p, HC=LK.HC, DH=2.12, TH2=.2;
   const wallM=LK.wallM, ceilM=LK.ceilM, trimM=rmat('trim',0xfbfaf7,0x3a3a3a), floorM=LK.floorM;
@@ -543,7 +543,7 @@ function setInside(r){
   person.traverse(o=>{ if(o.isMesh&&o.material!==shadow.material) o.material.depthTest=!r; });   // never hidden by the walls round you
   if(window.TRAFFIC&&TRAFFIC.occRebuild) TRAFFIC.occRebuild();                                    // and drop it from the car layer's building blockers
   step.cam=null; dirty=true; step.surf=null;
-  if(r&&window.STORES&&STORES.at){ const st=STORES.at(r.key); if(st) safe('greeter',()=>STORES.greet(st)); }   // "Welcome to Meijer" / "Welcome to Walmart"
+  if(r&&window.STORES&&STORES.own){ const st=STORES.own(r); if(st) safe('greeter',()=>STORES.greet(st)); }   // "Welcome to Meijer" / "Welcome to Walmart"
   if(r&&!IN.told){ IN.told=true; toast('Inside: the walls are cut away so you can see in'+(mode==='walk'?'. Walk out through a door to leave':''),3800); }
 }
 // work out which building you're in (if any), from where you stand
