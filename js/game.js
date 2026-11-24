@@ -152,7 +152,8 @@ function destroyBuilding(id){
 const HIDE={walk:null,vec:[]}; window.HIDE=HIDE;
 const VEC_HIDE=new Set(['building-3d','roof-cap']);
 function applyHides(lids){
-  const base=HIDE.walk!=null&&!destroyed.includes(HIDE.walk)?destroyed.concat([HIDE.walk]):destroyed.slice();
+  const wk=HIDE.walk==null?[]:Array.isArray(HIDE.walk)?HIDE.walk:[HIDE.walk];      // a store and its entrance pieces are several (js/enh/stores.js)
+  const base=destroyed.concat(wk.filter(i=>!destroyed.includes(i)));
   for(const lid of lids||hideIds){
     if(!map.getLayer(lid)) continue;
     const ids=VEC_HIDE.has(lid)&&HIDE.vec.length?base.concat(HIDE.vec):base;

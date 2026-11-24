@@ -20,7 +20,7 @@ const areaM=(r,kx)=>{ let a=0; for(let i=0,j=r.length-1;i<r.length;j=i++) a+=(r[
 
 function add(ring,name){ if(!ring||ring.length<4) return null; const k=keyOf(ring);
   if(ST.list.some(s=>s.key===k.key)) return null;
-  const s=Object.assign({ring,name:name||'Meijer',id:ring.id!=null?ring.id:null},k); ST.list.push(s); changed(); found(s); return s; }
+  const s=Object.assign({ring,name:name||'Meijer',id:ring.id!=null?ring.id:null,keys:ring.keys||[]},k); ST.list.push(s); changed(); found(s); return s; }
 // the building a point stands in (or the biggest one within 90 m), from the map tiles. A big building cut by a tile edge
 // comes in pieces with the same id: they're joined into one outline (their convex hull; stores are near enough boxes).
 function hull(pts){ const P=pts.slice().sort((a,b)=>a[0]-b[0]||a[1]-b[1]), cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]), lo=[], up=[];
@@ -37,8 +37,17 @@ function buildingFor(lng,lat){ let fs=[]; try{ fs=map.querySourceFeatures(bSrc,{
   if(!best) return null;
   const k=keyOf(best.r), m=3/111320, near=b=>!(b.bb[2]<k.bb[0]-m*1.4||b.bb[0]>k.bb[2]+m*1.4||b.bb[3]<k.bb[1]-m||b.bb[1]>k.bb[3]+m);
   const parts=best.f.id==null?[]:all.filter(o=>o!==best&&o.f.id===best.f.id&&near(keyOf(o.r))&&Math.abs(o.r[0][0]-best.r[0][0])+Math.abs(o.r[0][1]-best.r[0][1])>1e-7);
-  const ring=parts.length?hull(best.r.concat(...parts.map(o=>o.r))):best.r;
-  ring.id=best.f.id; return ring; }
+  // the entrance pieces: small buildings stuck onto it (vestibules, the roof over the doors), mapped on their own.
+  // Inside they'd stand as a wall between the doors and the store (owner 2026-11-23), so they become part of it.
+  const ring0=parts.length?hull(best.r.concat(...parts.map(o=>o.r))):best.r, mainA=areaM(ring0,kx);
+  const touch=o=>{ const A=areaM(o.r,kx); if(A>Math.min(2500,mainA*.12)) return false;
+    for(const q of o.r){ if(inRing(ring0,q[0],q[1])) return true; for(let i=1;i<ring0.length;i++){ const a=ring0[i-1], b=ring0[i];
+      const ax=(a[0]-q[0])*kx, ay=(a[1]-q[1])*111320, bx=(b[0]-q[0])*kx, by=(b[1]-q[1])*111320, dx=bx-ax, dy=by-ay, L2=dx*dx+dy*dy, t=L2?Math.max(0,Math.min(1,-(ax*dx+ay*dy)/L2)):0;
+      if(Math.hypot(ax+dx*t,ay+dy*t)<1.5) return true; } } return false; };
+  const ent=all.filter(o=>o!==best&&!parts.includes(o)&&touch(o));
+  const ring=ent.length?hull(ring0.slice(0,-1).concat(...ent.map(o=>o.r))):ring0;
+  const ids=[...new Set([best,...parts,...ent].map(o=>o.f.id).filter(i=>i!=null))];
+  ring.id=ids.length>1?ids:best.f.id; ring.keys=[best,...parts,...ent].map(o=>keyOf(o.r).key); return ring; }
 function scanTiles(){ let ps=[]; try{ ps=map.querySourceFeatures(bSrc,{sourceLayer:'poi'}); }catch(e){ return; }
   for(const p of ps){ const pr=p.properties||{}, n=pr.name||pr['name:latin']||pr.name_en||''; if(!NAME.test(n)||NOT.test(n)) continue;
     const c=p.geometry&&p.geometry.coordinates; if(!c||typeof c[0]!=='number') continue;
@@ -102,16 +111,30 @@ const at=key=>{ if(!key) return null; const e=ST.list.find(s=>s.key===key); if(e
   return ST.list.find(s=>x>=s.bb[0]&&x<=s.bb[2]&&y>=s.bb[1]&&y<=s.bb[3]&&inRing(s.ring,x,y))||null; };
 
 /* ---------- the way in, when buildings.js gave the store none ---------- */
-const regs=()=>window.ROOFS&&ROOFS.st0?ROOFS.st0():[];
 function ownRec(s){ const kx=111320*Math.cos(s.cy*Math.PI/180), ky=111320;
   let p=s.ring.slice(0,-1).map(q=>[(q[0]-s.cx)*kx,(q[1]-s.cy)*ky]); let a=0; for(let i=0,j=p.length-1;i<p.length;j=i++) a+=(p[j][0]-p[i][0])*(p[j][1]+p[i][1]); if(a<0) p.reverse();   // counter-clockwise
   const E=frontOf(s,p); if(!E) return null; const sm=E.L/2;
   const d={ei:E.ei,s0:sm-.95,s1:sm+.95,x0:E.a[0]+E.ux*(sm-.95),y0:E.a[1]+E.uy*(sm-.95),x1:E.a[0]+E.ux*(sm+.95),y1:E.a[1]+E.uy*(sm+.95),nx:E.nx,ny:E.ny,dk:9e8+ST.list.indexOf(s)};
-  return {key:s.key,id:s.id,cx:s.cx,cy:s.cy,kx,ky,p,h:s.h||hOf(s),house:false,doors:[d],garages:[],bb:s.bb,store:true,E,sm}; }
-function recs(){ const out=[], kx0=111320*Math.cos(S.lat*Math.PI/180), base=regs();
+  // the doors js/enh/buildings.js drew on the store's pieces work too, where they lie on the outline
+  const doors=[d], base=window.ROOFS&&ROOFS.st0?ROOFS.st0():[];
+  for(const r of base){ if(!covers(r)) continue;
+    for(const q of r.doors||[]){ const mx=(q.x0+q.x1)/2, my=(q.y0+q.y1)/2, lng=r.cx+mx/r.kx, lat=r.cy+my/r.ky, X=(lng-s.cx)*kx, Y=(lat-s.cy)*ky, hw=Math.hypot(q.x1-q.x0,q.y1-q.y0)/2;
+      for(let i=0;i<p.length;i++){ const a=p[i], b=p[(i+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1]); if(L<2) continue; const ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L;
+        const t=(X-a[0])*ux+(Y-a[1])*uy, off=(X-a[0])*uy-(Y-a[1])*ux; if(t<hw+.2||t>L-hw-.2||Math.abs(off)>.8) continue;
+        if(doors.some(o=>o.ei===i&&Math.abs((o.s0+o.s1)/2-t)<2.5)) break;
+        doors.push({ei:i,s0:t-hw,s1:t+hw,x0:a[0]+ux*(t-hw),y0:a[1]+uy*(t-hw),x1:a[0]+ux*(t+hw),y1:a[1]+uy*(t+hw),nx:uy,ny:-ux,dk:q.dk}); break; } } }
+  return {key:s.key,keys:s.keys,id:s.id,cx:s.cx,cy:s.cy,kx,ky,p,h:s.h||hOf(s),house:false,doors,garages:[],bb:s.bb,store:true,E,sm}; }
+// the store's pieces come in as their tiles load: look again (at most every 4 s) and grow the outline to take them in
+function regrow(s){ const now=performance.now(); if(now-(s.gT||0)<4000) return; s.gT=now;
+  const r=buildingFor(s.cx,s.cy); if(!r) return; const k=keyOf(r); const kk=(r.keys||[]).join('|');
+  if(kk===(s.keys||[]).join('|')) return;
+  s.ring=r; s.bb=k.bb; s.keys=r.keys||[]; s.id=r.id!=null?r.id:s.id; s.rec=null; s.fd=null; }
+// is this walk-in building (from js/enh/buildings.js) one of a store's pieces? Then the store's own way in stands for it
+function covers(r){ for(const s of ST.list){ if((s.keys||[]).includes(r.key)) return true; if(r.cx>=s.bb[0]&&r.cx<=s.bb[2]&&r.cy>=s.bb[1]&&r.cy<=s.bb[3]&&inRing(s.ring,r.cx,r.cy)) return true; } return false; }
+function recs(){ const out=[], kx0=111320*Math.cos(S.lat*Math.PI/180);
   for(const s of ST.list){ if(Math.hypot((s.cx-S.lng)*kx0,(s.cy-S.lat)*111320)>600) continue;
-    if(base.some(r=>r.key===s.key||(r.doors&&r.doors.length&&inRing(s.ring,r.cx,r.cy)&&r.p.length>2))) { s.rec=null; continue; }   // buildings.js has its door
-    if(!s.rec||s.rec.fdN!==s.fdN) { s.rec=ownRec(s); if(s.rec) s.rec.fdN=s.fdN; }
+    regrow(s);
+    if(!s.rec||s.rec.fdN!==s.fdN||performance.now()-s.rec.t>5000) { s.rec=ownRec(s); if(s.rec){ s.rec.fdN=s.fdN; s.rec.t=performance.now(); } }
     if(s.rec) out.push(s.rec); }
   return out; }
 function hOf(s){ let h=0; try{ for(const f of map.querySourceFeatures(bSrc,{sourceLayer:'building'})){ if(s.id==null||f.id!==s.id) continue; const pr=f.properties||{}; h=Math.max(h,+(pr.render_height||pr.height||0)); } }catch(e){} return h||8; }
@@ -139,5 +162,5 @@ onTick(1500,function storeTick(){
   const nm=ST.nsAt?meters(ST.nsAt[1],ST.nsAt[0],S.lat,S.lng):1e9; if(nm>3000) scanSearch();
   if(ST.list.length) safe('store doors',drawDoors);
 });
-window.STORES={list:ST.list,at,recs,add,frontDir,markHere,pts:PTS,state:ST,refresh:()=>{ ST.dirty=true; }};
+window.STORES={list:ST.list,at,recs,covers,add,frontDir,markHere,pts:PTS,state:ST,refresh:()=>{ ST.dirty=true; }};
 })();
