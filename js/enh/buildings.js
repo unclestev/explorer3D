@@ -25,6 +25,20 @@ const BRICK=['#9b5e4a','#8a4f3f','#a86a52','#b07a5e','#7c4a3c','#a2735f','#c49a7
 const ROOFC=['#3a3c41','#46484d','#55585e','#62656b','#5b4a3c','#6a5c4d','#4a3f38','#3f4654','#6e6a63','#7b6f61','#5c3a33',
   '#2f3a33','#7a4b3a','#86898d','#4d4a46','#695849'];
 const LOWC=['#d8d2c4','#c9c0ae','#b5a48c','#a7a29a','#c2b8a3','#9e6b55','#d0c9bd','#b9bcbf','#cfc6b4','#a58f78'];
+/* every other building gets a wall texture too (owner 2026-11-23: "siding textures on all of the buildings… schools should be
+   brick"): shops and offices brick, split-face block or stucco; industrial ribbed metal or block; mid-rise brick or precast
+   panels; towers glass. Anything standing on school / college / university grounds is brick. */
+const BLOCK=['#c9c3b6','#b8b2a6','#d4cbb8','#a9a49b','#c2b49c','#9d9a94'], STUCCO=['#e2d6bf','#d8c9ad','#efe7d6','#cdbfa6','#e6dcc8','#c8bfb1'],
+  METAL=['#b9bec2','#a3abb1','#d2d4d2','#8e9aa4','#c4b9a2','#7f8f84'], PANEL=['#c8c4bc','#b3b8be','#d2c8b5','#bdb7ad','#a89f93'], CURTAIN=['#9fb3c6','#8b9fb2','#a7b4bf'];
+function otherLook(seed,h,zone){
+  const pick=(a,k)=>a[Math.floor(hash(seed,k)*a.length)], i=k=>Math.floor(hash(seed,k)*8);
+  if(zone==='school') return 'hw-br'+i(61);
+  if(h>30) return 'cw-gl'+Math.floor(hash(seed,62)*CURTAIN.length);
+  if(h>12) return hash(seed,63)<.5?'hw-br'+i(61):'cw-pc'+Math.floor(hash(seed,64)*PANEL.length);
+  const r=hash(seed,65);
+  if(zone==='industrial') return r<.6?'cw-mt'+Math.floor(hash(seed,66)*METAL.length):'cw-bk'+Math.floor(hash(seed,67)*BLOCK.length);
+  return r<.35?'hw-br'+i(61):r<.7?'cw-bk'+Math.floor(hash(seed,67)*BLOCK.length):'cw-st'+Math.floor(hash(seed,68)*STUCCO.length);
+}
 const seedOf=(cx,cy)=>(Math.floor(cx*1e5)^Math.floor(cy*1e5))>>>0;
 function houseLook(seed){ const brick=hash(seed,51)<.2, i=Math.floor(hash(seed,53)*(brick?BRICK.length:SIDING.length));
   return {brick, wall:brick?BRICK[i]:SIDING[i], pat:brick?'hw-br'+i:(hash(seed,55)<.2?'hw-bb':'hw-lap')+i,
@@ -37,6 +51,16 @@ function wallImages(){
   SIDING.forEach((c,i)=>{
     mk('hw-lap'+i,c,x=>{ for(let y=0;y<32;y+=4){ x.fillStyle='rgba(0,0,0,.2)'; x.fillRect(0,y+3,32,1); x.fillStyle='rgba(255,255,255,.16)'; x.fillRect(0,y,32,1); } });
     mk('hw-bb'+i,c,x=>{ for(let v=0;v<32;v+=8){ x.fillStyle='rgba(0,0,0,.2)'; x.fillRect(v+2,0,1,32); x.fillStyle='rgba(255,255,255,.14)'; x.fillRect(v,0,2,32); } }); });
+  BLOCK.forEach((c,i)=>mk('cw-bk'+i,c,x=>{ for(let y=0;y<32;y+=8) for(let v=0;v<32;v+=16){ const o=(y/8)%2?8:0;   // split-face block, 40 x 20 cm
+      x.fillStyle=`rgba(0,0,0,${.03+.05*((y*7+v*13)%5)/5})`; x.fillRect((v+o)%32,y,16,8); x.fillStyle='rgba(255,255,255,.08)'; x.fillRect((v+o)%32,y,16,1); }
+    x.fillStyle='rgba(60,55,50,.28)'; for(let y=0;y<32;y+=8){ x.fillRect(0,y+7,32,1); for(let v=0;v<32;v+=16) x.fillRect((v+((y/8)%2?8:0))%32,y,1,7); } }));
+  STUCCO.forEach((c,i)=>mk('cw-st'+i,c,x=>{ for(let k=0;k<160;k++){ const a=(k*97)%32, b=(k*61+k*k)%32; x.fillStyle=k%2?'rgba(0,0,0,.06)':'rgba(255,255,255,.08)'; x.fillRect(a,b,1,1); }
+    x.fillStyle='rgba(0,0,0,.16)'; x.fillRect(0,31,32,1); x.fillStyle='rgba(255,255,255,.12)'; x.fillRect(0,30,32,1); }));      // EIFS reveal every ~3.5 m
+  METAL.forEach((c,i)=>mk('cw-mt'+i,c,x=>{ for(let v=0;v<32;v+=4){ x.fillStyle='rgba(0,0,0,.18)'; x.fillRect(v+3,0,1,32); x.fillStyle='rgba(255,255,255,.18)'; x.fillRect(v,0,1,32); } }));
+  PANEL.forEach((c,i)=>mk('cw-pc'+i,c,x=>{ x.fillStyle='rgba(0,0,0,.2)'; x.fillRect(0,31,32,1); x.fillRect(31,0,1,32);              // precast panels with a dark window band
+    x.fillStyle='rgba(40,55,70,.55)'; x.fillRect(0,12,32,9); x.fillStyle='rgba(255,255,255,.15)'; x.fillRect(0,12,32,1); }));
+  CURTAIN.forEach((c,i)=>mk('cw-gl'+i,c,x=>{ x.fillStyle='rgba(255,255,255,.10)'; x.fillRect(0,0,16,32);                           // curtain wall: mullions, spandrels
+    x.fillStyle='rgba(30,40,50,.35)'; for(let v=0;v<32;v+=8) x.fillRect(v,0,1,32); x.fillRect(0,26,32,3); }));
   BRICK.forEach((c,i)=>mk('hw-br'+i,c,x=>{ const r=(a,b)=>{ let h=(a*73856093^b*19349663)>>>0; return (h%1000)/1000; };
     for(let y=0;y<32;y+=4) for(let v=-8;v<32;v+=8){ const o=(y/4)%2?4:0; x.fillStyle=`rgba(${r(y,v)<.5?0:255},${r(y,v)<.5?0:220},${r(y,v)<.5?0:200},${.05+.08*r(v,y)})`; x.fillRect(v+o,y,8,4); }
     x.fillStyle='rgba(225,220,210,.55)'; for(let y=0;y<32;y+=4){ x.fillRect(0,y+3,32,1); for(let v=0;v<32;v+=8) x.fillRect(v+((y/4)%2?4:0),y,1,3); } }));
@@ -148,6 +172,22 @@ function clipRing(r,b){                                           // Sutherland-
     P=out; }
   if(P.length<3) return null; P.push(P[0]); return P;
 }
+/* school / industrial grounds near the car (vector landuse), for otherLook; refreshed with each build */
+let ZONES=[], SCHOOLS=[];
+function zones(kx,ky,R){ const out=[], sp=[];
+  /* school points too: many school grounds aren't mapped as land use (Yorkville Grade School isn't), but the school is a map point */
+  try{ for(const f of map.querySourceFeatures(bSrc,{sourceLayer:'poi',filter:['match',['get','class'],['school','college','university','kindergarten'],true,false]})){
+      const c=f.geometry&&f.geometry.coordinates; if(c&&Math.abs(c[0]-S.lng)*kx<R&&Math.abs(c[1]-S.lat)*ky<R) sp.push([c[0],c[1]]); } }catch(e){}
+  SCHOOLS=sp;
+  try{ for(const f of map.querySourceFeatures(bSrc,{sourceLayer:'landuse',filter:['match',['get','class'],['school','college','university','kindergarten','education','industrial'],true,false]})){
+      const z=f.properties.class==='industrial'?'industrial':'school', g=f.geometry, pls=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
+      for(const pl of pls){ const r=pl[0]; if(!r) continue; let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const q of r){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
+        if(x1<S.lng-R/kx||x0>S.lng+R/kx||y1<S.lat-R/ky||y0>S.lat+R/ky) continue; out.push({z,r,bb:[x0,y0,x1,y1]}); } } }catch(e){}
+  ZONES=out; }
+function zoneAt(x,y,A,kx,ky){ let z=null;
+  if(A>500){ const reach=Math.max(40,Math.sqrt(A)*.8); for(const q of SCHOOLS) if(Math.hypot((q[0]-x)*kx,(q[1]-y)*ky)<reach) return 'school'; } for(const o of ZONES){ if(x<o.bb[0]||x>o.bb[2]||y<o.bb[1]||y>o.bb[3]) continue; let c=false, r=o.r;
+    for(let i=0,j=r.length-1;i<r.length;j=i++){ const xi=r[i][0],yi=r[i][1],xj=r[j][0],yj=r[j][1]; if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi)) c=!c; }
+    if(c){ if(o.z==='school') return 'school'; z=o.z; } } return z; }
 function buildWalls(fs,geo,kx,ky,RW,gone){                          // geo[i]: fs[i].geometry, decoded once (each read decodes it again)
   const t0=performance.now(), minD=new Map();
   for(let i=0;i<fs.length;i++){ const f=fs[i]; if(f.id==null||gone.has(f.id)) continue; const g=geo[i]; if(!g) continue;
@@ -170,7 +210,7 @@ function buildWalls(fs,geo,kx,ky,RW,gone){                          // geo[i]: f
       const house=h<=12&&b0===0&&A>=25&&A<=450, L=house?houseLook(seed):null;
       const c=house?L.wall:h<=12?LOWC[Math.floor(hash(seed,59)*LOWC.length)]:h<=30?['#c8c4bc','#b3b8be','#d2c8b5','#bdb7ad','#a89f93'][seed%5]:['#9fb3c6','#8b9fb2','#a7b4bf'][seed%3];
       const rings=[outer]; for(const hr of pl.slice(1)){ const c2=clipRing(hr,box); if(c2) rings.push(c2); }
-      const pr2={c,cc:house?L.roof:FLAT[seed%2],b:b0,h}; if(house&&!POWER) pr2.pat=L.pat;
+      const pr2={c,cc:house?L.roof:FLAT[seed%2],b:b0,h}; if(!POWER) pr2.pat=house?L.pat:otherLook(seed,h,zoneAt(cx,cy,A,kx,ky));
       const ft={type:'Feature',id:f.id,properties:pr2,geometry:{type:'Polygon',coordinates:rings}};
       W.cache.set(sk,ft); feats.push(ft); } }
   if(W.cache.size>20000) W.cache.clear();
@@ -193,7 +233,7 @@ function build(){
   if(reuse) parts=R.parts; else {
   let fs=[]; try{ fs=map.querySourceFeatures(bSrc,{sourceLayer:'building'}); }catch(e){ return; }
   const geo=fs.map(f=>f.geometry);
-  if(map.getSource('walls')) safe('walls',()=>buildWalls(fs,geo,kx,ky,radius+60,gone));
+  if(map.getSource('walls')) safe('walls',()=>{ zones(kx,ky,radius+120); buildWalls(fs,geo,kx,ky,radius+60,gone); });
   safe('driveways',()=>{ const ds=[]; for(const f of map.querySourceFeatures(bSrc,{sourceLayer:'transportation'})){ const pr=f.properties||{};
       if(pr.class!=='service'||pr.service!=='driveway') continue; const g=f.geometry, ls=g.type==='LineString'?[g.coordinates]:g.type==='MultiLineString'?g.coordinates:[];
       for(const l of ls){ if(l.length<2) continue; let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const q of l){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
@@ -309,7 +349,7 @@ function streetDir(P){                                            // unit vector
   let best=1e9, bx=0, by=0;
   for(const [x1,y1,x2,y2] of segs){ const dx=x2-x1, dy=y2-y1, L2=dx*dx+dy*dy, t=L2?Math.max(0,Math.min(1,((px-x1)*dx+(py-y1)*dy)/L2)):0;
     const ex=x1+t*dx-px, ey=y1+t*dy-py, d=ex*ex+ey*ey; if(d<best){ best=d; bx=ex; by=ey; } }
-  best=Math.sqrt(best); return best>2&&best<70?[bx/best,by/best]:null;
+  best=Math.sqrt(best); return best>2&&best<70?Object.assign([bx/best,by/best],{d:best}):null;   // .d: metres to that road
 }
 /* the garage goes where a driveway reaches the house (owner 2026-11-23: "make sure that garage doors line up with the
    driveways"): OpenStreetMap often maps driveways (service=driveway) up to the house. The driveway end nearest the house
@@ -322,6 +362,24 @@ function driveSpot(P,edges,toLoc){
         if(s<-1||s>E.L+1||out<-3||out>9) continue;                // in front of this wall (or just inside it)
         const d=Math.abs(out); if(!best||d<best.d) best={E,s,d}; } } }
   return best;
+}
+/* a spot in the front yard (js/enh/snowmen.js): between the street-side wall and the road, clear of the garage, the
+   front door's walk and any mapped driveway. Local metres around the house middle, plus the way to the street. */
+function yardSpot(P,E,sd,free,seed,kx,ky){
+  if(!sd||!sd.d) return null; const nd=E.nx*sd[0]+E.ny*sd[1]; if(nd<.6) return null;
+  const wall=E.a[0]*E.nx+E.a[1]*E.ny, yard=sd.d/nd-wall-6.5;        // 6.5 m: half the street and the sidewalk
+  if(yard<3.5) return null;
+  const out=Math.min(9,Math.max(2.2,yard*(.35+.3*hash(seed,81))));
+  const near=DRIVES.filter(D=>{ const b=D.bb, m=25/111320; return !(b[2]<P.bb[0]-m*1.4||b[0]>P.bb[2]+m*1.4||b[3]<P.bb[1]-m||b[1]>P.bb[3]+m); })
+    .map(D=>D.l.map(q=>[(q[0]-P.cx)*kx,(q[1]-P.cy)*ky]));
+  const clear=(x,y)=>{ for(const l of near) for(let i=1;i<l.length;i++){ const [x1,y1]=l[i-1],[x2,y2]=l[i], dx=x2-x1, dy=y2-y1, L2=dx*dx+dy*dy,
+      t=L2?Math.max(0,Math.min(1,((x-x1)*dx+(y-y1)*dy)/L2)):0; if(Math.hypot(x1+t*dx-x,y1+t*dy-y)<2.8) return false; } return true; };
+  for(const f of [.15+.7*hash(seed,83),.2,.8,.35,.65]){ const s=E.L*f;
+    if(s<.8||s>E.L-.8||!free(E,s-.9,s+.9)) continue;
+    const x=E.a[0]+E.ux*s+E.nx*out, y=E.a[1]+E.uy*s+E.ny*out; if(!clear(x,y)) continue;
+    const tw=(hash(seed,87)-.5)*.9, c=Math.cos(tw), sn=Math.sin(tw);     // turned a little, not all square to the street
+    return {x,y,fx:E.nx*c-E.ny*sn,fy:E.nx*sn+E.ny*c}; }
+  return null;
 }
 function facades(P,kx,ky,res,rich){
   if(P.b0>0) return;
@@ -395,6 +453,7 @@ function facades(P,kx,ky,res,rich){
         if(fine){ put(E,s-.02,s+.02,.08,.1,b,h,trim); put(E,s-w/2,s+w/2,.08,.1,(b+h)/2-.02,(b+h)/2+.02,trim);          // muntins
           put(E,s-w/2-.14,s+w/2+.14,.0,.15,b-.14,b-.06,'#d9dbdc');                                                         // sill
           if(shut&&E===front&&!big) for(const z of [-1,1]){ const x=s+z*(w/2+.13); put(E,Math.min(x,x+z*.42),Math.max(x,x+z*.42),.02,.07,b-.02,h+.02,shut); } } } }
+    if(res.bld) res.bld.yard=yardSpot(P,front,sd,free,seed,kx,ky);    // where a snowman could stand (js/enh/snowmen.js)
   } else if(P.h<=12){
     // storefront: glass band on the street side (the middle 60% of very long walls), mullions every ~1.6 m
     const E=front, s0=E.L>40?E.L*.2:1, s1=E.L>40?E.L*.8:E.L-1;
