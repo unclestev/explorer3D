@@ -46,6 +46,8 @@ function makeTextures(){
     speckle(x,s,r,w,520,['#55595e','#70747a','#4a4e53','#7c8085'],.4,1.2,.6);
     speckle(x,s,r,w,3,['#3d4046'],4,9,.22);                                                    // oil stains
   });
+  tex('tx-lot',128,22,(x,s,r,w)=>{ x.fillStyle='#4c4e51'; x.fillRect(0,0,s,s);              // paved lots when ⚙️ Asphalt roads is on: the service-road colour + the road grain, so a lot reads as the same surface as the street
+    speckle(x,s,r,w,520,['#5a5d62','#7d8085','#4c4f54','#8a8d91'],.4,1,.2); speckle(x,s,r,w,3,['#50535a'],4,9,.08); });
   tex('tx-pitch',128,17,(x,s,r,w)=>{ for(let i=0;i<4;i++){ x.fillStyle=i%2?'#62a53f':'#82c25a'; x.fillRect(0,i*s/4,s,s/4); }
     blades(x,s,r,w,200,['#5f9c3d','#95cb6d'],3); });
   tex('tx-cemetery',128,18,(x,s,r,w)=>{ x.fillStyle='#93bd66'; x.fillRect(0,0,s,s); blades(x,s,r,w,220,['#7fac55','#a8cf7c'],3.5);
@@ -59,7 +61,8 @@ function makeTextures(){
 
 // which texture goes on which kind of ground (OpenMapTiles classes)
 const LANDCOVER=['match',['get','class'],'grass','tx-grass','wood','tx-wood','sand','tx-sand','wetland','tx-wet','none'];
-const LANDUSE=['match',['get','class'],'residential','tx-lawn','parking','tx-parking',['commercial','retail','industrial','railway','garages'],'tx-paved',
+const lotImg=()=>(window.ROADSIDE?ROADSIDE.state.asphalt:(()=>{ try{ return localStorage.getItem('ydAsphalt')!=='0'; }catch(e){ return true; } })())?'tx-lot':'tx-parking';
+const LANDUSE=()=>['match',['get','class'],'residential','tx-lawn','parking',lotImg(),['commercial','retail','industrial','railway','garages'],'tx-paved',
   ['pitch','track','stadium'],'tx-pitch','cemetery','tx-cemetery',['school','college','university','hospital','playground','park'],'tx-grass','none'];
 const TXLAYERS=[], HEAVY=id=>id==='tx-water'||id.startsWith('tx-asph-');   // hidden in battery saver
 
@@ -72,7 +75,7 @@ function addTextureLayers(){
   const belowWater=map.getLayer('water')?'water':before;
   const add=(l,b)=>{ if(map.getLayer(l.id)) return; l.layout=Object.assign({visibility:POWER&&HEAVY(l.id)?'none':'visible'},l.layout||{}); map.addLayer(l,b); TXLAYERS.push(l.id); };
   safe('tx-ground',()=>{
-    add({id:'tx-landuse',type:'fill',source:src,'source-layer':'landuse',minzoom:13,filter:['!=',LANDUSE,'none'],paint:{'fill-pattern':LANDUSE,'fill-opacity':1}},belowWater);
+    add({id:'tx-landuse',type:'fill',source:src,'source-layer':'landuse',minzoom:13,filter:['!=',LANDUSE(),'none'],paint:{'fill-pattern':LANDUSE(),'fill-opacity':1}},belowWater);
     add({id:'tx-park',type:'fill',source:src,'source-layer':'park',minzoom:13,paint:{'fill-pattern':'tx-grass','fill-opacity':1}},belowWater);
     add({id:'tx-landcover',type:'fill',source:src,'source-layer':'landcover',minzoom:13,filter:['all',['!=',LANDCOVER,'none'],['!=',['get','class'],'sand']],paint:{'fill-pattern':LANDCOVER,'fill-opacity':1}},belowWater);
     // the style itself draws sand above the water (beaches), so the sand texture keeps its old place above it
@@ -109,6 +112,14 @@ function colourBuildings(){
 function setVisible(saver){ for(const id of TXLAYERS) if(HEAVY(id)) safe('tx-vis',()=>{ if(map.getLayer(id)) map.setLayoutProperty(id,'visibility',saver?'none':'visible'); }); }
 const prev=window.onPowerChange;
 window.onPowerChange=(on)=>{ if(prev) prev(on); setVisible(on); };
+
+// the asphalt switch (js/enh/roadside.js) calls this: lots and parking pads use the road look when on, the old dark-grey stalls texture when off
+window.TXLOT={name:lotImg, apply(){ const img=lotImg();
+  safe('lot-landuse',()=>{ if(map.getLayer('tx-landuse')) map.setPaintProperty('tx-landuse','fill-pattern',LANDUSE()); });
+  for(const id of ['pk-stalls','pk-padtx']) safe('lot-'+id,()=>{ if(map.getLayer(id)) map.setPaintProperty(id,'fill-pattern',img); });
+  const on=img==='tx-lot';
+  for(const id of ['pk-base','pk-pad']) safe('lot-'+id,()=>{ if(map.getLayer(id)) map.setPaintProperty(id,'fill-color',on?'#4c4e51':'#5f6368'); });
+  safe('lot-curb',()=>{ if(map.getLayer('pk-curb')) map.setPaintProperty('pk-curb','line-color',on?'#9a9a94':'#b9bcc0'); }); }};
 
 onReady(function textures(){ makeTextures(); addTextureLayers(); colourBuildings(); });
 })();

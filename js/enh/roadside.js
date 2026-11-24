@@ -33,7 +33,8 @@ function applyAsphalt(){ if(!map.isStyleLoaded||!map.getStyle()) return;
     if(!(id in RS.orig)) RS.orig[id]=map.getPaintProperty(id,'line-color');
     safe('asphalt',()=>map.setPaintProperty(id,'line-color',RS.asphalt?asphaltColour(id):RS.orig[id])); }
   for(const l of map.getStyle().layers) if(/^tx-asph-/.test(l.id)) safe('asphalt grain',()=>map.setPaintProperty(l.id,'line-opacity',RS.asphalt?.22:.45));
-  if(map.getLayer('rs-walk')) safe('walk',()=>map.setPaintProperty('rs-walk','line-color',RS.asphalt?'#a9a8a2':'#c9c7c0'));
+  safe('lots',()=>{ if(window.TXLOT) TXLOT.apply(); });
+  safe('walk tones',walkTones);
   dirty=true; }
 function setAsphalt(v){ RS.asphalt=v; try{ localStorage.setItem('ydAsphalt',v?'1':'0'); }catch(e){} applyAsphalt(); showBtn(); }
 function showBtn(){ const b=document.getElementById('asphaltBtn'); if(b) b.classList.toggle('on',RS.asphalt); }
@@ -46,6 +47,49 @@ function rect(L,cx,cy,ux,uy,len,wid){ const vx=-uy, vy=ux, a=len/2, b=wid/2, P=[
 function octa(L,cx,cy,r){ const p=[]; for(let i=0;i<=8;i++){ const a=i/8*Math.PI*2; p.push(L(cx+Math.cos(a)*r,cy+Math.sin(a)*r)); } return [p]; }
 const F=(coords,props)=>({type:'Feature',properties:props,geometry:{type:'Polygon',coordinates:coords}});
 const Line=(pts,props)=>({type:'Feature',properties:props,geometry:{type:'LineString',coordinates:pts}});
+
+
+/* ---------- sidewalks ----------
+   One continuous strip per street side (the pieces of a street are chained end to end and the corners mitred, so there are no
+   gaps at bends or between segments), with a slab joint every SLAB metres and a slightly different tone on some slabs.
+   Joints and tones are keyed to the distance along the street, so they stay put when the strip is rebuilt as you drive. */
+const SLAB=1.6, WALKW=1.6;
+function sidewalks(WK,L,ox,oy,out){
+  const by=new Map(); for(const w of WK){ let a=by.get(w.lid); if(!a) by.set(w.lid,a=[]); a.push(w); }
+  const jointR=Q3(120,170,220), slabR=Q3(60,90,120);
+  for(const [lid,arr] of by){ arr.sort((a,b)=>a.along-b.along);
+    // chains: neighbours that share an end point and don't turn sharply
+    const chains=[]; let cur=null;
+    for(const w of arr){ const p=cur&&cur[cur.length-1];
+      if(p&&Math.hypot(p.x2-w.x1,p.y2-w.y1)<1.2&&p.ux*w.ux+p.uy*w.uy>.2) cur.push(w); else chains.push(cur=[w]); }
+    for(const sd of [-1,1]) for(const ch of chains){
+      // offset polyline with mitred corners
+      const pts=[]; const n=ch.length;
+      const vtx=(w,x,y,nbx,nby)=>{ let mx=w.nx*sd+(nbx==null?0:nbx*sd), my=w.ny*sd+(nby==null?0:nby*sd); const ml=Math.hypot(mx,my)||1; mx/=ml; my/=ml;
+        const d=Math.max(.45,mx*w.nx*sd+my*w.ny*sd), k=Math.min(2.2,1/d); return [x+mx*w.o*k,y+my*w.o*k]; };
+      pts.push(vtx(ch[0],ch[0].x1,ch[0].y1));
+      for(let i=1;i<n;i++) pts.push(vtx(ch[i],ch[i].x1,ch[i].y1,ch[i-1].nx,ch[i-1].ny));
+      pts.push(vtx(ch[n-1],ch[n-1].x2,ch[n-1].y2));
+      out.push(Line(pts.map(q=>L(q[0],q[1])),{k:'walk'}));
+      // slabs: joint lines across the strip, and tone variation on some slabs
+      const joints=[], lighter=[], darker=[];
+      for(const w of ch){ const hw=WALKW/2+.05;
+        for(let d=Math.ceil(w.along/SLAB)*SLAB; d<w.along+w.len; d+=SLAB){ const t=d-w.along, cx=w.x1+w.ux*t+w.nx*sd*w.o, cy=w.y1+w.uy*t+w.ny*sd*w.o;
+          const dd=Math.hypot(cx-ox,cy-oy); if(dd>jointR) continue;
+          joints.push([L(cx-w.nx*hw,cy-w.ny*hw),L(cx+w.nx*hw,cy+w.ny*hw)]);
+          if(dd<slabR){ const idx=Math.round(d/SLAB), h=hash(idx,lid*7+sd), x0=cx-w.ux*SLAB, y0=cy-w.uy*SLAB;   // the slab behind this joint
+            if(h<.28) lighter.push([L(x0,y0),L(cx,cy)]); else if(h>.78) darker.push([L(x0,y0),L(cx,cy)]); } } }
+      if(joints.length) out.push({type:'Feature',properties:{k:'wjoint'},geometry:{type:'MultiLineString',coordinates:joints}});
+      if(lighter.length) out.push({type:'Feature',properties:{k:'wslab',t:1},geometry:{type:'MultiLineString',coordinates:lighter}});
+      if(darker.length) out.push({type:'Feature',properties:{k:'wslab',t:2},geometry:{type:'MultiLineString',coordinates:darker}});
+    } }
+}
+const WALK_C=()=>RS.asphalt?'#a9a8a2':'#c9c7c0';
+function walkTones(){
+  if(map.getLayer('rs-walk')) map.setPaintProperty('rs-walk','line-color',WALK_C());
+  if(map.getLayer('rs-wslab')) map.setPaintProperty('rs-wslab','line-color',RS.asphalt?['match',['get','t'],1,'#b6b5ae','#9a9993']:['match',['get','t'],1,'#d6d4cd','#b9b7b0']);
+  if(map.getLayer('rs-wjoint')) map.setPaintProperty('rs-wjoint','line-color',RS.asphalt?'#75746f':'#9a978f');
+}
 
 function build(){
   if(typeof roadGeo!=='object') return;
@@ -76,7 +120,7 @@ function build(){
   const clear=(x,y,g)=>{ if(typeof roadClear!=='function') return true; const q=L(x,y); return roadClear(q[0],q[1])>=g; };
   const ok=(x,y,self,m,pad)=>Math.hypot(x-ox,y-oy)<R&&!onRoad(x,y,self,m)&&!inBuilding(x,y,pad==null?1:pad)&&clear(x,y,Math.min(m,.6));
 
-  const out=[], obs=[], poles=new Map(), mailFor=new Set();
+  const out=[], obs=[], poles=new Map(), mailFor=new Set(), WK=[];
   const QL0=Q3(0,1,2);
   for(const s of near){ const [x1,y1,x2,y2,half,name,cls,along,lid]=s; if(/motorway|track|path|service/.test(cls)) continue;
     const len=Math.hypot(x2-x1,y2-y1); if(len<.5) continue; const ux=(x2-x1)/len, uy=(y2-y1)/len, nx=uy, ny=-ux;   // n = right of travel
@@ -106,8 +150,7 @@ function build(){
         const ax=x-nx*sd*1.1, ay=y-ny*sd*1.1; out.push(F(rect(L,ax,ay,nx,ny,2.2,.12),{k:'lpole',b:7.9,h:8.05,c:'#6d7278'}));
         out.push(F(rect(L,x-nx*sd*2.1,y-ny*sd*2.1,nx,ny,.7,.32),{k:'lamp',b:7.75,h:7.95,c:'#d7dade'})); });
       // sidewalks both sides (a concrete strip a little back from the curb), drawn under the roads so crossings stay clear
-      for(const sd of [-1,1]){ const o=half+2.2, a=[x1+nx*sd*o,y1+ny*sd*o], b=[x2+nx*sd*o,y2+ny*sd*o];
-        if(Math.hypot(a[0]-ox,a[1]-oy)<R+40) out.push(Line([L(a[0],a[1]),L(b[0],b[1])],{k:'walk'})); }
+      if(Math.hypot(mid[0]-ox,mid[1]-oy)<R+40+len/2) WK.push({lid,along,len,x1,y1,x2,y2,ux,uy,nx,ny,o:half+2.2});   // chained into continuous strips after the loop
       // fire hydrants now and then
       each(85,31,(px,py,d)=>{ const sd=hash(lid,Math.round(d))<.5?1:-1, x=px+nx*sd*(half+.9), y=py+ny*sd*(half+.9); if(!ok(x,y,s,.8,0)) return;
         out.push(F(octa(L,x,y,.17),{k:'hyd',b:0,h:.75,c:'#c62828'})); obs.push([x,y,.2]); out.push(F(octa(L,x,y,.11),{k:'hyd',b:.75,h:.85,c:'#c62828'})); });
@@ -118,6 +161,7 @@ function build(){
         out.push(F(rect(L,x,y,ux,uy,.1,.1),{k:'mail',b:0,h:1.02,c:'#3a2f26'})); obs.push([x,y,.25]);
         out.push(F(rect(L,x,y,nx,ny,.48,.2),{k:'mail',b:1.0,h:1.22,c:['#202326','#2b3a55','#5a5d61','#7a2321'][Math.floor(hash(b.cx|0,b.cy|0)*4)]})); }
     } }
+  safe('sidewalks',()=>sidewalks(WK,L,ox,oy,out));
   RS.n=out.length; RS.obs=obs.map(([x,y,r])=>{ const q=L(x,y); return [q[0]*MLNG,q[1]*MLAT,r]; });   // street lights, hydrants and mailboxes, for the parking sensors (m)
   const src=map.getSource('roadside'); if(src) src.setData({type:'FeatureCollection',features:out});
   RS.at=[S.lng,S.lat]; RS.geoT=roadGeo.t; dirty=true;
@@ -128,7 +172,11 @@ onReady(function roadside(){
     const ids=map.getStyle().layers.map(l=>l.id), firstRoad=ids.find(id=>/^(road|tunnel|bridge)_/.test(id)&&/casing/.test(id))||ids.find(id=>/^road_/.test(id));
     map.addSource('roadside',{type:'geojson',data:{type:'FeatureCollection',features:[]},maxzoom:19,tolerance:.1});
     map.addLayer({id:'rs-walk',type:'line',source:'roadside',filter:['==',['get','k'],'walk'],minzoom:14,
-      layout:{'line-cap':'butt','line-join':'round'},paint:{'line-color':RS.asphalt?'#a9a8a2':'#c9c7c0','line-width':mz(1.8,1)}},firstRoad);
+      layout:{'line-cap':'butt','line-join':'miter','line-miter-limit':3},paint:{'line-color':WALK_C(),'line-width':mz(WALKW,1)}},firstRoad);
+    map.addLayer({id:'rs-wslab',type:'line',source:'roadside',filter:['==',['get','k'],'wslab'],minzoom:16,
+      layout:{'line-cap':'butt'},paint:{'line-color':'#b6b5ae','line-width':mz(WALKW,1)}},firstRoad);
+    map.addLayer({id:'rs-wjoint',type:'line',source:'roadside',filter:['==',['get','k'],'wjoint'],minzoom:16,
+      layout:{'line-cap':'butt'},paint:{'line-color':'#75746f','line-width':mz(.06,.5),'line-opacity':.85}},firstRoad);
     const top=map.getLayer('tree-trunk')?'tree-trunk':undefined;
     map.addLayer({id:'rs-3d',type:'fill-extrusion',source:'roadside',filter:['all',['==',['geometry-type'],'Polygon'],['!=',['get','k'],'crown']],minzoom:14,
       paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-height':['get','h'],'fill-extrusion-base':['get','b'],'fill-extrusion-vertical-gradient':false}},top);

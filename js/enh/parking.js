@@ -110,16 +110,18 @@ function layers(){ safe('parking layers',()=>{
   if(!map.getSource('parking')) map.addSource('parking',{type:'geojson',data:EMPTY});
   const all=map.getStyle().layers, road=(all.find(l=>l['source-layer']==='transportation')||{}).id, before=road&&map.getLayer(road)?road:undefined;
   if(!map.getLayer('pk-base')) map.addLayer({id:'pk-base',type:'fill',source:'parking',minzoom:12,paint:{'fill-color':'#5f6368','fill-opacity':1}},before);
-  if(!map.getLayer('pk-stalls')&&map.hasImage('tx-parking')) map.addLayer({id:'pk-stalls',type:'fill',source:'parking',minzoom:14,paint:{'fill-pattern':'tx-parking','fill-opacity':1}},before);
+  const lot=()=>window.TXLOT?TXLOT.name():'tx-parking';
+  if(!map.getLayer('pk-stalls')&&map.hasImage(lot())) map.addLayer({id:'pk-stalls',type:'fill',source:'parking',minzoom:14,paint:{'fill-pattern':lot(),'fill-opacity':1}},before);
   if(!map.getSource('pk-lines')) map.addSource('pk-lines',{type:'geojson',data:EMPTY,tolerance:0,buffer:32,maxzoom:18});
   if(!map.getSource('pk-pads')) map.addSource('pk-pads',{type:'geojson',data:EMPTY,tolerance:0});
   if(!map.getLayer('pk-pad')) map.addLayer({id:'pk-pad',type:'fill',source:'pk-pads',minzoom:14,paint:{'fill-color':'#5f6368','fill-opacity':1}},before);
-  if(!map.getLayer('pk-padtx')&&map.hasImage('tx-parking')) map.addLayer({id:'pk-padtx',type:'fill',source:'pk-pads',minzoom:14,paint:{'fill-pattern':'tx-parking','fill-opacity':1}},before);
+  if(!map.getLayer('pk-padtx')&&map.hasImage(lot())) map.addLayer({id:'pk-padtx',type:'fill',source:'pk-pads',minzoom:14,paint:{'fill-pattern':lot(),'fill-opacity':1}},before);
   if(!map.getLayer('pk-curb')) map.addLayer({id:'pk-curb',type:'line',source:'parking',minzoom:14,layout:{'line-join':'round'},
     paint:{'line-color':'#b9bcc0','line-width':['interpolate',['exponential',2],['zoom'],14,.5,18,2,22,14],'line-opacity':.9}},before);
   // painted lines ~12 cm wide at any zoom (world-scaled width)
   if(!map.getLayer('pk-lines')) map.addLayer({id:'pk-lines',type:'line',source:'pk-lines',minzoom:15,layout:{'line-cap':'butt'},
     paint:{'line-color':'#f4f4f0','line-width':['interpolate',['exponential',2],['zoom'],15,.05,22,6.4],'line-opacity':.92}},before);
+  if(window.TXLOT) TXLOT.apply();
   draw(); }); }
 
 const KEY=(lat,lng)=>'ydPark:'+lat.toFixed(2)+','+lng.toFixed(2);
