@@ -725,8 +725,13 @@ function setInside(r){
   if(r&&!IN.told){ IN.told=true; toast('Inside: the walls are cut away so you can see in'+(mode==='walk'?'. Walk out through a door to leave':''),3800); }
 }
 // work out which building you're in (if any), from where you stand
+/* in the car the building only opens up when the car is well inside it (a garage, a store's doorway): a footprint that is a metre or
+   two off the real house, or a car parked on the apron, must not strip the walls (owner 2026-11-24). On foot any step through a door counts. */
+const deepIn=(r,lat,lng,m)=>{ const q=loc(r,lat,lng); if(!inP(r.p,q[0],q[1])) return false; const p=r.p;
+  for(let i=0;i<p.length;i++){ const a=p[i], b=p[(i+1)%p.length], dx=b[0]-a[0], dy=b[1]-a[1], L2=dx*dx+dy*dy||1, t=Math.max(0,Math.min(1,((q[0]-a[0])*dx+(q[1]-a[1])*dy)/L2));
+    if(Math.hypot(a[0]+t*dx-q[0],a[1]+t*dy-q[1])<m) return false; } return true; };
 function updInside(recs){
-  let r=null; if(IN.rec&&inRec(IN.rec,S.lat,S.lng)) r=IN.rec; else for(const q of recs) if(inRec(q,S.lat,S.lng)){ r=q; break; }
+  let r=null; if(IN.rec&&inRec(IN.rec,S.lat,S.lng)) r=IN.rec; else for(const q of recs) if(inRec(q,S.lat,S.lng)&&(mode==='walk'||deepIn(q,S.lat,S.lng,2.4))){ r=q; break; }
   if((r?r.key:null)!==IN.key) setInside(r);
 }
 
