@@ -255,7 +255,8 @@ function buildRoom(r){
       globe.position.set(x3,HC-.03,z3); g.add(globe); } }
   // door leaves, hinged at the jamb; double doors on the wide glass entrances
   ROOM.leaves=[];
-  for(const d of r.doors){ const W0=d.s1-d.s0, two=W0>1.5, lw=two?(W0-.06)/2:W0-.04, glass=two;
+  const AUTO=!!r.store;                                              // store entrances are automatic: no knobs, they open by themselves
+  for(const d of r.doors){ const W0=d.s1-d.s0, two=W0>1.5, lw=two?(W0-.06)/2:W0-.04, glass=two||AUTO;
     const leafM=glass?rmat('glassdoor',0x2f3e4e,0x0a1420):rmat('door',0x7a5236,0x1a120c);
     const L=Math.hypot(d.x1-d.x0,d.y1-d.y0)||1, ux=(d.x1-d.x0)/L, uy=(d.y1-d.y0)/L;
     for(const side of two?[0,1]:[0]){
@@ -263,11 +264,12 @@ function buildRoom(r){
       const cdx=side?-ux:ux, cdy=side?-uy:uy;                        // closed: along the wall, from the hinge
       const pv=new THREE.Group(); const [hx3,hz3]=to3(hx-d.nx*.06,hy-d.ny*.06); pv.position.set(hx3,0,hz3);
       const leaf=new THREE.Mesh(new THREE.BoxGeometry(lw,2.04,.045),leafM); leaf.position.set(lw/2,1.03,0); pv.add(leaf);
-      const kn=new THREE.Mesh(new THREE.SphereGeometry(.03,8,6),rmat('knob',0xc9a14a,0x30240c)); kn.position.set(lw-.08,1.0,.04); pv.add(kn);
-      const kn2=kn.clone(); kn2.position.z=-.04; pv.add(kn2);
+      if(!AUTO){ const kn=new THREE.Mesh(new THREE.SphereGeometry(.03,8,6),rmat('knob',0xc9a14a,0x30240c)); kn.position.set(lw-.08,1.0,.04); pv.add(kn);
+        const kn2=kn.clone(); kn2.position.z=-.04; pv.add(kn2); }
+      else { const bar=new THREE.Mesh(new THREE.BoxGeometry(.4,.05,.07),rmat('pushbar',0xc7ccd1,0x30343a)); bar.position.set(lw-.3,1.06,0); pv.add(bar); }
       const angC=Math.atan2(-to3(cdx,cdy)[1],cdx), angO=Math.atan2(-to3(-d.nx,-d.ny)[1],-d.nx);   // rotation.y for a leaf pointing along / in
       let dA=angO-angC; dA=((dA+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI;
-      pv.rotation.y=angC; g.add(pv); ROOM.leaves.push({pv,angC,dA,d,o:0}); } }
+      pv.rotation.y=angC; g.add(pv); ROOM.leaves.push({pv,angC,dA,d,o:0,auto:AUTO}); } }
   // the garage door: a panel across the opening that rolls up with the opener
   ROOM.gar=[];
   for(const q of r.garages||[]){ const [ax,az]=to3(q.x0-q.nx*.08,q.y0-q.ny*.08), [bx,bz]=to3(q.x1-q.nx*.08,q.y1-q.ny*.08), W0=Math.hypot(bx-ax,bz-az);
@@ -389,8 +391,8 @@ function placeRoom(m,b){ const r=ROOM.r; if(!r) return; const kx=111320*cosLat()
   ROOM.g.position.set(rr/m,0,-f/m); ROOM.g.scale.setScalar(1/m); ROOM.g.rotation.y=b; }
 // doors swing open when you're within ~1.8 m of them, and shut again behind you
 function doorSwing(dt){ const r=ROOM.r; if(!r) return; const q=loc(r,S.lat,S.lng);
-  for(const L of ROOM.leaves){ const mx=(L.d.x0+L.d.x1)/2, my=(L.d.y0+L.d.y1)/2, near=Math.hypot(q[0]-mx,q[1]-my)<1.8;
-    L.o=Math.max(0,Math.min(1,L.o+(near?1:-1)*dt/.7)); L.pv.rotation.y=L.angC+L.dA*.95*(L.o*L.o*(3-2*L.o)); } }
+  for(const L of ROOM.leaves){ const mx=(L.d.x0+L.d.x1)/2, my=(L.d.y0+L.d.y1)/2, near=Math.hypot(q[0]-mx,q[1]-my)<(L.auto?3.8:1.8);   // automatic doors sense you from further off, and open quicker
+    L.o=Math.max(0,Math.min(1,L.o+(near?1:-1)*dt/(L.auto?.45:.7))); L.pv.rotation.y=L.angC+L.dA*.95*(L.o*L.o*(3-2*L.o)); } }
 function fpCam(dt){
   if(!FPV.on){ FPV.on=true; step.W=0; LOOK.pitch=0; }
   const W2=innerWidth, H=innerHeight, fov=FPV.fov, DEGR=Math.PI/180;

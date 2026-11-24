@@ -169,13 +169,16 @@ function recs(){ const out=[], kx0=111320*Math.cos(S.lat*Math.PI/180);
   return out; }
 function hOf(s){ let h=0; try{ for(const f of map.querySourceFeatures(bSrc,{sourceLayer:'building'})){ if(s.id==null||f.id!==s.id) continue; const pr=f.properties||{}; h=Math.max(h,+(pr.render_height||pr.height||0)); } }catch(e){} return h||8; }
 // the glass double doors on the map (dark frame, two glass leaves, push bars), like buildings.js draws its own
-function drawDoors(){ const feats=[];
+function drawDoors(){ const feats=[]; ST.cache=[];
   for(const r of recs()){ const E=r.E, sm=r.sm, toLL=q=>[+(r.cx+q[0]/r.kx).toFixed(7),+(r.cy+q[1]/r.ky).toFixed(7)];
-    const put=(s0,s1,o0,o1,b,h,c)=>{ const a=[E.a[0]+E.ux*s0,E.a[1]+E.uy*s0], z=[E.a[0]+E.ux*s1,E.a[1]+E.uy*s1];
+    const o=ST.op[r.key]||0; ST.cache.push({key:r.key,lng:r.cx+(E.a[0]+E.ux*sm)/r.kx,lat:r.cy+(E.a[1]+E.uy*sm)/r.ky});
+    const put=(s0,s1,o0,o1,b,h,c)=>{ if(s1-s0<.02) return; const a=[E.a[0]+E.ux*s0,E.a[1]+E.uy*s0], z=[E.a[0]+E.ux*s1,E.a[1]+E.uy*s1];
       const ring=[[a[0]+E.nx*o0,a[1]+E.ny*o0],[z[0]+E.nx*o0,z[1]+E.ny*o0],[z[0]+E.nx*o1,z[1]+E.ny*o1],[a[0]+E.nx*o1,a[1]+E.ny*o1]].map(toLL); ring.push(ring[0]);
       feats.push({type:'Feature',properties:{c,b,h},geometry:{type:'Polygon',coordinates:[ring]}}); };
-    put(sm-1.15,sm+1.15,.06,.1,0,2.65,'#3b4048');
-    for(const z of [-1,1]){ put(z<0?sm-.95:sm+.03,z<0?sm-.03:sm+.95,.1,.13,.04,2.45,'#27313e'); put(z<0?sm-.45:sm+.1,z<0?sm-.1:sm+.45,.13,.17,1,1.06,'#c7ccd1'); }
+    put(sm-1.15,sm+1.15,.06,.1,0,2.65,o>.02?'#14171b':'#3b4048');                                          // the frame (a dark doorway once they open)
+    // the automatic doors: both glass leaves slide apart towards their jambs as you come up, and close behind you
+    for(const z of [-1,1]){ const J=sm+z*.95, F=J-z*.92*(1-.92*o), A=Math.min(J,F), B=Math.max(J,F), hx=F+z*.35;
+      put(A,B,.1,.13,.04,2.45,'#27313e'); put(Math.min(F,hx),Math.max(F,hx),.13,.17,1,1.06,'#c7ccd1'); }
     put(sm-1.6,sm+1.6,.06,.9,2.65,2.85,'#c9ccd0'); }                                                     // a little canopy edge over them
   safe('stores',()=>{ const src=map.getSource('stores'); if(src) src.setData({type:'FeatureCollection',features:feats}); }); }
 function layers(){ safe('stores layer',()=>{ if(map.getSource('stores')) return;
@@ -183,6 +186,11 @@ function layers(){ safe('stores layer',()=>{ if(map.getSource('stores')) return;
   map.addLayer({id:'stores-3d',type:'fill-extrusion',source:'stores',minzoom:13,paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-base':['get','b'],'fill-extrusion-height':['get','h'],'fill-extrusion-vertical-gradient':false}},
     map.getLayer('hn-big')?'hn-big':undefined); }); }
 
+// the doors are automatic: a sensor within 5 m opens every Meijer entrance, in about half a second, and they shut again when you leave
+ST.op={}; ST.cache=[]; let lastDraw=0;
+FRAME_HOOKS.push(function storeDoors(dt){ if(!ST.cache.length) return false; let ch=false;
+  for(const c of ST.cache){ const near=meters(c.lat,c.lng,S.lat,S.lng)<5, o0=ST.op[c.key]||0, o=Math.max(0,Math.min(1,o0+(near?1:-1)*dt/.55)); if(o!==o0){ ST.op[c.key]=o; ch=true; } }
+  const now=performance.now(); if(ch&&now-lastDraw>45){ lastDraw=now; safe('store doors',drawDoors); } return false; });
 onReady(function stores(){ layers(); setTimeout(()=>safe('stores scan',()=>{ scanTiles(); drawDoors(); }),2500); });
 onTick(1500,function storeTick(){
   const moved=ST.at?meters(ST.at[1],ST.at[0],S.lat,S.lng):1e9;
