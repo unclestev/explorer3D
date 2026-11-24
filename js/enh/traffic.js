@@ -236,7 +236,7 @@ function hiddenByBuilding(a,camX,camY,camH){
    ground is flat there). ---------- */
 const OCC={mesh:null,at:null,t:0,o:null,dirty:true,ter:null};
 function occFeatures(){ const out=[]; const add=(src,sl,hk,bk)=>{ let fs=[]; try{ fs=map.getSource(src)?map.querySourceFeatures(src,sl?{sourceLayer:sl}:{}):[]; }catch(e){} for(const f of fs) out.push([f,hk,bk]); };
-  add(bSrc,'building','b','b'); add('rebuilt',null,'h','b'); add('roofs',null,'h','b'); add('inrest',null,'b','b'); add('trj',null,'h','b');            // footprints, redrawn buildings, and the houses' pitched roofs (stacked slices)
+  add(bSrc,'building','b','b'); add('rebuilt',null,'h','b'); add('roofs',null,'h','b'); add('inrest',null,'b','b'); add('trj',null,'t','b');            // footprints, redrawn buildings, and the houses' pitched roofs (stacked slices)
   return out; }
 // built a slice at a time, ~4 ms a frame (owner 2026-11-22: downtown LA froze for ~150 ms each time it rebuilt in one go);
 // the old blockers stay up until the new set is finished
