@@ -99,6 +99,8 @@ function details(F,P,kx,ky){
       const rows=H<6?[[1.5,2.6]]:H<9?[[1.4,2.5],[4.6,5.7]]:[[H-3.3,H-2.3]];
       for(let i=0;i<cnt;i++){ const s=cnt>1?1.8+i*step:L/2;
         for(const [wb,wt] of rows) if(wt<H-.4&&free(s,wb+.1)) put(a,u,n,s-.5,s+.5,.02,.09,wb,wt,GLASS); }
+      if(H<9&&L>=24) for(const f of [.3,.72]) if(free(L*f,2.8)&&free(L*f-1.2,2.8)&&free(L*f+1.2,2.8)){ const q=L*f;      // plain doors flush in the brick, along the longer low walls
+        put(a,u,n,q-1.1,q+1.1,.02,.07,0,2.65,DARK); for(const z of [-1,1]){ put(a,u,n,z<0?q-1:q+.04,z<0?q-.04:q+1,.07,.12,.05,2.55,RED); put(a,u,n,z<0?q-.88:q+.16,z<0?q-.16:q+.88,.12,.15,.45,2.35,GLASS); } }
       if(H>=10&&L>20) for(const f of [.08,.14]) if(free(L*f,3)) put(a,u,n,L*f-.2,L*f+.2,.02,.09,2.2,7.4,GLASS);   // the tall slit windows at a gym's end
     } });
   for(const [px,py,kind] of PORTALS){ let wi=-1, f=0; PLAN.forEach((b,k)=>{ if(Math.abs(b[3]-py)<30&&px>=b[0]+10&&px<=b[2]-10&&b[2]-b[0]>=50&&(wi<0||Math.abs(b[3]-py)<Math.abs(PLAN[wi][3]-py))){ wi=k; f=(px-b[0])/(b[2]-b[0]); } });
