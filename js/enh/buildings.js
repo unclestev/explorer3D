@@ -9,7 +9,7 @@
    3. Rooftop units (air conditioners, vents) on stores, schools and offices near the car.
    1b. (2026-11-23) Near the car every building is redrawn as its own feature ('walls'), with each house's own siding /
       brick texture and roof colour, and the map's grouped copies left out — see buildWalls.
-   Houses = up to 12 m tall and 25–450 m² (up to 900 m² outside school/shop/industrial zones, isHouseA); split across map tiles or "building:part" pieces stay flat-roofed.
+   Houses = up to 12 m tall, no business point inside, sized by land use (residential or unmapped up to 900 m², commercial only tiny, school/industrial never; isHouseA); split across map tiles or "building:part" pieces stay flat-roofed.
    Smashed buildings drop their roof too. Pure fill-extrusions, rebuilt only after moving ~120 m or when tiles load. */
 (()=>{
 'use strict';
@@ -203,17 +203,29 @@ function clipRing(r,b){                                           // Sutherland-
   if(P.length<3) return null; P.push(P[0]); return P;
 }
 /* school / industrial grounds near the car (vector landuse), for otherLook; refreshed with each build */
-let ZONES=[], SCHOOLS=[];
+let ZONES=[], SCHOOLS=[], POIS=[], ZSIG='';
+const SCHCLS=new Set(['school','college','university','kindergarten']);
+/* map points that are not a building you'd call a shop or office (parks, stops, furniture, nature): everything else is a business or
+   institution, whatever the region calls it */
+const NOTBLD=new Set(['parking','bus','bus_stop','railway','harbor','ferry_terminal','picnic_site','playground','park','pitch','dog_park','camp_site','toilets','bench','drinking_water','information','charging_station','attraction','viewpoint','peak','monument','bicycle_parking','ice_rink','swimming','garden','zoo','theme_park','stadium','shelter','grave_yard','cemetery','recycling','waste_basket','post_box','fountain','golf','sports_centre','campsite','atm','telephone','ev_charging','bicycle_rental','taxi','aerialway','entrance']);
 function zones(kx,ky,R){ const out=[], sp=[];
   /* school points too: many school grounds aren't mapped as land use (Yorkville Grade School isn't), but the school is a map point */
   try{ for(const f of map.querySourceFeatures(bSrc,{sourceLayer:'poi',filter:['match',['get','class'],['school','college','university','kindergarten'],true,false]})){
       const c=f.geometry&&f.geometry.coordinates; if(c&&Math.abs(c[0]-S.lng)*kx<R&&Math.abs(c[1]-S.lat)*ky<R) sp.push([c[0],c[1],(f.properties&&(f.properties.name||f.properties['name:latin']))||'']); } }catch(e){}
   SCHOOLS=sp;
-  try{ for(const f of map.querySourceFeatures(bSrc,{sourceLayer:'landuse',filter:['match',['get','class'],['school','college','university','kindergarten','education','industrial'],true,false]})){
-      const z=f.properties.class==='industrial'?'industrial':'school', g=f.geometry, pls=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
+  /* what the buildings are used for, from the same map tiles every region has (owner 2026-11-24: "apply new features as broadly across
+     the globe as possible"): shop / restaurant / bank / office points sitting in a footprint, and residential / commercial land use */
+  const pp=[], seenP=new Set();
+  try{ for(const f of map.querySourceFeatures(bSrc,{sourceLayer:'poi'})){ const c=f.geometry&&f.geometry.coordinates, k=f.properties&&f.properties.class;
+      if(!c||typeof c[0]!=='number'||!k||NOTBLD.has(k)||SCHCLS.has(k)) continue; if(Math.abs(c[0]-S.lng)*kx>R||Math.abs(c[1]-S.lat)*ky>R) continue;
+      const key=c[0].toFixed(6)+','+c[1].toFixed(6); if(seenP.has(key)) continue; seenP.add(key); pp.push([c[0],c[1],k]); } }catch(e){}
+  POIS=pp;
+  try{ for(const f of map.querySourceFeatures(bSrc,{sourceLayer:'landuse',filter:['match',['get','class'],['school','college','university','kindergarten','education','industrial','commercial','retail','residential','suburb','neighbourhood','quarter'],true,false]})){
+      const cl=f.properties.class, z=cl==='industrial'?'industrial':(cl==='commercial'||cl==='retail')?'commercial':(cl==='residential'||cl==='suburb'||cl==='neighbourhood'||cl==='quarter')?'residential':'school', g=f.geometry, pls=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
       for(const pl of pls){ const r=pl[0]; if(!r) continue; let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const q of r){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
         if(x1<S.lng-R/kx||x0>S.lng+R/kx||y1<S.lat-R/ky||y0>S.lat+R/ky) continue; out.push({z,r,bb:[x0,y0,x1,y1]}); } } }catch(e){}
   ZONES=out;
+  const zs=ZONES.length+'/'+POIS.length+'/'+ZONES.reduce((a,o)=>a+o.r.length,0); if(zs!==ZSIG){ const first=ZSIG===''; ZSIG=zs; if(!first) try{ W.cache.clear(); W.sig=''; CACHE.clear(); R.at=null; R.last=''; R.parts=null; }catch(e){} }   // the classification changed as tiles streamed in: rebuild
   /* the school buildings round you, for the heights (owner 2026-11-23: "make a structure 2 story and even the gymnasium ceiling
      the proper height for schools"): a school is two storeys (the map's default 5 m is one), and the gymnasium — the one
      compact 700-3500 m2 building beside a school at least 2.5 times as big, the data doesn't say which one it is — is tall */
@@ -240,10 +252,20 @@ function isTrj(x,y,kx,ky){ for(const q of SCHOOLS) if(q[2]&&/traughber/i.test(q[
 function zoneAt(x,y,A,kx,ky){ let z=null;
   if(A>500){ const reach=Math.max(40,Math.sqrt(A)*.8); for(const q of SCHOOLS) if(Math.hypot((q[0]-x)*kx,(q[1]-y)*ky)<reach) return 'school'; } for(const o of ZONES){ if(x<o.bb[0]||x>o.bb[2]||y<o.bb[1]||y>o.bb[3]) continue; let c=false, r=o.r;
     for(let i=0,j=r.length-1;i<r.length;j=i++){ const xi=r[i][0],yi=r[i][1],xj=r[j][0],yj=r[j][1]; if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi)) c=!c; }
-    if(c){ if(o.z==='school') return 'school'; z=o.z; } } return z; }
+    if(c){ if(o.z==='school') return 'school'; if(z==null||ZR[o.z]>ZR[z]) z=o.z; } } return z; }
+const ZR={residential:1,commercial:2,industrial:3};
+/* a business or institution point in (or at the door of) this footprint */
+function poiAt(x,y,A,kx,ky){ const rad=Math.sqrt(A)*.5+3; for(const q of POIS) if(Math.abs((q[0]-x)*kx)<rad&&Math.abs((q[1]-y)*ky)<rad&&Math.hypot((q[0]-x)*kx,(q[1]-y)*ky)<rad) return true; return false; }
 // a house: up to 12 m, 25-450 m2, or up to 900 m2 where no school/shop/industrial zone covers it (owner 2026-11-24: a 486 m2 house
 // with many wings, 353 Emily Ct, got a flat roof and rooftop units)
-const isHouseA=(h,b0,A,cx,cy,kx,ky)=>h<=12&&b0===0&&A>=25&&(A<=450||(A<=900&&zoneAt(cx,cy,A,kx,ky)==null));
+/* a house: up to 12 m, no business point in it, and sized by what the land around it is used for (owner 2026-11-24: a 486 m2 house with
+   many wings, 353 Emily Ct, got a flat roof and rooftop units; now land use and shop points decide, not size alone):
+   residential land use up to 900 m2; unmapped land use up to 900 m2; commercial land use only the tiny ones; school / industrial grounds never. */
+const isHouseA=(h,b0,A,cx,cy,kx,ky)=>{ if(h>12||b0!==0||A<25) return false;
+  const z=zoneAt(cx,cy,A,kx,ky); if(z==='school'||z==='industrial') return false;
+  if(A>100&&poiAt(cx,cy,A,kx,ky)) return z==='residential'&&A<=250;     // a home office or a corner shop in a house block
+  if(z==='commercial') return A<=120;
+  return A<=900; };
 function buildWalls(fs,geo,kx,ky,RW,gone){                          // geo[i]: fs[i].geometry, decoded once (each read decodes it again)
   const t0=performance.now(), minD=new Map();
   for(let i=0;i<fs.length;i++){ const f=fs[i]; if(f.id==null||gone.has(f.id)) continue; const g=geo[i]; if(!g) continue;
