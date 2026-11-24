@@ -21,6 +21,8 @@ const H=['coalesce',['get','render_height'],['get','height'],6];
    it stands, so neighbours differ and a house looks the same on every visit */
 const SIDING=['#f2efe8','#ebe5d8','#e3d8c2','#d6c7aa','#c7b89c','#cfc8bc','#b7b1a7','#a8b0b5','#93a1ab','#7f8f9b','#9ea88f','#87937c',
   '#e7d9a9','#d9c58e','#c4b7a2','#a9a095','#6f7d86','#5f6e62','#8c9fb4','#b8c4c9','#e9e2cf','#bfa98c'];
+/* Traughber Junior High (owner 2026-11-23, an aerial photo): tan-orange brick walls under dark flat roofs */
+const TRJ={wall:'#b98056',roof:'#2c2e34'};
 const BRICK=['#9b5e4a','#8a4f3f','#a86a52','#b07a5e','#7c4a3c','#a2735f','#c49a7a','#8f6b5a'];
 const ROOFC=['#3a3c41','#46484d','#55585e','#62656b','#5b4a3c','#6a5c4d','#4a3f38','#3f4654','#6e6a63','#7b6f61','#5c3a33',
   '#2f3a33','#7a4b3a','#86898d','#4d4a46','#695849'];
@@ -61,9 +63,10 @@ function wallImages(){
     x.fillStyle='rgba(40,55,70,.55)'; x.fillRect(0,12,32,9); x.fillStyle='rgba(255,255,255,.15)'; x.fillRect(0,12,32,1); }));
   CURTAIN.forEach((c,i)=>mk('cw-gl'+i,c,x=>{ x.fillStyle='rgba(255,255,255,.10)'; x.fillRect(0,0,16,32);                           // curtain wall: mullions, spandrels
     x.fillStyle='rgba(30,40,50,.35)'; for(let v=0;v<32;v+=8) x.fillRect(v,0,1,32); x.fillRect(0,26,32,3); }));
-  BRICK.forEach((c,i)=>mk('hw-br'+i,c,x=>{ const r=(a,b)=>{ let h=(a*73856093^b*19349663)>>>0; return (h%1000)/1000; };
+  const brickPaint=x=>{ const r=(a,b)=>{ let h=(a*73856093^b*19349663)>>>0; return (h%1000)/1000; };
     for(let y=0;y<32;y+=4) for(let v=-8;v<32;v+=8){ const o=(y/4)%2?4:0; x.fillStyle=`rgba(${r(y,v)<.5?0:255},${r(y,v)<.5?0:220},${r(y,v)<.5?0:200},${.05+.08*r(v,y)})`; x.fillRect(v+o,y,8,4); }
-    x.fillStyle='rgba(225,220,210,.55)'; for(let y=0;y<32;y+=4){ x.fillRect(0,y+3,32,1); for(let v=0;v<32;v+=8) x.fillRect(v+((y/4)%2?4:0),y,1,3); } }));
+    x.fillStyle='rgba(225,220,210,.55)'; for(let y=0;y<32;y+=4){ x.fillRect(0,y+3,32,1); for(let v=0;v<32;v+=8) x.fillRect(v+((y/4)%2?4:0),y,1,3); } };
+  BRICK.forEach((c,i)=>mk('hw-br'+i,c,brickPaint)); mk('hw-trj',TRJ.wall,brickPaint);   // Traughber's tan-orange brick
 }
 const NID=['%',['abs',['to-number',['id'],0]],8];
 const R={at:null,t:0,n:-1,tiles:false,last:''};
@@ -215,6 +218,7 @@ function zones(kx,ky,R){ const out=[], sp=[];
    up / dn = wash slice colours from the fixture outward. Matched by the school's map-point name near the building. */
 const SCHCOL=[{re:/oswego (east |community )?high/i,up:['#ff8a1a','#ff7a00','#f06400','#c24d00'],dn:['#3b63ff','#2d50f0','#2342c8','#1a3290']}];
 function schoolCols(x,y,kx,ky){ for(const q of SCHOOLS){ if(!q[2]||Math.hypot((q[0]-x)*kx,(q[1]-y)*ky)>300) continue; for(const c of SCHCOL) if(c.re.test(q[2])) return c; } return null; }
+function isTrj(x,y,kx,ky){ for(const q of SCHOOLS) if(q[2]&&/traughber/i.test(q[2])&&Math.hypot((q[0]-x)*kx,(q[1]-y)*ky)<240) return true; return false; }
 function zoneAt(x,y,A,kx,ky){ let z=null;
   if(A>500){ const reach=Math.max(40,Math.sqrt(A)*.8); for(const q of SCHOOLS) if(Math.hypot((q[0]-x)*kx,(q[1]-y)*ky)<reach) return 'school'; } for(const o of ZONES){ if(x<o.bb[0]||x>o.bb[2]||y<o.bb[1]||y>o.bb[3]) continue; let c=false, r=o.r;
     for(let i=0,j=r.length-1;i<r.length;j=i++){ const xi=r[i][0],yi=r[i][1],xj=r[j][0],yj=r[j][1]; if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi)) c=!c; }
@@ -241,7 +245,8 @@ function buildWalls(fs,geo,kx,ky,RW,gone){                          // geo[i]: f
       const house=h<=12&&b0===0&&A>=25&&A<=450, L=house?houseLook(seed):null;
       const c=house?L.wall:h<=12?LOWC[Math.floor(hash(seed,59)*LOWC.length)]:h<=30?['#c8c4bc','#b3b8be','#d2c8b5','#bdb7ad','#a89f93'][seed%5]:['#9fb3c6','#8b9fb2','#a7b4bf'][seed%3];
       const rings=[outer]; for(const hr of pl.slice(1)){ const c2=clipRing(hr,box); if(c2) rings.push(c2); }
-      const pr2={c,cc:house?L.roof:FLAT[seed%2],b:b0,h}; if(!POWER) pr2.pat=house?L.pat:otherLook(seed,h,zoneAt(cx,cy,A,kx,ky));
+      const trj=!house&&A>=60&&isTrj(cx,cy,kx,ky);
+      const pr2={c:trj?TRJ.wall:c,cc:house?L.roof:trj?TRJ.roof:FLAT[seed%2],b:b0,h}; if(!POWER) pr2.pat=house?L.pat:trj?'hw-trj':otherLook(seed,h,zoneAt(cx,cy,A,kx,ky));
       const ft={type:'Feature',id:f.id,properties:pr2,geometry:{type:'Polygon',coordinates:rings}};
       W.cache.set(sk,ft); feats.push(ft); } }
   if(W.cache.size>20000) W.cache.clear();
