@@ -9,7 +9,7 @@
    3. Rooftop units (air conditioners, vents) on stores, schools and offices near the car.
    1b. (2026-11-23) Near the car every building is redrawn as its own feature ('walls'), with each house's own siding /
       brick texture and roof colour, and the map's grouped copies left out — see buildWalls.
-   Houses = up to 12 m tall and 25–450 m²; split across map tiles or "building:part" pieces stay flat-roofed.
+   Houses = up to 12 m tall and 25–450 m² (up to 900 m² outside school/shop/industrial zones, isHouseA); split across map tiles or "building:part" pieces stay flat-roofed.
    Smashed buildings drop their roof too. Pure fill-extrusions, rebuilt only after moving ~120 m or when tiles load. */
 (()=>{
 'use strict';
@@ -241,6 +241,9 @@ function zoneAt(x,y,A,kx,ky){ let z=null;
   if(A>500){ const reach=Math.max(40,Math.sqrt(A)*.8); for(const q of SCHOOLS) if(Math.hypot((q[0]-x)*kx,(q[1]-y)*ky)<reach) return 'school'; } for(const o of ZONES){ if(x<o.bb[0]||x>o.bb[2]||y<o.bb[1]||y>o.bb[3]) continue; let c=false, r=o.r;
     for(let i=0,j=r.length-1;i<r.length;j=i++){ const xi=r[i][0],yi=r[i][1],xj=r[j][0],yj=r[j][1]; if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi)) c=!c; }
     if(c){ if(o.z==='school') return 'school'; z=o.z; } } return z; }
+// a house: up to 12 m, 25-450 m2, or up to 900 m2 where no school/shop/industrial zone covers it (owner 2026-11-24: a 486 m2 house
+// with many wings, 353 Emily Ct, got a flat roof and rooftop units)
+const isHouseA=(h,b0,A,cx,cy,kx,ky)=>h<=12&&b0===0&&A>=25&&(A<=450||(A<=900&&zoneAt(cx,cy,A,kx,ky)==null));
 function buildWalls(fs,geo,kx,ky,RW,gone){                          // geo[i]: fs[i].geometry, decoded once (each read decodes it again)
   const t0=performance.now(), minD=new Map();
   for(let i=0;i<fs.length;i++){ const f=fs[i]; if(f.id==null||gone.has(f.id)) continue; const g=geo[i]; if(!g) continue;
@@ -261,7 +264,7 @@ function buildWalls(fs,geo,kx,ky,RW,gone){                          // geo[i]: f
       const outer=clipRing(r,box); if(!outer){ W.cache.set(sk,null); continue; }
       let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const q of r){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
       const cx=(x0+x1)/2, cy=(y0+y1)/2, A=Math.abs(area(r.slice(0,-1).map(q=>[(q[0]-cx)*kx,(q[1]-cy)*ky]))), seed=seedOf(cx,cy), hS=schoolH(cx,cy,A,h,b0,kx,ky);
-      const house=h<=12&&b0===0&&A>=25&&A<=450, L=house?houseLook(seed):null;
+      const house=isHouseA(h,b0,A,cx,cy,kx,ky), L=house?houseLook(seed):null;
       const c=house?L.wall:h<=12?LOWC[Math.floor(hash(seed,59)*LOWC.length)]:h<=30?['#c8c4bc','#b3b8be','#d2c8b5','#bdb7ad','#a89f93'][seed%5]:['#9fb3c6','#8b9fb2','#a7b4bf'][seed%3];
       const rings=[outer]; for(const hr of pl.slice(1)){ const c2=clipRing(hr,box); if(c2) rings.push(c2); }
       const trj=!house&&A>=60&&isTrj(cx,cy,kx,ky);
@@ -347,6 +350,40 @@ function build(){
 function tagId(fs,P){ const bk=P.cx.toFixed(6)+','+P.cy.toFixed(6); for(const f of fs) f.properties.bk=bk; }
 // one building's roof features (cached by position, so each is only worked out once)
 const CACHE=new Map();
+/* a house with wings (an L, a T, a garage jutting out): the outline is cut into the biggest rectangles that fit inside it
+   (all outline edges must run along the long axis or across it), and every rectangle gets its own gable or hip roof, its ridge
+   along its long side, the same pitch everywhere. The roofs are stacked slices, so where two wings meet the higher one wins
+   and the valley between them forms by itself. Returns features, or null (angled walls, too many wings: the old shrinking roof). */
+function wingRoof(p,B,slices,pitch,seed,c,top,toLL){
+  const U=p.map(q=>[q[0]*B.c+q[1]*B.s,-q[0]*B.s+q[1]*B.c]), n=U.length;
+  for(let i=0;i<n;i++){ const a=U[i], b=U[(i+1)%n], dx=b[0]-a[0], dy=b[1]-a[1], l=Math.hypot(dx,dy); if(l>=2.5&&Math.min(Math.abs(dx),Math.abs(dy))/l>.1) return null; }
+  const uniq=a=>{ a=a.slice().sort((x,y)=>x-y); const o=[a[0]]; for(const x of a) if(x-o[o.length-1]>.35) o.push(x); return o; };
+  const us=uniq(U.map(q=>q[0])), vs=uniq(U.map(q=>q[1])), nu=us.length-1, nv=vs.length-1; if(nu<1||nv<1||nu*nv>420) return null;
+  const g=[], P=[]; for(let i=0;i<=nu;i++){ g.push([]); P.push(new Array(nv+1).fill(0)); }
+  for(let i=0;i<nu;i++) for(let j=0;j<nv;j++) g[i][j]=inside(U,(us[i]+us[i+1])/2,(vs[j]+vs[j+1])/2)?1:0;
+  for(let i=0;i<nu;i++) for(let j=0;j<nv;j++) P[i+1][j+1]=g[i][j]+P[i][j+1]+P[i+1][j]-P[i][j];
+  const cnt=(i0,i1,j0,j1)=>P[i1+1][j1+1]-P[i0][j1+1]-P[i1+1][j0]+P[i0][j0], full=(i0,i1,j0,j1)=>cnt(i0,i1,j0,j1)===(i1-i0+1)*(j1-j0+1);
+  const rects=[];
+  for(let i0=0;i0<nu;i0++) for(let i1=i0;i1<nu;i1++) for(let j0=0;j0<nv;j0++){ if(!full(i0,i1,j0,j0)) continue;
+    for(let j1=j0;j1<nv&&full(i0,i1,j0,j1);j1++){
+      if((i0>0&&full(i0-1,i1,j0,j1))||(i1<nu-1&&full(i0,i1+1,j0,j1))||(j0>0&&full(i0,i1,j0-1,j1))||(j1<nv-1&&full(i0,i1,j0,j1+1))) continue;   // not the biggest
+      rects.push([i0,i1,j0,j1]); } }
+  const cov=g.map(r=>r.map(()=>0)), cellA=(i,j)=>(us[i+1]-us[i])*(vs[j+1]-vs[j]), pick=[];
+  for(let guard=0;guard<12;guard++){ let best=null, ba=0;
+    for(const r of rects){ let a=0; for(let i=r[0];i<=r[1];i++) for(let j=r[2];j<=r[3];j++) if(!cov[i][j]&&g[i][j]) a+=cellA(i,j); if(a>ba+1e-6){ ba=a; best=r; } }
+    if(!best||ba<1.2) break; pick.push(best); for(let i=best[0];i<=best[1];i++) for(let j=best[2];j<=best[3];j++) cov[i][j]=1; }
+  for(let i=0;i<nu;i++) for(let j=0;j<nv;j++) if(g[i][j]&&!cov[i][j]&&cellA(i,j)>=1.2) return null;       // something left uncovered: don't guess
+  if(!pick.length||pick.length>9) return null;
+  pick.sort((a,b)=>(b[1]-b[0]+1)*(b[3]-b[2]+1)-(a[1]-a[0]+1)*(a[3]-a[2]+1));
+  const out=[], oh=.3;
+  pick.forEach((r,idx)=>{ const u0=us[r[0]], u1=us[r[1]+1], v0=vs[r[2]], v1=vs[r[3]+1], Lr=u1-u0, Wr=v1-v0, alongU=Lr>=Wr, lg=Math.max(Lr,Wr), sh=Math.min(Lr,Wr);
+    if(sh<2.2) return;                                           // a porch or a bump: leave it flat
+    const half=sh/2, rise=Math.min(4.2,half*pitch), gable=lg/sh>1.15&&hash(seed+idx*7,3)<(idx?.9:.62), um=(u0+u1)/2, vm=(v0+v1)/2;
+    for(let k=0;k<slices;k++){ const t=k/slices, hv=(half+oh)*(1-t), hu=gable?lg/2+oh:Math.max(hv,lg/2+oh-(half+oh)*t); if(hv<.15) break;
+      const ring=(alongU?boxRing(B,um-hu,um+hu,vm-hv,vm+hv):boxRing(B,um-hv,um+hv,vm-hu,vm+hu)).map(toLL); ring.push(ring[0]);
+      out.push({type:'Feature',properties:{c,rf:1,b:top+rise*t,h:top+rise*(k+1)/slices},geometry:{type:'Polygon',coordinates:[ring]}}); } });
+  return out.length?out:null;
+}
 function roofFor(P,kx,ky,slices){ return roofParts(P,kx,ky,slices); }
 function roofParts(P,kx,ky,slices){
   const out=[], res={house:false,feats:out};
@@ -354,9 +391,9 @@ function roofParts(P,kx,ky,slices){
     let p=clean(P.ring.map(q=>[(q[0]-P.cx)*kx,(q[1]-P.cy)*ky])); if(p.length<3) return res;
     if(area(p)<0) p.reverse();
     const A=area(p), toLL=q=>[+(P.cx+q[0]/kx).toFixed(7),+(P.cy+q[1]/ky).toFixed(7)], top=P.h+.35;
-    const idn=Math.abs(Number(P.f.id)||0), seed=Math.floor(P.cx*1e5)^Math.floor(P.cy*1e5), house=P.h<=12&&A>=25&&A<=450;
+    const idn=Math.abs(Number(P.f.id)||0), seed=Math.floor(P.cx*1e5)^Math.floor(P.cy*1e5), house=isHouseA(P.h,0,A,P.cx,P.cy,kx,ky);
     if(house){
-      if(p.length>40) return res;
+      if(p.length>80) return res;
       res.house=true;
       const c=houseLook(seedOf(P.cx,P.cy)).roof;
       const B=obb(p), L=B.u1-B.u0, Wd=B.v1-B.v0, rect=A/((L*Wd)||1), pitch=.5+.14*hash(seed,7);
@@ -367,7 +404,9 @@ function roofParts(P,kx,ky,slices){
           if(hv<.15) break;
           const ring=boxRing(B,um-hu,um+hu,vm-hv,vm+hv).map(toLL); ring.push(ring[0]);
           out.push({type:'Feature',properties:{c,rf:1,b:top+rise*t,h:top+rise*(k+1)/slices},geometry:{type:'Polygon',coordinates:[ring]}}); }
-      } else {                                                    // hip roof following the real outline
+      } else {                                                    // a house with wings: a roof for each wing, or a hip roof following the real outline
+        const wr=wingRoof(p,B,slices,pitch,seed,c,top,toLL); if(wr){ for(const f of wr) out.push(f); return res; }
+        if(p.length>40) return res;
         let lo=0, hi=half;                                        // how far the outline can shrink before a wing closes up
         for(let it=0;it<10;it++){ const m=(lo+hi)/2; if(inset(p,m)) lo=m; else hi=m; }
         if(lo<.6) return res;
@@ -477,7 +516,7 @@ function facades(P,kx,ky,res,rich){
   if(P.b0>0) return;
   let p=cleanTight(P.ring.map(q=>[(q[0]-P.cx)*kx,(q[1]-P.cy)*ky])); if(p.length<3||p.length>400) return;                          /* was 80: a high school's outline has ~90 corners and got no windows or lights at all */
   if(area(p)<0) p.reverse();
-  const A=area(p), house=P.h<=12&&A>=25&&A<=450, seed=(Math.floor(P.cx*1e5)^Math.floor(P.cy*1e5))>>>0, out=res.fac=[];
+  const A=area(p), house=isHouseA(P.h,0,A,P.cx,P.cy,kx,ky), seed=(Math.floor(P.cx*1e5)^Math.floor(P.cy*1e5))>>>0, out=res.fac=[];
   if(!house&&A<80) return;                                        // sheds and kiosks: plain
   res.glow=[]; res.wash=[];
   const zone=house?null:zoneAt(P.cx,P.cy,A,kx,ky), school=zone==='school', industrial=zone==='industrial';
