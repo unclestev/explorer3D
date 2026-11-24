@@ -173,14 +173,19 @@ function clipRing(r,b){                                           // Sutherland-
   if(P.length<3) return null; P.push(P[0]); return P;
 }
 /* school / industrial grounds near the car (vector landuse), for otherLook; refreshed with each build */
-let ZONES=[];
-function zones(kx,ky,R){ const out=[];
+let ZONES=[], SCHOOLS=[];
+function zones(kx,ky,R){ const out=[], sp=[];
+  /* school points too: many school grounds aren't mapped as land use (Yorkville Grade School isn't), but the school is a map point */
+  try{ for(const f of map.querySourceFeatures(bSrc,{sourceLayer:'poi',filter:['match',['get','class'],['school','college','university','kindergarten'],true,false]})){
+      const c=f.geometry&&f.geometry.coordinates; if(c&&Math.abs(c[0]-S.lng)*kx<R&&Math.abs(c[1]-S.lat)*ky<R) sp.push([c[0],c[1]]); } }catch(e){}
+  SCHOOLS=sp;
   try{ for(const f of map.querySourceFeatures(bSrc,{sourceLayer:'landuse',filter:['match',['get','class'],['school','college','university','kindergarten','education','industrial'],true,false]})){
       const z=f.properties.class==='industrial'?'industrial':'school', g=f.geometry, pls=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
       for(const pl of pls){ const r=pl[0]; if(!r) continue; let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const q of r){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
         if(x1<S.lng-R/kx||x0>S.lng+R/kx||y1<S.lat-R/ky||y0>S.lat+R/ky) continue; out.push({z,r,bb:[x0,y0,x1,y1]}); } } }catch(e){}
   ZONES=out; }
-function zoneAt(x,y){ let z=null; for(const o of ZONES){ if(x<o.bb[0]||x>o.bb[2]||y<o.bb[1]||y>o.bb[3]) continue; let c=false, r=o.r;
+function zoneAt(x,y,A,kx,ky){ let z=null;
+  if(A>500){ const reach=Math.max(40,Math.sqrt(A)*.8); for(const q of SCHOOLS) if(Math.hypot((q[0]-x)*kx,(q[1]-y)*ky)<reach) return 'school'; } for(const o of ZONES){ if(x<o.bb[0]||x>o.bb[2]||y<o.bb[1]||y>o.bb[3]) continue; let c=false, r=o.r;
     for(let i=0,j=r.length-1;i<r.length;j=i++){ const xi=r[i][0],yi=r[i][1],xj=r[j][0],yj=r[j][1]; if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi)) c=!c; }
     if(c){ if(o.z==='school') return 'school'; z=o.z; } } return z; }
 function buildWalls(fs,geo,kx,ky,RW,gone){                          // geo[i]: fs[i].geometry, decoded once (each read decodes it again)
@@ -205,7 +210,7 @@ function buildWalls(fs,geo,kx,ky,RW,gone){                          // geo[i]: f
       const house=h<=12&&b0===0&&A>=25&&A<=450, L=house?houseLook(seed):null;
       const c=house?L.wall:h<=12?LOWC[Math.floor(hash(seed,59)*LOWC.length)]:h<=30?['#c8c4bc','#b3b8be','#d2c8b5','#bdb7ad','#a89f93'][seed%5]:['#9fb3c6','#8b9fb2','#a7b4bf'][seed%3];
       const rings=[outer]; for(const hr of pl.slice(1)){ const c2=clipRing(hr,box); if(c2) rings.push(c2); }
-      const pr2={c,cc:house?L.roof:FLAT[seed%2],b:b0,h}; if(!POWER) pr2.pat=house?L.pat:otherLook(seed,h,zoneAt(cx,cy));
+      const pr2={c,cc:house?L.roof:FLAT[seed%2],b:b0,h}; if(!POWER) pr2.pat=house?L.pat:otherLook(seed,h,zoneAt(cx,cy,A,kx,ky));
       const ft={type:'Feature',id:f.id,properties:pr2,geometry:{type:'Polygon',coordinates:rings}};
       W.cache.set(sk,ft); feats.push(ft); } }
   if(W.cache.size>20000) W.cache.clear();
