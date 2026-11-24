@@ -235,7 +235,7 @@ function schoolH(cx,cy,A,h,b0,kx,ky){ if(b0>0||A<700||!SB.length) return h; if(i
    up / dn = wash slice colours from the fixture outward. Matched by the school's map-point name near the building. */
 const SCHCOL=[{re:/oswego (east |community )?high/i,up:['#ff8a1a','#ff7a00','#f06400','#c24d00'],dn:['#3b63ff','#2d50f0','#2342c8','#1a3290']}];
 function schoolCols(x,y,kx,ky){ for(const q of SCHOOLS){ if(!q[2]||Math.hypot((q[0]-x)*kx,(q[1]-y)*ky)>300) continue; for(const c of SCHCOL) if(c.re.test(q[2])) return c; } return null; }
-const TRJS=r=>!!(window.TRJ&&TRJ.skip&&TRJ.skip(r)), TRJV=()=>(HIDE.pin||[]).length+'|'+(window.TRJ&&TRJ.ver?TRJ.ver():0);   // Traughber's own pieces (js/enh/traughber.js)
+const TRJS=r=>{ const T=window.TRJ; return !!(T&&T.skip&&T.skip(r)); }, TRJV=()=>{ const T=window.TRJ; return (HIDE.pin||[]).length+'|'+(T&&T.ver?T.ver():0); };   // (window.TRJ: this file's own TRJ is the colours)   // Traughber's own pieces (js/enh/traughber.js)
 function isTrj(x,y,kx,ky){ for(const q of SCHOOLS) if(q[2]&&/traughber/i.test(q[2])&&Math.hypot((q[0]-x)*kx,(q[1]-y)*ky)<240) return true; return false; }
 function zoneAt(x,y,A,kx,ky){ let z=null;
   if(A>500){ const reach=Math.max(40,Math.sqrt(A)*.8); for(const q of SCHOOLS) if(Math.hypot((q[0]-x)*kx,(q[1]-y)*ky)<reach) return 'school'; } for(const o of ZONES){ if(x<o.bb[0]||x>o.bb[2]||y<o.bb[1]||y>o.bb[3]) continue; let c=false, r=o.r;
@@ -269,7 +269,7 @@ function buildWalls(fs,geo,kx,ky,RW,gone){                          // geo[i]: f
       const ft={type:'Feature',id:f.id,properties:pr2,geometry:{type:'Polygon',coordinates:rings}};
       W.cache.set(sk,ft); feats.push(ft); } }
   if(W.cache.size>20000) W.cache.clear();
-  const sig=[...hid].sort().join(',')+'|'+[...tiles].sort().join(',')+'|'+(window.TRJ&&TRJ.ver?TRJ.ver():0);
+  const sig=[...hid].sort().join(',')+'|'+[...tiles].sort().join(',')+'|'+TRJV();
   if(sig!==W.sig){ W.sig=sig; W.hid=hid; W.n=feats.length;
     safe('walls',()=>map.getSource('walls').setData({type:'FeatureCollection',features:feats}));
     // the map's own copies go once the new walls are in (a moment later), so nothing blinks out in between
