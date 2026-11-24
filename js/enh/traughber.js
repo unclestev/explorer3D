@@ -49,7 +49,7 @@ const norm=b=>[(b[0]-X0)/(X1-X0),1-(b[3]-Y0)/(Y1-Y0),(b[2]-X0)/(X1-X0),1-(b[1]-Y
 function fit(P,kx,ky){
   /* the school's own pieces only (owner 2026-11-24: cars drove through the school): OpenFreeMap gives the school and the whole
      subdivision round it one id, and a house 130 m away once stretched the plan over the street and the bus loop. So: pieces
-     of at least ~1000 m2 near the school point, plus any smaller piece touching one of them (a tile cut or an annex). */
+     of at least ~1800 m2 near the school point (townhouse rows nearby are ~1000), plus any smaller piece touching one of them (a tile cut or an annex). */
   const ids=new Set(), keys=new Set(), cand=[];
   const fs=map.querySourceFeatures(bSrc,{sourceLayer:'building'});
   for(const f of fs){ if(f.id==null) continue; const g=f.geometry; if(!g) continue;
@@ -59,12 +59,14 @@ function fit(P,kx,ky){
       if(Math.hypot((x0+x1)/2,(y0+y1)/2)>170) continue;
       let A=0; for(let i=0,j=ring.length-1;i<ring.length;j=i++) A+=(ring[j][0]-ring[i][0])*(ring[j][1]+ring[i][1]);
       cand.push({id:f.id,ring,bb:[x0,y0,x1,y1],A:Math.abs(A/2),key:rkey(r),on:false}); } }
-  for(const c of cand) if(c.A>=1000) c.on=true;
+  for(const c of cand) if(c.A>=1800) c.on=true;
   for(let more=true,it=0;more&&it<6;it++){ more=false;
     for(const c of cand){ if(c.on||c.A<40) continue; const b=c.bb;
       if(cand.some(o=>o.on&&b[0]<o.bb[2]+1&&b[2]>o.bb[0]-1&&b[1]<o.bb[3]+1&&b[3]>o.bb[1]-1)){ c.on=true; more=true; } } }
   const polys=[]; let pts=[];
-  for(const c of cand) if(c.on){ ids.add(c.id); keys.add(c.key); polys.push(c.ring); pts=pts.concat(c.ring); }
+  const sbb=[1e9,1e9,-1e9,-1e9];
+  for(const c of cand) if(c.on){ ids.add(c.id); keys.add(c.key); polys.push(c.ring); pts=pts.concat(c.ring); sbb[0]=Math.min(sbb[0],c.bb[0]); sbb[1]=Math.min(sbb[1],c.bb[1]); sbb[2]=Math.max(sbb[2],c.bb[2]); sbb[3]=Math.max(sbb[3],c.bb[3]); }
+  const sll=[P[0]+(sbb[0]-3)/kx,P[1]+(sbb[1]-3)/ky,P[0]+(sbb[2]+3)/kx,P[1]+(sbb[3]+3)/ky];     // the school's pieces lie in here (lng/lat, 3 m spare)
   if(polys.length<1||pts.length<4) return null;
   const R=minRect(pts); if(!R||R.W<40||R.H<40||R.W>400||R.H>400) return null;
   const real=new Uint8Array(N*N); let nReal=0;
@@ -83,7 +85,7 @@ function fit(P,kx,ky){
   for(const f of fits){ if(f.iou<top-.04) continue; const [t,fx,fy]=f.T8, [u,v]=t?[fy?1-gv:gv,fx?1-gu:gu]:[fx?1-gu:gu,fy?1-gv:gv], uu=u-.5, vv=v-.5;
     const x=R.ux*uu*R.W+R.vx*vv*R.H, y=R.uy*uu*R.W+R.vy*vv*R.H; f.sw=-(x+y);
     if(!best||f.sw>best.sw) best=f; }
-  return {R,ids:[...ids],keys,iou:best.iou,T8:best.T8,nReal}; }
+  return {R,ids:[...ids],keys,sll,iou:best.iou,T8:best.T8,nReal}; }
 
 function toLL(F,P,kx,ky,px,py){        // a photo-plan point -> lng/lat, through the fitted rectangle
   const [t,fx,fy]=F.T8, pu=(px-X0)/(X1-X0), pv=1-(py-Y0)/(Y1-Y0);
@@ -208,7 +210,7 @@ function apply(F,P,kx,ky){
   T.rec=safe('trj gym',()=>gymRec(F,P,kx,ky))||null;
   const feats=polysOf(F,P,kx,ky).map((o,k)=>({type:'Feature',properties:{h:o.h,g:k===GYM?1:0},geometry:{type:'Polygon',coordinates:[o.ring]}}));
   // the map's own pieces of the school that buildings.js should leave out (only those: the houses sharing their id stay)
-  T.keys=F.keys; T.ll=feats.map(f=>f.geometry.coordinates[0]); let a=1e9,b=1e9,c=-1e9,d=-1e9; for(const r of T.ll) for(const q of r){ a=Math.min(a,q[0]); b=Math.min(b,q[1]); c=Math.max(c,q[0]); d=Math.max(d,q[1]); }
+  T.keys=F.keys; T.sll=F.sll; T.ll=feats.map(f=>f.geometry.coordinates[0]); let a=1e9,b=1e9,c=-1e9,d=-1e9; for(const r of T.ll) for(const q of r){ a=Math.min(a,q[0]); b=Math.min(b,q[1]); c=Math.max(c,q[0]); d=Math.max(d,q[1]); }
   T.bb=[a,b,c,d]; T.ver++;
   layers(); map.getSource('trj').setData({type:'FeatureCollection',features:feats});
   safe('trj details',()=>map.getSource('trjd').setData({type:'FeatureCollection',features:details(F,P,kx,ky)}));
@@ -229,9 +231,8 @@ function scan(){
 
 onTick(3000,function trjTick(){ safe('traughber',scan); });
 // is this ring (lng/lat, as the tiles give it) one of the school's own pieces? Those are drawn by this file instead.
-function skip(r){ if(!T.bb||off||!r||!r.length) return false; if(T.keys&&T.keys.has(rkey(r))) return true;
-  let x=0,y=0; const n=r.length-1; for(let i=0;i<n;i++){ x+=r[i][0]; y+=r[i][1]; } x/=n; y/=n;               // a piece from a tile that loaded later: its middle in the school
-  if(x<T.bb[0]||x>T.bb[2]||y<T.bb[1]||y>T.bb[3]) return false;
-  return T.ll.some(q=>inPoly(q,x,y)); }
+function skip(r){ if(!T.sll||off||!r||!r.length) return false; if(T.keys&&T.keys.has(rkey(r))) return true;
+  const b=T.sll; for(const q of r) if(q[0]<b[0]||q[0]>b[2]||q[1]<b[1]||q[1]>b[3]) return false;          // the same piece cut differently by another tile:
+  return true; }                                                                                         // wholly inside the school's own area
 window.TRJ={skip,ver:()=>T.ver,recs:()=>T.rec?[T.rec]:[],covers:r=>{ const g=T.rec; if(!g||!r||r===g||r.cx==null) return false; const x=(r.cx-g.cx)*g.kx, y=(r.cy-g.cy)*g.ky; let c=false; const P=g.p; for(let i=0,j=P.length-1;i<P.length;j=i++){ if((P[i][1]>y)!==(P[j][1]>y)&&x<(P[j][0]-P[i][0])*(y-P[i][1])/(P[j][1]-P[i][1])+P[i][0]) c=!c; } return c; },hide:on=>{ for(const id of ['trj-wall','trj-roof','trj-det']) if(map.getLayer(id)) map.setFilter(id,on?['!=',['get','g'],1]:null); dirty=true; } /* inside the gym only the gym goes (the room stands in for it); the rest of the school stays outside its windows */,off:()=>{ try{ localStorage.setItem('ydTrjOff','1'); }catch(e){} location.reload(); },on:()=>{ try{ localStorage.removeItem('ydTrjOff'); }catch(e){} location.reload(); },state:T,fit,PLAN};
 })();
