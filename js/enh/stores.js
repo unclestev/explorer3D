@@ -172,6 +172,11 @@ function ownRec(s){ const kx=111320*Math.cos(s.cy*Math.PI/180), ky=111320;
   const garages=[]; { const gw=4, cand=[];
     if(sm-12.5>1.2) cand.push({ei:E.ei,a:E.a,ux:E.ux,uy:E.uy,nx:E.nx,ny:E.ny,s0:sm-12.5});
     const others=[]; for(let i=0;i<p.length;i++){ if(i===E.ei) continue; const a=p[i], b=p[(i+1)%p.length], ex=b[0]-a[0], ey=b[1]-a[1], L=Math.hypot(ex,ey); if(L>=12) others.push({ei:i,a,ux:ex/L,uy:ey/L,nx:ey/L,ny:-ex/L,s0:L/2-gw/2,L}); }
+    /* the front of a big store is several wall pieces facing the same way (the entrance bay is only one of them): a loading door
+       belongs on the parking-lot side, so try the pieces facing the way the entrance does first, nearest the entrance, left of it first */
+    const ex0=E.a[0]+E.ux*sm, ey0=E.a[1]+E.uy*sm;
+    const fr=others.filter(o=>o.nx*E.nx+o.ny*E.ny>.9).map(o=>{ const mx=o.a[0]+o.ux*o.L/2, my=o.a[1]+o.uy*o.L/2, al=(mx-ex0)*E.ux+(my-ey0)*E.uy; return Object.assign({},o,{d:Math.hypot(mx-ex0,my-ey0)+(al>0?25:0)}); }).filter(o=>o.d<150);
+    fr.sort((u,v)=>u.d-v.d); for(const o of fr) cand.push(o);
     others.sort((u,v)=>v.L-u.L); for(const o of others) cand.push(o);
     const F=cand[0]; if(F){ const gs0=F.s0, gs1=gs0+gw; let depth=0; const mx=F.a[0]+F.ux*(gs0+gw/2), my=F.a[1]+F.uy*(gs0+gw/2); for(const q of p) depth=Math.max(depth,-((q[0]-mx)*F.nx+(q[1]-my)*F.ny));
       garages.push({ei:F.ei,s0:gs0,s1:gs1,x0:F.a[0]+F.ux*gs0,y0:F.a[1]+F.uy*gs0,x1:F.a[0]+F.ux*gs1,y1:F.a[1]+F.uy*gs1,nx:F.nx,ny:F.ny,gk:8e8+ST.list.indexOf(s),col:'#e7e4dc',D:Math.max(6,Math.min(70,depth-.4))}); } }
