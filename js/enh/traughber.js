@@ -182,7 +182,7 @@ function gymRec(F,P,kx,ky){
   const cover=(x,y)=>{ let h=0; W.forEach((o,k)=>{ if(k!==GYM&&o.h>h&&inPoly(o.ring,x+cx,y+cy)) h=o.h; }); return h; };
   const E=p.map((A,i)=>{ const B=p[(i+1)%4], L=Math.hypot(B[0]-A[0],B[1]-A[1]), ux=(B[0]-A[0])/L, uy=(B[1]-A[1])/L; return {i,A,L,ux,uy,nx:uy,ny:-ux}; });
   const out=(e,s,o)=>cover(e.A[0]+e.ux*s+e.nx*o,e.A[1]+e.uy*s+e.ny*o);
-  const open=(e,s0,s1,hh)=>{ for(let s=s0;s<=s1+.01;s+=Math.max(.5,(s1-s0)/6)) for(const o of [.6,2.6]) if(out(e,Math.max(.3,Math.min(e.L-.3,s)),o)>=hh) return false; return true; };
+  const open=(e,s0,s1,hh)=>{ for(let s=s0;s<=s1+.01;s+=Math.max(.5,(s1-s0)/6)) for(const o of [.6,2.6,5.5]) if(out(e,Math.max(.3,Math.min(e.L-.3,s)),o)>=hh) return false; return true; };
   const doors=[]; let dk=0;
   const door=(e,c,hw)=>{ const s0=c-hw, s1=c+hw; if(s0<1.5||s1>e.L-1.5||doors.some(d=>d.ei===e.i&&s0<d.s1+3&&s1>d.s0-3)) return false;
     doors.push({ei:e.i,s0,s1,x0:e.A[0]+e.ux*s0,y0:e.A[1]+e.uy*s0,x1:e.A[0]+e.ux*s1,y1:e.A[1]+e.uy*s1,nx:e.nx,ny:e.ny,dk:9.5e8+dk++}); return true; };
