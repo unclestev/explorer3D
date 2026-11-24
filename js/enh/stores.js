@@ -22,11 +22,37 @@ function add(ring,name){ if(!ring||ring.length<4) return null; const k=keyOf(rin
   if(ST.list.some(s=>s.key===k.key)) return null;
   const s=Object.assign({ring,name:name||'Meijer',id:ring.id!=null?ring.id:null,keys:ring.keys||[]},k); ST.list.push(s); changed(); found(s); return s; }
 // the building a point stands in (or the biggest one within 90 m), from the map tiles. A big building cut by a tile edge
-// comes in pieces with the same id: they're joined into one outline (their convex hull; stores are near enough boxes).
-function hull(pts){ const P=pts.slice().sort((a,b)=>a[0]-b[0]||a[1]-b[1]), cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]), lo=[], up=[];
-  for(const p of P){ while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0) lo.pop(); lo.push(p); }
-  for(let i=P.length-1;i>=0;i--){ const p=P[i]; while(up.length>=2&&cr(up[up.length-2],up[up.length-1],p)<=0) up.pop(); up.push(p); }
-  const h=lo.slice(0,-1).concat(up.slice(0,-1)); h.push(h[0]); return h; }
+// comes in pieces with the same id: they are joined into one outline (union, below).
+// the outline of several buildings that touch (owner 2026-11-23: a convex hull took in the shops next door, so their
+// windows stood inside the store and the doors floated off the walls). Works on pieces that share walls, as tile-cut
+// pieces and entrances drawn onto a store do: walls the pieces share cancel out, the rest chain into one outline.
+// Returns null when the pieces don't join cleanly (then they're left apart).
+function union(rings,lng0,lat0){
+  const kx=111320*Math.cos(lat0*Math.PI/180), ky=111320, V=[], vid=(x,y)=>{ for(let i=0;i<V.length;i++) if(Math.abs(V[i][0]-x)<.35&&Math.abs(V[i][1]-y)<.35) return i; V.push([x,y]); return V.length-1; };
+  const polys=rings.map(r=>{ let p=r.slice(0,-1).map(q=>vid((q[0]-lng0)*kx,(q[1]-lat0)*ky)); p=p.filter((v,i)=>v!==p[(i+1)%p.length]);
+    let a=0; for(let i=0;i<p.length;i++){ const A=V[p[i]], B=V[p[(i+1)%p.length]]; a+=A[0]*B[1]-B[0]*A[1]; } if(a<0) p.reverse(); return {p,a:Math.abs(a)/2}; });
+  // every wall, cut wherever another piece's corner lies on it
+  let E=[]; for(const P of polys) for(let i=0;i<P.p.length;i++) E.push([P.p[i],P.p[(i+1)%P.p.length]]);
+  const split=[]; for(const [a,b] of E){ const A=V[a], B=V[b], dx=B[0]-A[0], dy=B[1]-A[1], L2=dx*dx+dy*dy; if(!L2) continue; const cut=[];
+    for(let k=0;k<V.length;k++){ if(k===a||k===b) continue; const t=((V[k][0]-A[0])*dx+(V[k][1]-A[1])*dy)/L2; if(t<=.001||t>=.999) continue;
+      if(Math.hypot(A[0]+dx*t-V[k][0],A[1]+dy*t-V[k][1])<.3) cut.push([t,k]); }
+    cut.sort((x,y)=>x[0]-y[0]); let s0=a; for(const [,k] of cut){ split.push([s0,k]); s0=k; } split.push([s0,b]); }
+  // a wall two pieces share runs both ways: it's inside, drop it
+  const key=(a,b)=>a+'>'+b, cnt=new Map(); for(const [a,b] of split) cnt.set(key(a,b),(cnt.get(key(a,b))||0)+1);
+  const out=new Map(); for(const [a,b] of split){ if(cnt.has(key(b,a))) continue; if(!out.has(a)) out.set(a,[]); if(!out.get(a).includes(b)) out.get(a).push(b); }
+  // chain the rest into rings; the biggest is the outline
+  let best=null, ba=0; const used=new Set();
+  for(const [s0] of out){ for(const n0 of out.get(s0)){ if(used.has(key(s0,n0))) continue; const ring=[s0]; let a=s0, b=n0, guard=0;
+      while(guard++<5000){ used.add(key(a,b)); ring.push(b); if(b===s0) break; const nx=(out.get(b)||[]).filter(c=>!used.has(key(b,c)));
+        if(!nx.length) break; let pick=nx[0];
+        if(nx.length>1){ const ang=c=>{ const h1=Math.atan2(V[b][1]-V[a][1],V[b][0]-V[a][0]), h2=Math.atan2(V[c][1]-V[b][1],V[c][0]-V[b][0]); let d=h2-h1; while(d<=-Math.PI) d+=2*Math.PI; while(d>Math.PI) d-=2*Math.PI; return d; };
+          pick=nx.reduce((m,c)=>ang(c)>ang(m)?c:m,nx[0]); }                       // keep to the outside: the leftmost turn
+        a=b; b=pick; }
+      if(ring[ring.length-1]!==s0||ring.length<4) continue;
+      let ar=0; for(let i=0;i<ring.length-1;i++){ const A=V[ring[i]], B=V[ring[i+1]]; ar+=A[0]*B[1]-B[0]*A[1]; } ar/=2;
+      if(ar>ba){ ba=ar; best=ring; } } }
+  const sum=polys.reduce((t,P)=>t+P.a,0); if(!best||Math.abs(ba-sum)>Math.max(4,sum*.005)) return null;   // pieces overlapping or apart: no clean join
+  return best.map(i=>[lng0+V[i][0]/kx,lat0+V[i][1]/ky]); }
 function buildingFor(lng,lat){ let fs=[]; try{ fs=map.querySourceFeatures(bSrc,{sourceLayer:'building'}); }catch(e){ return null; }
   const kx=111320*Math.cos(lat*Math.PI/180); let best=null, bd=1e9;
   const all=[]; for(const f of fs){ const g=f.geometry, pls=!g?[]:g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
@@ -39,15 +65,19 @@ function buildingFor(lng,lat){ let fs=[]; try{ fs=map.querySourceFeatures(bSrc,{
   const parts=best.f.id==null?[]:all.filter(o=>o!==best&&o.f.id===best.f.id&&near(keyOf(o.r))&&Math.abs(o.r[0][0]-best.r[0][0])+Math.abs(o.r[0][1]-best.r[0][1])>1e-7);
   // the entrance pieces: small buildings stuck onto it (vestibules, the roof over the doors), mapped on their own.
   // Inside they'd stand as a wall between the doors and the store (owner 2026-11-23), so they become part of it.
-  const ring0=parts.length?hull(best.r.concat(...parts.map(o=>o.r))):best.r, mainA=areaM(ring0,kx);
+  let pieces=[best,...parts]; let ring0=parts.length?union(pieces.map(o=>o.r),best.r[0][0],best.r[0][1]):best.r;
+  if(!ring0){ pieces=[best]; ring0=best.r; }                        // the tile-cut pieces didn't join: just the biggest
+  const mainA=areaM(ring0,kx);
   const touch=o=>{ const A=areaM(o.r,kx); if(A>Math.min(2500,mainA*.12)) return false;
     for(const q of o.r){ if(inRing(ring0,q[0],q[1])) return true; for(let i=1;i<ring0.length;i++){ const a=ring0[i-1], b=ring0[i];
       const ax=(a[0]-q[0])*kx, ay=(a[1]-q[1])*111320, bx=(b[0]-q[0])*kx, by=(b[1]-q[1])*111320, dx=bx-ax, dy=by-ay, L2=dx*dx+dy*dy, t=L2?Math.max(0,Math.min(1,-(ax*dx+ay*dy)/L2)):0;
       if(Math.hypot(ax+dx*t,ay+dy*t)<1.5) return true; } } return false; };
-  const ent=all.filter(o=>o!==best&&!parts.includes(o)&&touch(o));
-  const ring=ent.length?hull(ring0.slice(0,-1).concat(...ent.map(o=>o.r))):ring0;
-  const ids=[...new Set([best,...parts,...ent].map(o=>o.f.id).filter(i=>i!=null))];
-  ring.id=ids.length>1?ids:best.f.id; ring.keys=[best,...parts,...ent].map(o=>keyOf(o.r).key); return ring; }
+  // each entrance piece joins only if it shares a wall cleanly with the store
+  let ring=ring0; const joined=[];
+  for(const o of all.filter(o=>o!==best&&!parts.includes(o)&&touch(o))){ const u=union([ring,o.r],ring[0][0],ring[0][1]); if(u){ ring=u; joined.push(o); } }
+  if(ring===best.r) ring=best.r.slice();
+  const ids=[...new Set([...pieces,...joined].map(o=>o.f.id).filter(i=>i!=null))];
+  ring.id=ids.length>1?ids:best.f.id; ring.keys=[...pieces,...joined].map(o=>keyOf(o.r).key); return ring; }
 function scanTiles(){ let ps=[]; try{ ps=map.querySourceFeatures(bSrc,{sourceLayer:'poi'}); }catch(e){ return; }
   for(const p of ps){ const pr=p.properties||{}, n=pr.name||pr['name:latin']||pr.name_en||''; if(!NAME.test(n)||NOT.test(n)) continue;
     const c=p.geometry&&p.geometry.coordinates; if(!c||typeof c[0]!=='number') continue;
