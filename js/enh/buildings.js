@@ -661,15 +661,22 @@ function facades(P,kx,ky,res,rich){
       { const xs=[]; const m=12/111320, B=P.bb; for(const D of DRIVES){ const b=D.bb; if(b[2]<B[0]-m*1.4||b[0]>B[2]+m*1.4||b[3]<B[1]-m||b[1]>B[3]+m) continue;
           for(const end of [D.l[0],D.l[D.l.length-1]]){ const q=toLoc(end), dx=q[0]-E.a[0], dy=q[1]-E.a[1], o=dx*E.nx+dy*E.ny, t=dx*E.ux+dy*E.uy; if(o>-3&&o<9&&t>-2&&t<E.L+2) xs.push(t); } }
         if(xs.length>1) pw=Math.max(pw,Math.max(...xs)-Math.min(...xs)+2.6); }
-      const avail=wingG?E.L-.8:Math.min(E.L-1.6,E.L*(ds?.75:.6)), nWall=Math.max(1,Math.min(4,Math.floor((avail+.8)/3.3)));   // 3.3 m a bay: 2 bays from ~6 m, 3 from ~9 m, 4 from ~12.4 m of wall
-      const nPad=pw>=2.4?Math.max(1,Math.min(4,Math.round(pw/3))):0, nArea=A<130?1:A<260?2:A<430?3:4;
-      const nB=wingG?nWall:Math.min(nWall,nPad||nArea), r43=hash(seed,43), r44=hash(seed,44), S1=2.7, D1=4.9;
-      let ws=nB===1?[S1]:nB===2?(r43<.55?[D1]:[S1,S1]):nB===3?(r43<.35?[S1,S1,S1]:r44<.5?[D1,S1]:[S1,D1]):(r43<.4?[D1,D1]:r43<.7?(r44<.5?[D1,S1,S1]:[S1,S1,D1]):[S1,S1,S1,S1]);
+      /* how many cars (owner 2026-11-24: "3 car garages are not getting 3 garage doors"): a garage face that is a wall of its own
+         (a whole outline edge the driveway runs to, or a wing that juts out) is the garage, so its width counts the bays the way
+         real ones are built: about 3 m a car plus the jambs (2-car ~6-7.5 m, 3-car ~9-11 m, 4-car 12.5 m+). Measured round Oswego
+         and Yorkville: tract houses of 200-260 m2 with 9.4-10.7 m garage wings. Part of a long wall: from the wall, the paved pad in
+         front and the house size, whichever is smallest. */
+      const face=E.off===0&&(wingG||(ds&&ds.E===E))&&E.L>=4.4&&E.L<=14, fw=E.L;
+      const nFace=fw<5.6?1:fw<8.6?2:fw<12.6?3:4;
+      const avail=Math.min(E.L-1.6,E.L*(ds?.75:.6)), nWall=Math.max(1,Math.min(4,Math.floor((avail+.8)/3.3)));
+      const nPad=pw>=2.4?Math.max(1,Math.min(4,Math.round(pw/3))):0, nArea=A<110?1:A<170?2:A<260?3:4;
+      const nB=wingG?nFace:face?Math.min(nFace,nArea):Math.min(nWall,nPad||nArea), r43=hash(seed,43), r44=hash(seed,44), S1=2.7, D1=4.9;
+      let ws=nB===1?[S1]:nB===2?(r43<.55?[D1]:[S1,S1]):nB===3?(r43<.5?[S1,S1,S1]:r44<.5?[D1,S1]:[S1,D1]):(r43<.4?[D1,D1]:r43<.7?(r44<.5?[D1,S1,S1]:[S1,S1,D1]):[S1,S1,S1,S1]);
       let tw=ws.reduce((x,y)=>x+y,0)+.5*(ws.length-1);
       while(tw>E.L-.8){ const k=ws.findIndex((x,i)=>x<3&&ws[i+1]<3); if(k<0) break; ws.splice(k,2,D1); tw=ws.reduce((x,y)=>x+y,0)+.5*(ws.length-1); }   // too wide for singles: pair them into doubles
-      if(wingG&&tw<(E.L-.8)*.85){ const f=Math.min(1.3,(E.L-.8)/tw); ws=ws.map(x=>x*f); tw=ws.reduce((x,y)=>x+y,0)+.5*(ws.length-1); }   // a wing wider than its doors: fill it
+      if((wingG||face)&&tw<(E.L-.8)*.85){ const f=Math.min(1.3,(E.L-.8)/tw); ws=ws.map(x=>x*f); tw=ws.reduce((x,y)=>x+y,0)+.5*(ws.length-1); }   // a wing wider than its doors: fill it
       if(tw>E.L-.8){ const f=(E.L-.8)/tw; ws=ws.map(x=>Math.max(2.2,x*f)); tw=ws.reduce((x,y)=>x+y,0)+.5*(ws.length-1); }
-      let st=wingG?(E.L-tw)/2:gC>=0?gC-tw/2:gC===-1?.7:E.L-.7-tw; st=Math.max(.4,Math.min(E.L-.4-tw,st));
+      let st=(wingG||face)?(E.L-tw)/2:gC>=0?gC-tw/2:gC===-1?.7:E.L-.7-tw; st=Math.max(.4,Math.min(E.L-.4-tw,st));
       const gcol=GARAGE[seed&3], GT=2.15, GKS=[1,2,3,0], gWins=fine&&hash(seed,73)<.35; let x=st;   // one colour, one panel style and one window choice for every door of the garage (owner 2026-11-24)
       for(let k=0;k<ws.length;k++){ const gw=ws[k], s0=x; x+=gw+.5;
         // a garage you can open (js/enh/garage.js): the dark inside shows behind the panels as they roll up
