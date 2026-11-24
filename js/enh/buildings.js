@@ -661,12 +661,13 @@ function facades(P,kx,ky,res,rich){
       { const xs=[]; const m=12/111320, B=P.bb; for(const D of DRIVES){ const b=D.bb; if(b[2]<B[0]-m*1.4||b[0]>B[2]+m*1.4||b[3]<B[1]-m||b[1]>B[3]+m) continue;
           for(const end of [D.l[0],D.l[D.l.length-1]]){ const q=toLoc(end), dx=q[0]-E.a[0], dy=q[1]-E.a[1], o=dx*E.nx+dy*E.ny, t=dx*E.ux+dy*E.uy; if(o>-3&&o<9&&t>-2&&t<E.L+2) xs.push(t); } }
         if(xs.length>1) pw=Math.max(pw,Math.max(...xs)-Math.min(...xs)+2.6); }
-      const avail=wingG?E.L-.8:Math.min(E.L-1.6,E.L*(ds?.75:.6)), nWall=Math.max(1,Math.min(4,Math.floor((avail+.8)/2.9)));
+      const avail=wingG?E.L-.8:Math.min(E.L-1.6,E.L*(ds?.75:.6)), nWall=Math.max(1,Math.min(4,Math.floor((avail+.8)/3.3)));   // 3.3 m a bay: 2 bays from ~6 m, 3 from ~9 m, 4 from ~12.4 m of wall
       const nPad=pw>=2.4?Math.max(1,Math.min(4,Math.round(pw/3))):0, nArea=A<130?1:A<260?2:A<430?3:4;
       const nB=wingG?nWall:Math.min(nWall,nPad||nArea), r43=hash(seed,43), r44=hash(seed,44), S1=2.7, D1=4.9;
       let ws=nB===1?[S1]:nB===2?(r43<.55?[D1]:[S1,S1]):nB===3?(r43<.35?[S1,S1,S1]:r44<.5?[D1,S1]:[S1,D1]):(r43<.4?[D1,D1]:r43<.7?(r44<.5?[D1,S1,S1]:[S1,S1,D1]):[S1,S1,S1,S1]);
       let tw=ws.reduce((x,y)=>x+y,0)+.5*(ws.length-1);
       while(tw>E.L-.8){ const k=ws.findIndex((x,i)=>x<3&&ws[i+1]<3); if(k<0) break; ws.splice(k,2,D1); tw=ws.reduce((x,y)=>x+y,0)+.5*(ws.length-1); }   // too wide for singles: pair them into doubles
+      if(wingG&&tw<(E.L-.8)*.85){ const f=Math.min(1.3,(E.L-.8)/tw); ws=ws.map(x=>x*f); tw=ws.reduce((x,y)=>x+y,0)+.5*(ws.length-1); }   // a wing wider than its doors: fill it
       if(tw>E.L-.8){ const f=(E.L-.8)/tw; ws=ws.map(x=>Math.max(2.2,x*f)); tw=ws.reduce((x,y)=>x+y,0)+.5*(ws.length-1); }
       let st=wingG?(E.L-tw)/2:gC>=0?gC-tw/2:gC===-1?.7:E.L-.7-tw; st=Math.max(.4,Math.min(E.L-.4-tw,st));
       const gcol=GARAGE[seed&3], GT=2.15, GKS=[1,2,3,0]; let x=st;
@@ -690,7 +691,7 @@ function facades(P,kx,ky,res,rich){
          driveways. Asphalt unless the tiles say unpaved (gravel): they have no asphalt vs concrete. */
       { const wall=E.a[0]*E.nx+E.a[1]*E.ny; let room=null;
         if(sd&&sd.d){ const nd=E.nx*sd[0]+E.ny*sd[1]; if(nd>.6){ room=sd.d/nd-wall-6.5; } }
-        const gr=ds&&ds.E===E&&ds.sf==='unpaved', top=gr?'#a39b8b':'#4c4e51', o0=.04, W=tw+.7, L=st-.35, Rr=st+tw+.35, short=room!=null&&room<=12, A5=5, TT=Math.min(9,Math.max(4,(room!=null?room:15)-A5-1)), LW=3.2;
+        const gr=ds&&ds.E===E&&ds.sf==='unpaved', top=gr?'#a39b8b':'#62656a', o0=.04, W=tw+.7, L=st-.35, Rr=st+tw+.35, short=room!=null&&room<=12, A5=5, TT=Math.min(9,Math.max(4,(room!=null?room:15)-A5-1)), LW=3.2;
         const quad=(q,h,c)=>{ if(q.length<3) return; const ring=q.map(([x,y])=>toLL([x,y])); ring.push(ring[0]); out.push({type:'Feature',properties:{c,b:0,h},geometry:{type:'Polygon',coordinates:[ring]}}); };
         const wl=(x,o)=>[E.a[0]+E.ux*x+E.nx*o,E.a[1]+E.uy*x+E.ny*o];          // wall coordinates -> local metres
         const wd=u=>short?W:u<=A5?W:u>=A5+TT?LW:W+(LW-W)*(u-A5)/TT;            // pad width at u metres out from the doors
@@ -702,11 +703,11 @@ function facades(P,kx,ky,res,rich){
           if(ds&&ds.E===E&&ds.l&&ds.l.length>1){ const l=ds.l.map(toLoc), pts=[l[0]]; let acc=0;
             for(let i=1;i<l.length;i++){ const dx=l[i][0]-l[i-1][0], dy=l[i][1]-l[i-1][1], sg=Math.hypot(dx,dy), n=Math.max(1,Math.ceil(sg/1.5)); for(let k=1;k<=n;k++) pts.push([l[i-1][0]+dx*k/n,l[i-1][1]+dy*k/n]); }
             const Ls=[], Rs=[]; let u=ds.d; for(let i=0;i<pts.length;i++){ if(i) u+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);
-              if(short?(room!=null&&u>room+.5):u>A5+TT) break; if(u<ae-1.5&&i<pts.length-1) continue;
+              if(short?(room!=null&&u>room+1.4):u>A5+TT) break; if(u<ae-1.5&&i<pts.length-1) continue;
               const a=pts[Math.max(0,i-1)], b=pts[Math.min(pts.length-1,i+1)], tx=b[0]-a[0], ty=b[1]-a[1], tl=Math.hypot(tx,ty)||1, h=(wd(u)+ex*2)/2;
               Ls.push([pts[i][0]-ty/tl*h,pts[i][1]+tx/tl*h]); Rs.push([pts[i][0]+ty/tl*h,pts[i][1]-tx/tl*h]); }
             if(Ls.length>1) quad(Ls.concat(Rs.reverse()),.045-(grow?.005:0),grow?'#9a9a94':top); }
-          else if(ae<(short?Math.max(3,room):A5+TT)){ const len=short?Math.max(3,room):A5+TT;   // no mapped line: the pad runs straight out
+          else if(ae<(short?Math.max(3,room)+1.4:A5+TT)){ const len=short?Math.max(3,room)+1.4:A5+TT;   // no mapped line: the pad runs straight out
             quad(short?[wl(L-ex,ae),wl(Rr+ex,ae),wl(Rr+ex,len),wl(L-ex,len)]:[wl(L-ex,ae),wl(Rr+ex,ae),wl((L+Rr)/2+LW/2+ex,len),wl((L+Rr)/2-LW/2-ex,len)],.045-(grow?.005:0),grow?'#9a9a94':top); } };
         if(!gr) build(.12); build(0); }
       for(const xx of [st-.42,st+tw+.42]) lamp(E,xx,1.95,1.2,3.2);                                                   // a light on each side of the whole row
