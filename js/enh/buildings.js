@@ -270,7 +270,10 @@ function build(){
       const key=cx.toFixed(6)+','+cy.toFixed(6); if(seen.has(key)){ const o=seenP.get(key); if(o&&o.ring.length===ring.length) o.intact=true; continue; } seen.add(key);     // same building in two tiles
       /* intact: two tiles each hold the whole outline (same corners), so it only crosses a tile edge — it isn't a clipped fragment
          (a school 140 m wide on a tile edge got no windows, doors or lights: owner 2026-11-23, Traughber Junior High) */
-      const part={f,ring,h,b0,cx,cy,d,bb:[x0,y0,x1,y1],holes:pl.length>1}; seenP.set(key,part); parts.push(part); }
+      const part={f,ring,h,b0,cx,cy,d,bb:[x0,y0,x1,y1],holes:pl.length>1}; seenP.set(key,part); parts.push(part);
+      { const T=f.tile||{z:f._z,x:f._x,y:f._y};                 // or all of it lies within a hair of its own tile (inside the tile's buffer): a piece cut off at the buffer edge reaches 1.0156 or more
+        if(T&&T.z!=null){ const n=1<<T.z, u0=(x0+180)/360*n-T.x, u1=(x1+180)/360*n-T.x, sy=la=>{ const sn=Math.sin(la*Math.PI/180); return (.5-Math.log((1+sn)/(1-sn))/(4*Math.PI))*n-T.y; }, v0=sy(y1), v1=sy(y0);
+          if(Math.min(u0,v0)>-.0125&&Math.max(u1,v1)<1.0125) part.intact=true; } } }
   }
   parts.sort((a,b)=>a.d-b.d); R.parts=parts; R.pAt=[S.lng,S.lat]; }
   if(CACHE.size>4000) CACHE.clear();
