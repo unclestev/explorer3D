@@ -351,16 +351,16 @@ function gymDecor(g,p,HC,r,TH2){
         if(j%2===1) bulbs.push([ex,ey]); } }
     chords.count=ci; diags.count=di; chords.instanceMatrix.needsUpdate=diags.instanceMatrix.needsUpdate=true; chords.frustumCulled=diags.frustumCulled=false; g.add(chords); g.add(diags);
     // round UFO high-bay lights (owner 2026-11-24, product photo): black finned body with a ring, hook up to the truss, white lens under it, a soft glow
-    const lm=new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide}), n=Math.max(1,bulbs.length), dark=rmat('ufo',0x16181b,0x050506);
-    const prof=[[0,.3],[.12,.3],[.15,.24],[.2,.2],[.26,.16],[.3,.1],[.37,.07],[.37,.02],[.33,0],[0,0]].map(q=>new THREE.Vector2(q[0],q[1]));
-    const body=new THREE.InstancedMesh(new THREE.LatheGeometry(prof,20),dark,n), hook=new THREE.InstancedMesh(new THREE.CylinderGeometry(.015,.015,.3,6),rmat('ufohook',0xb8bcc2,0x30323a),n),
-      lens=new THREE.InstancedMesh(new THREE.CircleGeometry(.31,20),lm,n), halo=new THREE.InstancedMesh(new THREE.CircleGeometry(1.5,20),new THREE.MeshBasicMaterial({map:roundGlow(),transparent:true,opacity:.5,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,toneMapped:false}),n);
-    bulbs.forEach(([bx,by],i)=>{ const y=yb-.62;
-      dm.rotation.set(0,0,0); dm.scale.set(1,1,1); dm.position.set(bx,y,-by); dm.updateMatrix(); body.setMatrixAt(i,dm.matrix);
-      dm.position.set(bx,y+.45,-by); dm.updateMatrix(); hook.setMatrixAt(i,dm.matrix);
-      dm.rotation.set(Math.PI/2,0,0); dm.position.set(bx,y-.005,-by); dm.updateMatrix(); lens.setMatrixAt(i,dm.matrix);
-      dm.position.set(bx,y-.15,-by); dm.updateMatrix(); halo.setMatrixAt(i,dm.matrix); });
-    for(const o of [body,hook,lens,halo]){ o.instanceMatrix.needsUpdate=true; o.frustumCulled=false; g.add(o); } halo.renderOrder=1;
+    const lm=new THREE.MeshBasicMaterial({color:0xffffff,map:lensTex(),side:THREE.DoubleSide}), n=Math.max(1,bulbs.length), dark=rmat('ufo',0x16181b,0x050506);
+    const body=new THREE.InstancedMesh(ufoBody(),dark,n), hook=new THREE.InstancedMesh(ufoHook(),rmat('ufohook',0xb8bcc2,0x30323a),n),
+      lens=new THREE.InstancedMesh(new THREE.CircleGeometry(.31,28),lm,n), knob=new THREE.InstancedMesh(new THREE.CylinderGeometry(.07,.075,.07,16),lm,n),
+      halo=new THREE.InstancedMesh(new THREE.CircleGeometry(1.5,20),new THREE.MeshBasicMaterial({map:roundGlow(),transparent:true,opacity:.5,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,toneMapped:false}),n);
+    bulbs.forEach(([bx,by],i)=>{ const y=yb-.7;
+      dm.rotation.set(0,(i*1.7)%6.28,0); dm.scale.set(1,1,1); dm.position.set(bx,y,-by); dm.updateMatrix(); body.setMatrixAt(i,dm.matrix); hook.setMatrixAt(i,dm.matrix);
+      dm.rotation.set(Math.PI/2,0,0); dm.position.set(bx,y+.025,-by); dm.updateMatrix(); lens.setMatrixAt(i,dm.matrix);
+      dm.rotation.set(0,0,0); dm.position.set(bx,y-.01,-by); dm.updateMatrix(); knob.setMatrixAt(i,dm.matrix);
+      dm.rotation.set(Math.PI/2,0,0); dm.position.set(bx,y-.15,-by); dm.updateMatrix(); halo.setMatrixAt(i,dm.matrix); });
+    for(const o of [body,hook,lens,knob,halo]){ o.instanceMatrix.needsUpdate=true; o.frustumCulled=false; g.add(o); } halo.renderOrder=1;
     ROOM.glow=[[halo]];
     ROOM.tro=[lm]; }
 }
@@ -500,6 +500,23 @@ function trofferTex(){ if(STX.trof) return STX.trof;
   for(let i=0;i<=cols;i++){ const X=m+i*cw; x.fillStyle='rgba(120,122,126,.8)'; x.fillRect(X-1.5,m,3,H-2*m); }
   const t=new THREE.CanvasTexture(c); t.anisotropy=8; STX.trof=t; return t; }
 // a soft glow round a fixture (brightness bleeding onto the ceiling) and its reflection on the shiny floor
+// one UFO high-bay light, like the product photo: a black ring, 28 curved cooling fins stepping up to a round housing with a SET UP cap, a silver hook ring on top
+let UFOB=null, UFOH=null, LENST=null;
+function mergeGeo(parts){ const pos=[], nor=[]; for(const [geo,m] of parts){ const gg=geo.index?geo.toNonIndexed():geo; gg.applyMatrix4(m); pos.push(...gg.attributes.position.array); const nm=new THREE.Matrix3().getNormalMatrix(m), nn=gg.attributes.normal.array; for(let i=0;i<nn.length;i+=3){ const v=new THREE.Vector3(nn[i],nn[i+1],nn[i+2]).applyMatrix3(nm).normalize(); nor.push(v.x,v.y,v.z); } }
+  const G=new THREE.BufferGeometry(); G.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); G.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3)); return G; }
+function ufoBody(){ if(UFOB) return UFOB; const M=new THREE.Matrix4(), parts=[];
+  const ring=new THREE.LatheGeometry([[.28,0],[.4,0],[.42,.02],[.42,.075],[.38,.1],[.3,.1],[.28,.06]].map(q=>new THREE.Vector2(q[0],q[1])),32); parts.push([ring,M.clone()]);
+  const house=new THREE.LatheGeometry([[0,.1],[.3,.1],[.3,.16],[.2,.2],[.17,.3],[.2,.34],[.2,.4],[.14,.42],[0,.42]].map(q=>new THREE.Vector2(q[0],q[1])),24); parts.push([house,M.clone()]);
+  const sh=new THREE.Shape(); sh.moveTo(.4,.09); sh.lineTo(.4,.14); sh.quadraticCurveTo(.4,.26,.3,.3); sh.lineTo(.2,.31); sh.lineTo(.2,.18); sh.lineTo(.3,.1); sh.closePath();
+  const fin=new THREE.ExtrudeGeometry(sh,{depth:.04,bevelEnabled:false}); fin.translate(0,0,-.02);
+  for(let k=0;k<28;k++){ const m=new THREE.Matrix4().makeRotationY(k/28*Math.PI*2); parts.push([fin,m]); }
+  const cap=new THREE.BoxGeometry(.12,.04,.07); parts.push([cap,new THREE.Matrix4().makeTranslation(.12,.43,.06)]);
+  return UFOB=mergeGeo(parts); }
+function ufoHook(){ if(UFOH) return UFOH; const parts=[], tr=new THREE.TorusGeometry(.055,.014,6,14); parts.push([tr,new THREE.Matrix4().makeTranslation(0,.6,0)]);
+  parts.push([new THREE.CylinderGeometry(.03,.035,.1,8),new THREE.Matrix4().makeTranslation(0,.47,0)]); return UFOH=mergeGeo(parts); }
+function lensTex(){ if(LENST) return LENST; const c=document.createElement('canvas'); c.width=c.height=128; const x=c.getContext('2d'); x.fillStyle='#dfe3e6'; x.fillRect(0,0,128,128);
+  for(let r=60;r>8;r-=6){ x.strokeStyle=r%12?'rgba(255,255,255,.95)':'rgba(170,178,184,.7)'; x.lineWidth=3; x.beginPath(); x.arc(64,64,r,0,7); x.stroke(); }
+  x.fillStyle='#f6f6f6'; x.beginPath(); x.arc(64,64,12,0,7); x.fill(); return LENST=new THREE.CanvasTexture(c); }
 function roundGlow(){ if(STX.rg) return STX.rg; const c=document.createElement('canvas'); c.width=c.height=64; const x=c.getContext('2d'); const g=x.createRadialGradient(32,32,0,32,32,32); g.addColorStop(0,'rgba(255,255,255,.85)'); g.addColorStop(.3,'rgba(255,255,255,.35)'); g.addColorStop(1,'rgba(255,255,255,0)'); x.fillStyle=g; x.fillRect(0,0,64,64); return STX.rg=new THREE.CanvasTexture(c); }
 function glowTex(k){ if(STX['g'+k]) return STX['g'+k]; const c=document.createElement('canvas'); c.width=128; c.height=256; const x=c.getContext('2d');
   const g=x.createRadialGradient(64,64,0,64,64,64); if(k==='halo'){ g.addColorStop(0,'rgba(255,255,255,.9)'); g.addColorStop(.35,'rgba(255,255,255,.45)'); g.addColorStop(1,'rgba(255,255,255,0)'); }
