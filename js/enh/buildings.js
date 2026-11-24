@@ -319,7 +319,7 @@ function build(){
       for(const l of ls){ if(l.length<2) continue; let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9,len=0; for(let i=0;i<l.length;i++){ const q=l[i]; if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; if(i) len+=Math.hypot((q[0]-l[i-1][0])*kx,(q[1]-l[i-1][1])*ky); }
         if(Math.hypot(((x0+x1)/2-S.lng)*kx,((y0+y1)/2-S.lat)*ky)>=radius+150) continue;
         if(walk) wk.push({l,bb:[x0,y0,x1,y1]});
-        else if(pr.service==='driveway'||pr.class==='path'||len<=40) ds.push({l,bb:[x0,y0,x1,y1]}); } }    // an untagged short service way is most often a driveway
+        else if(pr.service==='driveway'||pr.class==='path'||len<=40) ds.push({l,bb:[x0,y0,x1,y1],sf:pr.surface||''}); } }    // an untagged short service way is most often a driveway
     DRIVES=ds; WALKS=wk; });
   for(let i=0;i<fs.length;i++){ const f=fs[i];
     if(f.id!=null&&gone.has(f.id)) continue;
@@ -488,7 +488,7 @@ function driveSpot(P,edges,toLoc){
     for(const end of [D.l[0],D.l[D.l.length-1]]){ const q=toLoc(end);
       for(const E of edges){ const dx=q[0]-E.a[0], dy=q[1]-E.a[1], s=dx*E.ux+dy*E.uy, out=dx*E.nx+dy*E.ny;
         if(s<-1||s>E.L+1||out<-3||out>9) continue;                // in front of this wall (or just inside it)
-        const d=Math.abs(out); if(!best||d<best.d) best={E,s,d}; } } }
+        const d=Math.abs(out); if(!best||d<best.d) best={E,s,d,sf:D.sf}; } } }
   return best;
 }
 /* where a mapped footpath (a sidewalk spur, a path across the lawn or from a parking lot) ends at a wall: that is where the
@@ -682,12 +682,15 @@ function facades(P,kx,ky,res,rich){
           if(fine&&!(wins&&q===3)) for(const z of [q*ph+ph*.22,q*ph+ph*.78-.04]){ put(E,s0+.12,s0+gw-.12,.06,.072,z,z+.04,shade(gcol,-.12)); rp(); } }   // raised panel edges
         if(wins){ const n=gw>4?8:4, ww=(gw-.5)/n; for(let q=0;q<n;q++){ const xx=s0+.25+q*ww; put(E,xx+.06,xx+ww-.06,.06,.075,3*ph+.14,3*ph+.4,GLASS); rp(); } }
         if(fine){ put(E,s0-.14,s0,-.04,.06,0,GT+.12,trim); put(E,s0+gw,s0+gw+.14,-.04,.06,0,GT+.12,trim); put(E,s0-.14,s0+gw+.14,-.04,.06,GT,GT+.12,trim); } }   // trim round each opening
-      /* the pad in front of the doors (owner 2026-11-24: "make sure the driveways leading to the garage doors meet the garage all the way
-         across"): a mapped driveway is a thin line, so a slab of concrete as wide as the row of doors runs out from them to meet it,
-         stopping short of the street */
+      /* the pad in front of the doors (owner 2026-11-24: "the driveway leading up to the garage should be continuous asphalt, if it is
+         asphalt"): a mapped driveway is a thin line the map style draws as asphalt (#4c4e51, grey kerb), so the pad is the same asphalt,
+         as wide as the row of doors, running out to meet it and stopping short of the street. The tiles only say paved / unpaved (no
+         asphalt vs concrete), so a driveway tagged unpaved gets gravel and everything else the asphalt the line is drawn in. */
       { let len=5.5; if(ds&&ds.E===E) len=Math.max(5.5,Math.min(9,ds.d+1.5));
         if(sd&&sd.d){ const nd=E.nx*sd[0]+E.ny*sd[1]; if(nd>.6){ const room=sd.d/nd-(E.a[0]*E.nx+E.a[1]*E.ny)-6.5; if(room>2.5) len=Math.min(len,room); } }
-        put(E,st-.35,st+tw+.35,.04,len,0,.045,'#bdbab3'); }
+        const gr=ds&&ds.E===E&&ds.sf==='unpaved', top=gr?'#a39b8b':'#4c4e51';
+        put(E,st-.35,st+tw+.35,.04,len,0,.045,top);
+        if(!gr) for(const [x0,x1] of [[st-.47,st-.35],[st+tw+.35,st+tw+.47]]) put(E,x0,x1,.04,len,0,.05,'#9a9a94'); }
       for(const xx of [st-.42,st+tw+.42]) lamp(E,xx,1.95,1.2,3.2);                                                   // a light on each side of the whole row
       occupy(E,st-.6,st+tw+.6); }
     // front door on the street side, in the free part of the wall
