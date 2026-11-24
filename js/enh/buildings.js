@@ -488,7 +488,7 @@ function driveSpot(P,edges,toLoc){
     for(const end of [D.l[0],D.l[D.l.length-1]]){ const q=toLoc(end);
       for(const E of edges){ const dx=q[0]-E.a[0], dy=q[1]-E.a[1], s=dx*E.ux+dy*E.uy, out=dx*E.nx+dy*E.ny;
         if(s<-1||s>E.L+1||out<-3||out>9) continue;                // in front of this wall (or just inside it)
-        const d=Math.abs(out); if(!best||d<best.d) best={E,s,d,sf:D.sf}; } } }
+        const d=Math.abs(out); if(!best||d<best.d) best={E,s,d,sf:D.sf,l:(end===D.l[0]?D.l:D.l.slice().reverse())}; } } }
   return best;
 }
 /* where a mapped footpath (a sidewalk spur, a path across the lawn or from a parking lot) ends at a wall: that is where the
@@ -690,16 +690,25 @@ function facades(P,kx,ky,res,rich){
          driveways. Asphalt unless the tiles say unpaved (gravel): they have no asphalt vs concrete. */
       { const wall=E.a[0]*E.nx+E.a[1]*E.ny; let room=null;
         if(sd&&sd.d){ const nd=E.nx*sd[0]+E.ny*sd[1]; if(nd>.6){ room=sd.d/nd-wall-6.5; } }
-        const gr=ds&&ds.E===E&&ds.sf==='unpaved', top=gr?'#a39b8b':'#4c4e51';
-        const L=st-.35, Rr=st+tw+.35, sc=(L+Rr)/2, hl=1.6, o0=.04;
-        let cx=ds&&ds.E===E?ds.s:sc; cx=Math.max(L+hl,Math.min(Rr-hl,cx));
-        let pts;
-        if(room!=null&&room<=12){ const len=Math.max(3,room); pts=[[L,o0],[Rr,o0],[Rr,len],[L,len]]; }
-        else { const a=5, T=Math.min(9,Math.max(4,(room!=null?room:15)-a-1)); pts=(Rr-L)<=2*hl+.4?[[L,o0],[Rr,o0],[Rr,a+T],[L,a+T]]:[[L,o0],[Rr,o0],[Rr,a],[cx+hl,a+T],[cx-hl,a+T],[L,a]]; }
-        const quad=(q,h,c)=>{ const ring=q.map(([x,o])=>toLL([E.a[0]+E.ux*x+E.nx*o,E.a[1]+E.uy*x+E.ny*o])); ring.push(ring[0]); out.push({type:'Feature',properties:{c,b:0,h},geometry:{type:'Polygon',coordinates:[ring]}}); };
-        if(!gr){ const gx=pts.reduce((x,q)=>x+q[0],0)/pts.length, gy=pts.reduce((x,q)=>x+q[1],0)/pts.length;
-          quad(pts.map(([x,o])=>{ const dx=x-gx, dy=o-gy, d=Math.hypot(dx,dy)||1; return [x+dx/d*.12*(Math.abs(dx)>Math.abs(dy)?1:.4),o+(o>o0+.01?dy/d*.12*(Math.abs(dy)>Math.abs(dx)?1:.4):0)]; }),.04,'#9a9a94'); }
-        quad(pts,.045,top); }
+        const gr=ds&&ds.E===E&&ds.sf==='unpaved', top=gr?'#a39b8b':'#4c4e51', o0=.04, W=tw+.7, L=st-.35, Rr=st+tw+.35, short=room!=null&&room<=12, A5=5, TT=Math.min(9,Math.max(4,(room!=null?room:15)-A5-1)), LW=3.2;
+        const quad=(q,h,c)=>{ if(q.length<3) return; const ring=q.map(([x,y])=>toLL([x,y])); ring.push(ring[0]); out.push({type:'Feature',properties:{c,b:0,h},geometry:{type:'Polygon',coordinates:[ring]}}); };
+        const wl=(x,o)=>[E.a[0]+E.ux*x+E.nx*o,E.a[1]+E.uy*x+E.ny*o];          // wall coordinates -> local metres
+        const wd=u=>short?W:u<=A5?W:u>=A5+TT?LW:W+(LW-W)*(u-A5)/TT;            // pad width at u metres out from the doors
+        const build=(grow)=>{
+          // the apron in front of the doors: out to where the mapped driveway starts (at least 5 m), full width
+          const ae=ds&&ds.E===E?Math.max(A5,Math.min(9,ds.d+1.5)):A5, ex=grow;
+          quad([wl(L-ex,o0),wl(Rr+ex,o0),wl(Rr+ex,ae),wl(L-ex,ae)],.045-(grow?.005:0),grow?'#9a9a94':top);
+          // then along the mapped driveway line itself (so it follows a curve): wide, narrowing gradually unless the yard is short
+          if(ds&&ds.E===E&&ds.l&&ds.l.length>1){ const l=ds.l.map(toLoc), pts=[l[0]]; let acc=0;
+            for(let i=1;i<l.length;i++){ const dx=l[i][0]-l[i-1][0], dy=l[i][1]-l[i-1][1], sg=Math.hypot(dx,dy), n=Math.max(1,Math.ceil(sg/1.5)); for(let k=1;k<=n;k++) pts.push([l[i-1][0]+dx*k/n,l[i-1][1]+dy*k/n]); }
+            const Ls=[], Rs=[]; let u=ds.d; for(let i=0;i<pts.length;i++){ if(i) u+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);
+              if(short?(room!=null&&u>room+.5):u>A5+TT) break; if(u<ae-1.5&&i<pts.length-1) continue;
+              const a=pts[Math.max(0,i-1)], b=pts[Math.min(pts.length-1,i+1)], tx=b[0]-a[0], ty=b[1]-a[1], tl=Math.hypot(tx,ty)||1, h=(wd(u)+ex*2)/2;
+              Ls.push([pts[i][0]-ty/tl*h,pts[i][1]+tx/tl*h]); Rs.push([pts[i][0]+ty/tl*h,pts[i][1]-tx/tl*h]); }
+            if(Ls.length>1) quad(Ls.concat(Rs.reverse()),.045-(grow?.005:0),grow?'#9a9a94':top); }
+          else if(ae<(short?Math.max(3,room):A5+TT)){ const len=short?Math.max(3,room):A5+TT;   // no mapped line: the pad runs straight out
+            quad(short?[wl(L-ex,ae),wl(Rr+ex,ae),wl(Rr+ex,len),wl(L-ex,len)]:[wl(L-ex,ae),wl(Rr+ex,ae),wl((L+Rr)/2+LW/2+ex,len),wl((L+Rr)/2-LW/2-ex,len)],.045-(grow?.005:0),grow?'#9a9a94':top); } };
+        if(!gr) build(.12); build(0); }
       for(const xx of [st-.42,st+tw+.42]) lamp(E,xx,1.95,1.2,3.2);                                                   // a light on each side of the whole row
       occupy(E,st-.6,st+tw+.6); }
     // front door on the street side, in the free part of the wall
