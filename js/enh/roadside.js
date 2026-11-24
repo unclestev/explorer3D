@@ -116,17 +116,16 @@ function mappedWalks(ox,oy,R,kx,C){
 // draw them as one continuous strip of concrete instead, with a slab joint every SLAB metres (a very short dash is a joint).
 // The road layers come from js/enh/smooth.js a little later, so this is retried from the tick until they exist.
 function footways(){
-  if(RS.fw||map.getLayer('rs-fw')) return RS.fw=true;
   const pp=map.getLayer('road_path_pedestrian'); if(!pp) return;
   safe('footways',()=>{
     const SUB=['match',['get','subclass'],['footway','cycleway','pedestrian'],true,false];
     const walkF=['all',['match',['geometry-type'],['LineString','MultiLineString'],true,false],['==',['get','class'],'path'],SUB,['match',['get','brunnel'],['bridge','tunnel'],false,true]];
-    map.addLayer({id:'rs-fw',type:'line',source:pp.source,filter:walkF,minzoom:15,layout:{'line-cap':'butt','line-join':'round'},
+    if(!map.getLayer('rs-fw')) map.addLayer({id:'rs-fw',type:'line',source:pp.source,filter:walkF,minzoom:15,layout:{'line-cap':'butt','line-join':'round'},
       paint:{'line-color':WALK_C(),'line-width':mz(WALKW+.1,1)}},'road_path_pedestrian');
-    map.addLayer({id:'rs-fwj',type:'line',source:pp.source,filter:walkF,minzoom:17,layout:{'line-cap':'butt','line-join':'round'},
+    if(!map.getLayer('rs-fwj')) map.addLayer({id:'rs-fwj',type:'line',source:pp.source,filter:walkF,minzoom:17,layout:{'line-cap':'butt','line-join':'round'},
       paint:{'line-color':RS.asphalt?'#7c7b76':'#9a978f','line-width':mz(WALKW+.1,1),'line-opacity':.8,'line-dasharray':[.05,SLAB/(WALKW+.1)-.05]}},'road_path_pedestrian');
     // trails keep the old dashed look; mapped sidewalks no longer get it
-    const old=map.getFilter('road_path_pedestrian'); map.setFilter('road_path_pedestrian',['all',old,['!',walkF]]);
+    const old=map.getFilter('road_path_pedestrian'); if(!JSON.stringify(old).includes('"cycleway"')) map.setFilter('road_path_pedestrian',['all',old,['!',walkF]]);
     RS.fw=true; walkTones(); });
 }
 
@@ -228,7 +227,7 @@ onReady(function roadside(){
 });
 // rebuild after driving ~80 m (Low: 120 m) or when the road lines were refreshed; never while gliding
 onTick(700,function roadsideTick(){
-  if(!RS.fw) footways();
+  if(!map.getLayer('rs-fw')||!map.getLayer('rs-fwj')) footways();
   if(!map.getSource('roadside')||mode==='glider') return;
   const moved=RS.at?meters(RS.at[1],RS.at[0],S.lat,S.lng):1e9;
   if(moved>(POWER?120:80)||(roadGeo.t&&roadGeo.t!==RS.geoT&&moved>25)) safe('roadside',build);
