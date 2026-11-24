@@ -391,21 +391,23 @@ function gymDecor(g,p,HC,r,TH2){
       for(const y of [yb,yt]){ dm.position.set(px,y,-py); dm.rotation.set(0,Math.atan2(vy,vx),0); dm.scale.set(span,1,1); dm.updateMatrix(); chords.setMatrixAt(ci++,dm.matrix); }
       for(let j=0;j<seg;j++){ const s0=-span/2+j*span/seg, s1=s0+span/seg, up=j%2===0, ya=up?yb:yt, yc=up?yt:yb, ex=px+vx*(s0+s1)/2, ey=py+vy*(s0+s1)/2, L2=Math.hypot(span/seg,yc-ya);
         dm.position.set(ex,(ya+yc)/2,-ey); dm.rotation.set(0,Math.atan2(vy,vx),0); dm.rotateZ(Math.atan2(yc-ya,span/seg)); dm.scale.set(L2,1,1); dm.updateMatrix(); diags.setMatrixAt(di++,dm.matrix);
-        if(j%3===1) bulbs.push([ex,ey]); } }
+        if(j%3===1) bulbs.push([ex,ey,k%2]); } }
     chords.count=ci; diags.count=di; chords.instanceMatrix.needsUpdate=diags.instanceMatrix.needsUpdate=true; chords.frustumCulled=diags.frustumCulled=false; g.add(chords); g.add(diags);
     // round UFO high-bay lights (owner 2026-11-24, product photo): black finned body with a ring, hook up to the truss, white lens under it, a soft glow
-    const lm=new THREE.MeshBasicMaterial({color:0xffffff,map:lensTex(),side:THREE.DoubleSide}), n=Math.max(1,bulbs.length), dark=rmat('ufo',0x16181b,0x050506);
-    const body=new THREE.InstancedMesh(ufoBody(),dark,n), hook=new THREE.InstancedMesh(ufoHook(),rmat('ufohook',0xb8bcc2,0x30323a),n),
-      lens=new THREE.InstancedMesh(new THREE.CircleGeometry(.31,16),lm,n), knob=new THREE.InstancedMesh(new THREE.CylinderGeometry(.07,.075,.07,16),lm,n),
-      halo=new THREE.InstancedMesh(new THREE.CircleGeometry(1.1,12),new THREE.MeshBasicMaterial({map:roundGlow(),transparent:true,opacity:.5,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,toneMapped:false}),n);
-    bulbs.forEach(([bx,by],i)=>{ const y=yb-.7;
+    // two banks of lights (every other truss), one per switch (owner 2026-11-24: "add light switches in the gym")
+    const n=Math.max(1,bulbs.length), dark=rmat('ufo',0x16181b,0x050506), lms=[0,1].map(()=>new THREE.MeshBasicMaterial({color:0xffffff,map:lensTex(),side:THREE.DoubleSide})),
+      body=new THREE.InstancedMesh(ufoBody(),dark,n), hook=new THREE.InstancedMesh(ufoHook(),rmat('ufohook',0xb8bcc2,0x30323a),n), glowM=new THREE.MeshBasicMaterial({map:roundGlow(),transparent:true,opacity:.5,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,toneMapped:false});
+    const cnt=[bulbs.filter(q=>q[2]===0).length,bulbs.filter(q=>q[2]===1).length];
+    const lens=[0,1].map(k=>new THREE.InstancedMesh(new THREE.CircleGeometry(.31,16),lms[k],Math.max(1,cnt[k]))), knob=[0,1].map(k=>new THREE.InstancedMesh(new THREE.CylinderGeometry(.07,.075,.07,16),lms[k],Math.max(1,cnt[k]))),
+      halo=[0,1].map(k=>new THREE.InstancedMesh(new THREE.CircleGeometry(1.1,12),glowM,Math.max(1,cnt[k]))), ci2=[0,0];
+    bulbs.forEach(([bx,by,bk],i)=>{ const y=yb-.7, j2=ci2[bk]++;
       dm.rotation.set(0,(i*1.7)%6.28,0); dm.scale.set(1,1,1); dm.position.set(bx,y,-by); dm.updateMatrix(); body.setMatrixAt(i,dm.matrix); hook.setMatrixAt(i,dm.matrix);
-      dm.rotation.set(Math.PI/2,0,0); dm.position.set(bx,y+.025,-by); dm.updateMatrix(); lens.setMatrixAt(i,dm.matrix);
-      dm.rotation.set(0,0,0); dm.position.set(bx,y-.01,-by); dm.updateMatrix(); knob.setMatrixAt(i,dm.matrix);
-      dm.rotation.set(Math.PI/2,0,0); dm.position.set(bx,y-.15,-by); dm.updateMatrix(); halo.setMatrixAt(i,dm.matrix); });
-    for(const o of [body,hook,lens,knob,halo]){ o.instanceMatrix.needsUpdate=true; o.frustumCulled=false; g.add(o); } halo.renderOrder=1;
-    ROOM.glow=[[halo]];
-    ROOM.tro=[lm]; }
+      dm.rotation.set(Math.PI/2,0,0); dm.position.set(bx,y+.025,-by); dm.updateMatrix(); lens[bk].setMatrixAt(j2,dm.matrix);
+      dm.rotation.set(0,0,0); dm.position.set(bx,y-.01,-by); dm.updateMatrix(); knob[bk].setMatrixAt(j2,dm.matrix);
+      dm.rotation.set(Math.PI/2,0,0); dm.position.set(bx,y-.15,-by); dm.updateMatrix(); halo[bk].setMatrixAt(j2,dm.matrix); });
+    for(const k of [0,1]){ lens[k].count=knob[k].count=halo[k].count=cnt[k]; halo[k].renderOrder=1; }
+    for(const o of [body,hook,...lens,...knob,...halo]){ o.instanceMatrix.needsUpdate=true; o.frustumCulled=false; g.add(o); }
+    ROOM.glow=[[halo[0]],[halo[1]]]; ROOM.tro=lms; }
 }
 function buildRoom(r){
   if(ROOM.key===r.key&&ROOM.g) return; dropRoom();
@@ -451,7 +453,7 @@ function buildRoom(r){
       const base=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,.03,24),trimM); base.position.set(x3,HC-.015,z3); g.add(base);
       const globe=new THREE.Mesh(new THREE.SphereGeometry(.17,20,10,0,Math.PI*2,Math.PI/2,Math.PI/2),new THREE.MeshBasicMaterial({color:0xfff6df,side:THREE.DoubleSide}));
       globe.position.set(x3,HC-.03,z3); g.add(globe); ROOM.tro=[globe.material]; }          // one light, one switch by the door
-    switches(g,r,HC,1);
+    switches(g,r,HC,r.gym?2:1);
     if(r.gym&&ROOM.hoops&&ROOM.sw&&ROOM.sw[0]){ const lv=ROOM.sw[0].lv, th=lv.rotation.y, ax=Math.cos(th), az=-Math.sin(th);             // a second, blue-levered plate beside the light switch: the hoop winch
       const pl=new THREE.Mesh(new THREE.BoxGeometry(.1,.13,.012),rmat('swplate',0xf6f5f1,0x55544f)); pl.position.set(lv.position.x+ax*.22,1.2,lv.position.z+az*.22); pl.rotation.y=th; g.add(pl);
       const hl=new THREE.Mesh(new THREE.BoxGeometry(.022,.045,.02),rmat('swlever2',0x3a7bd5,0x1a3a6a)); hl.position.set(pl.position.x+ax*.013*0,1.2,pl.position.z); hl.position.x+=Math.sin(th)*.013; hl.position.z+=Math.cos(th)*.013; hl.rotation.y=th; g.add(hl);
