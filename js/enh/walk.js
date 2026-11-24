@@ -336,9 +336,17 @@ function gymDecor(g,p,HC,r,TH2){
     const c=document.createElement('canvas'); c.width=256; c.height=96; const x=c.getContext('2d'); x.fillStyle='#0c0d10'; x.fillRect(0,0,256,96); x.fillStyle='#e8a43a'; x.font='bold 30px monospace'; x.fillText('GUEST   HOME',22,36); x.font='bold 36px monospace'; x.fillText(' 00  P1  00',22,80);
     const m=new THREE.Mesh(new THREE.PlaneGeometry(2.6,1),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c)})); const q=[a[0]+ux*L/2-nx*(TH2+.03),a[1]+uy*L/2-ny*(TH2+.03)];
     m.position.set(q[0],Math.min(HC-2.2,6.2),-q[1]); m.lookAt(cx,m.position.y,-cy); g.add(m); }
-  for(const e of [-1,1]){ const hx=cx+Math.cos(ang)*e*(CL/2-1.2), hy=cy+Math.sin(ang)*e*(CL/2-1.2);
-    const bb=new THREE.Mesh(new THREE.BoxGeometry(.06,1.05,1.8),rmat('board',0xf0f0f0,0x303030)); bb.position.set(hx,3.6,-hy); bb.rotation.y=-ang; g.add(bb);
-    const rim=new THREE.Mesh(new THREE.TorusGeometry(.23,.015,6,20),rmat('rim',0xe8571a,0x401808)); rim.rotation.x=Math.PI/2; rim.position.set(hx-Math.cos(ang)*e*.45,3.05,-(hy-Math.sin(ang)*e*.45)); g.add(rim); }
+  // the hoops hang up under the trusses on cables; a wall switch lowers them slowly (owner 2026-11-24), another raises them again
+  { const list=[], up=Math.max(1.5,HC-1.6-3.6), o0=HOOPO[r.key]||0;
+    for(const e of [-1,1]){ const hx=cx+Math.cos(ang)*e*(CL/2-1.2), hy=cy+Math.sin(ang)*e*(CL/2-1.2), H=new THREE.Group(); H.position.set(hx,0,-hy); H.rotation.y=-ang; g.add(H);
+      const bb=new THREE.Mesh(new THREE.BoxGeometry(.06,1.05,1.8),rmat('board',0xf0f0f0,0x303030)); bb.position.set(0,3.6,0); H.add(bb);
+      const sq=new THREE.Mesh(new THREE.BoxGeometry(.065,.36,.6),rmat('boardsq',0xd9d9d9,0x202020)); sq.position.set(0,3.35,0); H.add(sq);
+      const rim=new THREE.Mesh(new THREE.TorusGeometry(.23,.015,6,20),rmat('rim',0xe8571a,0x401808)); rim.rotation.x=Math.PI/2; rim.position.set(-.45*e,3.05,0); H.add(rim);
+      const net=new THREE.Mesh(new THREE.CylinderGeometry(.23,.13,.4,12,1,true),new THREE.MeshBasicMaterial({color:0xf4f4f4,wireframe:true})); net.position.set(-.45*e,2.85,0); H.add(net);
+      const arm=new THREE.Mesh(new THREE.BoxGeometry(.5,.05,.05),rmat('harm',0x2a2c30,0x08080a)); arm.position.set(-.25*e,3.05,0); H.add(arm);
+      const cabs=[-.7,.7].map(z=>{ const c=new THREE.Mesh(new THREE.CylinderGeometry(.015,.015,1,6),rmat('hcab',0x1b1c1f,0x050506)); c.position.set(0,0,z); H.add(c); return c; });
+      list.push({H,cabs}); }
+    ROOM.hoops={list,up,top:HC-1.4,o:o0,t:o0}; hoopPose(); }
   // the roof: white steel trusses across the short way every 6 m, with round high-bay lights hung under them
   { const sp=Math.min(W,Hh)<best?Math.min(W,Hh):W, ux=Math.cos(ang), uy=Math.sin(ang), vx=-uy, vy=ux, nT=Math.max(2,Math.floor(best/6)), span=Math.max(10,Math.min(Math.hypot(maxx-minx,maxy-miny),sp)), yb=HC-1.4, yt=HC-.2, seg=Math.max(4,Math.round(span/2.4));
     const trussM=rmat('truss',0xeeeeea,0x2a2a28), boxG=new THREE.BoxGeometry(1,.09,.09), dm=new THREE.Object3D();
@@ -408,7 +416,11 @@ function buildRoom(r){
       const base=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,.03,24),trimM); base.position.set(x3,HC-.015,z3); g.add(base);
       const globe=new THREE.Mesh(new THREE.SphereGeometry(.17,20,10,0,Math.PI*2,Math.PI/2,Math.PI/2),new THREE.MeshBasicMaterial({color:0xfff6df,side:THREE.DoubleSide}));
       globe.position.set(x3,HC-.03,z3); g.add(globe); ROOM.tro=[globe.material]; }          // one light, one switch by the door
-    switches(g,r,HC,1); }
+    switches(g,r,HC,1);
+    if(r.gym&&ROOM.hoops&&ROOM.sw&&ROOM.sw[0]){ const lv=ROOM.sw[0].lv, th=lv.rotation.y, ax=Math.cos(th), az=-Math.sin(th);             // a second, blue-levered plate beside the light switch: the hoop winch
+      const pl=new THREE.Mesh(new THREE.BoxGeometry(.1,.13,.012),rmat('swplate',0xf6f5f1,0x55544f)); pl.position.set(lv.position.x+ax*.22,1.2,lv.position.z+az*.22); pl.rotation.y=th; g.add(pl);
+      const hl=new THREE.Mesh(new THREE.BoxGeometry(.022,.045,.02),rmat('swlever2',0x3a7bd5,0x1a3a6a)); hl.position.set(pl.position.x+ax*.013*0,1.2,pl.position.z); hl.position.x+=Math.sin(th)*.013; hl.position.z+=Math.cos(th)*.013; hl.rotation.y=th; g.add(hl);
+      const q0=ROOM.sw[0].pos; ROOM.hs=[q0[0]+ax*.22,q0[1]-az*.22]; } }
   // door leaves, hinged at the jamb; double doors on the wide glass entrances
   ROOM.leaves=[];
   const SEE=()=>STX.see||(STX.see=new THREE.MeshLambertMaterial({color:0x9db4c6,transparent:true,opacity:.22,depthWrite:false,side:THREE.DoubleSide}));   // clear glass
@@ -598,11 +610,15 @@ swBtn.style.cssText='position:absolute;left:50%;bottom:calc(var(--gap,10px) + 12
 for(const k of [0,1]){ const b=document.createElement('button'); b.style.cssText='font:600 15px system-ui;padding:10px 14px;border-radius:12px;border:0;background:rgba(20,24,32,.85);color:#fff;box-shadow:0 3px 10px rgba(0,0,0,.4)';
   b.onclick=e=>{ e.stopPropagation(); flipLights(k); swLabel(); }; swBtn.appendChild(b); }
 document.body.appendChild(swBtn);
+const hoopBtn=document.createElement('button'); hoopBtn.style.cssText='position:absolute;left:50%;bottom:calc(var(--gap,10px) + 176px);transform:translateX(-50%);z-index:32;display:none;font:600 15px system-ui;padding:10px 14px;border-radius:12px;border:0;background:rgba(20,24,32,.85);color:#fff;box-shadow:0 3px 10px rgba(0,0,0,.4)';
+hoopBtn.onclick=e=>{ e.stopPropagation(); const h=ROOM.hoops; if(h){ h.t=h.t>.5?0:1; if(h.o===h.t) h.o=h.t; hoopLabel(); } }; document.body.appendChild(hoopBtn);
+function hoopLabel(){ const h=ROOM.hoops; if(!h) return; hoopBtn.textContent=h.o!==h.t?(h.t>h.o?'🏀 Lowering the hoops…  (tap to stop and raise)':'🏀 Raising the hoops…  (tap to lower)'):(h.o>=1?'🏀 Hoops: down. Raise them':'🏀 Hoops: up. Lower them'); }
 function swLabel(){ const one=ROOM.sw&&ROOM.sw.length===1; [...swBtn.children].forEach((b,k)=>{ b.style.display=one&&k?'none':''; b.textContent=(LSW[k]?'💡':'⚫')+(one?' Light: ':' Switch '+(k+1)+': ')+(LSW[k]?'on':'off'); }); }
 function switchNear(){ const r=ROOM.r; let near=false;
   if(r&&ROOM.sw&&ROOM.sw.length&&mode==='walk'){ const q=loc(r,S.lat,S.lng); near=ROOM.sw.some(w=>Math.hypot(q[0]-w.pos[0],q[1]-w.pos[1])<2.2); }
+  { let hn=false; if(r&&ROOM.hs&&ROOM.hoops&&mode==='walk'){ const q=loc(r,S.lat,S.lng); hn=Math.hypot(q[0]-ROOM.hs[0],q[1]-ROOM.hs[1])<2.4; } if(hn!==(hoopBtn.style.display==='block')){ hoopBtn.style.display=hn?'block':'none'; if(hn) hoopLabel(); } }
   if(near!==(swBtn.style.display==='flex')){ swBtn.style.display=near?'flex':'none'; if(near) swLabel(); } }
-function dropRoom(){ ROOM.gr=null; ROOM.tro=null; ROOM.glow=null; ROOM.gm=null; ROOM.sw=null; ROOM.dimM=null; LKEY=null; swBtn.style.display='none'; if(!ROOM.g) return; scene.remove(ROOM.g); ROOM.g.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); ROOM.g=null; ROOM.key=null; ROOM.r=null; ROOM.leaves=[]; ROOM.gar=[]; }
+function dropRoom(){ ROOM.gr=null; ROOM.tro=null; ROOM.glow=null; ROOM.gm=null; ROOM.hoops=null; ROOM.hs=null; ROOM.sw=null; ROOM.dimM=null; LKEY=null; swBtn.style.display='none'; hoopBtn.style.display='none'; if(!ROOM.g) return; scene.remove(ROOM.g); ROOM.g.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); ROOM.g=null; ROOM.key=null; ROOM.r=null; ROOM.leaves=[]; ROOM.gar=[]; }
 function garUpdate(){ for(const G2 of ROOM.gar){ const o=window.GARAGE?GARAGE.openness(G2.q.gk):0, b0=o*1.95, top=2.2, h=Math.max(.15,top-b0);
   G2.m.scale.y=h; G2.m.position.y=b0+h/2; } }
 // the room sits round the building's middle, turned with the camera, at the map's scale (like the cars)
@@ -610,6 +626,11 @@ function placeRoom(m,b){ const r=ROOM.r; if(!r) return; const kx=111320*cosLat()
   const dx=(r.cx-S.lng)*kx, dy=(r.cy-S.lat)*111320, sb=Math.sin(b), cb=Math.cos(b), f=dx*sb+dy*cb, rr=dx*cb-dy*sb;
   ROOM.g.position.set(rr/m,0,-f/m); ROOM.g.scale.setScalar(1/m); ROOM.g.rotation.y=b; }
 // doors swing open when you're within ~1.8 m of them, and shut again behind you
+const HOOPO={};
+function hoopPose(){ const h=ROOM.hoops; if(!h) return; const e=h.o*h.o*(3-2*h.o);                    // eased
+  for(const q of h.list){ q.H.position.y=(1-e)*h.up; const by=q.H.position.y+4.15, len=Math.max(.05,h.top-by); for(const c of q.cabs){ c.scale.y=len; c.position.y=by+len/2; } }
+  if(typeof hoopLabel==='function') hoopLabel(); }
+function hoopTick(dt){ const h=ROOM.hoops; if(!h||h.o===h.t) return; const st=dt/16; h.o=h.t>h.o?Math.min(h.t,h.o+st):Math.max(h.t,h.o-st); HOOPO[ROOM.r&&ROOM.r.key]=h.o; hoopPose(); dirty=true; }   // 16 s from up to down
 function doorSwing(dt){ const r=ROOM.r; if(!r) return; const q=loc(r,S.lat,S.lng);
   greeterTick(dt,q);
   for(const L of ROOM.leaves){ const mx=(L.d.x0+L.d.x1)/2, my=(L.d.y0+L.d.y1)/2, near=Math.hypot(q[0]-mx,q[1]-my)<(L.auto?3.8:1.8);   // automatic doors sense you from further off, and open quicker
@@ -778,7 +799,7 @@ function walkStep(dt,st,gas,now){
   // car layer: you at the centre, the parked vehicle where you left it (same projection as the traffic)
   const m=mpp(S.lat,S.zoom), sc=WX/m, b=rad(S.camB), sb=Math.sin(b), cb=Math.cos(b);
   person.scale.setScalar(sc); person.rotation.y=-rad(S.hdg-S.camB); person.visible=!IN.rec;   /* first person indoors: you're the camera */
-  if(ROOM.g){ placeRoom(m,b); doorSwing(dt); }
+  if(ROOM.g){ placeRoom(m,b); doorSwing(dt); hoopTick(dt); }
   switchNear();
   const dx=(PK.lng-S.lng)*111320*cosLat(), dy=(PK.lat-S.lat)*111320, f=dx*sb+dy*cb, r=dx*cb-dy*sb;
   car.visible=true; car.position.set(r/m,0,-f/m); car.scale.setScalar(sc); car.rotation.y=-(rad(PK.hdg)-b);
