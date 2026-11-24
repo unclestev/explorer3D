@@ -682,15 +682,24 @@ function facades(P,kx,ky,res,rich){
           if(fine&&!(wins&&q===3)) for(const z of [q*ph+ph*.22,q*ph+ph*.78-.04]){ put(E,s0+.12,s0+gw-.12,.06,.072,z,z+.04,shade(gcol,-.12)); rp(); } }   // raised panel edges
         if(wins){ const n=gw>4?8:4, ww=(gw-.5)/n; for(let q=0;q<n;q++){ const xx=s0+.25+q*ww; put(E,xx+.06,xx+ww-.06,.06,.075,3*ph+.14,3*ph+.4,GLASS); rp(); } }
         if(fine){ put(E,s0-.14,s0,-.04,.06,0,GT+.12,trim); put(E,s0+gw,s0+gw+.14,-.04,.06,0,GT+.12,trim); put(E,s0-.14,s0+gw+.14,-.04,.06,GT,GT+.12,trim); } }   // trim round each opening
-      /* the pad in front of the doors (owner 2026-11-24: "the driveway leading up to the garage should be continuous asphalt, if it is
-         asphalt"): a mapped driveway is a thin line the map style draws as asphalt (#4c4e51, grey kerb), so the pad is the same asphalt,
-         as wide as the row of doors, running out to meet it and stopping short of the street. The tiles only say paved / unpaved (no
-         asphalt vs concrete), so a driveway tagged unpaved gets gravel and everything else the asphalt the line is drawn in. */
-      { let len=5.5; if(ds&&ds.E===E) len=Math.max(5.5,Math.min(9,ds.d+1.5));
-        if(sd&&sd.d){ const nd=E.nx*sd[0]+E.ny*sd[1]; if(nd>.6){ const room=sd.d/nd-(E.a[0]*E.nx+E.a[1]*E.ny)-6.5; if(room>2.5) len=Math.min(len,room); } }
+      /* the pad in front of the doors (owner 2026-11-24: "continuous asphalt, if it is asphalt"; "gradually widen to the width of the
+         garage for long driveways, and for shorter driveways the width of the garage all of the way to the street"): the map draws a
+         driveway as a thin asphalt line, so a pad as wide as the row of doors starts at the doors. A short front yard (street kerb
+         within ~12 m): it stays that wide right out to the street. A long one: 5 m that wide, then it narrows gradually to the
+         mapped line (about 3 m) over up to 9 m, and the line carries on. The kerb strip round it is the grey the map puts round
+         driveways. Asphalt unless the tiles say unpaved (gravel): they have no asphalt vs concrete. */
+      { const wall=E.a[0]*E.nx+E.a[1]*E.ny; let room=null;
+        if(sd&&sd.d){ const nd=E.nx*sd[0]+E.ny*sd[1]; if(nd>.6){ room=sd.d/nd-wall-6.5; } }
         const gr=ds&&ds.E===E&&ds.sf==='unpaved', top=gr?'#a39b8b':'#4c4e51';
-        put(E,st-.35,st+tw+.35,.04,len,0,.045,top);
-        if(!gr) for(const [x0,x1] of [[st-.47,st-.35],[st+tw+.35,st+tw+.47]]) put(E,x0,x1,.04,len,0,.05,'#9a9a94'); }
+        const L=st-.35, Rr=st+tw+.35, sc=(L+Rr)/2, hl=1.6, o0=.04;
+        let cx=ds&&ds.E===E?ds.s:sc; cx=Math.max(L+hl,Math.min(Rr-hl,cx));
+        let pts;
+        if(room!=null&&room<=12){ const len=Math.max(3,room); pts=[[L,o0],[Rr,o0],[Rr,len],[L,len]]; }
+        else { const a=5, T=Math.min(9,Math.max(4,(room!=null?room:15)-a-1)); pts=(Rr-L)<=2*hl+.4?[[L,o0],[Rr,o0],[Rr,a+T],[L,a+T]]:[[L,o0],[Rr,o0],[Rr,a],[cx+hl,a+T],[cx-hl,a+T],[L,a]]; }
+        const quad=(q,h,c)=>{ const ring=q.map(([x,o])=>toLL([E.a[0]+E.ux*x+E.nx*o,E.a[1]+E.uy*x+E.ny*o])); ring.push(ring[0]); out.push({type:'Feature',properties:{c,b:0,h},geometry:{type:'Polygon',coordinates:[ring]}}); };
+        if(!gr){ const gx=pts.reduce((x,q)=>x+q[0],0)/pts.length, gy=pts.reduce((x,q)=>x+q[1],0)/pts.length;
+          quad(pts.map(([x,o])=>{ const dx=x-gx, dy=o-gy, d=Math.hypot(dx,dy)||1; return [x+dx/d*.12*(Math.abs(dx)>Math.abs(dy)?1:.4),o+(o>o0+.01?dy/d*.12*(Math.abs(dy)>Math.abs(dx)?1:.4):0)]; }),.04,'#9a9a94'); }
+        quad(pts,.045,top); }
       for(const xx of [st-.42,st+tw+.42]) lamp(E,xx,1.95,1.2,3.2);                                                   // a light on each side of the whole row
       occupy(E,st-.6,st+tw+.6); }
     // front door on the street side, in the free part of the wall
