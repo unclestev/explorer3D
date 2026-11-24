@@ -261,13 +261,13 @@ const TXM={
     for(let r=0;r<16;r++){ const Y=r*32, off=r&1?32:0; for(let c=-1;c<5;c++){ x.fillStyle=R()<.5?'rgba(0,0,0,.05)':'rgba(255,255,255,.06)'; x.fillRect(c*64+off,Y,64,32); }
       x.fillStyle='rgba(0,0,0,.2)'; x.fillRect(0,Y,w,2); for(let c=0;c<5;c++) x.fillRect(c*64+off,Y,2,32); } },1],
   metal:[256,256,1.6,1.6,(x,w,h)=>{ for(let i=0;i<16;i++){ const g=x.createLinearGradient(i*16,0,i*16+16,0); g.addColorStop(0,'#c8c8c8'); g.addColorStop(.35,'#f4f4f4'); g.addColorStop(.7,'#dcdcdc'); g.addColorStop(1,'#a8a8a8'); x.fillStyle=g; x.fillRect(i*16,0,16,h); } }],
-  deck:[256,256,1.6,1.6,(x,w,h)=>{ for(let i=0;i<8;i++){ x.fillStyle=i&1?'#bdbdbd':'#e8e8e8'; x.fillRect(i*32,0,32,h); x.fillStyle='rgba(0,0,0,.3)'; x.fillRect(i*32,0,2,h); } }]
+  deck:[256,256,1.6,1.6,(x,w,h)=>{ for(let i=0;i<8;i++){ x.fillStyle=i&1?'#bdbdbd':'#e8e8e8'; x.fillRect(i*32,0,32,h); x.fillStyle='rgba(0,0,0,.18)'; x.fillRect(i*32,0,2,h); } }]
 };
 function itex(name,a,b){ const k=name+'|'+(a||'')+'|'+(b||''); if(ITX[k]) return ITX[k];
   const D=TXM[name], c=document.createElement('canvas'); c.width=D[0]; c.height=D[1]; D[4](c.getContext('2d'),D[0],D[1],prng(seedOf(k)),a,b);
   const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; if(D[5]) t.wrapT=THREE.ClampToEdgeWrapping; t.repeat.set(1/D[2],1/D[3]); t.anisotropy=8; return ITX[k]=t; }
 function imat(name,tint,a,b,glow){ const k=name+'|'+tint+'|'+(a||'')+'|'+(b||''); if(IMT[k]) return IMT[k]; const t=itex(name,a,b), col=new THREE.Color(tint);
-  return IMT[k]=new THREE.MeshLambertMaterial({color:col,map:t,emissive:col.clone().multiplyScalar(glow||.42),emissiveMap:t,side:THREE.DoubleSide}); }
+  return IMT[k]=new THREE.MeshLambertMaterial({color:col.clone().multiplyScalar(.7),map:t,emissive:col.clone().multiplyScalar(glow||.22),emissiveMap:t,side:THREE.DoubleSide}); }
 function itexTrim(){ if(Object.keys(ITX).length<=14) return; for(const k in IMT) IMT[k].dispose(); for(const k in ITX) ITX[k].dispose(); for(const k in IMT) delete IMT[k]; for(const k in ITX) delete ITX[k]; }
 const WALLS_HOUSE=['#f3eee3','#e9dfcc','#d9e2dc','#dfe6ee','#efe3cf','#e6d6d0','#d8dfc9','#f4f1ea'], FLOORS_HOUSE=[['planks','#d8b27f'],['planks','#8a5a36'],['planks','#b9b3a7'],['carpet','#cdbfa8'],['carpet','#9ba1a9'],['planks','#c99a62']];
 function roomKind(r,SH){ if(SH) return 'store'; if(r.house) return 'house'; if(r.zone==='school') return 'school'; if(r.zone==='industrial') return 'industrial'; return (r.h||0)>12?'office':'shop'; }
@@ -275,14 +275,14 @@ function roomKind(r,SH){ if(SH) return 'store'; if(r.house) return 'house'; if(r
 function roomLook(r,SH){
   const kind=roomKind(r,SH), R=prng(seedOf(r.key)), H=r.h||3, L={kind,trof:kind!=='house'};
   if(kind==='house'){ const f=pickOf(FLOORS_HOUSE,R); L.HC=Math.max(2.4,Math.min(2.7,H-.3));
-    L.wallM=imat('drywall',pickOf(WALLS_HOUSE,R)); L.floorM=imat(f[0],f[1],0,0,.3); L.ceilM=imat('stipple','#f7f6f2'); }
+    L.wallM=imat('drywall',pickOf(WALLS_HOUSE,R)); L.floorM=imat(f[0],f[1],0,0,.18); L.ceilM=imat('stipple','#f7f6f2'); }
   else if(kind==='store'){ L.HC=Math.max(3.6,Math.min(5,H-1.4)); L.wallM=imat('drywall','#ddd5c0'); L.floorM=storeMat('floor'); L.ceilM=storeMat('ceil'); }
   else if(kind==='school'){ const w=pickOf([['#efe7cf','#c8b58d'],['#e9eef0','#7f9db5'],['#efe9dd','#8aa58a']],R), chk=R()<.4; L.HC=Math.max(2.6,Math.min(3.1,H-.4));
-    L.wallM=imat('block','#ffffff',w[0],w[1]); L.floorM=imat('vct','#ffffff',chk?'chk':'spk',0,.3); L.ceilM=storeMat('ceil'); }
-  else if(kind==='office'){ L.HC=3; L.wallM=imat('drywall',pickOf(['#f4f3f0','#e6e8ea','#eee9df'],R)); L.floorM=imat('ctile',pickOf(['#9aa0a6','#7b8794','#a39d92','#6a6e73'],R),0,0,.3); L.ceilM=storeMat('ceil'); }
-  else if(kind==='industrial'){ L.HC=Math.max(3.4,Math.min(5,H-.6)); L.wallM=imat('metal',pickOf(['#cfd3d6','#d8d0bf','#b9c3cc'],R)); L.floorM=imat('concrete','#d4d4d0',0,0,.3); L.ceilM=imat('deck','#dcdcdc'); }
+    L.wallM=imat('block','#ffffff',w[0],w[1]); L.floorM=imat('vct','#ffffff',chk?'chk':'spk',0,.18); L.ceilM=storeMat('ceil'); }
+  else if(kind==='office'){ L.HC=3; L.wallM=imat('drywall',pickOf(['#f4f3f0','#e6e8ea','#eee9df'],R)); L.floorM=imat('ctile',pickOf(['#9aa0a6','#7b8794','#a39d92','#6a6e73'],R),0,0,.18); L.ceilM=storeMat('ceil'); }
+  else if(kind==='industrial'){ L.HC=Math.max(3.4,Math.min(5,H-.6)); L.wallM=imat('metal',pickOf(['#cfd3d6','#d8d0bf','#b9c3cc'],R)); L.floorM=imat('concrete','#d4d4d0',0,0,.18); L.ceilM=imat('deck','#dcdcdc'); }
   else { const f=pickOf([['vct','#ffffff','chk'],['vct','#efe4cc','spk'],['concrete','#d0d0cc'],['planks','#dcc7a6']],R); L.HC=Math.max(2.6,Math.min(3.3,H-.4));   // shop
-    L.wallM=imat('drywall',pickOf(['#f3f1ec','#e3e5e6','#ece2cf','#dbe6ef'],R)); L.floorM=f[0]==='vct'?imat('vct',f[1],f[2],0,.3):imat(f[0],f[1],0,0,.3); L.ceilM=storeMat('ceil'); }
+    L.wallM=imat('drywall',pickOf(['#f3f1ec','#e3e5e6','#ece2cf','#dbe6ef'],R)); L.floorM=f[0]==='vct'?imat('vct',f[1],f[2],0,.18):imat(f[0],f[1],0,0,.18); L.ceilM=storeMat('ceil'); }
   return L; }
 function buildRoom(r){
   if(ROOM.key===r.key&&ROOM.g) return; dropRoom();
