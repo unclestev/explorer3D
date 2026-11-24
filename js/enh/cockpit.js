@@ -2058,7 +2058,7 @@ function update(dt){
   if(p.hud){ p.hud.g.visible=CK.hud&&pw>.02; if(CK.hud) p.hud.m.opacity=(1-.45*k)*pw; }
   const ik=[d.mph,Math.round(d.rpm/60),d.gear,d.gearL,d.street,d.limit,d.time,d.temp,d.wx,d.trip,d.nav,d.navArrow,d.navDist,d.navStreet,d.eta,d.compass,CK.hud,d.bl,d.br].join('|');
   if(now-c.lastDraw>66){ c.lastDraw=now; if(ik!==c.ik){ c.ik=ik; if(p.hud&&CK.hud) drawHud(p.hud,d);   // only when a number on them changed (each redraw is a texture upload)
-    if(p.cluster) drawSport(p.cluster,d); if(p.pano) (P.xp?drawPanoXp:drawPano)(p.pano,d); } if(p.screen&&now-(c.lastMap||0)>130){ c.lastMap=now; if(P.style==='ev') drawEV(p.screen,d); else if(P.xp) drawScreenXp(p.screen,d); else drawScreen(p.screen,d,P.style==='lux'); musicBar(p.screen); }
+    if(p.cluster) drawSport(p.cluster,d); if(p.pano) (P.xp?drawPanoXp:drawPano)(p.pano,d); } if(p.screen&&now-(c.lastMap||0)>130){ c.lastMap=now; if(P.style==='ev') drawEV(p.screen,d); else if(P.xp) drawScreenXp(p.screen,d); else drawScreen(p.screen,d,P.style==='lux'); if(!(window.PARK&&PARK.active&&PARK.draw(p.screen))) musicBar(p.screen); }
     if(p.prnd&&p.prnd.cur!==d.gearL){ const pr=p.prnd, x=pr.T.x, L=pr.classic?['P','R','N','D','2','1']:['P','R','N','D','S'], W=pr.T.c.width, step=pr.classic?42:pr.lux?102:50, o=pr.classic?22:pr.lux?52:28;
       x.fillStyle=pr.lux?'#16130f':pr.classic?'#0c0c0c':'#0a0a0b'; x.fillRect(0,0,W,64); x.font=pr.lux?'600 30px system-ui':pr.classic?'700 30px Arial':'700 34px system-ui'; x.textAlign='center'; x.textBaseline='middle';
       L.forEach((t,i)=>{ x.fillStyle=t===d.gearL?(pr.classic?'#ff7a2a':'#ffffff'):(pr.lux?'#a09c94':'#70757c'); x.fillText(t,o+i*step,32); }); pr.T.t.needsUpdate=true; pr.cur=d.gearL; } }

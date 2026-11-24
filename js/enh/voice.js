@@ -197,6 +197,10 @@ async function handle(raw){
   if(/\b(air conditioning|a\/?c|heat|heater|climate|fan|defrost|seat heat|heated seats?|temperature to|warmer|cooler)\b/.test(t)&&!/\b(what|how)\b/.test(t)) return say('The climate controls aren\'t working in the game yet.');
   if(/\b(window|windows)\b/.test(t)&&/\b(open|close|roll|up|down)\b/.test(t)) return say('The windows don\'t open in the game yet. I can open the sunroof.');
   // ---- the snow plow's blade (js/enh/plow.js)
+  if(window.PARK&&/\b(park assist|self[- ]?park|park (the|my) (car|truck)|park it|parallel park|perpendicular park)\b/.test(t)){   // js/enh/park.js
+    if(OFF.test(t)||/\b(cancel|stop)\b/.test(t)){ PARK.cancel(); return say('Park Assist off.'); }
+    if(PARK.active) return say('Park Assist is on. Hold the park button to park.');
+    PARK.start(); return say(PARK.active?'Park Assist. Drive forward slowly and I will find a space. Use the turn signal to pick a side.':'Park Assist is in the Explorer and the Expedition.'); }
   if(window.PLOW&&PLOW.salt&&/\b(salt|salting|spreader)\b/.test(t)){
     if(typeof CARKEY!=='undefined'&&CARKEY!=='snowplow') return say('Switch to the snow plow first.');
     const on=OFF.test(t)||/\b(stop)\b/.test(t)?false:true; PLOW.salt(on); return say(on?'Salt on. Drive and it spreads.':'Salt off.'); }
