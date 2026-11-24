@@ -20,7 +20,7 @@
 <link href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/3.6.2/maplibre-gl.css" rel="stylesheet">
 <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>window.THREE||document.write('<script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"><\/script>')</script>
-<link href="css/style.css?v=40" rel="stylesheet">
+<link href="css/style.css?v=41" rel="stylesheet">
 </head>
 <body>
 <div id="load">Loading map…</div>
@@ -36,7 +36,7 @@ try{ if(localStorage.getItem('ydStartOnce')==='tp'){ const l=document.getElement
 <div id="findPanel"><form id="findForm"><input id="findQ" type="search" placeholder="Address or place, e.g. Main St, Yorkville" autocomplete="off" enterkeyhint="search"><button type="submit">Go</button><button type="button" id="findX" aria-label="Close search">✕</button></form><div id="findList"></div></div>
 <div id="nav"><div id="navArrow">↑</div><div id="navTxt"><b id="navDist"></b><span id="navStreet"></span><span id="navEta"></span></div><button id="navAuto" title="Autopilot: drive this route for me">AUTO</button><button id="navX" aria-label="Clear route">✕</button></div>
 <div id="chal"><span id="chalTxt"></span><button id="chalX" aria-label="Stop challenge">✕</button></div>
-<div id="zoom"><button id="find" title="Search for a destination">🔍</button><button id="glide" title="Hang glider: take off / land">🪂</button><button id="walkBtn" title="Get out of the car / get back in">🚶</button><button id="garBtn" title="Garage door opener (K)" style="display:none">🏠</button><button id="prog" title="Progress and challenges">🏆</button><button id="gear" title="Settings">⚙️</button></div>
+<div id="zoom"><button id="find" title="Search for a destination">🔍</button><button id="glide" title="Hang glider: take off / land">🪂</button><button id="walkBtn" title="Get out of the car / get back in">🚶</button><button id="garBtn" title="Garage door opener (K)" style="display:none">🏠</button><button id="shootBtn" title="Shoot the puck: tap, or hold for a slap shot (Space)" style="display:none">🏒</button><button id="prog" title="Progress and challenges">🏆</button><button id="gear" title="Settings">⚙️</button></div>
 <div id="progPanel" class="sheet" role="dialog" aria-label="Progress and challenges">
   <div class="setHead"><b>Progress</b><button id="progX" aria-label="Close">✕</button></div>
   <div class="pgTabs"><button data-t="stats" class="on">Stats</button><button data-t="play">Challenges</button><button data-t="rec">Records</button></div>
@@ -97,7 +97,7 @@ try{ if(localStorage.getItem('ydStartOnce')==='tp'){ const l=document.getElement
 <script src="js/update.js?v=4"></script>
 <script src="js/game.js?v=100"></script>
 <script src="js/enh/core.js?v=4"></script>
-<script src="js/enh/controls.js?v=8"></script>
+<script src="js/enh/controls.js?v=9"></script>
 <script src="js/enh/roads.js?v=10"></script>
 <script src="js/enh/signs.js?v=19"></script>
 <script src="js/enh/nav.js?v=12"></script>
@@ -115,7 +115,7 @@ try{ if(localStorage.getItem('ydStartOnce')==='tp'){ const l=document.getElement
 <script src="js/enh/progress.js?v=18"></script>
 <script src="js/enh/challenges.js?v=17"></script>
 <script src="js/enh/police.js?v=17"></script>
-<script src="js/enh/satellite.js?v=3"></script>
+<script src="js/enh/satellite.js?v=4"></script>
 <script src="js/enh/credits.js?v=1"></script>
 <script src="js/enh/towers.js?v=13"></script>
 <script src="js/enh/sound.js?v=12"></script>
@@ -144,6 +144,8 @@ try{ if(localStorage.getItem('ydStartOnce')==='tp'){ const l=document.getElement
 <script src="js/enh/controls-view.js?v=1"></script>
 <script src="js/enh/smooth.js?v=1"></script>
 <script src="js/enh/glidelod.js?v=1"></script>
+<script src="js/enh/ice.js?v=1"></script>
+<script src="js/enh/rink.js?v=1"></script>
 <script src="js/enh/boot.js?v=5"></script>
 </body>
 </html>

@@ -24,7 +24,7 @@ function beforeId(){ const all=map.getStyle().layers; const r=all.find(l=>l['sou
 function hideCovered(){
   const all=map.getStyle().layers, i=all.findIndex(l=>l.id===LAYER); if(i<0) return;
   for(const l of all.slice(0,i)){
-    if(l.type==='background') continue;                          // stays as the colour you see while photos load
+    if(l.type==='background'||l.id==='ice-fill') continue;                // ice (js/enh/ice.js) is drawn above the photo                          // stays as the colour you see while photos load
     const vis=map.getLayoutProperty(l.id,'visibility');
     if(vis!=='none'){ map.setLayoutProperty(l.id,'visibility','none'); if(!hidden.includes(l.id)) hidden.push(l.id); }
   }
@@ -37,6 +37,7 @@ function add(){
   map.addLayer({id:LAYER,type:'raster',source:SRC,minzoom:12,
     paint:{'raster-fade-duration':0,'raster-contrast':.05,'raster-saturation':-.05}},beforeId());
   hideCovered();
+  if(window.ICE) ICE.raise();                                      // frozen water stays on top of the photo
 }
 function remove(){
   if(map.getLayer(LAYER)) map.removeLayer(LAYER);
