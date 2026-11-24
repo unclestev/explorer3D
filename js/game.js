@@ -149,11 +149,11 @@ function destroyBuilding(id){
 /* Which buildings each building layer leaves out, by map id (same id across tiles => split buildings vanish together):
    smashed ones (destroyed), the one you've walked into (HIDE.walk, js/enh/walk.js), and — only on the map's own
    building layers — the groups js/enh/buildings.js redraws house by house near you (HIDE.vec; its 'walls' source). */
-const HIDE={walk:null,vec:[]}; window.HIDE=HIDE;
+const HIDE={walk:null,vec:[],pin:[]}; window.HIDE=HIDE;
 const VEC_HIDE=new Set(['building-3d','roof-cap']);
 function applyHides(lids){
   const wk=HIDE.walk==null?[]:Array.isArray(HIDE.walk)?HIDE.walk:[HIDE.walk];      // a store and its entrance pieces are several (js/enh/stores.js)
-  const base=destroyed.concat(wk.filter(i=>!destroyed.includes(i)));
+  const base=destroyed.concat(wk.filter(i=>!destroyed.includes(i))).concat((HIDE.pin||[]).filter(i=>!destroyed.includes(i)));   // pin: buildings another module redraws itself (js/enh/traughber.js)
   for(const lid of lids||hideIds){
     if(!map.getLayer(lid)) continue;
     const ids=VEC_HIDE.has(lid)&&HIDE.vec.length?base.concat(HIDE.vec):base;
