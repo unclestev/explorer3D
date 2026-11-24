@@ -22,7 +22,7 @@ const areaM=(r,kx)=>{ let a=0; for(let i=0,j=r.length-1;i<r.length;j=i++) a+=(r[
 
 function add(ring,name){ if(!ring||ring.length<4) return null; const k=keyOf(ring);
   if(ST.list.some(s=>s.key===k.key)) return null;
-  const s=Object.assign({ring,name:name||'Meijer'},k); ST.list.push(s); changed(); return s; }
+  const s=Object.assign({ring,name:name||'Meijer'},k); ST.list.push(s); changed(); found(s); return s; }
 // the building a point stands in (or the biggest one within 90 m), from the map tiles
 function buildingFor(lng,lat){ let fs=[]; try{ fs=map.querySourceFeatures(bSrc,{sourceLayer:'building'}); }catch(e){ return null; }
   const kx=111320*Math.cos(lat*Math.PI/180); let best=null, bd=1e9;
@@ -35,18 +35,38 @@ function scanTiles(){ let ps=[]; try{ ps=map.querySourceFeatures(bSrc,{sourceLay
   for(const p of ps){ const pr=p.properties||{}, n=pr.name||pr['name:latin']||pr.name_en||''; if(!NAME.test(n)||NOT.test(n)) continue;
     const c=p.geometry&&p.geometry.coordinates; if(!c||typeof c[0]!=='number') continue;
     if(ST.list.some(s=>inRing(s.ring,c[0],c[1])||Math.hypot((s.cx-c[0])*80000,(s.cy-c[1])*111320)<120)) continue;
-    const r=buildingFor(c[0],c[1]); if(r) add(r,n.replace(/\s*\(.*\)\s*$/,'')); } }
-// OpenStreetMap: Meijers within ~4 km (mapped as the building itself, or a point in it)
+    addPt(c[0],c[1],n.replace(/\s*\(.*\)\s*$/,'')); } resolvePts(); }
+// candidate spots (from OpenStreetMap, the search, or ones you marked): each becomes a store once the map tiles round it
+// are in and a big building is found there
+const PTS=[]; const SAVE='ydStores';
+function addPt(lng,lat,name,ring,mine){ if(!isFinite(lng)||!isFinite(lat)) return;
+  if(PTS.some(q=>Math.hypot((q.lng-lng)*80000,(q.lat-lat)*111320)<60)) return; PTS.push({lng,lat,name:name||'Meijer',ring:ring||null,mine:!!mine,done:false}); }
+try{ for(const q of JSON.parse(localStorage.getItem(SAVE)||'[]')) addPt(q[0],q[1],q[2],null,true); }catch(e){}
+function resolvePts(){ const kx=111320*Math.cos(S.lat*Math.PI/180);
+  for(const q of PTS){ if(q.done) continue; if(Math.hypot((q.lng-S.lng)*kx,(q.lat-S.lat)*111320)>900) continue;
+    if(ST.list.some(s=>inRing(s.ring,q.lng,q.lat))){ q.done=true; continue; }
+    const r=buildingFor(q.lng,q.lat)||q.ring; if(r){ q.done=true; const s=add(r,q.name); if(s) found(s); } } }
+function found(s){ if(ST.told&&ST.told[s.key]) return; (ST.told=ST.told||{})[s.key]=1; if(typeof toast==='function') toast('🏬 '+s.name+' found',2200); }
+// OpenStreetMap: anything named Meijer within ~5 km (the store may be mapped as the building, a point, or without a shop tag)
 async function scanOverpass(){ if(ST.busy||typeof ovFetch!=='function') return; ST.busy=true; ST.ovAt=[S.lng,S.lat]; ST.ovT=performance.now();
-  const dy=.036, dx=.048, bb=`(${(S.lat-dy).toFixed(4)},${(S.lng-dx).toFixed(4)},${(S.lat+dy).toFixed(4)},${(S.lng+dx).toFixed(4)})`;
-  try{ const j=await ovFetch(`[out:json][timeout:25];(nwr["name"~"^Meijer",i]["shop"]${bb};nwr["brand"~"^Meijer",i]${bb};);out geom qt;`);
-    for(const el of (j&&j.elements)||[]){ const n=(el.tags&&el.tags.name)||'Meijer'; if(!NAME.test(n)||NOT.test(n)) continue;
-      if(el.type==='way'&&el.geometry&&el.geometry.length>3&&el.tags&&el.tags.building){ const r=el.geometry.map(p=>[+p.lon,+p.lat]); add(r,n); continue; }
+  const dy=.045, dx=.06, bb=`(${(S.lat-dy).toFixed(4)},${(S.lng-dx).toFixed(4)},${(S.lat+dy).toFixed(4)},${(S.lng+dx).toFixed(4)})`;
+  try{ const j=await ovFetch(`[out:json][timeout:25];(nwr["name"~"meijer",i]${bb};nwr["brand"~"meijer",i]${bb};);out geom qt;`);
+    for(const el of (j&&j.elements)||[]){ const t=el.tags||{}, n=t.name||t.brand||'Meijer'; if(!NAME.test(n)||NOT.test(n)||t.highway||t.amenity==='fuel') continue;
+      const ring=el.type==='way'&&el.geometry&&el.geometry.length>3?el.geometry.map(p=>[+p.lon,+p.lat]):null;
       const c=el.type==='node'?[el.lon,el.lat]:el.bounds?[(el.bounds.minlon+el.bounds.maxlon)/2,(el.bounds.minlat+el.bounds.maxlat)/2]:null; if(!c) continue;
-      if(ST.list.some(s=>inRing(s.ring,c[0],c[1]))) continue;
-      const r=buildingFor(c[0],c[1]) || (el.type==='way'&&el.geometry&&el.geometry.length>3?el.geometry.map(p=>[+p.lon,+p.lat]):null); if(r) add(r,n.replace(/\s*\(.*\)\s*$/,'')); } }
-  catch(e){ console.warn('stores',e); } ST.busy=false; }
-
+      addPt(+c[0],+c[1],n.replace(/\s*\(.*\)\s*$/,''),ring&&t.building&&ring[0][0]===ring[ring.length-1][0]?ring:null); } }
+  catch(e){ console.warn('stores overpass',e); } ST.busy=false; resolvePts(); }
+// the place search (Nominatim), as a second source
+async function scanSearch(){ ST.nsAt=[S.lng,S.lat]; const vb=[S.lng-.07,S.lat+.05,S.lng+.07,S.lat-.05].map(v=>v.toFixed(4)).join(',');
+  try{ const r=await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=10&bounded=1&viewbox='+vb+'&q=Meijer'); if(!r.ok) return;
+    for(const x of await r.json()){ const n=(x.name||x.display_name||'').split(',')[0]; if(!NAME.test(n)||NOT.test(n)||x.category==='highway'||x.type==='fuel') continue; addPt(+x.lon,+x.lat,n); } }
+  catch(e){} resolvePts(); }
+// "this is Meijer": the big building nearest you (or the one you're looking at) becomes one, remembered on this device
+function markHere(){ const h=S.hdg*Math.PI/180, kx=111320*Math.cos(S.lat*Math.PI/180);
+  for(const ah of [0,40,80,120]){ const lng=S.lng+Math.sin(h)*ah/kx, lat=S.lat+Math.cos(h)*ah/111320, r=buildingFor(lng,lat);
+    if(r){ const k=keyOf(r); let sv=[]; try{ sv=JSON.parse(localStorage.getItem(SAVE)||'[]'); }catch(e){} sv.push([+k.cx.toFixed(6),+k.cy.toFixed(6),'Meijer']);
+      try{ localStorage.setItem(SAVE,JSON.stringify(sv.slice(-30))); }catch(e){} addPt(k.cx,k.cy,'Meijer',r,true); resolvePts(); return true; } }
+  return false; }
 // a store was found: the walls get repainted (js/enh/buildings.js) and the outside pieces drawn
 function changed(){ ST.dirty=true; try{ const R=window.ROOFS; if(R){ R.walls.cache.clear(); R.walls.sig=''; R.state.at=null; } }catch(e){} }
 // js/enh/buildings.js: the wall look for the building whose middle is (lng,lat)
@@ -162,6 +182,8 @@ onTick(1500,function storeTick(){
   if(moved>250||ST.dirty){ ST.at=[S.lng,S.lat]; ST.dirty=false; safe('stores scan',scanTiles); layers(); safe('stores out',outside); }
   else if(ST.list.some(s=>!s.front)&&performance.now()-(ST.recT||0)>3000){ ST.recT=performance.now(); safe('stores out',outside); }   // waiting for the doors (js/enh/buildings.js)
   const om=ST.ovAt?meters(ST.ovAt[1],ST.ovAt[0],S.lat,S.lng):1e9; if(om>2500&&performance.now()-ST.ovT>60000) scanOverpass();
+  const nm=ST.nsAt?meters(ST.nsAt[1],ST.nsAt[0],S.lat,S.lng):1e9; if(nm>3000) scanSearch();
+  if(PTS.some(q=>!q.done)) safe('stores pts',resolvePts);
 });
-window.STORES={list:ST.list,look,at,add,frontDir,state:ST,refresh:()=>{ ST.dirty=true; }};
+window.STORES={list:ST.list,look,at,add,frontDir,markHere,pts:PTS,state:ST,refresh:()=>{ ST.dirty=true; }};
 })();
