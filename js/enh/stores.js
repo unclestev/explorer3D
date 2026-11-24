@@ -144,14 +144,16 @@ const at=key=>{ if(!key) return null; const e=ST.list.find(s=>s.key===key); if(e
 function ownRec(s){ const kx=111320*Math.cos(s.cy*Math.PI/180), ky=111320;
   let p=s.ring.slice(0,-1).map(q=>[(q[0]-s.cx)*kx,(q[1]-s.cy)*ky]); let a=0; for(let i=0,j=p.length-1;i<p.length;j=i++) a+=(p[j][0]-p[i][0])*(p[j][1]+p[i][1]); if(a<0) p.reverse();   // counter-clockwise
   const E=frontOf(s,p); if(!E) return null; const sm=E.L/2;
-  const d={ei:E.ei,s0:sm-.95,s1:sm+.95,x0:E.a[0]+E.ux*(sm-.95),y0:E.a[1]+E.uy*(sm-.95),x1:E.a[0]+E.ux*(sm+.95),y1:E.a[1]+E.uy*(sm+.95),nx:E.nx,ny:E.ny,dk:9e8+ST.list.indexOf(s)};
+  // two pairs of glass doors either side of a tall pillar (owner's photo of the Oswego Meijer: entrance on the left, exit on the right)
+  const mk=(s0,s1,k)=>({ei:E.ei,s0,s1,x0:E.a[0]+E.ux*s0,y0:E.a[1]+E.uy*s0,x1:E.a[0]+E.ux*s1,y1:E.a[1]+E.uy*s1,nx:E.nx,ny:E.ny,dk:9e8+ST.list.indexOf(s)*2+k});
+  const d=mk(sm-2.45,sm-.5,0), d2=mk(sm+.5,sm+2.45,1);
   // the doors js/enh/buildings.js drew on the store's pieces work too, where they lie on the outline
-  const doors=[d], base=window.ROOFS&&ROOFS.st0?ROOFS.st0():[];
+  const doors=[d,d2], base=window.ROOFS&&ROOFS.st0?ROOFS.st0():[];
   for(const r of base){ if(!covers(r)) continue;
     for(const q of r.doors||[]){ const mx=(q.x0+q.x1)/2, my=(q.y0+q.y1)/2, lng=r.cx+mx/r.kx, lat=r.cy+my/r.ky, X=(lng-s.cx)*kx, Y=(lat-s.cy)*ky, hw=Math.hypot(q.x1-q.x0,q.y1-q.y0)/2;
       for(let i=0;i<p.length;i++){ const a=p[i], b=p[(i+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1]); if(L<2) continue; const ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L;
         const t=(X-a[0])*ux+(Y-a[1])*uy, off=(X-a[0])*uy-(Y-a[1])*ux; if(t<hw+.2||t>L-hw-.2||Math.abs(off)>.8) continue;
-        if(doors.some(o=>o.ei===i&&Math.abs((o.s0+o.s1)/2-t)<2.5)) break;
+        if(doors.some(o=>o.ei===i&&Math.abs((o.s0+o.s1)/2-t)<3.5)) break;
         doors.push({ei:i,s0:t-hw,s1:t+hw,x0:a[0]+ux*(t-hw),y0:a[1]+uy*(t-hw),x1:a[0]+ux*(t+hw),y1:a[1]+uy*(t+hw),nx:uy,ny:-ux,dk:q.dk}); break; } } }
   return {key:s.key,keys:s.keys,id:s.id,cx:s.cx,cy:s.cy,kx,ky,p,h:s.h||hOf(s),house:false,doors,garages:[],bb:s.bb,store:true,E,sm}; }
 // the store's pieces come in as their tiles load: look again (at most every 4 s) and grow the outline to take them in
@@ -175,11 +177,20 @@ function drawDoors(){ const feats=[]; ST.cache=[];
     const put=(s0,s1,o0,o1,b,h,c)=>{ if(s1-s0<.02) return; const a=[E.a[0]+E.ux*s0,E.a[1]+E.uy*s0], z=[E.a[0]+E.ux*s1,E.a[1]+E.uy*s1];
       const ring=[[a[0]+E.nx*o0,a[1]+E.ny*o0],[z[0]+E.nx*o0,z[1]+E.ny*o0],[z[0]+E.nx*o1,z[1]+E.ny*o1],[a[0]+E.nx*o1,a[1]+E.ny*o1]].map(toLL); ring.push(ring[0]);
       feats.push({type:'Feature',properties:{c,b,h},geometry:{type:'Polygon',coordinates:[ring]}}); };
-    put(sm-1.15,sm+1.15,.06,.1,0,2.65,o>.02?'#14171b':'#3b4048');                                          // the frame (a dark doorway once they open)
-    // the automatic doors: both glass leaves slide apart towards their jambs as you come up, and close behind you
-    for(const z of [-1,1]){ const J=sm+z*.95, F=J-z*.92*(1-.92*o), A=Math.min(J,F), B=Math.max(J,F), hx=F+z*.35;
-      put(A,B,.1,.13,.04,2.45,'#27313e'); put(Math.min(F,hx),Math.max(F,hx),.13,.17,1,1.06,'#c7ccd1'); }
-    put(sm-1.6,sm+1.6,.06,.9,2.65,2.85,'#c9ccd0'); }                                                     // a little canopy edge over them
+    const AL='#dfe2e4', GL='#27313e', BK='#16181b';
+    put(sm-2.6,sm+2.6,.04,.08,0,4.7,'#d3d6d8');                                                          // the white storefront wall, tall as the photo's
+    for(const [a0,a1] of [[sm-2.45,sm-.55],[sm+.55,sm+2.45]]){ put(a0,a1,.08,.11,2.75,4.35,'#2a343e'); put((a0+a1)/2-.03,(a0+a1)/2+.03,.11,.14,2.75,4.35,AL); }   // dark glass above, a mullion down the middle
+    put(sm-.5,sm+.5,.04,.16,0,4.7,'#c6c9cb');                                                            // the pillar between the pairs
+    // the automatic doors: each pair's two leaves slide apart towards the jambs as you come up, and close behind you
+    for(const [c0,c1] of [[sm-2.45,sm-.5],[sm+.5,sm+2.45]]){ const cm=(c0+c1)/2;
+      put(c0,c1,.08,.11,0,2.62,o>.02?'#0d0f12':'#3b4048');                                              // the doorway: dark once they open
+      for(const z of [-1,1]){ const J=cm+z*(c1-c0)/2, lw=(c1-c0)/2-.02, F=J-z*lw*(1-.92*o), A=Math.min(J,F), B=Math.max(J,F);
+        put(A,B,.11,.14,.04,2.5,AL);                                                                     // white aluminium frame
+        if(B-A>.3){ put(A+.07,B-.07,.14,.16,.5,2.38,GL); put(A+.04,B-.04,.16,.2,.82,.92,BK); put(A+.04,B-.04,.16,.2,.14,.3,BK); } }   // glass, then the two black bars
+      put(cm-.05,cm+.05,.2,.3,0,.95,BK); }                                                               // black post between each pair's doors
+    put(sm+.5,sm+.56,.1,1.9,0,1.05,BK); put(sm+2.45,sm+2.51,.1,1.9,0,1.05,BK);                           // the black gates in front of the exit doors
+    put(sm+.56,sm+2.45,1.84,1.9,0,1.05,BK);
+    put(sm-2.85,sm+2.85,.06,.9,4.7,4.9,'#c9ccd0'); }                                                     // a little canopy edge over them
   safe('stores',()=>{ const src=map.getSource('stores'); if(src) src.setData({type:'FeatureCollection',features:feats}); }); }
 function layers(){ safe('stores layer',()=>{ if(map.getSource('stores')) return;
   map.addSource('stores',{type:'geojson',data:{type:'FeatureCollection',features:[]},maxzoom:19,tolerance:0});
@@ -189,7 +200,7 @@ function layers(){ safe('stores layer',()=>{ if(map.getSource('stores')) return;
 // the doors are automatic: a sensor within 5 m opens every Meijer entrance, in about half a second, and they shut again when you leave
 ST.op={}; ST.cache=[]; let lastDraw=0;
 FRAME_HOOKS.push(function storeDoors(dt){ if(!ST.cache.length) return false; let ch=false;
-  for(const c of ST.cache){ const near=meters(c.lat,c.lng,S.lat,S.lng)<5, o0=ST.op[c.key]||0, o=Math.max(0,Math.min(1,o0+(near?1:-1)*dt/.55)); if(o!==o0){ ST.op[c.key]=o; ch=true; } }
+  for(const c of ST.cache){ const near=meters(c.lat,c.lng,S.lat,S.lng)<6.5, o0=ST.op[c.key]||0, o=Math.max(0,Math.min(1,o0+(near?1:-1)*dt/.55)); if(o!==o0){ ST.op[c.key]=o; ch=true; } }
   const now=performance.now(); if(ch&&now-lastDraw>45){ lastDraw=now; safe('store doors',drawDoors); } return false; });
 onReady(function stores(){ layers(); setTimeout(()=>safe('stores scan',()=>{ scanTiles(); drawDoors(); }),2500); });
 onTick(1500,function storeTick(){
