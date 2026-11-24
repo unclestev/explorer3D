@@ -571,10 +571,14 @@ function backupCam(dt){ const p=CK.cab&&CK.cab.parts&&CK.cab.parts.screen; if(!p
     const OT=canvasTex(512,Math.round(512*ph/pw),true), ov=mesh(new THREE.PlaneGeometry(pw,ph),new THREE.MeshBasicMaterial({map:OT.t,transparent:true,toneMapped:false,depthWrite:false}),p.grp,false,false); ov.position.z=.0008;
     p.bc={cam,ov,OT,key:''}; }
   p.bc.cam.visible=p.bc.ov.visible=on; if(!on) return;
+  // Park Assist (js/enh/park.js): the camera fills the top-left window of its split screen, like the real one
+  const pk=window.PARK&&PARK.state==='move'&&PARK.camRect?PARK.camRect(p.w,p.h):null, g0=p.grp.children[0].geometry.parameters;
+  if(pk){ p.bc.cam.scale.set(pk[2],pk[3],1); p.bc.cam.position.x=-g0.width/2+(pk[0]+pk[2]/2)*g0.width; p.bc.cam.position.y=g0.height/2-(pk[1]+pk[3]/2)*g0.height; p.bc.ov.visible=false; }
+  else if(p.bc.cam.scale.x!==1){ p.bc.cam.scale.set(1,1,1); p.bc.cam.position.x=p.bc.cam.position.y=0; }
   BC.t-=dt; if(BC.t>0) return; BC.t=QL>=2?.05:QL>=1?.066:.1;
   // the camera: on the tailgate, ~1 m up, looking back and down
   const e=CK.eyeLocal; if(!e) return; const mm=e.mm, d=(S.hdg-S.camB)*DEG, bx=-Math.sin(d), bz=Math.cos(d), Lr=rearLen()-.15;
-  const c=BC.cam; c.aspect=p.w/p.h; c.position.set(bx*Lr/mm,1.0/mm,bz*Lr/mm); c.near=.2/mm; c.far=300/mm; c.up.set(0,1,0);
+  const c=BC.cam; c.aspect=pk?pk[2]*p.w/(pk[3]*p.h):p.w/p.h; c.position.set(bx*Lr/mm,1.0/mm,bz*Lr/mm); c.near=.2/mm; c.far=300/mm; c.up.set(0,1,0);
   c.lookAt(c.position.x+bx*100,c.position.y-48,c.position.z+bz*100); c.updateProjectionMatrix();
   if(!BC.bmat) BC.bmat=new THREE.MeshLambertMaterial({color:0x8e939a});
   const occ=window.TRAFFIC&&TRAFFIC.occMesh&&TRAFFIC.occMesh(), om=occ&&occ.material, ov=occ&&occ.visible;

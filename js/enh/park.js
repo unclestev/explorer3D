@@ -45,7 +45,24 @@ function cancel(msg){ if(R.state==='off') return; R.state=msg?'cancel':'off'; R.
   if(msg) setTimeout(()=>{ if(R.state==='cancel'){ R.state='off'; dirtyScreen(); } },2500); dirtyScreen(); }
 function dirtyScreen(){ if(typeof dirty!=='undefined') dirty=true; }
 
-// ---------- scanning, in the background ----------
+// ---------- finding a space ----------
+// The painted stalls (js/enh/parking.js) are the spaces: while you drive past, the first empty one beside you on the
+// signalled side that you've just passed is picked, and the car parks with its middle on that stall's middle, square
+// to its lines. Where no stalls are drawn (no lot in the map here), a space the size of one is assumed beside you.
+const SD=5.4;                                                      // stall depth (parking.js)
+const kx=()=>111320*Math.cos(S.lat*Math.PI/180);
+const toL=(lng,lat,c)=>[(lng-c.lng)*kx(),(lat-c.lat)*111320];    // metres east, north of c
+const hv=d=>[Math.sin(d*Math.PI/180),Math.cos(d*Math.PI/180)];      // a compass heading as an east/north unit vector
+function findStall(){ const list=window.PARKING&&PARKING.stalls||[], h=hv(S.hdg), sd=[h[1]*R.side,-h[0]*R.side];   // sd: toward the signalled side
+  let best=null;
+  for(const st of list){ const d=toL(st.lng,st.lat,{lng:S.lng,lat:S.lat}); if(Math.abs(d[0])>20||Math.abs(d[1])>20) continue;
+    const iv=hv(st.into); if(iv[0]*sd[0]+iv[1]*sd[1]<.85) continue;    // opens toward the aisle you're in, square to you
+    const lat=d[0]*sd[0]+d[1]*sd[1], along=d[0]*h[0]+d[1]*h[1];          // across to it, and how far ahead (- = passed)
+    if(lat<5||lat>11||along>-.5||along<-6) continue;
+    if(!best||along>best.along) best={lng:st.lng,lat:st.lat,into:st.into,along,real:true}; }
+  return best; }
+function fakeStall(){ const h=hv(S.hdg), sd=[h[1]*R.side,-h[0]*R.side], o=3.3+SD/2, b=-1.5;
+  const e=sd[0]*o+h[0]*b, n=sd[1]*o+h[1]*b; return {lng:S.lng+e/kx(),lat:S.lat+n/111320,into:(S.hdg+R.side*90+360)%360,real:false}; }
 setInterval(()=>{
   if(R.state==='off') return;
   if(!OK()){ cancel(null); return; }
@@ -53,12 +70,41 @@ setInterval(()=>{
     if(window.SIG&&SIG.dir) R.side=SIG.dir>0?1:-1;                 // the turn signal picks the side
     const d=meters(R.last[1],R.last[0],S.lat,S.lng); R.last=[S.lng,S.lat]; if(S.v>.2) R.dist+=d;
     if(Math.abs(S.v)*2.237>14){ cancel('Too fast — Park Assist off'); return; }
-    if(R.dist>8){ R.state='found'; say('🅿️ Space found — stop',1600); } }
+    const hasStalls=!!(window.PARKING&&PARKING.stalls&&PARKING.stalls.length);
+    const f=R.dist>2?findStall():null;
+    if(f||(R.dist>(hasStalls?40:8))){ R.T=f||fakeStall(); R.state='found'; say('🅿️ Space found — stop',1600); } }
   if(R.state==='found'&&Math.abs(S.v)<.15) R.state='ready';
 },100);
 
 // ---------- driving it (called by js/game.js every frame while on) ----------
-const V=1.3;                                                       // walking pace, m/s
+// The car's position (S) moves like a rear axle, so steering it along a line is "pure pursuit": aim at a point a few
+// metres along the line and turn the wheels to arc onto it. Backing in follows the stall's middle line into the
+// stall; if it comes in crooked it pulls forward along that line and tries again (up to 3 times), like the real one.
+const vSet=()=>1.7/(typeof SPEEDUP!=='undefined'?SPEEDUP:1);       // ~1.7 m/s across the ground (≈4 mph)
+const angN=a=>{ while(a>Math.PI) a-=2*Math.PI; while(a<-Math.PI) a+=2*Math.PI; return a; };
+function poseAt(px,py,hdg){ const T=R.T, o=hv((T.into+180)%360), a=[o[1],-o[0]];
+  return {s:px*o[0]+py*o[1], e:px*a[0]+py*a[1], o, p:[px,py], hdg, th:angd(hdg,(T.into+180)%360)}; }   // s: out from the stall's middle; e: off its centre line; th: heading off "nose out"
+function pose(){ const p=toL(S.lng,S.lat,R.T); return poseAt(p[0],p[1],S.hdg); }
+// steering (-1..1 of full lock) to follow the stall's centre line, which runs on through the stall so it squares up too
+function pursue(P,dir,Ld,lock){ const sL=P.s+dir*Ld, L=[P.o[0]*sL,P.o[1]*sL], d=[L[0]-P.p[0],L[1]-P.p[1]], dist=Math.hypot(d[0],d[1]);
+  const m=hv(dir<0?(P.hdg+180)%360:P.hdg), al=angN(Math.atan2(d[0],d[1])-Math.atan2(m[0],m[1])), k=2*Math.sin(al)/dist;
+  return Math.max(-1,Math.min(1,Math.atan(WBm()*k)*dir/lock)); }
+const WBm=()=>typeof WB!=='undefined'?WB:3.05;
+const LD=2.8;
+// backing in: full lock round the corner until it's nearly square, then follow the centre line in
+const backSteer=(P,lock)=>Math.abs(P.th)>22?Math.sign(P.th):P.s<1.6?Math.max(-1,Math.min(1,.5*pursue(P,-1,LD,lock)+P.th*Math.PI/180*2/lock)):pursue(P,-1,LD,lock);   // last bit: square up
+// try the back-in from here (the same steering, a simple car) and see where it ends up in the stall
+function alongPast(){ const a=hv(R.h0), p=toL(S.lng,S.lat,R.T); return p[0]*a[0]+p[1]*a[1]; }   // how far past the space, along the aisle
+function plan(P0,steer0){ const lock=lockP(), dt=.05, ds=vSet()*(typeof SPEEDUP!=='undefined'?SPEEDUP:1)*dt;
+  let x=P0.p[0], y=P0.p[1], h=P0.hdg, sr=steer0||0, yr=0, ok=true;
+  for(let i=0;i<500;i++){ const P=poseAt(x,y,h); if(P.s<=0){ P.ok=ok; P.mth=P0.mth; P.me=P0.me; return P; }
+    if(P.s<SD/2+.2&&P.s>.8&&(Math.abs(P.e)>.6||Math.abs(P.th)>22)){ ok=false; if(P.s>SD/2-.2){ P0.mth=P.th; P0.me=P.e; } }   // would come in crooked (the B phase's test)
+    const st=backSteer(P,lock); sr+=(st*lock-sr)*Math.min(1,dt*9); yr+=(ds/dt/WBm()*Math.tan(sr)-yr)*Math.min(1,dt/.13);
+    h-=yr*dt*180/Math.PI; const hr=h*Math.PI/180; x-=Math.sin(hr)*ds; y-=Math.cos(hr)*ds; }
+  return null; }
+const lockP=()=>typeof steerLock==='function'?steerLock(vSet()):.55;
+function finish(){ R.state='done'; R.msgT=performance.now(); say('🅿️ Park Assist complete',2200);
+  setTimeout(()=>{ if(R.state==='done'){ R.state='off'; dirtyScreen(); } },4500); return {st:0,gas:0,brake:1}; }
 function control(dt,inp){
   if(R.state==='scan'||R.state==='found'||R.state==='off'||R.state==='cancel') return null;   // you drive
   if(R.state==='done') return Math.abs(S.v)>.05?{st:0,gas:0,brake:1}:null;
@@ -66,20 +112,31 @@ function control(dt,inp){
   if(inp&&(Math.abs(inp.st)>.35||inp.gas>.35)){ cancel('Park Assist cancelled'); return null; }
   const h=held()&&!(inp&&inp.brake>.3); R.held=h;
   if(R.state==='ready'){ if(!h) return {st:0,gas:0,brake:1};
-    R.state='move'; R.phase='A'; R.h0=S.hdg; R.ht=S.hdg-R.side*90; R.pd=0; R.last=[S.lng,S.lat]; R.stuck=0; }
+    R.state='move'; R.phase='A'; R.h0=S.hdg; R.pd=0; R.last=[S.lng,S.lat]; R.stuck=0; R.tries=0; R.backs=0;
+    if(alongPast()>3) R.phase='Z'; }
   if(!h){ R.dir=0; return {st:R.lastSt||0,gas:0,brake:1}; }       // let go: stop and wait
   const d=meters(R.last[1],R.last[0],S.lat,S.lng); R.last=[S.lng,S.lat]; R.pd+=d;
-  let st=0, vt=0;
-  if(R.phase==='A'){ st=-R.side; vt=V; if(R.pd>3.6){ R.phase='B'; R.pd=0; } }               // pull ahead, turning away
-  else if(R.phase==='B'){ st=R.side; vt=-V; if(Math.abs(angd(S.hdg,R.ht))<5){ R.phase='C'; R.pd=0; } }   // back in, turning in
-  else if(R.phase==='C'){ const e=angd(R.ht,S.hdg); st=Math.max(-1,Math.min(1,-e/15)); vt=-V*.8;   // straighten, back the rest of the way
-    if(R.pd>3.2){ R.state='done'; R.msgT=performance.now(); say('🅿️ Park Assist complete',2200); setTimeout(()=>{ if(R.state==='done'){ R.state='off'; dirtyScreen(); } },4500); return {st:0,gas:0,brake:1}; } }
+  const P=pose(), lock=lockP();
+  let st=0, vt=0, V=vSet();
+  if(R.phase==='Z'){ vt=-V; st=Math.max(-1,Math.min(1,angd(S.hdg,R.h0)/12));   // rolled too far past it: back up along the aisle first
+    if(alongPast()<1.2||R.pd>12){ R.phase='A'; R.pd=0; } }
+  else if(R.phase==='A'){ vt=V;                                          // pull ahead, angling away, until backing in would land square in the stall
+    st=Math.abs(angd(S.hdg,R.h0))<22?-R.side*.55:0;
+    const E=plan(P,S.steer); R.plan=E;
+    if(E&&E.ok&&Math.abs(E.e)<.2&&Math.abs(E.th)<4){ R.phase='B'; R.pd=0; }
+    else if(R.pd>9){ if(R.backs<2){ R.backs++; R.phase='Z'; } else R.phase='B'; R.pd=0; } }
+  else if(R.phase==='B'){ vt=-V; st=backSteer(P,lock);              // back in along the stall's centre line
+    if(P.s<SD/2+.2&&P.s>.8&&(Math.abs(P.e)>.65||Math.abs(P.th)>24)&&R.tries<3){ R.phase='F'; R.pd=0; R.tries++; }   // coming in crooked: pull up and try again
+    if(P.s<=.05) return finish(); }
+  else if(R.phase==='F'){ vt=V*.8; st=pursue(P,1,LD,lock);         // forward along the centre line, then back in again
+    const E=plan(P,S.steer);
+    if((P.s>SD/2+1.2&&E&&E.ok&&Math.abs(E.e)<.12&&Math.abs(E.th)<3)||P.s>SD/2+6||R.pd>7){ R.phase='B'; R.pd=0; } }
   R.dir=Math.sign(vt); R.lastSt=st;
-  if(Math.abs(S.v)<.05&&R.pd>0) R.stuck+=dt; else R.stuck=0;
-  if(R.stuck>2.5){ cancel('Park Assist stopped — something is in the way'); return {st:0,gas:0,brake:1}; }
+  if(Math.abs(S.v)<.02&&R.pd>0) R.stuck+=dt; else R.stuck=0;
+  if(R.stuck>3){ cancel('Park Assist stopped — something is in the way'); return {st:0,gas:0,brake:1}; }
   // a gentle speed hold: gas toward the target speed, brake if it's going too fast or the wrong way
   const err=vt-S.v; let gas=Math.max(-1,Math.min(1,err*.9+Math.sign(vt)*.18)), brake=0;
-  if(Math.sign(S.v)===-Math.sign(vt)&&Math.abs(S.v)>.2){ gas=0; brake=.6; }
+  if(Math.sign(S.v)===-Math.sign(vt)&&Math.abs(S.v)>.12){ gas=0; brake=.6; }
   return {st,gas,brake};
 }
 function cancelIfDriving(){ if(R.state!=='off') cancel(null); }
@@ -127,8 +184,8 @@ function draw(sc){ if(R.state==='off'||!OK()) return false; const x=sc.T.x, W=sc
     x.restore(); };
   const parked=(cx,cy,s,side,n,gap)=>{ x.fillStyle='#b8bec9'; for(let i=0;i<n;i++){ if(i===gap) continue; const y=cy+(i-(n-1)/2)*s*1.15; rr(x,cx+side*s*2.2-s*.5,y-s*.45,s*1.0,s*.9,s*.2); x.fill(); } };
   if(t.view==='move'){                                             // the split screen, like the real one
-    const T0=Math.round(6.5*u), tall=H>W*1.05;
-    const cam=tall?[0,T0,W*.6,H*.44]:[0,T0,W*.5,H-T0], top=tall?[W*.6,T0,W*.4,H*.44]:[W*.5,T0,W*.5,(H-T0)*.46],
+    const T0=Math.round(6.5*u), tall=H>W*1.05, cr=camRect(W,H);
+    const cam=[cr[0]*W,cr[1]*H,cr[2]*W,cr[3]*H], top=tall?[W*.6,T0,W*.4,H*.44]:[W*.5,T0,W*.5,(H-T0)*.46],
           inf=tall?[0,T0+H*.44,W,H-T0-H*.44]:[W*.5,T0+(H-T0)*.46,W*.5,(H-T0)*.54];
     // camera: the row of cars behind (or ahead) with the guide lines, bending the way it's steering
     { const [X,Y,w,h]=cam; x.save(); x.beginPath(); x.rect(X,Y,w,h); x.clip();
@@ -141,12 +198,16 @@ function draw(sc){ if(R.state==='off'||!OK()) return false; const x=sc.T.x, W=sc
         x.moveTo(X+w*(1-a)+w*.1,Y+h); x.quadraticCurveTo(X+w*(1-a)+bend*.4,Y+h*.7,X+w*(1-a-.08)+bend,Y+h*.45); x.stroke(); }
       x.fillStyle='rgba(0,0,0,.5)'; x.font='500 '+Math.round(2.8*u)+'px system-ui'; const lab=R.dir<0?'Rear camera':'Front camera', lw=x.measureText(lab).width+3*u;
       rr(x,X+1.5*u,Y+h-5.5*u,lw,4*u,1.2*u); x.fill(); x.fillStyle='#fff'; x.textAlign='left'; x.fillText(lab,X+3*u,Y+h-3.5*u); x.textAlign='center'; x.restore(); }
-    // the 360° top view: the stalls beside you and your car turning into one
+    // the 360° top view: the stall you're going into (its painted lines) and your car where it really is
     { const [X,Y,w,h]=top; x.save(); x.beginPath(); x.rect(X,Y,w,h); x.clip(); x.fillStyle='#2a2f37'; x.fillRect(X,Y,w,h);
-      const s=Math.min(w,h)*.14, cx=X+w*.42, cy=Y+h/2, sx=cx+R.side*s*2.6; x.strokeStyle='#e5e7eb'; x.lineWidth=Math.max(2,u*.35);
-      for(let i=-2;i<=2;i++){ const yy=cy+(i-.5)*s*2; x.beginPath(); x.moveTo(sx-R.side*s*1.1,yy); x.lineTo(sx+R.side*s*1.6,yy); x.stroke(); }
-      x.fillStyle='#6b7280'; for(const k of [-1,1]){ rr(x,sx-s*.9+R.side*s*.3,cy+(k-.5)*s*2+s*.15,s*1.8,s*1.7,s*.3); x.fill(); }   // the cars either side of the space
-      car(cx,cy,s,(S.hdg-R.h0)*Math.PI/180,false); x.restore(); }
+      const P=R.T?pose():{s:6,e:0,th:-R.side*90}, k=Math.min(w/9,h/13), cx=X+w/2, cy=Y+h*.66, hw=1.375, hd=SD/2;
+      x.strokeStyle='#e5e7eb'; x.lineWidth=Math.max(2,u*.35);
+      for(const e of [-3*hw,-hw,hw,3*hw]){ x.beginPath(); x.moveTo(cx+e*k,cy-hd*k); x.lineTo(cx+e*k,cy+hd*k); x.stroke(); }
+      x.beginPath(); x.moveTo(cx-3*hw*k,cy+hd*k); x.lineTo(cx+3*hw*k,cy+hd*k); x.stroke();
+      x.strokeStyle='rgba(34,197,94,.9)'; x.setLineDash([u,u]); x.strokeRect(cx-hw*k+3,cy-hd*k+3,2*hw*k-6,2*hd*k-6); x.setLineDash([]);   // the target space
+      x.save(); x.translate(cx+P.e*k,cy-P.s*k); x.rotate(P.th*Math.PI/180); x.fillStyle='#d1d5db'; rr(x,-.95*k,-2.45*k,1.9*k,4.9*k,.5*k); x.fill();
+      x.fillStyle='#4b5563'; rr(x,-.75*k,-1.2*k,1.5*k,.9*k,.2*k); x.fill(); rr(x,-.75*k,1.1*k,1.5*k,.7*k,.2*k); x.fill(); x.restore();
+      x.restore(); }
     // below: the words, the big arrow, the little car
     { const [X,Y,w,h]=inf; const mx=X+w/2; x.fillStyle='#1b2433'; x.font='400 '+Math.round(3.6*u)+'px system-ui';
       t.lines.forEach((l,i)=>x.fillText(l,mx,Y+h*.13+i*4.6*u));
@@ -163,7 +224,9 @@ function draw(sc){ if(R.state==='off'||!OK()) return false; const x=sc.T.x, W=sc
     else if(t.view==='done'){ x.fillStyle='#22c55e'; x.beginPath(); x.arc(W/2,H*.45,10*u,0,6.3); x.fill(); x.strokeStyle='#fff'; x.lineWidth=u*2; x.beginPath(); x.moveTo(W/2-5*u,H*.45); x.lineTo(W/2-1*u,H*.45+4*u); x.lineTo(W/2+6*u,H*.45-4*u); x.stroke(); }
   }
   x.restore(); sc.T.t.needsUpdate=true; return true; }
+// where the camera window sits on the split screen (fractions of the screen): js/enh/cockpit.js puts the real backup camera there
+function camRect(W,H){ const u=Math.min(W,H)/100, T0=Math.round(6.5*u)/H; return H>W*1.05?[0,T0,.6,.44]:[0,T0,.5,1-T0]; }
 function rr(x,X,Y,w,h,r){ x.beginPath(); x.moveTo(X+r,Y); x.arcTo(X+w,Y,X+w,Y+h,r); x.arcTo(X+w,Y+h,X,Y+h,r); x.arcTo(X,Y+h,X,Y,r); x.arcTo(X,Y,X+w,Y,r); x.closePath(); }
 
-window.PARK={get active(){ return R.state!=='off'; },get state(){ return R.state; },start,cancel:()=>cancel(null),control,draw,R};
+window.PARK={get active(){ return R.state!=='off'; },get state(){ return R.state; },start,cancel:()=>cancel(null),control,draw,camRect,R,pose:()=>R.T&&pose()};
 })();
