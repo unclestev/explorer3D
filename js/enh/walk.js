@@ -924,6 +924,6 @@ function walkStep(dt,st,gas,now){
 window.WALK={inStore:()=>!!(ROOM.sw&&ROOM.sw.length),storeLights:(k,on)=>flipLights(k,on),step:(dt,st,gas,now)=>{ try{ walkStep(dt,st,gas,now); }catch(e){ console.warn('walk',e); renderer.render(scene,camera); } },
   parked:()=>PK.mode, getOut:()=>safe('walk',getOut), toggle:()=>safe('walk',getOut), state:W, person, parkedAt:PK,   /* toggle: the F key (js/enh/controls.js) */
   insideId:()=>IN.rec?IN.rec.id:null, inside:IN,
-  setInside:r=>safe('inside',()=>{ if((r?r.key:null)!==IN.key) setInside(r); }), redrawInside:()=>{ if(IN.rec) safe('inside draw',()=>{ if(ROOM.g) garUpdate(); else drawInterior(IN.rec); }); }, inRec};
+  setInside:r=>safe('inside',()=>{ if((r?r.key:null)!==IN.key) setInside(r); }), deepIn,redrawInside:()=>{ if(IN.rec) safe('inside draw',()=>{ if(ROOM.g) garUpdate(); else drawInterior(IN.rec); }); }, inRec};
 updateBtn();
 })();

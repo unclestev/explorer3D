@@ -90,7 +90,7 @@ FRAME_HOOKS.push(function garageStep(dt){
   // in the car: the cut-away view while the car is inside a house's garage
   if((mode==='car'||mode==='tractor')&&window.WALK&&WALK.setInside){
     let r=null; const cur=WALK.inside&&WALK.inside.rec;
-    if(cur&&WALK.inRec(cur,S.lat,S.lng)) r=cur; else for(const q of near(S.lat,S.lng,4)) if(WALK.inRec(q,S.lat,S.lng)){ r=q; break; }
+    if(cur&&WALK.inRec(cur,S.lat,S.lng)) r=cur; else for(const q of near(S.lat,S.lng,4)) if(WALK.inRec(q,S.lat,S.lng)&&(!WALK.deepIn||WALK.deepIn(q,S.lat,S.lng,2.4))){ r=q; break; }   // well inside (a garage), not just over the outline (owner 2026-11-24)
     if((r?r.key:null)!==(cur?cur.key:null)){ WALK.setInside(r); moved=true; } }
   return moved; });
 // the map rebuilds the roofs now and then (new tiles, moving on): put the doors' state back
