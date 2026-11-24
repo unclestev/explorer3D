@@ -24,9 +24,10 @@ const W={v:0,phase:0,amp:0,run:0,order:0,blockT:0,near:false,lastAnim:false};
 const WALKV=1.4, RUNV=5.4, BACKV=.9;                              // m/s on the speedometer (3.1 / 12 / 2 mph)
 
 /* ---------- the person (metres, front = -z, feet on y = 0) ---------- */
-function buildPerson(){
+function buildPerson(pal){
+  pal=pal||{};
   const mat=c=>new THREE.MeshLambertMaterial({color:c,transparent:true,opacity:1});   // transparent: drawn in order with the car photo
-  const skin=mat(0xc98f6a), hair=mat(0x3b2a1e), top=mat(0x6f7780), jeans=mat(0x2c3a52), shoe=mat(0xe8e6e1), sole=mat(0x6b6b6b);
+  const skin=mat(pal.skin||0xc98f6a), hair=mat(pal.hair||0x3b2a1e), top=mat(pal.top||0x6f7780), jeans=mat(pal.jeans||0x2c3a52), shoe=mat(0xe8e6e1), sole=mat(0x6b6b6b);
   const cyl=(rt,rb,h,m,seg)=>new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg||10),m);
   const root=new THREE.Group(), fig=new THREE.Group(); root.add(fig);
   const parts={};
@@ -322,7 +323,7 @@ function buildRoom(r){
   g.add(meshOf(wall,wallM,wuv)); g.add(meshOf(trim,trimM));
   LKEY=r.key; { const sv=LSWS[r.key]; LSW[0]=sv?sv[0]:true; LSW[1]=sv?sv[1]:true; }     // each building keeps its own switch positions
   ROOM.dimM=[wallM,floorM,ceilM];
-  if(LK.trof){ troffers(g,p,HC); switches(g,r,HC,2); }
+  if(LK.trof){ troffers(g,p,HC); switches(g,r,HC,2); if(SH) greeterFig(g,r,SH); }
   else { let cx=0,cy=0; for(const q of p){ cx+=q[0]; cy+=q[1]; } cx/=p.length; cy/=p.length;       // a ceiling light in the middle of the room
     if(inP(p,cx,cy)){ const [x3,z3]=to3(cx,cy);
       const base=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,.03,24),trimM); base.position.set(x3,HC-.015,z3); g.add(base);
@@ -331,19 +332,30 @@ function buildRoom(r){
     switches(g,r,HC,1); }
   // door leaves, hinged at the jamb; double doors on the wide glass entrances
   ROOM.leaves=[];
-  for(const d of r.doors){ const W0=d.s1-d.s0, two=W0>1.5, lw=two?(W0-.06)/2:W0-.04, glass=two;
+  const SEE=()=>STX.see||(STX.see=new THREE.MeshLambertMaterial({color:0x9db4c6,transparent:true,opacity:.22,depthWrite:false,side:THREE.DoubleSide}));   // clear glass
+  const AUTO=!!r.store;                                              // store entrances are automatic: no knobs, they open by themselves
+  for(const d of r.doors){ const W0=d.s1-d.s0, two=W0>1.5, lw=two?(W0-.06)/2:W0-.04, glass=two||AUTO;
     const leafM=glass?rmat('glassdoor',0x2f3e4e,0x0a1420):rmat('door',0x7a5236,0x1a120c);
     const L=Math.hypot(d.x1-d.x0,d.y1-d.y0)||1, ux=(d.x1-d.x0)/L, uy=(d.y1-d.y0)/L;
     for(const side of two?[0,1]:[0]){
       const hx=side?d.x1-ux*.02:d.x0+ux*.02, hy=side?d.y1-uy*.02:d.y0+uy*.02;    // hinge point on the jamb
       const cdx=side?-ux:ux, cdy=side?-uy:uy;                        // closed: along the wall, from the hinge
       const pv=new THREE.Group(); const [hx3,hz3]=to3(hx-d.nx*.06,hy-d.ny*.06); pv.position.set(hx3,0,hz3);
-      const leaf=new THREE.Mesh(new THREE.BoxGeometry(lw,2.04,.045),leafM); leaf.position.set(lw/2,1.03,0); pv.add(leaf);
-      const kn=new THREE.Mesh(new THREE.SphereGeometry(.03,8,6),rmat('knob',0xc9a14a,0x30240c)); kn.position.set(lw-.08,1.0,.04); pv.add(kn);
-      const kn2=kn.clone(); kn2.position.z=-.04; pv.add(kn2);
+      const leaf=new THREE.Mesh(new THREE.BoxGeometry(lw,2.04,.045),AUTO?rmat('alu',0xdfe2e4,0x282a2c):leafM); leaf.position.set(lw/2,1.03,0); pv.add(leaf);
+      if(AUTO){ const gl=new THREE.Mesh(new THREE.BoxGeometry(lw-.16,1.5,.05),SEE()); gl.position.set(lw/2,1.3,0); pv.add(gl);   // a white aluminium door round dark glass...
+        for(const [y,h,w] of [[.85,.07,lw-.16],[.2,.14,lw-.1]]){ const bar=new THREE.Mesh(new THREE.BoxGeometry(w,h,.07),rmat('blackbar',0x16181b,0x050505)); bar.position.set(lw/2,y,0); pv.add(bar); }
+        const st=new THREE.Mesh(new THREE.BoxGeometry(.18,.18,.056),new THREE.MeshBasicMaterial({color:0xf1d21c})); st.position.set(lw/2,1.3,0); pv.add(st); }   // ...with the photo's two black bars
+      else { const kn=new THREE.Mesh(new THREE.SphereGeometry(.03,8,6),rmat('knob',0xc9a14a,0x30240c)); kn.position.set(lw-.08,1.0,.04); pv.add(kn);
+        const kn2=kn.clone(); kn2.position.z=-.04; pv.add(kn2); }
       const angC=Math.atan2(-to3(cdx,cdy)[1],cdx), angO=Math.atan2(-to3(-d.nx,-d.ny)[1],-d.nx);   // rotation.y for a leaf pointing along / in
       let dA=angO-angC; dA=((dA+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI;
-      pv.rotation.y=angC; g.add(pv); ROOM.leaves.push({pv,angC,dA,d,o:0}); } }
+      pv.rotation.y=angC; g.add(pv); ROOM.leaves.push({pv,angC,dA,d,o:0,auto:AUTO}); } }
+  // lit EXIT signs on the inside, over every way out (owner 2026-11-23). Unlit-material boxes: they are not part of ROOM.tro /
+  // ROOM.dimM, so the light switches never touch them — always on, like the real ones on their own circuit.
+  for(const d of r.doors){ const a=p[d.ei], b=p[(d.ei+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1])||1, ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux, t=(d.s0+d.s1)/2;
+    const [x3,z3]=to3(a[0]+ux*t-nx*(TH2+.026),a[1]+uy*t-ny*(TH2+.026)), [dx3,dz3]=to3(-nx,-ny), y3=Math.min(DH+.3,HC-.13), ry=Math.atan2(dx3,dz3);   // facing into the room
+    const sg=new THREE.Mesh(new THREE.BoxGeometry(.36,.16,.05),exitMats()); sg.position.set(x3,y3,z3); sg.rotation.y=ry; g.add(sg);
+    const gl=new THREE.Mesh(new THREE.PlaneGeometry(.95,.6),exitGlow()); gl.position.set(x3+dx3*.04,y3,z3+dz3*.04); gl.rotation.y=ry; gl.renderOrder=4; g.add(gl); }
   // the garage door: a panel across the opening that rolls up with the opener
   ROOM.gar=[];
   for(const q of r.garages||[]){ const [ax,az]=to3(q.x0-q.nx*.08,q.y0-q.ny*.08), [bx,bz]=to3(q.x1-q.nx*.08,q.y1-q.ny*.08), W0=Math.hypot(bx-ax,bz-az);
@@ -351,6 +363,19 @@ function buildRoom(r){
     m.position.set((ax+bx)/2,0,(az+bz)/2); m.rotation.y=-Math.atan2(bz-az,bx-ax); g.add(m); ROOM.gar.push({m,q}); }
   for(const o of g.children) o.traverse(c=>{ if(c.isMesh){ if(!c.renderOrder) c.renderOrder=1; c.frustumCulled=false; } });
   scene.add(g); ROOM.g=g; ROOM.key=r.key; ROOM.r=r; garUpdate(); }
+/* exit signs: a white-faced box with red EXIT letters and a faint red halo, drawn unlit so it glows in a dark room too */
+let EXM=null, EXG=null;
+function exitMats(){ if(EXM) return EXM;
+  const c=document.createElement('canvas'); c.width=256; c.height=112; const x=c.getContext('2d');
+  x.fillStyle='#f6f3ee'; x.fillRect(0,0,256,112); x.strokeStyle='#8f1d1d'; x.lineWidth=5; x.strokeRect(4,4,248,104);
+  x.fillStyle='#e0141b'; x.font='bold 84px Arial, Helvetica, sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText('EXIT',128,60);
+  const tex=new THREE.CanvasTexture(c); tex.anisotropy=4;
+  const side=new THREE.MeshBasicMaterial({color:0xb7b3ab}), face=new THREE.MeshBasicMaterial({map:tex,toneMapped:false});
+  EXM=[side,side,side,side,face,side]; return EXM; }
+function exitGlow(){ if(EXG) return EXG;
+  const c=document.createElement('canvas'); c.width=c.height=64; const x=c.getContext('2d'), gr=x.createRadialGradient(32,32,2,32,32,32);
+  gr.addColorStop(0,'rgba(255,40,40,.55)'); gr.addColorStop(.45,'rgba(255,30,30,.18)'); gr.addColorStop(1,'rgba(255,0,0,0)'); x.fillStyle=gr; x.fillRect(0,0,64,64);
+  EXG=new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false,side:THREE.DoubleSide}); return EXG; }
 /* store ceilings and lights (owner 2026-11-23, a photo of the lights inside Meijer): 2 x 2 ft speckled ceiling tiles in a
    white grid, and 2 x 4 ft parabolic-louvre troffers — a grid of deep shiny cells, bright where they catch the tubes and
    blue-grey in their shadows — in rows across the store */
@@ -439,6 +464,26 @@ function switches(g,r,HC,n){ ROOM.sw=[]; const d=r.doors[0]; if(!d){ lightsApply
     const [lx,lz]=to3(...at(s+off,.225)); lv.position.set(lx,1.2,lz); lv.rotation.y=ang+Math.PI/2; g.add(lv);
     ROOM.sw.push({lv,k,pos:at(s+off,.6)}); }
   lightsApply(); }
+/* the greeter (owner 2026-11-23: "a greeter at the entrance of every Meijer … and every Walmart"): a plain team member in the
+   store's colour shirt (no logos) standing just inside the front doors, facing them, who waves when you come in. The welcome
+   is spoken by js/enh/stores.js `STORES.greet` when you step inside (⚙️ A/V → Store greeter switches the voice off). */
+function greeterFig(g,r,SH){ let d=null, bd=1e9; const me=loc(r,S.lat,S.lng);                    // the door you came in by: the one nearest you as the room is built
+  for(const q of r.doors){ const dd=Math.hypot(me[0]-(q.x0+q.x1)/2,me[1]-(q.y0+q.y1)/2); if(dd<bd){ bd=dd; d=q; } }
+  if(!d) return;
+  const p=r.p, a=p[d.ei], b=p[(d.ei+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1])||1, ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux;
+  const at=(t,o)=>[a[0]+ux*t-nx*o,a[1]+uy*t-ny*o], mid=(d.s0+d.s1)/2; let pos=null;
+  for(const t of [d.s0-1.1,d.s1+1.1,d.s0-2.2,d.s1+2.2]){ const q=at(t,1.5); if(t>.6&&t<L-.6&&inP(p,q[0],q[1])){ pos=q; break; } }
+  if(!pos) return;
+  const walmart=(SH.brand||'')==='Walmart', who=buildPerson({top:walmart?0x2a6ab3:0xc4343a,jeans:0x2b2e36,hair:walmart?0x4a3426:0x1f1a17,skin:walmart?0xd7a47c:0xa8714f});
+  who.visible=true; who.traverse(o=>{ if(o.isMesh){ o.renderOrder=5; o.frustumCulled=false; if(o.material&&o.material!==shadow.material){ o.material.transparent=false; o.material.opacity=1; } } });   // plain opaque: always drawn with the room
+  const [x3,z3]=to3(pos[0],pos[1]), dm=at(mid,0), fx=dm[0]-pos[0], fy=dm[1]-pos[1];
+  who.position.set(x3,0,z3); who.rotation.y=Math.atan2(-fx,fy);            // front is -z; face the doors
+  const P=who.userData; P.hipL.rotation.x=P.hipR.rotation.x=0; P.kneeL.rotation.x=P.kneeR.rotation.x=0; P.elL.rotation.x=P.elR.rotation.x=.15;
+  g.add(who); ROOM.gr={who,P,pos,w:0,t:Math.random()*6}; }
+function greeterTick(dt,q){ const G=ROOM.gr; if(!G) return; G.t+=dt; const d=Math.hypot(q[0]-G.pos[0],q[1]-G.pos[1]), want=d<9?1:0;
+  G.w+=Math.max(-1,Math.min(1,want-G.w))*dt*2.2; const w=G.w, P=G.P;
+  P.shR.rotation.x=.05+w*2.35; P.shR.rotation.z=-.07+Math.sin(G.t*7)*.32*w; P.elR.rotation.x=.15+w*.5+Math.sin(G.t*7)*.12*w;   // the right arm goes up and waves
+  P.shL.rotation.x=.04; P.up.rotation.x=-.02; P.up.rotation.y=Math.sin(G.t*.8)*.05*(1-w*.5); }
 const LSWS={}; let LKEY=null;                                     // switch positions by building
 function lightsApply(){ if(ROOM.sw&&ROOM.sw.length===1) LSW[1]=LSW[0]; if(LKEY) LSWS[LKEY]=LSW.slice();
   for(const k of [0,1]){ const m=ROOM.tro&&ROOM.tro[k]; if(m){ m.color.setHex(LSW[k]?0xffffff:0x3b3f47); m.needsUpdate=true; } for(const o of (ROOM.glow&&ROOM.glow[k])||[]) o.visible=LSW[k]; }
@@ -459,7 +504,7 @@ function swLabel(){ const one=ROOM.sw&&ROOM.sw.length===1; [...swBtn.children].f
 function switchNear(){ const r=ROOM.r; let near=false;
   if(r&&ROOM.sw&&ROOM.sw.length&&mode==='walk'){ const q=loc(r,S.lat,S.lng); near=ROOM.sw.some(w=>Math.hypot(q[0]-w.pos[0],q[1]-w.pos[1])<2.2); }
   if(near!==(swBtn.style.display==='flex')){ swBtn.style.display=near?'flex':'none'; if(near) swLabel(); } }
-function dropRoom(){ ROOM.tro=null; ROOM.glow=null; ROOM.sw=null; ROOM.dimM=null; LKEY=null; swBtn.style.display='none'; if(!ROOM.g) return; scene.remove(ROOM.g); ROOM.g.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); ROOM.g=null; ROOM.key=null; ROOM.r=null; ROOM.leaves=[]; ROOM.gar=[]; }
+function dropRoom(){ ROOM.gr=null; ROOM.tro=null; ROOM.glow=null; ROOM.sw=null; ROOM.dimM=null; LKEY=null; swBtn.style.display='none'; if(!ROOM.g) return; scene.remove(ROOM.g); ROOM.g.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); ROOM.g=null; ROOM.key=null; ROOM.r=null; ROOM.leaves=[]; ROOM.gar=[]; }
 function garUpdate(){ for(const G2 of ROOM.gar){ const o=window.GARAGE?GARAGE.openness(G2.q.gk):0, b0=o*1.95, top=2.2, h=Math.max(.15,top-b0);
   G2.m.scale.y=h; G2.m.position.y=b0+h/2; } }
 // the room sits round the building's middle, turned with the camera, at the map's scale (like the cars)
@@ -468,8 +513,9 @@ function placeRoom(m,b){ const r=ROOM.r; if(!r) return; const kx=111320*cosLat()
   ROOM.g.position.set(rr/m,0,-f/m); ROOM.g.scale.setScalar(1/m); ROOM.g.rotation.y=b; }
 // doors swing open when you're within ~1.8 m of them, and shut again behind you
 function doorSwing(dt){ const r=ROOM.r; if(!r) return; const q=loc(r,S.lat,S.lng);
-  for(const L of ROOM.leaves){ const mx=(L.d.x0+L.d.x1)/2, my=(L.d.y0+L.d.y1)/2, near=Math.hypot(q[0]-mx,q[1]-my)<1.8;
-    L.o=Math.max(0,Math.min(1,L.o+(near?1:-1)*dt/.7)); L.pv.rotation.y=L.angC+L.dA*.95*(L.o*L.o*(3-2*L.o)); } }
+  greeterTick(dt,q);
+  for(const L of ROOM.leaves){ const mx=(L.d.x0+L.d.x1)/2, my=(L.d.y0+L.d.y1)/2, near=Math.hypot(q[0]-mx,q[1]-my)<(L.auto?3.8:1.8);   // automatic doors sense you from further off, and open quicker
+    L.o=Math.max(0,Math.min(1,L.o+(near?1:-1)*dt/(L.auto?.45:.7))); L.pv.rotation.y=L.angC+L.dA*.95*(L.o*L.o*(3-2*L.o)); } }
 function fpCam(dt){
   if(!FPV.on){ FPV.on=true; step.W=0; LOOK.pitch=0; }
   const W2=innerWidth, H=innerHeight, fov=FPV.fov, DEGR=Math.PI/180;
@@ -496,6 +542,7 @@ function setInside(r){
   person.traverse(o=>{ if(o.isMesh&&o.material!==shadow.material) o.material.depthTest=!r; });   // never hidden by the walls round you
   if(window.TRAFFIC&&TRAFFIC.occRebuild) TRAFFIC.occRebuild();                                    // and drop it from the car layer's building blockers
   step.cam=null; dirty=true; step.surf=null;
+  if(r&&window.STORES&&STORES.at){ const st=STORES.at(r.key); if(st) safe('greeter',()=>STORES.greet(st)); }   // "Welcome to Meijer" / "Welcome to Walmart"
   if(r&&!IN.told){ IN.told=true; toast('Inside: the walls are cut away so you can see in'+(mode==='walk'?'. Walk out through a door to leave':''),3800); }
 }
 // work out which building you're in (if any), from where you stand
