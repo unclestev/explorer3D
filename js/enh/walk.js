@@ -391,13 +391,13 @@ function gymDecor(g,p,HC,r,TH2){
       for(const y of [yb,yt]){ dm.position.set(px,y,-py); dm.rotation.set(0,Math.atan2(vy,vx),0); dm.scale.set(span,1,1); dm.updateMatrix(); chords.setMatrixAt(ci++,dm.matrix); }
       for(let j=0;j<seg;j++){ const s0=-span/2+j*span/seg, s1=s0+span/seg, up=j%2===0, ya=up?yb:yt, yc=up?yt:yb, ex=px+vx*(s0+s1)/2, ey=py+vy*(s0+s1)/2, L2=Math.hypot(span/seg,yc-ya);
         dm.position.set(ex,(ya+yc)/2,-ey); dm.rotation.set(0,Math.atan2(vy,vx),0); dm.rotateZ(Math.atan2(yc-ya,span/seg)); dm.scale.set(L2,1,1); dm.updateMatrix(); diags.setMatrixAt(di++,dm.matrix);
-        if(j%2===1) bulbs.push([ex,ey]); } }
+        if(j%3===1) bulbs.push([ex,ey]); } }
     chords.count=ci; diags.count=di; chords.instanceMatrix.needsUpdate=diags.instanceMatrix.needsUpdate=true; chords.frustumCulled=diags.frustumCulled=false; g.add(chords); g.add(diags);
     // round UFO high-bay lights (owner 2026-11-24, product photo): black finned body with a ring, hook up to the truss, white lens under it, a soft glow
     const lm=new THREE.MeshBasicMaterial({color:0xffffff,map:lensTex(),side:THREE.DoubleSide}), n=Math.max(1,bulbs.length), dark=rmat('ufo',0x16181b,0x050506);
     const body=new THREE.InstancedMesh(ufoBody(),dark,n), hook=new THREE.InstancedMesh(ufoHook(),rmat('ufohook',0xb8bcc2,0x30323a),n),
-      lens=new THREE.InstancedMesh(new THREE.CircleGeometry(.31,28),lm,n), knob=new THREE.InstancedMesh(new THREE.CylinderGeometry(.07,.075,.07,16),lm,n),
-      halo=new THREE.InstancedMesh(new THREE.CircleGeometry(1.5,20),new THREE.MeshBasicMaterial({map:roundGlow(),transparent:true,opacity:.5,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,toneMapped:false}),n);
+      lens=new THREE.InstancedMesh(new THREE.CircleGeometry(.31,16),lm,n), knob=new THREE.InstancedMesh(new THREE.CylinderGeometry(.07,.075,.07,16),lm,n),
+      halo=new THREE.InstancedMesh(new THREE.CircleGeometry(1.1,12),new THREE.MeshBasicMaterial({map:roundGlow(),transparent:true,opacity:.5,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,toneMapped:false}),n);
     bulbs.forEach(([bx,by],i)=>{ const y=yb-.7;
       dm.rotation.set(0,(i*1.7)%6.28,0); dm.scale.set(1,1,1); dm.position.set(bx,y,-by); dm.updateMatrix(); body.setMatrixAt(i,dm.matrix); hook.setMatrixAt(i,dm.matrix);
       dm.rotation.set(Math.PI/2,0,0); dm.position.set(bx,y+.025,-by); dm.updateMatrix(); lens.setMatrixAt(i,dm.matrix);
@@ -553,11 +553,11 @@ let UFOB=null, UFOH=null, LENST=null;
 function mergeGeo(parts){ const pos=[], nor=[]; for(const [geo,m] of parts){ const gg=geo.index?geo.toNonIndexed():geo; gg.applyMatrix4(m); pos.push(...gg.attributes.position.array); const nm=new THREE.Matrix3().getNormalMatrix(m), nn=gg.attributes.normal.array; for(let i=0;i<nn.length;i+=3){ const v=new THREE.Vector3(nn[i],nn[i+1],nn[i+2]).applyMatrix3(nm).normalize(); nor.push(v.x,v.y,v.z); } }
   const G=new THREE.BufferGeometry(); G.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); G.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3)); return G; }
 function ufoBody(){ if(UFOB) return UFOB; const M=new THREE.Matrix4(), parts=[];
-  const ring=new THREE.LatheGeometry([[.28,0],[.4,0],[.42,.02],[.42,.075],[.38,.1],[.3,.1],[.28,.06]].map(q=>new THREE.Vector2(q[0],q[1])),32); parts.push([ring,M.clone()]);
-  const house=new THREE.LatheGeometry([[0,.1],[.3,.1],[.3,.16],[.2,.2],[.17,.3],[.2,.34],[.2,.4],[.14,.42],[0,.42]].map(q=>new THREE.Vector2(q[0],q[1])),24); parts.push([house,M.clone()]);
+  const ring=new THREE.LatheGeometry([[.28,0],[.4,0],[.42,.02],[.42,.075],[.38,.1],[.3,.1],[.28,.06]].map(q=>new THREE.Vector2(q[0],q[1])),16); parts.push([ring,M.clone()]);
+  const house=new THREE.LatheGeometry([[0,.1],[.3,.1],[.3,.16],[.2,.2],[.17,.3],[.2,.34],[.2,.4],[.14,.42],[0,.42]].map(q=>new THREE.Vector2(q[0],q[1])),12); parts.push([house,M.clone()]);
   const sh=new THREE.Shape(); sh.moveTo(.4,.09); sh.lineTo(.4,.14); sh.quadraticCurveTo(.4,.26,.3,.3); sh.lineTo(.2,.31); sh.lineTo(.2,.18); sh.lineTo(.3,.1); sh.closePath();
-  const fin=new THREE.ExtrudeGeometry(sh,{depth:.04,bevelEnabled:false}); fin.translate(0,0,-.02);
-  for(let k=0;k<28;k++){ const m=new THREE.Matrix4().makeRotationY(k/28*Math.PI*2); parts.push([fin,m]); }
+  const fin=new THREE.ExtrudeGeometry(sh,{depth:.04,bevelEnabled:false,curveSegments:2}); fin.translate(0,0,-.02);
+  for(let k=0;k<14;k++){ const m=new THREE.Matrix4().makeRotationY(k/14*Math.PI*2); parts.push([fin,m]); }
   const cap=new THREE.BoxGeometry(.12,.04,.07); parts.push([cap,new THREE.Matrix4().makeTranslation(.12,.43,.06)]);
   return UFOB=mergeGeo(parts); }
 function ufoHook(){ if(UFOH) return UFOH; const parts=[], tr=new THREE.TorusGeometry(.055,.014,6,14); parts.push([tr,new THREE.Matrix4().makeTranslation(0,.6,0)]);

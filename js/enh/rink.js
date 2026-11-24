@@ -26,11 +26,16 @@ async function load(){
     const seen=new Set(R.list.map(a=>a.id)); let n=0;
     for(const e of (j&&j.elements)||[]){ const c=e.center||(e.lat!=null?{lat:e.lat,lon:e.lon}:null); if(!c) continue; const id=e.type+e.id; if(seen.has(id)) continue; seen.add(id);
       R.list.push({id,lat:c.lat,lng:c.lon,name:(e.tags&&e.tags.name)||'',tags:e.tags||{}}); n++; }
-    R.at=[lng,lat]; if(n) R.specs.clear(); }
-  catch(e){ R.at=[lng,lat]; }                                    // slow or failed: try again after you've moved on
+    R.at=[lng,lat]; R.nextTry=0;
+    if(n){ R.specs.clear(); try{ localStorage.setItem('ydRinkList',JSON.stringify(R.list)); }catch(e){}
+      const rec=window.WALK&&WALK.inside&&WALK.inside.rec;                                          // already standing in one when its answer arrives: redraw the room
+      if(rec&&spec(rec)){ WALK.setInside(null); WALK.setInside(rec); } } }
+  catch(e){ R.nextTry=performance.now()+25000; }                 // slow or failed (the mirrors often are): ask again in 25 s, not only after moving 1.5 km
   R.busy=false; }
+try{ const c=JSON.parse(localStorage.getItem('ydRinkList')||'[]'); if(Array.isArray(c)) R.list=c; }catch(e){}   // arenas found on earlier visits
 onReady(function rinks(){ setTimeout(()=>safe('rinks',load),4000); });
-onTick(8000,function rinkTick(){ if(R.busy||!R.at) return; if(meters(R.at[1],R.at[0],S.lat,S.lng)>1500) safe('rinks',load); });
+onTick(5000,function rinkTick(){ if(R.busy||performance.now()<(R.nextTry||0)) return;
+  if(!R.at||meters(R.at[1],R.at[0],S.lat,S.lng)>1000) safe('rinks',load); });                 // never asked here yet, or you've moved on (e.g. a teleport)
 
 /* ---------- the rink laid into a building ---------- */
 function ext(p,c,s){ let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9; for(const q of p){ const u=q[0]*c+q[1]*s, v=-q[0]*s+q[1]*c; if(u<x0)x0=u; if(u>x1)x1=u; if(v<y0)y0=v; if(v>y1)y1=v; } return {x0,x1,y0,y1}; }
