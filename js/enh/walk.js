@@ -301,23 +301,34 @@ function buildRoom(r){
     const ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux, at=(t,o)=>[a[0]+ux*t-nx*o,a[1]+uy*t-ny*o];
     const gaps=ways.filter(w=>w.d.ei===i).map(w=>({s0:w.d.s0,s1:w.d.s1,h:w.h})).sort((x,y)=>x.s0-y.s0);
     const E=TH2+.03;                                                 // walls run on past the corners, so inside corners close up
-    let t=-E; for(const q of gaps){ if(q.s0>t) wq(at(t,TH2),at(q.s0,TH2),0,HC,t,q.s0); wq(at(q.s0,TH2),at(q.s1,TH2),q.h,HC,q.s0,q.s1);   // wall up to the gap, header over it
+    const WN=(LK.kind==='store'?[]:(r.win||[]).filter(w=>w.ei===i&&w.b<HC-.4)).map(w=>({s0:w.s0,s1:w.s1,b:Math.max(.05,w.b),h:Math.min(w.h,HC-.12)})).sort((x,y)=>x.s0-y.s0);
+    // a stretch of wall with the window openings cut out of it (the map building is hidden while you're in, so you see the outside through them)
+    const solid=(a0,a1)=>{ let c=a0; for(const w of WN){ if(w.s0<c-.001||w.s1>a1+.001) continue;
+        wq(at(c,TH2),at(w.s0,TH2),0,HC,c,w.s0); wq(at(w.s0,TH2),at(w.s1,TH2),0,w.b,w.s0,w.s1); wq(at(w.s0,TH2),at(w.s1,TH2),w.h,HC,w.s0,w.s1);
+        wq(at(w.s0,0),at(w.s0,TH2),w.b,w.h,0,TH2); wq(at(w.s1,0),at(w.s1,TH2),w.b,w.h,0,TH2);   // reveals
+        for(const [u0,u1,y0,y1] of [[w.s0-.07,w.s0,w.b-.07,w.h+.07],[w.s1,w.s1+.07,w.b-.07,w.h+.07],[w.s0-.07,w.s1+.07,w.h,w.h+.07],[w.s0-.1,w.s1+.1,w.b-.07,w.b]]) quad(trim,at(u0,TH2+.012),at(u1,TH2+.012),y0,y1);   // casing and sill
+        c=w.s1; }
+      if(a1>c+.001) wq(at(c,TH2),at(a1,TH2),0,HC,c,a1); };
+    let t=-E; for(const q of gaps){ if(q.s0>t) solid(t,q.s0); wq(at(q.s0,TH2),at(q.s1,TH2),q.h,HC,q.s0,q.s1);   // wall up to the gap, header over it
       wq(at(q.s0,0),at(q.s0,TH2),0,q.h,0,TH2); wq(at(q.s1,0),at(q.s1,TH2),0,q.h,0,TH2);                                   // jambs
       { const P=at(q.s0,0), Q=at(q.s1,0), R2=at(q.s1,TH2), S2=at(q.s0,TH2); const [px,pz]=to3(...P),[qx,qz]=to3(...Q),[rx,rz]=to3(...R2),[sx,sz]=to3(...S2);
         wall.push(px,q.h,pz, qx,q.h,qz, rx,q.h,rz, px,q.h,pz, rx,q.h,rz, sx,q.h,sz); wuv.push(0,0,0,0,0,0,0,0,0,0,0,0); }                                    // underside of the header
       for(const [s0,s1] of [[q.s0-.1,q.s0],[q.s1,q.s1+.1]]) quad(trim,at(s0,TH2+.01),at(s1,TH2+.01),0,q.h+.1);                // casing round the opening
       quad(trim,at(q.s0-.1,TH2+.01),at(q.s1+.1,TH2+.01),q.h,q.h+.1);
       t=Math.max(t,q.s1); }
-    if(L+E>t) wq(at(t,TH2),at(L+E,TH2),0,HC,t,L+E);
+    if(L+E>t) solid(t,L+E);
     quad(trim,at(0,TH2+.005),at(L,TH2+.005),0,.09);                 // skirting board
   }
   g.add(meshOf(wall,wallM,wuv)); g.add(meshOf(trim,trimM));
-  if(LK.trof){ troffers(g,p,HC); switches(g,r,HC); }
+  LKEY=r.key; { const sv=LSWS[r.key]; LSW[0]=sv?sv[0]:true; LSW[1]=sv?sv[1]:true; }     // each building keeps its own switch positions
+  ROOM.dimM=[wallM,floorM,ceilM];
+  if(LK.trof){ troffers(g,p,HC); switches(g,r,HC,2); }
   else { let cx=0,cy=0; for(const q of p){ cx+=q[0]; cy+=q[1]; } cx/=p.length; cy/=p.length;       // a ceiling light in the middle of the room
     if(inP(p,cx,cy)){ const [x3,z3]=to3(cx,cy);
       const base=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,.03,24),trimM); base.position.set(x3,HC-.015,z3); g.add(base);
       const globe=new THREE.Mesh(new THREE.SphereGeometry(.17,20,10,0,Math.PI*2,Math.PI/2,Math.PI/2),new THREE.MeshBasicMaterial({color:0xfff6df,side:THREE.DoubleSide}));
-      globe.position.set(x3,HC-.03,z3); g.add(globe); } }
+      globe.position.set(x3,HC-.03,z3); g.add(globe); ROOM.tro=[globe.material]; }          // one light, one switch by the door
+    switches(g,r,HC,1); }
   // door leaves, hinged at the jamb; double doors on the wide glass entrances
   ROOM.leaves=[];
   for(const d of r.doors){ const W0=d.s1-d.s0, two=W0>1.5, lw=two?(W0-.06)/2:W0-.04, glass=two;
@@ -418,19 +429,22 @@ function troffers(g,p,HC){
 /* the two light switches: on the wall just inside the way in, at 1.2 m, a white two-gang plate. Walk up to them and a
    button shows (or say "turn off the lights" / "lights on"); each flips its half of the lights (every other one). Remembered while you play. */
 const LSW=[true,true];
-function switches(g,r,HC){ ROOM.sw=[]; const d=r.doors[0]; if(!d) return;
+function switches(g,r,HC,n){ ROOM.sw=[]; const d=r.doors[0]; if(!d){ lightsApply(); return; }
   const p=r.p, a=p[d.ei], b=p[(d.ei+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1])||1, ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux;
   let s=d.s1+.55; if(s+.5>L) s=d.s0-.75;                              // beside the door's latch side, or the other side if it's a corner
   const at=(t,o)=>[a[0]+ux*t-nx*o,a[1]+uy*t-ny*o], ang=Math.atan2(-to3(-nx,-ny)[1],-nx);   // facing into the store
-  const plate=new THREE.Mesh(new THREE.BoxGeometry(.2,.13,.012),rmat('swplate',0xf6f5f1,0x55544f)), [px,pz]=to3(...at(s,.212));
+  const plate=new THREE.Mesh(new THREE.BoxGeometry(n===1?.1:.2,.13,.012),rmat('swplate',0xf6f5f1,0x55544f)), [px,pz]=to3(...at(s,.212));
   plate.position.set(px,1.2,pz); plate.rotation.y=ang+Math.PI/2; g.add(plate);
-  for(const k of [0,1]){ const lv=new THREE.Mesh(new THREE.BoxGeometry(.022,.045,.02),rmat('swlever',0xffffff,0x6a6a66));
-    const [lx,lz]=to3(...at(s+(k?.045:-.045),.225)); lv.position.set(lx,1.2,lz); lv.rotation.y=ang+Math.PI/2; g.add(lv);
-    ROOM.sw.push({lv,k,pos:at(s+(k?.045:-.045),.6)}); }
+  for(const k of n===1?[0]:[0,1]){ const lv=new THREE.Mesh(new THREE.BoxGeometry(.022,.045,.02),rmat('swlever',0xffffff,0x6a6a66)), off=n===1?0:(k?.045:-.045);
+    const [lx,lz]=to3(...at(s+off,.225)); lv.position.set(lx,1.2,lz); lv.rotation.y=ang+Math.PI/2; g.add(lv);
+    ROOM.sw.push({lv,k,pos:at(s+off,.6)}); }
   lightsApply(); }
-function lightsApply(){ for(const k of [0,1]){ const m=ROOM.tro&&ROOM.tro[k]; if(m){ m.color.setHex(LSW[k]?0xffffff:0x3b3f47); m.needsUpdate=true; } for(const o of (ROOM.glow&&ROOM.glow[k])||[]) o.visible=LSW[k]; }
+const LSWS={}; let LKEY=null;                                     // switch positions by building
+function lightsApply(){ if(ROOM.sw&&ROOM.sw.length===1) LSW[1]=LSW[0]; if(LKEY) LSWS[LKEY]=LSW.slice();
+  for(const k of [0,1]){ const m=ROOM.tro&&ROOM.tro[k]; if(m){ m.color.setHex(LSW[k]?0xffffff:0x3b3f47); m.needsUpdate=true; } for(const o of (ROOM.glow&&ROOM.glow[k])||[]) o.visible=LSW[k]; }
   for(const w of ROOM.sw||[]){ w.lv.position.y=1.2+(LSW[w.k]?.012:-.012); w.lv.rotation.x=LSW[w.k]?-.35:.35; }
   const on=(LSW[0]?1:0)+(LSW[1]?1:0), f=on===2?1:on===1?.62:.3;           // the night lights keep a little light          // the room dims as rows go out
+  { const stx=Object.values(STX); for(const m of ROOM.dimM||[]) if(m&&!stx.includes(m)) m.emissiveIntensity=.12+.88*f; }       // the textured walls, floor and ceiling dim with the lights
   for(const k of ['ceil','floor']) if(STX[k]){ STX[k].emissiveIntensity=f; STX[k].color.setScalar(.35+.65*f); }
   if(typeof swLabel==='function'&&swBtn.style.display==='flex') swLabel();
   if(typeof dirty!=='undefined') dirty=true; }
@@ -441,11 +455,11 @@ swBtn.style.cssText='position:absolute;left:50%;bottom:calc(var(--gap,10px) + 12
 for(const k of [0,1]){ const b=document.createElement('button'); b.style.cssText='font:600 15px system-ui;padding:10px 14px;border-radius:12px;border:0;background:rgba(20,24,32,.85);color:#fff;box-shadow:0 3px 10px rgba(0,0,0,.4)';
   b.onclick=e=>{ e.stopPropagation(); flipLights(k); swLabel(); }; swBtn.appendChild(b); }
 document.body.appendChild(swBtn);
-function swLabel(){ [...swBtn.children].forEach((b,k)=>b.textContent=(LSW[k]?'💡':'⚫')+' Switch '+(k+1)+': '+(LSW[k]?'on':'off')); }
+function swLabel(){ const one=ROOM.sw&&ROOM.sw.length===1; [...swBtn.children].forEach((b,k)=>{ b.style.display=one&&k?'none':''; b.textContent=(LSW[k]?'💡':'⚫')+(one?' Light: ':' Switch '+(k+1)+': ')+(LSW[k]?'on':'off'); }); }
 function switchNear(){ const r=ROOM.r; let near=false;
   if(r&&ROOM.sw&&ROOM.sw.length&&mode==='walk'){ const q=loc(r,S.lat,S.lng); near=ROOM.sw.some(w=>Math.hypot(q[0]-w.pos[0],q[1]-w.pos[1])<2.2); }
   if(near!==(swBtn.style.display==='flex')){ swBtn.style.display=near?'flex':'none'; if(near) swLabel(); } }
-function dropRoom(){ ROOM.tro=null; ROOM.glow=null; ROOM.sw=null; swBtn.style.display='none'; if(!ROOM.g) return; scene.remove(ROOM.g); ROOM.g.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); ROOM.g=null; ROOM.key=null; ROOM.r=null; ROOM.leaves=[]; ROOM.gar=[]; }
+function dropRoom(){ ROOM.tro=null; ROOM.glow=null; ROOM.sw=null; ROOM.dimM=null; LKEY=null; swBtn.style.display='none'; if(!ROOM.g) return; scene.remove(ROOM.g); ROOM.g.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); ROOM.g=null; ROOM.key=null; ROOM.r=null; ROOM.leaves=[]; ROOM.gar=[]; }
 function garUpdate(){ for(const G2 of ROOM.gar){ const o=window.GARAGE?GARAGE.openness(G2.q.gk):0, b0=o*1.95, top=2.2, h=Math.max(.15,top-b0);
   G2.m.scale.y=h; G2.m.position.y=b0+h/2; } }
 // the room sits round the building's middle, turned with the camera, at the map's scale (like the cars)
@@ -633,7 +647,7 @@ function walkStep(dt,st,gas,now){
   W.lastAnim=anim; dirty=false;
   const mph=Math.round(Math.abs(W.v)*2.237); if(mph!==step.mph){ step.mph=mph; mphEl.textContent=mph; }
 }
-window.WALK={inStore:()=>!!(ROOM.tro&&ROOM.tro.length),storeLights:(k,on)=>flipLights(k,on),step:(dt,st,gas,now)=>{ try{ walkStep(dt,st,gas,now); }catch(e){ console.warn('walk',e); renderer.render(scene,camera); } },
+window.WALK={inStore:()=>!!(ROOM.sw&&ROOM.sw.length),storeLights:(k,on)=>flipLights(k,on),step:(dt,st,gas,now)=>{ try{ walkStep(dt,st,gas,now); }catch(e){ console.warn('walk',e); renderer.render(scene,camera); } },
   parked:()=>PK.mode, getOut:()=>safe('walk',getOut), toggle:()=>safe('walk',getOut), state:W, person, parkedAt:PK,   /* toggle: the F key (js/enh/controls.js) */
   insideId:()=>IN.rec?IN.rec.id:null, inside:IN,
   setInside:r=>safe('inside',()=>{ if((r?r.key:null)!==IN.key) setInside(r); }), redrawInside:()=>{ if(IN.rec) safe('inside draw',()=>{ if(ROOM.g) garUpdate(); else drawInterior(IN.rec); }); }, inRec};
