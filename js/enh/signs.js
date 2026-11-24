@@ -65,7 +65,7 @@ function computeBlades(){
     const ux=s[2]-s[0], uy=s[3]-s[1], ul=Math.hypot(ux,uy)||1, vx=t[2]-t[0], vy=t[3]-t[1], vl=Math.hypot(vx,vy)||1;
     const sin=Math.abs((ux*vy-uy*vx)/(ul*vl))||1, q=Math.floor(hash(Math.round(p[0]),Math.round(p[1]))*4);
     const da=(t[5]+2.5)/sin*(q&1?1:-1), db=(s[5]+2.5)/sin*(q&2?1:-1);   // (not a/b: those are the loop counters)
-    let bx0=p[0]+ux/ul*da+vx/vl*db, by0=p[1]+uy/ul*da+vy/vl*db; try{ const c=offRoad(bx0/MLNG,by0/MLAT,1.2); bx0=c[0]*MLNG; by0=c[1]*MLAT; }catch(e){}   // a third road or a wide one: still behind the curb
+    let bx0=p[0]+ux/ul*da+vx/vl*db, by0=p[1]+uy/ul*da+vy/vl*db; try{ const c=placeClear(bx0/MLNG,by0/MLAT,1.2,1.5); if(!c) continue; bx0=c[0]*MLNG; by0=c[1]*MLAT; }catch(e){}   // a third road or a wide one: still behind the curb, and never in or against a building (no clear spot: no sign)
     out.push({key,x:bx0,y:by0,names,
       st:[{name:s[4],hd:Math.atan2(ux,uy),w:s[5]},{name:t[4],hd:Math.atan2(vx,vy),w:t[5]}]}); }
   out.sort((a,b)=>Math.hypot(a.x-cx,a.y-cy)-Math.hypot(b.x-cx,b.y-cy));
@@ -77,7 +77,7 @@ function buildSigns(){
   const cx=S.lng*MLNG, cy=S.lat*MLAT, R=450, F=[], near=o=>Math.hypot(o.x-cx,o.y-cy)<R;
   // every post is then moved out of the road bands to just behind the curb (game.js offRoad): the map's stop / signal
   // points sit on the road's centre line, and a fixed few metres can still be in the lane on a wide or angled street
-  const pt=(x,y,props)=>{ let c=[x/MLNG,y/MLAT], ang=null; try{ c=offRoad(c[0],c[1],1.1); const r=roadNear(c[0],c[1]); if(r&&r.seg){ const q=r.seg; ang=Math.atan2(q[2]-q[0],q[3]-q[1]); } }catch(e){}
+  const pt=(x,y,props)=>{ let c=[x/MLNG,y/MLAT], ang=null; try{ const c0=c; c=null; for(const [dx,dy] of [[0,0],[5,0],[-5,0],[0,5],[0,-5]]){ c=placeClear(c0[0]+dx/MLNG,c0[1]+dy/MLAT,1.1,1.5); if(c) break; } if(!c) return; const r=roadNear(c[0],c[1]); if(r&&r.seg){ const q=r.seg; ang=Math.atan2(q[2]-q[0],q[3]-q[1]); } }catch(e){}
     F.push({type:'Feature',properties:props,geometry:{type:'Point',coordinates:c}}); PTS.push({k:props.k,ph:props.ph||0,x:c[0]*MLNG,y:c[1]*MLAT,ang}); };   // ang: the road it stands by (for the cockpit's 3D signs)
   PTS.length=0; CS.dirty=true;
   for(const o of OX.stops) if(near(o)) pt(o.x+3,o.y-3,{k:'stop'});

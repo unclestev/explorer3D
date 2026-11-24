@@ -2106,6 +2106,13 @@ function buildIndex(){ BI.t=performance.now(); BI.at=[S.lng,S.lat]; BI.cells=new
 const LAMPS={explorer:{lamp:.70,front:2.42,col:[236,244,255]},expedition:{lamp:.80,front:2.67,col:[236,244,255]},navigator:{lamp:.75,front:2.64,col:[236,244,255]},
   javelin:{lamp:.60,front:2.36,col:[255,238,205]},modely:{lamp:.66,front:2.30,col:[240,246,255]},tractor:{lamp:.34,front:1.86,col:[255,236,200]}};
 CK.lamps=function(){ const k=mode==='tractor'?'tractor':specKey(CARKEY), L=LAMPS[k]||LAMPS.explorer; return {...L,key:k}; };
+CK.blocksNear=function(lng,lat){                                   /* the footprints in this 25 m cell and its 8 neighbours (game.js bldGap) */
+  const now=performance.now(), moved=BI.at?meters(BI.at[1],BI.at[0],S.lat,S.lng):1e9;
+  if(moved>150||now-BI.t>(BI.cells.size?10000:800)) buildIndex();
+  if(!BI.o) return [];
+  const i=Math.floor((lng-BI.o[0])*BI.kx/BI.cell), j=Math.floor((lat-BI.o[1])*111320/BI.cell), out=[], seen=new Set();
+  for(let a=-1;a<=1;a++) for(let b=-1;b<=1;b++) for(const f of BI.cells.get((i+a)+','+(j+b))||[]) if(!seen.has(f)){ seen.add(f); out.push(f); }
+  return out; };
 CK.blocksAt=function(lng,lat){
   const now=performance.now(), moved=BI.at?meters(BI.at[1],BI.at[0],S.lat,S.lng):1e9;
   if(moved>150||now-BI.t>(BI.cells.size?10000:800)) buildIndex();

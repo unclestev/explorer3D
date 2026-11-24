@@ -936,6 +936,29 @@ function offRoad(lng,lat,gap){ for(let it=0;it<5;it++){ const r=roadNear(lng,lat
     let nx=r.x-r.px, ny=r.y-r.py; if(r.d<.01){ nx=1; ny=0; } const n=Math.hypot(nx,ny), push=gap-r.c+.05;
     lng+=nx/n*push/r.kx; lat+=ny/n*push/111320; }
   return [lng,lat]; }
+/* Keep things off the buildings too (owner 2026-11-23: "a bunch of stop signs sitting on top of buildings... make sure we are
+   not placing signs and other objects in improper places"). bldClear(lng,lat) = metres from the nearest building wall
+   (negative: inside one), from the map's footprints (cockpit.js blocksNear, no screen read-back). offBuilding(lng,lat,gap)
+   moves a point out to `gap` metres past the wall. placeClear(lng,lat,roadGap,bldGap) does roads and buildings together
+   (each push can shove the point into the other, so it alternates) and returns null when no clear spot is found nearby:
+   the caller then leaves the object out instead of putting it on a roof. */
+function bldNear(lng,lat){ try{ return window.COCKPIT&&COCKPIT.blocksNear?COCKPIT.blocksNear(lng,lat):[]; }catch(e){ return []; } }
+function bldGap(lng,lat){ const fs=bldNear(lng,lat); if(!fs.length) return null; const kx=111320*Math.cos(rad(lat)); let best=null;
+  for(const f of fs){ const g=f.geometry, pls=!g?[]:g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
+    for(const pl of pls){ const r=pl[0]; if(!r||r.length<4) continue; let d=1e9, qx=0, qy=0;
+      for(let i=1;i<r.length;i++){ const ax=(r[i-1][0]-lng)*kx, ay=(r[i-1][1]-lat)*111320, bx=(r[i][0]-lng)*kx, by=(r[i][1]-lat)*111320, dx=bx-ax, dy=by-ay, L2=dx*dx+dy*dy||1,
+          t=Math.max(0,Math.min(1,-(ax*dx+ay*dy)/L2)), px=ax+t*dx, py=ay+t*dy, e=Math.hypot(px,py); if(e<d){ d=e; qx=px; qy=py; } }
+      const ins=inPoly(lng,lat,pl), c=ins?-d:d; if(!best||c<best.c) best={c,qx,qy,kx,ins}; } }
+  return best; }
+function bldClear(lng,lat){ const b=bldGap(lng,lat); return b?b.c:99; }
+function offBuilding(lng,lat,gap){ for(let it=0;it<6;it++){ const b=bldGap(lng,lat); if(!b||b.c>=gap) return [lng,lat];
+    let nx=-b.qx, ny=-b.qy; if(b.ins){ nx=b.qx; ny=b.qy; }                       // outward: from inside toward the wall, from outside away from it
+    const n=Math.hypot(nx,ny); if(n<.01){ nx=1; ny=0; } else { nx/=n; ny/=n; }
+    const push=b.ins?-b.c+gap+.05:gap-b.c+.05; lng+=nx*push/b.kx; lat+=ny*push/111320; }
+  return [lng,lat]; }
+function placeClear(lng,lat,roadGap,bldGap2){ for(let it=0;it<4;it++){ const a=offBuilding(lng,lat,bldGap2); const c=offRoad(a[0],a[1],roadGap); lng=c[0]; lat=c[1];
+    if(bldClear(lng,lat)>=bldGap2-.05&&roadClear(lng,lat)>=roadGap-.05) return [lng,lat]; }
+  return bldClear(lng,lat)>=0&&roadClear(lng,lat)>=0?[lng,lat]:null; }
 const hit=(x,y,r,ids)=>{ try{ return ids.length?map.queryRenderedFeatures([[x-r,y-r],[x+r,y+r]],{layers:ids}):[]; }catch(e){ return []; } };
 const roadEl=document.getElementById('road'), mphEl=document.getElementById('mph');
 const mapEl=document.getElementById('map');

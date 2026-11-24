@@ -218,36 +218,100 @@ const MATS={};
 function rmat(k,c,emi){ if(!MATS[k]) MATS[k]=new THREE.MeshLambertMaterial({color:c,emissive:emi||0x000000,side:THREE.DoubleSide}); return MATS[k]; }
 const to3=(x,y)=>[x,-y];                                           // local (east, north) metres -> car-layer (x, z)
 function quad(pos,a,b,y0,y1){ const [ax,az]=to3(a[0],a[1]), [bx,bz]=to3(b[0],b[1]); pos.push(ax,y0,az, bx,y0,bz, bx,y1,bz, ax,y0,az, bx,y1,bz, ax,y1,az); }
-function meshOf(pos,mat){ const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.computeVertexNormals(); return new THREE.Mesh(g,mat); }
+function meshOf(pos,mat,uv){ const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); if(uv) g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2)); g.computeVertexNormals(); return new THREE.Mesh(g,mat); }
+/* ---------- what the rooms look like (owner 2026-11-23: "floors and walls and ceiling textures inside the buildings, only loaded
+   when you enter... use your best judgement for the building type... the same textures when you enter it multiple times").
+   Nothing here exists until you walk into a building: its textures are painted on a small canvas the first time they're
+   asked for (a handful of 256 px ones, shared by every building of that look, thrown away when too many pile up) and the
+   room's own meshes are dropped when you leave. Which look a building gets comes only from its key (where it stands) —
+   a seeded pick, not Math.random — so the same building looks the same on every visit and on every device.
+   Kinds: house (wood, laminate or carpet floors, painted walls, stippled ceiling), shop (vinyl tile / concrete / wood-look
+   floors, painted drywall, dropped ceiling), school (speckled or checked vinyl tile, painted block walls with a darker
+   lower band, dropped ceiling), office (carpet tile, drywall, dropped ceiling), industrial (sealed concrete, ribbed metal
+   walls, exposed deck), Meijer (js/enh/stores.js: its own tiles). Every non-house gets the troffer lights that were made
+   for Meijer (troffers() below). */
+const ITX={}, IMT={};
+function seedOf(k){ let h=2166136261; k=String(k); for(let i=0;i<k.length;i++){ h^=k.charCodeAt(i); h=Math.imul(h,16777619); } return h>>>0; }
+function prng(s){ return ()=>{ s=(s+0x6D2B79F5)|0; let t=Math.imul(s^(s>>>15),1|s); t=(t+Math.imul(t^(t>>>7),61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; }; }
+const pickOf=(a,R)=>a[Math.floor(R()*a.length)%a.length];
+const gray=v=>'rgb('+(v|0)+','+(v|0)+','+(v|0)+')';
+// name: [pixels w, pixels h, metres w, metres h, draw(ctx,w,h,rnd,a,b), clampV]
+const TXM={
+  planks:[256,256,1.2,1.2,(x,w,h,R)=>{ x.fillStyle='#e6e6e6'; x.fillRect(0,0,w,h); const rows=8, rh=h/rows;
+    for(let i=0;i<rows;i++){ let px=-R()*128; while(px<w){ const L=96+R()*96; x.fillStyle=gray(205+R()*50); x.fillRect(px,i*rh,L,rh);
+      x.strokeStyle='rgba(0,0,0,.24)'; x.lineWidth=1; x.strokeRect(px+.5,i*rh+.5,L,rh);
+      x.strokeStyle='rgba(60,60,60,.13)'; for(let g=0;g<3;g++){ const gy=i*rh+4+R()*(rh-8); x.beginPath(); x.moveTo(px,gy); x.lineTo(px+L,gy+(R()-.5)*3); x.stroke(); }
+      px+=L; } } }],
+  carpet:[128,128,1,1,(x,w,h,R)=>{ x.fillStyle='#d2d2d2'; x.fillRect(0,0,w,h); for(let i=0;i<2600;i++){ x.fillStyle=gray(150+R()*105); x.globalAlpha=.4; x.fillRect(R()*w,R()*h,1.4,1.4); } x.globalAlpha=1; }],
+  ctile:[256,256,1,1,(x,w,h,R)=>{ for(let i=0;i<4;i++){ const X=(i%2)*128, Y=(i>>1)*128; x.fillStyle=gray(198+R()*30); x.fillRect(X,Y,128,128);
+      for(let j=0;j<500;j++){ x.fillStyle=gray(140+R()*115); x.globalAlpha=.35; x.fillRect(X+R()*128,Y+R()*128,1.5,1.5); } x.globalAlpha=1; }
+    x.fillStyle='rgba(0,0,0,.28)'; for(const v of [0,128]){ x.fillRect(v,0,1,h); x.fillRect(0,v,w,1); } }],
+  vct:[256,256,.61,.61,(x,w,h,R,mode)=>{ for(let i=0;i<4;i++){ const X=(i%2)*128, Y=(i>>1)*128; x.fillStyle=mode==='chk'?((i===1||i===2)?gray(168):gray(246)):gray(222+R()*18); x.fillRect(X,Y,128,128);
+      for(let j=0;j<(mode==='chk'?40:170);j++){ x.fillStyle=gray(90+R()*110); x.globalAlpha=.3; x.fillRect(X+R()*128,Y+R()*128,2+R()*2,1+R()); } x.globalAlpha=1; }
+    x.fillStyle='rgba(0,0,0,.2)'; for(const v of [0,128]){ x.fillRect(v,0,1,h); x.fillRect(0,v,w,1); } }],
+  concrete:[256,256,2.4,2.4,(x,w,h,R)=>{ x.fillStyle='#d6d6d6'; x.fillRect(0,0,w,h);
+    for(let i=0;i<70;i++){ const cx=R()*w, cy=R()*h, r=14+R()*40, g=x.createRadialGradient(cx,cy,0,cx,cy,r), d=R()<.5; g.addColorStop(0,d?'rgba(90,90,90,.16)':'rgba(255,255,255,.2)'); g.addColorStop(1,'rgba(128,128,128,0)'); x.fillStyle=g; x.fillRect(cx-r,cy-r,2*r,2*r); }
+    for(let i=0;i<900;i++){ x.fillStyle=gray(120+R()*130); x.globalAlpha=.25; x.fillRect(R()*w,R()*h,1.3,1.3); } x.globalAlpha=1;
+    x.fillStyle='rgba(0,0,0,.4)'; x.fillRect(0,0,2,h); x.fillRect(0,0,w,2); }],
+  drywall:[128,128,2,2,(x,w,h,R)=>{ x.fillStyle='#fbfbfa'; x.fillRect(0,0,w,h); for(let i=0;i<500;i++){ x.fillStyle=gray(228+R()*27); x.globalAlpha=.5; x.fillRect(R()*w,R()*h,2,2); } x.globalAlpha=1; }],
+  stipple:[128,128,1,1,(x,w,h,R)=>{ x.fillStyle='#f6f6f4'; x.fillRect(0,0,w,h); for(let i=0;i<2600;i++){ x.fillStyle=R()<.5?'rgba(150,150,145,.3)':'rgba(255,255,255,.8)'; x.fillRect(R()*w,R()*h,1.6,1.6); } }],
+  // painted concrete block: courses of 0.2 x 0.4 m; the picture is 3.2 m tall, floor at the bottom, a darker band 1.2 m high (a, b = upper, lower colour)
+  block:[256,512,1.6,3.2,(x,w,h,R,a,b)=>{ x.fillStyle=a; x.fillRect(0,0,w,h); const wh=Math.round(1.2*160); x.fillStyle=b; x.fillRect(0,h-wh,w,wh);
+    x.fillStyle='rgba(0,0,0,.28)'; x.fillRect(0,h-wh-5,w,5);                                                 // the stripe where the two colours meet
+    for(let r=0;r<16;r++){ const Y=r*32, off=r&1?32:0; for(let c=-1;c<5;c++){ x.fillStyle=R()<.5?'rgba(0,0,0,.05)':'rgba(255,255,255,.06)'; x.fillRect(c*64+off,Y,64,32); }
+      x.fillStyle='rgba(0,0,0,.2)'; x.fillRect(0,Y,w,2); for(let c=0;c<5;c++) x.fillRect(c*64+off,Y,2,32); } },1],
+  metal:[256,256,1.6,1.6,(x,w,h)=>{ for(let i=0;i<16;i++){ const g=x.createLinearGradient(i*16,0,i*16+16,0); g.addColorStop(0,'#c8c8c8'); g.addColorStop(.35,'#f4f4f4'); g.addColorStop(.7,'#dcdcdc'); g.addColorStop(1,'#a8a8a8'); x.fillStyle=g; x.fillRect(i*16,0,16,h); } }],
+  deck:[256,256,1.6,1.6,(x,w,h)=>{ for(let i=0;i<8;i++){ x.fillStyle=i&1?'#bdbdbd':'#e8e8e8'; x.fillRect(i*32,0,32,h); x.fillStyle='rgba(0,0,0,.3)'; x.fillRect(i*32,0,2,h); } }]
+};
+function itex(name,a,b){ const k=name+'|'+(a||'')+'|'+(b||''); if(ITX[k]) return ITX[k];
+  const D=TXM[name], c=document.createElement('canvas'); c.width=D[0]; c.height=D[1]; D[4](c.getContext('2d'),D[0],D[1],prng(seedOf(k)),a,b);
+  const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; if(D[5]) t.wrapT=THREE.ClampToEdgeWrapping; t.repeat.set(1/D[2],1/D[3]); t.anisotropy=8; return ITX[k]=t; }
+function imat(name,tint,a,b,glow){ const k=name+'|'+tint+'|'+(a||'')+'|'+(b||''); if(IMT[k]) return IMT[k]; const t=itex(name,a,b), col=new THREE.Color(tint);
+  return IMT[k]=new THREE.MeshLambertMaterial({color:col,map:t,emissive:col.clone().multiplyScalar(glow||.42),emissiveMap:t,side:THREE.DoubleSide}); }
+function itexTrim(){ if(Object.keys(ITX).length<=14) return; for(const k in IMT) IMT[k].dispose(); for(const k in ITX) ITX[k].dispose(); for(const k in IMT) delete IMT[k]; for(const k in ITX) delete ITX[k]; }
+const WALLS_HOUSE=['#f3eee3','#e9dfcc','#d9e2dc','#dfe6ee','#efe3cf','#e6d6d0','#d8dfc9','#f4f1ea'], FLOORS_HOUSE=[['planks','#d8b27f'],['planks','#8a5a36'],['planks','#b9b3a7'],['carpet','#cdbfa8'],['carpet','#9ba1a9'],['planks','#c99a62']];
+function roomKind(r,SH){ if(SH) return 'store'; if(r.house) return 'house'; if(r.zone==='school') return 'school'; if(r.zone==='industrial') return 'industrial'; return (r.h||0)>12?'office':'shop'; }
+// the look of one building's room, picked from its key alone: {kind, HC (ceiling height), wallM, floorM, ceilM, trof}
+function roomLook(r,SH){
+  const kind=roomKind(r,SH), R=prng(seedOf(r.key)), H=r.h||3, L={kind,trof:kind!=='house'};
+  if(kind==='house'){ const f=pickOf(FLOORS_HOUSE,R); L.HC=Math.max(2.4,Math.min(2.7,H-.3));
+    L.wallM=imat('drywall',pickOf(WALLS_HOUSE,R)); L.floorM=imat(f[0],f[1],0,0,.3); L.ceilM=imat('stipple','#f7f6f2'); }
+  else if(kind==='store'){ L.HC=Math.max(3.6,Math.min(5,H-1.4)); L.wallM=imat('drywall','#ddd5c0'); L.floorM=storeMat('floor'); L.ceilM=storeMat('ceil'); }
+  else if(kind==='school'){ const w=pickOf([['#efe7cf','#c8b58d'],['#e9eef0','#7f9db5'],['#efe9dd','#8aa58a']],R), chk=R()<.4; L.HC=Math.max(2.6,Math.min(3.1,H-.4));
+    L.wallM=imat('block','#ffffff',w[0],w[1]); L.floorM=imat('vct','#ffffff',chk?'chk':'spk',0,.3); L.ceilM=storeMat('ceil'); }
+  else if(kind==='office'){ L.HC=3; L.wallM=imat('drywall',pickOf(['#f4f3f0','#e6e8ea','#eee9df'],R)); L.floorM=imat('ctile',pickOf(['#9aa0a6','#7b8794','#a39d92','#6a6e73'],R),0,0,.3); L.ceilM=storeMat('ceil'); }
+  else if(kind==='industrial'){ L.HC=Math.max(3.4,Math.min(5,H-.6)); L.wallM=imat('metal',pickOf(['#cfd3d6','#d8d0bf','#b9c3cc'],R)); L.floorM=imat('concrete','#d4d4d0',0,0,.3); L.ceilM=imat('deck','#dcdcdc'); }
+  else { const f=pickOf([['vct','#ffffff','chk'],['vct','#efe4cc','spk'],['concrete','#d0d0cc'],['planks','#dcc7a6']],R); L.HC=Math.max(2.6,Math.min(3.3,H-.4));   // shop
+    L.wallM=imat('drywall',pickOf(['#f3f1ec','#e3e5e6','#ece2cf','#dbe6ef'],R)); L.floorM=f[0]==='vct'?imat('vct',f[1],f[2],0,.3):imat(f[0],f[1],0,0,.3); L.ceilM=storeMat('ceil'); }
+  return L; }
 function buildRoom(r){
   if(ROOM.key===r.key&&ROOM.g) return; dropRoom();
   const SH=window.STORES&&STORES.at?STORES.at(r.key):null;      // a Meijer (js/enh/stores.js): high dropped ceiling, troffer lights
-  const g=new THREE.Group(), p=r.p, HC=SH?Math.max(3.6,Math.min(5,(r.h||6)-1.4)):Math.max(2.4,Math.min(2.7,(r.h||3)-.3)), DH=2.12, TH2=.2;
-  const wallM=rmat('wall',0xe8e2d6,0x4a4741), ceilM=SH?storeMat('ceil'):rmat('ceil',0xf4f2ed,0x8a8985), trimM=rmat('trim',0xfbfaf7,0x3a3a3a);
-  const floorM=SH?storeMat('floor'):rmat(r.house?'wood':'tile',r.house?0x7d5a3a:0xc9c6be,r.house?0x1e140c:0x2a2a28);
+  itexTrim(); const LK=roomLook(r,SH);                           // floor, wall and ceiling textures for this kind of building, picked from its key
+  const g=new THREE.Group(), p=r.p, HC=LK.HC, DH=2.12, TH2=.2;
+  const wallM=LK.wallM, ceilM=LK.ceilM, trimM=rmat('trim',0xfbfaf7,0x3a3a3a), floorM=LK.floorM;
   // floor and ceiling from the outline
   const sh=new THREE.Shape(p.map(q=>new THREE.Vector2(q[0],q[1])));
   const fl=new THREE.Mesh(new THREE.ShapeGeometry(sh),floorM); fl.rotation.x=-Math.PI/2; fl.position.y=.01; g.add(fl);   // shape (x, y=north) -> (x, z=-north)
   const ce=new THREE.Mesh(new THREE.ShapeGeometry(sh),ceilM); ce.rotation.x=-Math.PI/2; ce.position.y=HC; g.add(ce);
   // walls along the outline, with the doorways (and garage openings) cut out; jambs give them depth
-  const wall=[], trim=[], ways=r.doors.map(d=>({d,h:DH,gar:false})).concat((r.garages||[]).map(d=>({d,h:2.2,gar:true})));
+  const wall=[], wuv=[], trim=[], wq=(a,b,y0,y1,u0,u1)=>{ quad(wall,a,b,y0,y1); wuv.push(u0,y0,u1,y0,u1,y1,u0,y0,u1,y1,u0,y1); }, ways=r.doors.map(d=>({d,h:DH,gar:false})).concat((r.garages||[]).map(d=>({d,h:2.2,gar:true})));
   for(let i=0;i<p.length;i++){ const a=p[i], b=p[(i+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1]); if(L<.05) continue;
     const ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux, at=(t,o)=>[a[0]+ux*t-nx*o,a[1]+uy*t-ny*o];
     const gaps=ways.filter(w=>w.d.ei===i).map(w=>({s0:w.d.s0,s1:w.d.s1,h:w.h})).sort((x,y)=>x.s0-y.s0);
     const E=TH2+.03;                                                 // walls run on past the corners, so inside corners close up
-    let t=-E; for(const q of gaps){ if(q.s0>t) quad(wall,at(t,TH2),at(q.s0,TH2),0,HC); quad(wall,at(q.s0,TH2),at(q.s1,TH2),q.h,HC);   // wall up to the gap, header over it
-      quad(wall,at(q.s0,0),at(q.s0,TH2),0,q.h); quad(wall,at(q.s1,0),at(q.s1,TH2),0,q.h);                                   // jambs
+    let t=-E; for(const q of gaps){ if(q.s0>t) wq(at(t,TH2),at(q.s0,TH2),0,HC,t,q.s0); wq(at(q.s0,TH2),at(q.s1,TH2),q.h,HC,q.s0,q.s1);   // wall up to the gap, header over it
+      wq(at(q.s0,0),at(q.s0,TH2),0,q.h,0,TH2); wq(at(q.s1,0),at(q.s1,TH2),0,q.h,0,TH2);                                   // jambs
       { const P=at(q.s0,0), Q=at(q.s1,0), R2=at(q.s1,TH2), S2=at(q.s0,TH2); const [px,pz]=to3(...P),[qx,qz]=to3(...Q),[rx,rz]=to3(...R2),[sx,sz]=to3(...S2);
-        wall.push(px,q.h,pz, qx,q.h,qz, rx,q.h,rz, px,q.h,pz, rx,q.h,rz, sx,q.h,sz); }                                    // underside of the header
+        wall.push(px,q.h,pz, qx,q.h,qz, rx,q.h,rz, px,q.h,pz, rx,q.h,rz, sx,q.h,sz); wuv.push(0,0,0,0,0,0,0,0,0,0,0,0); }                                    // underside of the header
       for(const [s0,s1] of [[q.s0-.1,q.s0],[q.s1,q.s1+.1]]) quad(trim,at(s0,TH2+.01),at(s1,TH2+.01),0,q.h+.1);                // casing round the opening
       quad(trim,at(q.s0-.1,TH2+.01),at(q.s1+.1,TH2+.01),q.h,q.h+.1);
       t=Math.max(t,q.s1); }
-    if(L+E>t) quad(wall,at(t,TH2),at(L+E,TH2),0,HC);
+    if(L+E>t) wq(at(t,TH2),at(L+E,TH2),0,HC,t,L+E);
     quad(trim,at(0,TH2+.005),at(L,TH2+.005),0,.09);                 // skirting board
   }
-  g.add(meshOf(wall,wallM)); g.add(meshOf(trim,trimM));
-  if(SH) troffers(g,p,HC);
-  else { let cx=0,cy=0; for(const q of p){ cx+=q[0]; cy+=q[1]; } cx/=p.length; cy/=p.length;       // a ceiling light in the middle of the room
+  g.add(meshOf(wall,wallM,wuv)); g.add(meshOf(trim,trimM));
+  if(!(LK.trof&&troffers(g,p,HC))) { let cx=0,cy=0; for(const q of p){ cx+=q[0]; cy+=q[1]; } cx/=p.length; cy/=p.length;       // a ceiling light in the middle of the room
     if(inP(p,cx,cy)){ const [x3,z3]=to3(cx,cy);
       const base=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,.03,24),trimM); base.position.set(x3,HC-.015,z3); g.add(base);
       const globe=new THREE.Mesh(new THREE.SphereGeometry(.17,20,10,0,Math.PI*2,Math.PI/2,Math.PI/2),new THREE.MeshBasicMaterial({color:0xfff6df,side:THREE.DoubleSide}));
@@ -308,13 +372,13 @@ function troffers(g,p,HC){
   const along=(x1-x0)>=(y1-y0), sx=along?3.66:2.44, sy=along?2.44:3.66, pts=[];
   for(let x=x0+sx/2;x<x1;x+=sx) for(let y=y0+sy/2;y<y1;y+=sy){ if(!inP(p,x,y)) continue; let ok=true;
     for(const [dx,dy] of [[-.8,-.8],[.8,-.8],[.8,.8],[-.8,.8]]) if(!inP(p,x+dx,y+dy)){ ok=false; break; } if(ok) pts.push([x,y]); }
-  if(!pts.length) return;
+  if(!pts.length) return false;
   const geo=new THREE.PlaneGeometry(.61,1.22); geo.rotateX(Math.PI/2); if(along) geo.rotateY(Math.PI/2);   // facing down
   const lens=new THREE.InstancedMesh(geo,new THREE.MeshBasicMaterial({map:trofferTex(),side:THREE.DoubleSide,toneMapped:false}),pts.length);
   const rim=new THREE.InstancedMesh(new THREE.BoxGeometry(along?1.28:.67,.05,along?.67:1.28),rmat('trofrim',0xdfe2e5,0x6a6c70),pts.length);
   const M=new THREE.Matrix4();
   pts.forEach(([x,y],i)=>{ const [x3,z3]=to3(x,y); M.makeTranslation(x3,HC-.055,z3); lens.setMatrixAt(i,M); M.makeTranslation(x3,HC-.025,z3); rim.setMatrixAt(i,M); });
-  g.add(rim); g.add(lens);
+  g.add(rim); g.add(lens); return true;
   // the fixtures light the floor a little: a soft bright pool under each row would cost too much, so the floor's own glow does it
 }
 function dropRoom(){ if(!ROOM.g) return; scene.remove(ROOM.g); ROOM.g.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); ROOM.g=null; ROOM.key=null; ROOM.r=null; ROOM.leaves=[]; ROOM.gar=[]; }
