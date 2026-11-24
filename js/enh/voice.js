@@ -197,6 +197,11 @@ async function handle(raw){
   if(/\b(air conditioning|a\/?c|heat|heater|climate|fan|defrost|seat heat|heated seats?|temperature to|warmer|cooler)\b/.test(t)&&!/\b(what|how)\b/.test(t)) return say('The climate controls aren\'t working in the game yet.');
   if(/\b(window|windows)\b/.test(t)&&/\b(open|close|roll|up|down)\b/.test(t)) return say('The windows don\'t open in the game yet. I can open the sunroof.');
   // ---- the snow plow's blade (js/enh/plow.js)
+  if(window.WALK&&WALK.inStore&&WALK.inStore()&&/\b(lights?|switch)\b/.test(t)){   // in a store (js/enh/walk.js): its ceiling lights
+    const one=/\b(one|1|first)\b/.test(t)?0:/\b(two|2|second)\b/.test(t)?1:null, on=!(OFF.test(t)||/\b(off|out|dark)\b/.test(t));
+    WALK.storeLights(one,on); return say((one==null?'Lights ':'Switch '+(one+1)+' ')+(on?'on.':'off.')); }
+  if(window.STORES&&STORES.markHere&&/\b(this is (a |the )?(meijer|major|mayor|meyer)|make (this|that|it) (a |the )?(meijer|major|mayor|meyer))\b/.test(t)){   // js/enh/stores.js
+    return say(STORES.markHere()?'Okay, this building is Meijer now.':'I can\'t find a big building here. Pull up in front of it and try again.'); }
   if(window.PARK&&/\b(park assist|self[- ]?park|park (the|my) (car|truck)|park it|parallel park|perpendicular park)\b/.test(t)){   // js/enh/park.js
     if(OFF.test(t)||/\b(cancel|stop)\b/.test(t)){ PARK.cancel(); return say('Park Assist off.'); }
     if(PARK.active) return say('Park Assist is on. Hold the park button to park.');

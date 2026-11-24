@@ -163,12 +163,13 @@ function restLayers(){
 function hideBuilding(r){
   const id=r?r.id:null;
   HIDE.walk=id; applyHides();                                       // js/game.js: with the smashed ones and the redrawn groups
-  if(map.getLayer('roof-3d')) safe('inside roofs',()=>map.setFilter('roof-3d',r?['!=',['coalesce',['get','bk'],''],r.key]:null));
+  if(map.getLayer('roof-3d')) safe('inside roofs',()=>map.setFilter('roof-3d',r?['!',['in',['coalesce',['get','bk'],''],['literal',(r.keys||[]).concat([r.key])]]]:null));
   // the rest of the group
   REST.features=[];
-  if(r&&!destroyed.includes(id)){ const seen=new Set(), lim=800/111320, kx=Math.cos(rad(S.lat));
+  const idl=id==null?[]:Array.isArray(id)?id:[id];
+  if(r&&idl.some(i=>!destroyed.includes(i))){ const seen=new Set(), lim=800/111320, kx=Math.cos(rad(S.lat));
     let fs=[]; try{ fs=map.querySourceFeatures(bSrc,{sourceLayer:'building'}); }catch(e){}
-    for(const q of fs){ if(q.id!==id) continue; const g=q.geometry, pls=!g?[]:g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
+    for(const q of fs){ if(!idl.includes(q.id)) continue; const g=q.geometry, pls=!g?[]:g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
       for(const pl of pls){ const ring=pl[0]; if(!ring||ring.length<4) continue;
         let x=0,y=0; const n=ring.length-1; for(let i=0;i<n;i++){ x+=ring[i][0]; y+=ring[i][1]; } x/=n; y/=n;
         if(Math.abs(y-S.lat)>lim||Math.abs(x-S.lng)*kx>lim) continue;
@@ -311,7 +312,8 @@ function buildRoom(r){
     quad(trim,at(0,TH2+.005),at(L,TH2+.005),0,.09);                 // skirting board
   }
   g.add(meshOf(wall,wallM,wuv)); g.add(meshOf(trim,trimM));
-  if(!(LK.trof&&troffers(g,p,HC))) { let cx=0,cy=0; for(const q of p){ cx+=q[0]; cy+=q[1]; } cx/=p.length; cy/=p.length;       // a ceiling light in the middle of the room
+  if(LK.trof){ troffers(g,p,HC); switches(g,r,HC); }
+  else { let cx=0,cy=0; for(const q of p){ cx+=q[0]; cy+=q[1]; } cx/=p.length; cy/=p.length;       // a ceiling light in the middle of the room
     if(inP(p,cx,cy)){ const [x3,z3]=to3(cx,cy);
       const base=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,.03,24),trimM); base.position.set(x3,HC-.015,z3); g.add(base);
       const globe=new THREE.Mesh(new THREE.SphereGeometry(.17,20,10,0,Math.PI*2,Math.PI/2,Math.PI/2),new THREE.MeshBasicMaterial({color:0xfff6df,side:THREE.DoubleSide}));
@@ -336,7 +338,7 @@ function buildRoom(r){
   for(const q of r.garages||[]){ const [ax,az]=to3(q.x0-q.nx*.08,q.y0-q.ny*.08), [bx,bz]=to3(q.x1-q.nx*.08,q.y1-q.ny*.08), W0=Math.hypot(bx-ax,bz-az);
     const m=new THREE.Mesh(new THREE.BoxGeometry(W0,1,.05),rmat('gar'+q.col,new THREE.Color(q.col||'#e5dfd3').getHex(),0x202020));
     m.position.set((ax+bx)/2,0,(az+bz)/2); m.rotation.y=-Math.atan2(bz-az,bx-ax); g.add(m); ROOM.gar.push({m,q}); }
-  for(const o of g.children) o.traverse(c=>{ if(c.isMesh){ c.renderOrder=1; c.frustumCulled=false; } });
+  for(const o of g.children) o.traverse(c=>{ if(c.isMesh){ if(!c.renderOrder) c.renderOrder=1; c.frustumCulled=false; } });
   scene.add(g); ROOM.g=g; ROOM.key=r.key; ROOM.r=r; garUpdate(); }
 /* store ceilings and lights (owner 2026-11-23, a photo of the lights inside Meijer): 2 x 2 ft speckled ceiling tiles in a
    white grid, and 2 x 4 ft parabolic-louvre troffers — a grid of deep shiny cells, bright where they catch the tubes and
@@ -352,36 +354,98 @@ function storeMat(k){ if(STX[k]) return STX[k]; const c=document.createElement('
     x.fillStyle='rgba(0,0,0,.1)'; for(const v of [0,128]){ x.fillRect(v,0,1,256); x.fillRect(0,v,256,1); } }
   const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(1/1.22,1/1.22); t.anisotropy=8;
   STX[k]=new THREE.MeshLambertMaterial({map:t,emissive:k==='ceil'?0x9a9890:0x55524c,emissiveMap:t,side:THREE.DoubleSide}); return STX[k]; }
-function trofferTex(){ if(STX.trof) return STX.trof; const c=document.createElement('canvas'); c.width=256; c.height=512; const x=c.getContext('2d');
-  x.fillStyle='#eef0f2'; x.fillRect(0,0,256,512);                                                            // the frame
-  const cols=3, rows=8, X0=14, Y0=14, cw=(256-2*X0)/cols, ch=(512-2*Y0)/rows;
-  for(let i=0;i<cols;i++) for(let j=0;j<rows;j++){ const X=X0+i*cw, Y=Y0+j*ch;
-    // a cell: bright reflection in the middle fading to blue-grey shadow at its sides, a hot streak along the tube
-    const g=x.createLinearGradient(X,0,X+cw,0); g.addColorStop(0,'#9aa3b8'); g.addColorStop(.22,'#e6ebf5'); g.addColorStop(.5,'#ffffff'); g.addColorStop(.78,'#e2e7f2'); g.addColorStop(1,'#8f98ad');
-    x.fillStyle=g; x.fillRect(X,Y,cw,ch);
-    const v=x.createLinearGradient(0,Y,0,Y+ch); v.addColorStop(0,'rgba(60,70,95,.4)'); v.addColorStop(.3,'rgba(255,255,255,0)'); v.addColorStop(.7,'rgba(255,255,255,.35)'); v.addColorStop(1,'rgba(60,70,95,.3)');
-    x.fillStyle=v; x.fillRect(X,Y,cw,ch);
-    x.strokeStyle='rgba(255,255,255,.9)'; x.lineWidth=3; x.beginPath(); x.moveTo(X+cw*.2,Y+ch*.55); x.quadraticCurveTo(X+cw*.5,Y+ch*.25,X+cw*.8,Y+ch*.55); x.stroke(); }
-  x.strokeStyle='#b4bac3'; x.lineWidth=2.5; for(let i=0;i<=cols;i++){ x.beginPath(); x.moveTo(X0+i*cw,Y0); x.lineTo(X0+i*cw,512-Y0); x.stroke(); }   // the louvre blades
-  for(let j=0;j<=rows;j++){ x.beginPath(); x.moveTo(X0,Y0+j*ch); x.lineTo(256-X0,Y0+j*ch); x.stroke(); }
-  x.strokeStyle='#7d838b'; x.lineWidth=6; x.strokeRect(X0-3,Y0-3,256-2*X0+6,512-2*Y0+6);
+function trofferTex(){ if(STX.trof) return STX.trof;
+  /* drawn after the owner's photo of a Meijer fixture: 3 columns x 10 rows of parabolic cells in a light metal trim, every
+     cell the same bright white */
+  const W=512, H=1024, c=document.createElement('canvas'); c.width=W; c.height=H; const x=c.getContext('2d');
+    x.fillStyle='#c9ccce'; x.fillRect(0,0,W,H);                                                   // trim
+  x.fillStyle='#262a30'; x.fillRect(14,14,W-28,H-28);                                         // the gap inside the trim
+  const m=22, cols=3, rows=10, cw=(W-2*m)/cols, ch=(H-2*m)/rows;
+  // each cell like the photo's: a curved mirror, pillow-shaped — bright white where it faces the tubes, a soft grey
+  // shadow sweeping into its lower corner, a faint crease down the middle where the two curved halves meet, and a
+  // bending highlight across it. Every cell drawn the same and in neutral white/grey (owner: "all the same white").
+  const cell=document.createElement('canvas'), CW=Math.round(cw), CH=Math.round(ch); cell.width=CW; cell.height=CH; const y=cell.getContext('2d');
+  y.fillStyle='#d9dbdf'; y.fillRect(0,0,CW,CH);                                              // the metal, in its own light
+  let g=y.createLinearGradient(0,0,CW,CH); g.addColorStop(0,'rgba(255,255,255,.55)'); g.addColorStop(.6,'rgba(160,164,172,.25)'); g.addColorStop(1,'rgba(95,100,110,.7)');
+  y.fillStyle=g; y.fillRect(0,0,CW,CH);                                                       // lit on one side, shadowed into the far corner
+  // the rippled reflections: bright white bands bending across the cell, grey between them
+  y.filter='blur(5px)';
+  const band=(y0,a,w,al)=>{ y.strokeStyle='rgba(255,255,255,'+al+')'; y.lineWidth=w; y.beginPath();
+    for(let k=0;k<=24;k++){ const t=k/24, xx=-CW*.05+CW*1.1*t, yy=y0-Math.sin(t*Math.PI*1.3+.3)*a+t*CH*.12; k?y.lineTo(xx,yy):y.moveTo(xx,yy); } y.stroke(); };
+  band(CH*.38,CH*.22,CH*.26,1); band(CH*.82,CH*.16,CH*.16,.9); band(CH*.1,CH*.1,CH*.1,.7);
+  y.strokeStyle='rgba(110,116,126,.55)'; y.lineWidth=CH*.08; y.beginPath();                  // the grey trough between the two big bands
+  for(let k=0;k<=24;k++){ const t=k/24, xx=-CW*.05+CW*1.1*t, yy=CH*.62-Math.sin(t*Math.PI*1.3+.3)*CH*.18+t*CH*.12; k?y.lineTo(xx,yy):y.moveTo(xx,yy); } y.stroke();
+  y.filter='blur(2px)'; y.strokeStyle='rgba(120,126,136,.5)'; y.lineWidth=2.5;                // the crease down the middle, where the two curved halves meet
+  y.beginPath(); y.moveTo(CW*.5,0); y.quadraticCurveTo(CW*.46,CH*.5,CW*.52,CH); y.stroke(); y.filter='none';
+  g=y.createLinearGradient(0,0,0,CH); g.addColorStop(0,'rgba(90,95,104,.5)'); g.addColorStop(.1,'rgba(90,95,104,0)'); g.addColorStop(.92,'rgba(90,95,104,0)'); g.addColorStop(1,'rgba(90,95,104,.45)');
+  y.fillStyle=g; y.fillRect(0,0,CW,CH);                                                       // the blades' shade top and bottom
+  for(let i=0;i<cols;i++) for(let j=0;j<rows;j++) x.drawImage(cell,m+i*cw,m+j*ch,cw,ch);
+  // the blades between the cells: thin bright edges catching the light, with a dark line under each
+  for(let j=0;j<=rows;j++){ const y=m+j*ch; x.fillStyle='rgba(120,122,126,.8)'; x.fillRect(m,y-1.5,W-2*m,3); }
+  for(let i=0;i<=cols;i++){ const X=m+i*cw; x.fillStyle='rgba(120,122,126,.8)'; x.fillRect(X-1.5,m,3,H-2*m); }
   const t=new THREE.CanvasTexture(c); t.anisotropy=8; STX.trof=t; return t; }
+// a soft glow round a fixture (brightness bleeding onto the ceiling) and its reflection on the shiny floor
+function glowTex(k){ if(STX['g'+k]) return STX['g'+k]; const c=document.createElement('canvas'); c.width=128; c.height=256; const x=c.getContext('2d');
+  const g=x.createRadialGradient(64,64,0,64,64,64); if(k==='halo'){ g.addColorStop(0,'rgba(255,255,255,.9)'); g.addColorStop(.35,'rgba(255,255,255,.45)'); g.addColorStop(1,'rgba(255,255,255,0)'); }
+  else { g.addColorStop(0,'rgba(255,255,255,.85)'); g.addColorStop(.3,'rgba(255,255,255,.35)'); g.addColorStop(1,'rgba(255,255,255,0)'); }
+  x.setTransform(1,0,0,2,0,0); x.fillStyle=g; x.fillRect(0,0,128,128); x.setTransform(1,0,0,1,0,0);   // stretched to the fixture's 1:2
+  const t=new THREE.CanvasTexture(c); STX['g'+k]=t; return t; }
 function troffers(g,p,HC){
-  // rows along the building's long side: a 2 x 4 ft fixture every 2.44 m across and 3.66 m along (a common store layout)
+  // rows along the building's long side: a 2 x 4 ft fixture every 2.44 m across and 3.66 m along (a common store layout).
+  // Two switches (owner 2026-11-23): in a chequerboard pattern, every other light on the first switch and the ones between
+  // on the second, so either one alone leaves the store evenly lit. A few (one in sixteen, spread out) are night lights on
+  // no switch: they stay on when both switches are off (owner 2026-11-23), like a real store after hours
   let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const q of p){ x0=Math.min(x0,q[0]); x1=Math.max(x1,q[0]); y0=Math.min(y0,q[1]); y1=Math.max(y1,q[1]); }
-  const along=(x1-x0)>=(y1-y0), sx=along?3.66:2.44, sy=along?2.44:3.66, pts=[];
-  for(let x=x0+sx/2;x<x1;x+=sx) for(let y=y0+sy/2;y<y1;y+=sy){ if(!inP(p,x,y)) continue; let ok=true;
-    for(const [dx,dy] of [[-.8,-.8],[.8,-.8],[.8,.8],[-.8,.8]]) if(!inP(p,x+dx,y+dy)){ ok=false; break; } if(ok) pts.push([x,y]); }
-  if(!pts.length) return false;
+  const along=(x1-x0)>=(y1-y0), sx=along?3.66:2.44, sy=along?2.44:3.66, pts=[[],[],[]];
+  let xi=0; for(let x=x0+sx/2;x<x1;x+=sx,xi++){ let yi=0; for(let y=y0+sy/2;y<y1;y+=sy,yi++){ if(!inP(p,x,y)) continue; let ok=true;
+    for(const [dx,dy] of [[-.8,-.8],[.8,-.8],[.8,.8],[-.8,.8]]) if(!inP(p,x+dx,y+dy)){ ok=false; break; } if(ok) pts[xi%4===1&&yi%4===1?2:(xi+yi)%2].push([x,y]); } }
+  ROOM.tro=[]; ROOM.glow=[];
   const geo=new THREE.PlaneGeometry(.61,1.22); geo.rotateX(Math.PI/2); if(along) geo.rotateY(Math.PI/2);   // facing down
-  const lens=new THREE.InstancedMesh(geo,new THREE.MeshBasicMaterial({map:trofferTex(),side:THREE.DoubleSide,toneMapped:false}),pts.length);
-  const rim=new THREE.InstancedMesh(new THREE.BoxGeometry(along?1.28:.67,.05,along?.67:1.28),rmat('trofrim',0xdfe2e5,0x6a6c70),pts.length);
   const M=new THREE.Matrix4();
-  pts.forEach(([x,y],i)=>{ const [x3,z3]=to3(x,y); M.makeTranslation(x3,HC-.055,z3); lens.setMatrixAt(i,M); M.makeTranslation(x3,HC-.025,z3); rim.setMatrixAt(i,M); });
-  g.add(rim); g.add(lens); return true;
-  // the fixtures light the floor a little: a soft bright pool under each row would cost too much, so the floor's own glow does it
+  pts.forEach((P,k)=>{ if(!P.length) return;
+    const mat=new THREE.MeshBasicMaterial({map:trofferTex(),side:THREE.DoubleSide,toneMapped:false});
+    const lens=new THREE.InstancedMesh(geo,mat,P.length);
+    // set into the ceiling (owner 2026-11-23: "make the lights in the ceiling"): flush with the tiles, no box hanging below
+    P.forEach(([x,y],i)=>{ const [x3,z3]=to3(x,y); M.makeTranslation(x3,HC-.006,z3); lens.setMatrixAt(i,M); });
+    // brightness: a soft glow on the ceiling round each one, and its reflection on the polished floor below
+    const hg=new THREE.PlaneGeometry(along?2.1:1.25,along?1.25:2.1); hg.rotateX(Math.PI/2);
+    const halo=new THREE.InstancedMesh(hg,new THREE.MeshBasicMaterial({map:glowTex('halo'),transparent:true,opacity:.3,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,toneMapped:false}),P.length);
+    const fg=new THREE.PlaneGeometry(along?2.2:1.1,along?1.1:2.2); fg.rotateX(-Math.PI/2);
+    const spot=new THREE.InstancedMesh(fg,new THREE.MeshBasicMaterial({map:glowTex('floor'),transparent:true,opacity:.32,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}),P.length);
+    P.forEach(([x,y],i)=>{ const [x3,z3]=to3(x,y); M.makeTranslation(x3,HC-.012,z3); halo.setMatrixAt(i,M); M.makeTranslation(x3,.02,z3); spot.setMatrixAt(i,M); });
+    halo.renderOrder=1; spot.renderOrder=2; lens.renderOrder=3; g.add(lens); g.add(halo); g.add(spot); ROOM.tro[k]=mat; (ROOM.glow=ROOM.glow||[])[k]=[halo,spot]; });
 }
-function dropRoom(){ if(!ROOM.g) return; scene.remove(ROOM.g); ROOM.g.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); ROOM.g=null; ROOM.key=null; ROOM.r=null; ROOM.leaves=[]; ROOM.gar=[]; }
+/* the two light switches: on the wall just inside the way in, at 1.2 m, a white two-gang plate. Walk up to them and a
+   button shows (or say "turn off the lights" / "lights on"); each flips its half of the lights (every other one). Remembered while you play. */
+const LSW=[true,true];
+function switches(g,r,HC){ ROOM.sw=[]; const d=r.doors[0]; if(!d) return;
+  const p=r.p, a=p[d.ei], b=p[(d.ei+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1])||1, ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux;
+  let s=d.s1+.55; if(s+.5>L) s=d.s0-.75;                              // beside the door's latch side, or the other side if it's a corner
+  const at=(t,o)=>[a[0]+ux*t-nx*o,a[1]+uy*t-ny*o], ang=Math.atan2(-to3(-nx,-ny)[1],-nx);   // facing into the store
+  const plate=new THREE.Mesh(new THREE.BoxGeometry(.2,.13,.012),rmat('swplate',0xf6f5f1,0x55544f)), [px,pz]=to3(...at(s,.212));
+  plate.position.set(px,1.2,pz); plate.rotation.y=ang+Math.PI/2; g.add(plate);
+  for(const k of [0,1]){ const lv=new THREE.Mesh(new THREE.BoxGeometry(.022,.045,.02),rmat('swlever',0xffffff,0x6a6a66));
+    const [lx,lz]=to3(...at(s+(k?.045:-.045),.225)); lv.position.set(lx,1.2,lz); lv.rotation.y=ang+Math.PI/2; g.add(lv);
+    ROOM.sw.push({lv,k,pos:at(s+(k?.045:-.045),.6)}); }
+  lightsApply(); }
+function lightsApply(){ for(const k of [0,1]){ const m=ROOM.tro&&ROOM.tro[k]; if(m){ m.color.setHex(LSW[k]?0xffffff:0x3b3f47); m.needsUpdate=true; } for(const o of (ROOM.glow&&ROOM.glow[k])||[]) o.visible=LSW[k]; }
+  for(const w of ROOM.sw||[]){ w.lv.position.y=1.2+(LSW[w.k]?.012:-.012); w.lv.rotation.x=LSW[w.k]?-.35:.35; }
+  const on=(LSW[0]?1:0)+(LSW[1]?1:0), f=on===2?1:on===1?.62:.3;           // the night lights keep a little light          // the room dims as rows go out
+  for(const k of ['ceil','floor']) if(STX[k]){ STX[k].emissiveIntensity=f; STX[k].color.setScalar(.35+.65*f); }
+  if(typeof swLabel==='function'&&swBtn.style.display==='flex') swLabel();
+  if(typeof dirty!=='undefined') dirty=true; }
+function flipLights(k,on){ if(k==null){ LSW[0]=LSW[1]=on; } else LSW[k]=on==null?!LSW[k]:on; lightsApply(); return LSW.slice(); }
+// the button by the switches
+const swBtn=document.createElement('div'); swBtn.id='lightSw';
+swBtn.style.cssText='position:absolute;left:50%;bottom:calc(var(--gap,10px) + 120px);transform:translateX(-50%);z-index:32;display:none;gap:10px';
+for(const k of [0,1]){ const b=document.createElement('button'); b.style.cssText='font:600 15px system-ui;padding:10px 14px;border-radius:12px;border:0;background:rgba(20,24,32,.85);color:#fff;box-shadow:0 3px 10px rgba(0,0,0,.4)';
+  b.onclick=e=>{ e.stopPropagation(); flipLights(k); swLabel(); }; swBtn.appendChild(b); }
+document.body.appendChild(swBtn);
+function swLabel(){ [...swBtn.children].forEach((b,k)=>b.textContent=(LSW[k]?'💡':'⚫')+' Switch '+(k+1)+': '+(LSW[k]?'on':'off')); }
+function switchNear(){ const r=ROOM.r; let near=false;
+  if(r&&ROOM.sw&&ROOM.sw.length&&mode==='walk'){ const q=loc(r,S.lat,S.lng); near=ROOM.sw.some(w=>Math.hypot(q[0]-w.pos[0],q[1]-w.pos[1])<2.2); }
+  if(near!==(swBtn.style.display==='flex')){ swBtn.style.display=near?'flex':'none'; if(near) swLabel(); } }
+function dropRoom(){ ROOM.tro=null; ROOM.glow=null; ROOM.sw=null; swBtn.style.display='none'; if(!ROOM.g) return; scene.remove(ROOM.g); ROOM.g.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); ROOM.g=null; ROOM.key=null; ROOM.r=null; ROOM.leaves=[]; ROOM.gar=[]; }
 function garUpdate(){ for(const G2 of ROOM.gar){ const o=window.GARAGE?GARAGE.openness(G2.q.gk):0, b0=o*1.95, top=2.2, h=Math.max(.15,top-b0);
   G2.m.scale.y=h; G2.m.position.y=b0+h/2; } }
 // the room sits round the building's middle, turned with the camera, at the map's scale (like the cars)
@@ -556,6 +620,7 @@ function walkStep(dt,st,gas,now){
   const m=mpp(S.lat,S.zoom), sc=WX/m, b=rad(S.camB), sb=Math.sin(b), cb=Math.cos(b);
   person.scale.setScalar(sc); person.rotation.y=-rad(S.hdg-S.camB); person.visible=!IN.rec;   /* first person indoors: you're the camera */
   if(ROOM.g){ placeRoom(m,b); doorSwing(dt); }
+  switchNear();
   const dx=(PK.lng-S.lng)*111320*cosLat(), dy=(PK.lat-S.lat)*111320, f=dx*sb+dy*cb, r=dx*cb-dy*sb;
   car.visible=true; car.position.set(r/m,0,-f/m); car.scale.setScalar(sc); car.rotation.y=-(rad(PK.hdg)-b);
   body.rotation.set(0,0,0); tractorG.rotation.set(0,0,0); debris.scale.setScalar(sc);
@@ -568,7 +633,7 @@ function walkStep(dt,st,gas,now){
   W.lastAnim=anim; dirty=false;
   const mph=Math.round(Math.abs(W.v)*2.237); if(mph!==step.mph){ step.mph=mph; mphEl.textContent=mph; }
 }
-window.WALK={step:(dt,st,gas,now)=>{ try{ walkStep(dt,st,gas,now); }catch(e){ console.warn('walk',e); renderer.render(scene,camera); } },
+window.WALK={inStore:()=>!!(ROOM.tro&&ROOM.tro.length),storeLights:(k,on)=>flipLights(k,on),step:(dt,st,gas,now)=>{ try{ walkStep(dt,st,gas,now); }catch(e){ console.warn('walk',e); renderer.render(scene,camera); } },
   parked:()=>PK.mode, getOut:()=>safe('walk',getOut), toggle:()=>safe('walk',getOut), state:W, person, parkedAt:PK,   /* toggle: the F key (js/enh/controls.js) */
   insideId:()=>IN.rec?IN.rec.id:null, inside:IN,
   setInside:r=>safe('inside',()=>{ if((r?r.key:null)!==IN.key) setInside(r); }), redrawInside:()=>{ if(IN.rec) safe('inside draw',()=>{ if(ROOM.g) garUpdate(); else drawInterior(IN.rec); }); }, inRec};

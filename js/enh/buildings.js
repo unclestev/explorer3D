@@ -227,7 +227,6 @@ function buildWalls(fs,geo,kx,ky,RW,gone){                          // geo[i]: f
       const c=house?L.wall:h<=12?LOWC[Math.floor(hash(seed,59)*LOWC.length)]:h<=30?['#c8c4bc','#b3b8be','#d2c8b5','#bdb7ad','#a89f93'][seed%5]:['#9fb3c6','#8b9fb2','#a7b4bf'][seed%3];
       const rings=[outer]; for(const hr of pl.slice(1)){ const c2=clipRing(hr,box); if(c2) rings.push(c2); }
       const pr2={c,cc:house?L.roof:FLAT[seed%2],b:b0,h}; if(!POWER) pr2.pat=house?L.pat:otherLook(seed,h,zoneAt(cx,cy,A,kx,ky));
-      if(!house&&window.STORES&&STORES.list.length){ const sl=STORES.look(cx,cy); if(sl){ pr2.c=sl.c; if(!POWER) pr2.pat=sl.pat; } }   // a Meijer (js/enh/stores.js)
       const ft={type:'Feature',id:f.id,properties:pr2,geometry:{type:'Polygon',coordinates:rings}};
       W.cache.set(sk,ft); feats.push(ft); } }
   if(W.cache.size>20000) W.cache.clear();
@@ -452,7 +451,7 @@ function facades(P,kx,ky,res,rich){
     for(const z of [-1,1]){ putD(E,z<0?s-.87:s+.05,z<0?s-.05:s+.87,.1,.125,.06,2.37,GLASS,dk); putD(E,z<0?s-.4:s+.1,z<0?s-.1:s+.4,.125,.16,1,1.06,'#c7ccd1'); } };
   const putD=(E,s0,s1,o0,o1,b,h,c,dk)=>{ put(E,s0,s1,o0,o1,b,h,c); if(dk!=null) out[out.length-1].properties.dk=dk; };
   if(P.f.id!=null) res.bld={key:P.cx.toFixed(6)+','+P.cy.toFixed(6),id:P.f.id,cx:P.cx,cy:P.cy,kx,ky,p,h:P.h,house,doors,garages,bb:P.bb,zone,area:A};
-  const sd=streetDir(P);
+  const sd=(window.STORES&&STORES.list.length&&STORES.frontDir(P.cx,P.cy))||streetDir(P);   // a Meijer faces its parking lot (js/enh/stores.js)
   let front=edges[0]; for(const E of edges){ const sc=(sd?E.nx*sd[0]+E.ny*sd[1]:0)+.02*Math.min(E.L,12), fs=(sd?front.nx*sd[0]+front.ny*sd[1]:0)+.02*Math.min(front.L,12); if(sc>fs) front=E; }
   let k=0;
   if(house){
@@ -602,5 +601,6 @@ onTick(700,function roofTick(){
 });
 const prev=window.onPowerChange;
 window.onPowerChange=(on)=>{ if(prev) prev(on); R.at=null; R.last=''; R.parts=null; CACHE.clear(); W.cache.clear(); W.sig=''; glowVis(); };   // also: wall textures off in battery saver   // slice count / unit count change
-window.ROOFS={build,state:R,walls:W,doorsNear:()=>R.reg||[],openDoor};
+// doorsNear: every walk-in building near you, with a store's own way in when it has no door here (js/enh/stores.js)
+window.ROOFS={build,state:R,walls:W,st0:()=>R.reg||[],doorsNear:()=>{ const b=R.reg||[]; return window.STORES&&STORES.list.length?b.filter(r=>!STORES.covers(r)).concat(STORES.recs()):b; },openDoor};
 })();
