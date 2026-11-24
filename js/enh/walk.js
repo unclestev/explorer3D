@@ -273,7 +273,7 @@ function buildRoom(r){
   for(const q of r.garages||[]){ const [ax,az]=to3(q.x0-q.nx*.08,q.y0-q.ny*.08), [bx,bz]=to3(q.x1-q.nx*.08,q.y1-q.ny*.08), W0=Math.hypot(bx-ax,bz-az);
     const m=new THREE.Mesh(new THREE.BoxGeometry(W0,1,.05),rmat('gar'+q.col,new THREE.Color(q.col||'#e5dfd3').getHex(),0x202020));
     m.position.set((ax+bx)/2,0,(az+bz)/2); m.rotation.y=-Math.atan2(bz-az,bx-ax); g.add(m); ROOM.gar.push({m,q}); }
-  for(const o of g.children) o.traverse(c=>{ if(c.isMesh){ c.renderOrder=1; c.frustumCulled=false; } });
+  for(const o of g.children) o.traverse(c=>{ if(c.isMesh){ if(!c.renderOrder) c.renderOrder=1; c.frustumCulled=false; } });
   scene.add(g); ROOM.g=g; ROOM.key=r.key; ROOM.r=r; garUpdate(); }
 /* store ceilings and lights (owner 2026-11-23, a photo of the lights inside Meijer): 2 x 2 ft speckled ceiling tiles in a
    white grid, and 2 x 4 ft parabolic-louvre troffers â€” a grid of deep shiny cells, bright where they catch the tubes and
@@ -289,20 +289,35 @@ function storeMat(k){ if(STX[k]) return STX[k]; const c=document.createElement('
     x.fillStyle='rgba(0,0,0,.1)'; for(const v of [0,128]){ x.fillRect(v,0,1,256); x.fillRect(0,v,256,1); } }
   const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(1/1.22,1/1.22); t.anisotropy=8;
   STX[k]=new THREE.MeshLambertMaterial({map:t,emissive:k==='ceil'?0x9a9890:0x55524c,emissiveMap:t,side:THREE.DoubleSide}); return STX[k]; }
-function trofferTex(){ if(STX.trof) return STX.trof; const c=document.createElement('canvas'); c.width=256; c.height=512; const x=c.getContext('2d');
-  x.fillStyle='#eef0f2'; x.fillRect(0,0,256,512);                                                            // the frame
-  const cols=3, rows=8, X0=14, Y0=14, cw=(256-2*X0)/cols, ch=(512-2*Y0)/rows;
-  for(let i=0;i<cols;i++) for(let j=0;j<rows;j++){ const X=X0+i*cw, Y=Y0+j*ch;
-    // a cell: bright reflection in the middle fading to blue-grey shadow at its sides, a hot streak along the tube
-    const g=x.createLinearGradient(X,0,X+cw,0); g.addColorStop(0,'#9aa3b8'); g.addColorStop(.22,'#e6ebf5'); g.addColorStop(.5,'#ffffff'); g.addColorStop(.78,'#e2e7f2'); g.addColorStop(1,'#8f98ad');
-    x.fillStyle=g; x.fillRect(X,Y,cw,ch);
-    const v=x.createLinearGradient(0,Y,0,Y+ch); v.addColorStop(0,'rgba(60,70,95,.4)'); v.addColorStop(.3,'rgba(255,255,255,0)'); v.addColorStop(.7,'rgba(255,255,255,.35)'); v.addColorStop(1,'rgba(60,70,95,.3)');
-    x.fillStyle=v; x.fillRect(X,Y,cw,ch);
-    x.strokeStyle='rgba(255,255,255,.9)'; x.lineWidth=3; x.beginPath(); x.moveTo(X+cw*.2,Y+ch*.55); x.quadraticCurveTo(X+cw*.5,Y+ch*.25,X+cw*.8,Y+ch*.55); x.stroke(); }
-  x.strokeStyle='#b4bac3'; x.lineWidth=2.5; for(let i=0;i<=cols;i++){ x.beginPath(); x.moveTo(X0+i*cw,Y0); x.lineTo(X0+i*cw,512-Y0); x.stroke(); }   // the louvre blades
-  for(let j=0;j<=rows;j++){ x.beginPath(); x.moveTo(X0,Y0+j*ch); x.lineTo(256-X0,Y0+j*ch); x.stroke(); }
-  x.strokeStyle='#7d838b'; x.lineWidth=6; x.strokeRect(X0-3,Y0-3,256-2*X0+6,512-2*Y0+6);
+function trofferTex(){ if(STX.trof) return STX.trof;
+  /* drawn after the owner's photo of a Meijer fixture: 3 columns x 10 rows of parabolic cells in a light metal trim, every
+     cell the same bright white */
+  const W=512, H=1024, c=document.createElement('canvas'); c.width=W; c.height=H; const x=c.getContext('2d');
+    x.fillStyle='#c9ccce'; x.fillRect(0,0,W,H);                                                   // trim
+  x.fillStyle='#262a30'; x.fillRect(14,14,W-28,H-28);                                         // the gap inside the trim
+  const m=22, cols=3, rows=10, cw=(W-2*m)/cols, ch=(H-2*m)/rows;
+  // every cell the same bright white (owner 2026-11-23: "make them all the same white"), with only a soft neutral shade
+  // toward the cell's edges and one gentle curved highlight, so the louvre still reads
+  for(let i=0;i<cols;i++) for(let j=0;j<rows;j++){ const X=m+i*cw, Y=m+j*ch;
+    x.save(); x.beginPath(); x.rect(X+1,Y+1,cw-2,ch-2); x.clip();
+    x.fillStyle='#f7f8fa'; x.fillRect(X,Y,cw,ch);
+    x.filter='blur(5px)'; x.strokeStyle='rgba(255,255,255,1)'; x.lineWidth=ch*.3; x.beginPath();
+    for(let k=0;k<=20;k++){ const t=k/20, xx=X+cw*t, yy=Y+ch*.42-Math.sin(t*Math.PI)*ch*.16; k?x.lineTo(xx,yy):x.moveTo(xx,yy); } x.stroke(); x.filter='none';
+    const sg=x.createLinearGradient(X,0,X+cw,0); sg.addColorStop(0,'rgba(150,152,156,.35)'); sg.addColorStop(.12,'rgba(150,152,156,0)'); sg.addColorStop(.88,'rgba(150,152,156,0)'); sg.addColorStop(1,'rgba(150,152,156,.35)');
+    x.fillStyle=sg; x.fillRect(X,Y,cw,ch);
+    const vg=x.createLinearGradient(0,Y,0,Y+ch); vg.addColorStop(0,'rgba(150,152,156,.25)'); vg.addColorStop(.15,'rgba(150,152,156,0)'); vg.addColorStop(.85,'rgba(150,152,156,0)'); vg.addColorStop(1,'rgba(150,152,156,.3)');
+    x.fillStyle=vg; x.fillRect(X,Y,cw,ch);
+    x.restore(); }
+  // the blades between the cells: thin bright edges catching the light, with a dark line under each
+  for(let j=0;j<=rows;j++){ const y=m+j*ch; x.fillStyle='rgba(120,122,126,.8)'; x.fillRect(m,y-1.5,W-2*m,3); }
+  for(let i=0;i<=cols;i++){ const X=m+i*cw; x.fillStyle='rgba(120,122,126,.8)'; x.fillRect(X-1.5,m,3,H-2*m); }
   const t=new THREE.CanvasTexture(c); t.anisotropy=8; STX.trof=t; return t; }
+// a soft glow round a fixture (brightness bleeding onto the ceiling) and its reflection on the shiny floor
+function glowTex(k){ if(STX['g'+k]) return STX['g'+k]; const c=document.createElement('canvas'); c.width=128; c.height=256; const x=c.getContext('2d');
+  const g=x.createRadialGradient(64,64,0,64,64,64); if(k==='halo'){ g.addColorStop(0,'rgba(255,255,255,.9)'); g.addColorStop(.35,'rgba(255,255,255,.45)'); g.addColorStop(1,'rgba(255,255,255,0)'); }
+  else { g.addColorStop(0,'rgba(255,255,255,.85)'); g.addColorStop(.3,'rgba(255,255,255,.35)'); g.addColorStop(1,'rgba(255,255,255,0)'); }
+  x.setTransform(1,0,0,2,0,0); x.fillStyle=g; x.fillRect(0,0,128,128); x.setTransform(1,0,0,1,0,0);   // stretched to the fixture's 1:2
+  const t=new THREE.CanvasTexture(c); STX['g'+k]=t; return t; }
 function troffers(g,p,HC){
   // rows along the building's long side: a 2 x 4 ft fixture every 2.44 m across and 3.66 m along (a common store layout).
   // Two switches (owner 2026-11-23): in a chequerboard pattern, every other light on the first switch and the ones between
@@ -312,7 +327,7 @@ function troffers(g,p,HC){
   const along=(x1-x0)>=(y1-y0), sx=along?3.66:2.44, sy=along?2.44:3.66, pts=[[],[],[]];
   let xi=0; for(let x=x0+sx/2;x<x1;x+=sx,xi++){ let yi=0; for(let y=y0+sy/2;y<y1;y+=sy,yi++){ if(!inP(p,x,y)) continue; let ok=true;
     for(const [dx,dy] of [[-.8,-.8],[.8,-.8],[.8,.8],[-.8,.8]]) if(!inP(p,x+dx,y+dy)){ ok=false; break; } if(ok) pts[xi%4===1&&yi%4===1?2:(xi+yi)%2].push([x,y]); } }
-  ROOM.tro=[];
+  ROOM.tro=[]; ROOM.glow=[];
   const geo=new THREE.PlaneGeometry(.61,1.22); geo.rotateX(Math.PI/2); if(along) geo.rotateY(Math.PI/2);   // facing down
   const M=new THREE.Matrix4();
   pts.forEach((P,k)=>{ if(!P.length) return;
@@ -320,7 +335,13 @@ function troffers(g,p,HC){
     const lens=new THREE.InstancedMesh(geo,mat,P.length);
     // set into the ceiling (owner 2026-11-23: "make the lights in the ceiling"): flush with the tiles, no box hanging below
     P.forEach(([x,y],i)=>{ const [x3,z3]=to3(x,y); M.makeTranslation(x3,HC-.006,z3); lens.setMatrixAt(i,M); });
-    g.add(lens); ROOM.tro[k]=mat; });
+    // brightness: a soft glow on the ceiling round each one, and its reflection on the polished floor below
+    const hg=new THREE.PlaneGeometry(along?2.1:1.25,along?1.25:2.1); hg.rotateX(Math.PI/2);
+    const halo=new THREE.InstancedMesh(hg,new THREE.MeshBasicMaterial({map:glowTex('halo'),transparent:true,opacity:.3,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,toneMapped:false}),P.length);
+    const fg=new THREE.PlaneGeometry(along?2.2:1.1,along?1.1:2.2); fg.rotateX(-Math.PI/2);
+    const spot=new THREE.InstancedMesh(fg,new THREE.MeshBasicMaterial({map:glowTex('floor'),transparent:true,opacity:.32,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}),P.length);
+    P.forEach(([x,y],i)=>{ const [x3,z3]=to3(x,y); M.makeTranslation(x3,HC-.012,z3); halo.setMatrixAt(i,M); M.makeTranslation(x3,.02,z3); spot.setMatrixAt(i,M); });
+    halo.renderOrder=1; spot.renderOrder=2; lens.renderOrder=3; g.add(lens); g.add(halo); g.add(spot); ROOM.tro[k]=mat; (ROOM.glow=ROOM.glow||[])[k]=[halo,spot]; });
 }
 /* the two light switches: on the wall just inside the way in, at 1.2 m, a white two-gang plate. Walk up to them and a
    button shows (or say "turn off the lights" / "lights on"); each flips its half of the lights (every other one). Remembered while you play. */
@@ -335,7 +356,7 @@ function switches(g,r,HC){ ROOM.sw=[]; const d=r.doors[0]; if(!d) return;
     const [lx,lz]=to3(...at(s+(k?.045:-.045),.225)); lv.position.set(lx,1.2,lz); lv.rotation.y=ang+Math.PI/2; g.add(lv);
     ROOM.sw.push({lv,k,pos:at(s+(k?.045:-.045),.6)}); }
   lightsApply(); }
-function lightsApply(){ for(const k of [0,1]){ const m=ROOM.tro&&ROOM.tro[k]; if(m){ m.color.setHex(LSW[k]?0xffffff:0x3b3f47); m.needsUpdate=true; } }
+function lightsApply(){ for(const k of [0,1]){ const m=ROOM.tro&&ROOM.tro[k]; if(m){ m.color.setHex(LSW[k]?0xffffff:0x3b3f47); m.needsUpdate=true; } for(const o of (ROOM.glow&&ROOM.glow[k])||[]) o.visible=LSW[k]; }
   for(const w of ROOM.sw||[]){ w.lv.position.y=1.2+(LSW[w.k]?.012:-.012); w.lv.rotation.x=LSW[w.k]?-.35:.35; }
   const on=(LSW[0]?1:0)+(LSW[1]?1:0), f=on===2?1:on===1?.62:.3;           // the night lights keep a little light          // the room dims as rows go out
   for(const k of ['ceil','floor']) if(STX[k]){ STX[k].emissiveIntensity=f; STX[k].color.setScalar(.35+.65*f); }
@@ -352,7 +373,7 @@ function swLabel(){ [...swBtn.children].forEach((b,k)=>b.textContent=(LSW[k]?'ðŸ
 function switchNear(){ const r=ROOM.r; let near=false;
   if(r&&ROOM.sw&&ROOM.sw.length&&mode==='walk'){ const q=loc(r,S.lat,S.lng); near=ROOM.sw.some(w=>Math.hypot(q[0]-w.pos[0],q[1]-w.pos[1])<2.2); }
   if(near!==(swBtn.style.display==='flex')){ swBtn.style.display=near?'flex':'none'; if(near) swLabel(); } }
-function dropRoom(){ ROOM.tro=null; ROOM.sw=null; swBtn.style.display='none'; if(!ROOM.g) return; scene.remove(ROOM.g); ROOM.g.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); ROOM.g=null; ROOM.key=null; ROOM.r=null; ROOM.leaves=[]; ROOM.gar=[]; }
+function dropRoom(){ ROOM.tro=null; ROOM.glow=null; ROOM.sw=null; swBtn.style.display='none'; if(!ROOM.g) return; scene.remove(ROOM.g); ROOM.g.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); ROOM.g=null; ROOM.key=null; ROOM.r=null; ROOM.leaves=[]; ROOM.gar=[]; }
 function garUpdate(){ for(const G2 of ROOM.gar){ const o=window.GARAGE?GARAGE.openness(G2.q.gk):0, b0=o*1.95, top=2.2, h=Math.max(.15,top-b0);
   G2.m.scale.y=h; G2.m.position.y=b0+h/2; } }
 // the room sits round the building's middle, turned with the camera, at the map's scale (like the cars)
