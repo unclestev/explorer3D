@@ -8,15 +8,11 @@
 (()=>{
 'use strict';
 const {safe,onReady,onTick}=YD;
-const WALL='#b98056', ROOF='#2c2e34';
+const WALL='#b88862', ROOF='#2c2e34';
 // the wings, in photo pixels [x0,y0,x1,y1, height m] (the photo is looked at from the south-east, so this is a flattened plan)
-const PLAN=[[270,110,515,350,8],[525,98,628,162,5],[495,150,620,302,6],[618,115,842,362,8],[430,300,655,575,6.4],
-  [0,462,432,770,11],[135,770,355,860,6.2],[190,855,305,915,4],[365,575,600,860,6.6],[596,515,885,765,10],
-  [865,548,1140,765,10.4],[600,760,1155,915,7],[725,895,840,945,4.2],[645,470,955,545,5.2]];   // every wing overlaps its neighbours, so the school is one connected building
-/* the windows and doors that show in the photo, each on the wall it is on: [x0, x1, wall y (the south face of that wing), how many, kind]
-   kind w: a row of windows (dark glass, 1.0-2.6 m up); d: doors (0-2.4 m) */
-const WINS=[[345,425,350,5,'w'],[648,712,362,3,'w'],[445,585,575,4,'w'],[418,538,860,3,'d'],[738,830,945,3,'d']];
-const X0=0,X1=1155,Y0=98,Y1=945;
+// traced from the owner's aerial photo: its roof outline cut into rectangles (photo pixels x0,y0,x1,y1) with each one's height in metres
+const PLAN=[[528,84,552,132,5],[612,84,624,120,5],[552,96,612,132,5],[420,108,492,348,8],[408,120,420,360,8],[492,120,504,348,8],[612,120,624,132,8],[648,120,744,360,8],[396,132,408,360,8],[744,132,756,372,8],[348,144,372,360,8],[384,144,396,360,8],[504,144,516,348,8],[636,144,648,360,8],[756,144,804,372,8],[324,156,348,348,8],[372,156,384,360,8],[516,156,564,300,6],[624,156,636,360,8],[804,156,816,372,8],[312,168,324,360,8],[564,168,612,300,6],[612,168,624,360,8],[816,168,828,372,8],[300,192,312,360,8],[288,204,300,360,8],[276,252,288,360,8],[264,288,276,360,8],[828,288,840,372,8],[516,300,612,516,6.4],[324,348,336,360,8],[420,348,432,360,8],[432,348,516,360,6.4],[444,360,516,576,6.4],[612,360,660,372,6.4],[660,360,744,372,8],[432,372,444,576,6.4],[612,372,636,384,6.4],[420,384,432,432,6.4],[612,384,624,396,6.4],[648,420,672,432,6.4],[660,432,672,456,6.4],[36,444,48,756,11],[204,444,216,768,11],[612,444,660,516,6.4],[48,456,60,756,11],[168,456,204,768,11],[216,456,240,768,11],[336,456,420,768,11],[660,456,720,516,5.2],[24,468,36,756,11],[60,468,168,756,11],[240,468,336,768,11],[420,468,432,768,11],[720,468,780,516,5.2],[780,480,948,516,5.2],[12,492,24,756,11],[948,504,960,552,5.2],[516,516,600,576,6.4],[600,516,888,552,10],[888,516,948,552,5.2],[960,516,972,540,5.2],[0,528,12,744,11],[996,540,1044,756,10.4],[600,552,864,636,10],[864,552,960,756,10.4],[972,552,996,756,10.4],[1044,552,1056,768,10.4],[960,564,972,756,10.4],[1056,564,1092,768,10.4],[432,576,600,624,6.6],[1092,612,1104,768,10.4],[432,624,552,648,6.6],[576,624,600,636,6.6],[612,636,864,648,10],[432,648,540,864,6.6],[624,648,864,756,10],[1104,648,1116,768,10.4],[540,672,588,696,6.6],[612,672,624,756,10],[540,696,576,864,6.6],[1116,696,1128,768,10.4],[1128,744,1140,768,10.4],[144,756,168,768,11],[576,756,588,768,6.6],[696,756,864,768,10],[864,756,888,768,10.4],[1008,756,1044,768,10.4],[156,768,360,852,6.2],[360,768,432,852,6.6],[144,780,156,852,6.2],[888,780,1128,912,7],[132,792,144,804,6.2],[576,792,600,852,6.6],[624,792,636,900,7],[744,792,888,852,7],[612,804,624,900,7],[636,804,720,888,7],[720,816,732,876,7],[132,828,144,852,6.2],[1128,828,1140,924,7],[204,852,360,864,6.2],[360,852,372,864,6.6],[576,852,588,864,6.6],[768,852,888,864,7],[192,864,312,900,4],[348,864,360,876,6.2],[780,864,888,876,7],[1140,864,1152,924,7],[180,876,192,888,4],[600,876,612,888,7],[792,876,888,912,7],[636,888,708,900,7],[192,900,300,912,4],[720,900,792,912,7],[204,912,216,924,4],[240,912,312,924,4],[720,912,840,948,4.2],[900,912,1128,924,7],[1152,912,1164,924,7],[840,936,852,948,4.2]];
+const X0=0,X1=1164,Y0=84,Y1=948;
 const T={ids:[],sig:'',fit:null,tries:0,at:0};
 const N=48;
 let off=false; try{ off=localStorage.getItem('ydTrjOff')==='1'; }catch(e){}
@@ -74,7 +70,7 @@ function polysM(F){                     // the plan's wings as rings in metres (
   PLAN.forEach((b,k)=>{ const n=norm(b), corners=[[n[0],n[1]],[n[2],n[1]],[n[2],n[3]],[n[0],n[3]]];
     const ring=corners.map(([pu,pv])=>{ const [u,v]=back(pu,pv), uu=u-.5, vv=v-.5;
       return [F.R.cx+F.R.ux*uu*F.R.W+F.R.vx*vv*F.R.H, F.R.cy+F.R.uy*uu*F.R.W+F.R.vy*vv*F.R.H]; });
-    out.push({ring,h:b[4]+k*.01,b}); });
+    out.push({ring,h:b[4],b}); });
   return out; }
 function polysOf(F,P,kx,ky){            // ... as lng/lat rings
   return polysM(F).map(o=>{ const ring=o.ring.map(([x,y])=>[+(P[0]+x/kx).toFixed(7),+(P[1]+y/ky).toFixed(7)]); ring.push(ring[0]); return {ring,h:o.h}; }); }
@@ -83,8 +79,8 @@ function polysOf(F,P,kx,ky){            // ... as lng/lat rings
    roof edge, rows of small square windows high on the walls (two rows on the two-storey wings), and three recessed entrances with
    brick canopies and red doors on the parking-lot side. Drawn flat on the faces of the wings, and only where no other wing
    covers the wall, so nothing floats. */
-const BASE='#6b3a30', BAND='#8a2f2a', GLASS='#1f2a36', RED='#8a1f26', DARK='#3a1a1a', BRICKC='#b98056';
-const PORTALS=[[9,.5,'main'],[11,.18,'aud'],[5,.14,'gym']];      // [wing, how far along its south side, kind]
+const BASE='#7a4a38', BAND='#8b3a32', GLASS='#1f2a36', RED='#8a1f26', DARK='#3a1a1a', BRICKC='#b88862';
+const PORTALS=[[480,860,'main'],[655,912,'aud'],[75,772,'gym']];      // [photo x, y on a south wall, kind]: found among the wings at run time
 function details(F,P,kx,ky){
   const W=polysM(F), feats=[], ll=([x,y])=>[+(P[0]+x/kx).toFixed(7),+(P[1]+y/ky).toFixed(7)];
   const area=r=>{ let a=0; for(let i=0,j=r.length-1;i<r.length;j=i++) a+=(r[j][0]-r[i][0])*(r[j][1]+r[i][1]); return a; };
@@ -105,7 +101,8 @@ function details(F,P,kx,ky){
         for(const [wb,wt] of rows) if(wt<H-.4&&free(s,wb+.1)) put(a,u,n,s-.5,s+.5,.02,.09,wb,wt,GLASS); }
       if(H>=10&&L>20) for(const f of [.08,.14]) if(free(L*f,3)) put(a,u,n,L*f-.2,L*f+.2,.02,.09,2.2,7.4,GLASS);   // the tall slit windows at a gym's end
     } });
-  for(const [wi,f,kind] of PORTALS){ const w=W[wi]; if(!w) continue; const r=w.ring, ccw=area(r)<0, a=r[0], b=r[1], L=Math.hypot(b[0]-a[0],b[1]-a[1]), u=[(b[0]-a[0])/L,(b[1]-a[1])/L], n=ccw?[u[1],-u[0]]:[-u[1],u[0]], s=L*f;
+  for(const [px,py,kind] of PORTALS){ let wi=-1, f=0; PLAN.forEach((b,k)=>{ if(Math.abs(b[3]-py)<30&&px>=b[0]+10&&px<=b[2]-10&&b[2]-b[0]>=50&&(wi<0||Math.abs(b[3]-py)<Math.abs(PLAN[wi][3]-py))){ wi=k; f=(px-b[0])/(b[2]-b[0]); } });
+    const w=W[wi]; if(!w) continue; const r=w.ring, ccw=area(r)<0, a=r[0], b=r[1], L=Math.hypot(b[0]-a[0],b[1]-a[1]), u=[(b[0]-a[0])/L,(b[1]-a[1])/L], n=ccw?[u[1],-u[0]]:[-u[1],u[0]], s=L*f;
     if(cover(a[0]+u[0]*s+n[0]*2.8,a[1]+u[1]*s+n[1]*2.8,wi)>0) continue;                              // something already stands there
     const hw=kind==='main'?3.2:2.6, hh=kind==='main'?4.6:4, D=2.4;
     // a covered entrance like the photo's: two brick piers and a roof slab over open space, the red doors sit in the brick wall itself
@@ -151,5 +148,5 @@ function scan(){
   T.fit=F; apply(F,P,kx,ky); }
 
 onTick(3000,function trjTick(){ safe('traughber',scan); });
-window.TRJ={off:()=>{ try{ localStorage.setItem('ydTrjOff','1'); }catch(e){} location.reload(); },on:()=>{ try{ localStorage.removeItem('ydTrjOff'); }catch(e){} location.reload(); },state:T,fit,PLAN,WINS};
+window.TRJ={off:()=>{ try{ localStorage.setItem('ydTrjOff','1'); }catch(e){} location.reload(); },on:()=>{ try{ localStorage.removeItem('ydTrjOff'); }catch(e){} location.reload(); },state:T,fit,PLAN};
 })();

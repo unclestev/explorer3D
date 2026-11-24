@@ -22,7 +22,7 @@ const H=['coalesce',['get','render_height'],['get','height'],6];
 const SIDING=['#f2efe8','#ebe5d8','#e3d8c2','#d6c7aa','#c7b89c','#cfc8bc','#b7b1a7','#a8b0b5','#93a1ab','#7f8f9b','#9ea88f','#87937c',
   '#e7d9a9','#d9c58e','#c4b7a2','#a9a095','#6f7d86','#5f6e62','#8c9fb4','#b8c4c9','#e9e2cf','#bfa98c'];
 /* Traughber Junior High (owner 2026-11-23, an aerial photo): tan-orange brick walls under dark flat roofs */
-const TRJ={wall:'#b98056',roof:'#2c2e34'};
+const TRJ={wall:'#b88862',roof:'#2c2e34'};
 const BRICK=['#9b5e4a','#8a4f3f','#a86a52','#b07a5e','#7c4a3c','#a2735f','#c49a7a','#8f6b5a'];
 const ROOFC=['#3a3c41','#46484d','#55585e','#62656b','#5b4a3c','#6a5c4d','#4a3f38','#3f4654','#6e6a63','#7b6f61','#5c3a33',
   '#2f3a33','#7a4b3a','#86898d','#4d4a46','#695849'];
