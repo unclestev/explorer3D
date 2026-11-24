@@ -24,14 +24,16 @@ const hash=(a,b)=>{ let h=Math.imul((a*73856093)^(b*19349663),0x5bd1e995); h^=h>
 const strHash=s=>{ let h=2166136261; for(let i=0;i<(s||'').length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return (h>>>0)/4294967296; };
 
 /* ---------- asphalt colours ---------- */
-const ROADRE=/^(road|bridge)_/, SKIP=/rail|hatching|transit|arrow|path|pedestrian|track|area|pier|ferry/;
-function roadLayers(){ return map.getStyle().layers.filter(l=>(l['source-layer']==='transportation'||l.source==='roads-smooth')&&l.type==='line'&&ROADRE.test(l.id)&&!SKIP.test(l.id)); }
+const ROADRE=/^(road|bridge)_/, SKIP=/rail|hatching|transit|arrow|path|pedestrian|area|pier|ferry/;
+/* road_service_track is the style's layer for service roads (parking aisles, driveways, alleys) AND farm tracks: it gets the asphalt colour
+   for service roads only, so lots and driveways read like the streets (they were left the map's white) */
+function roadLayers(){ return map.getStyle().layers.filter(l=>(l['source-layer']==='transportation'||l.source==='roads-smooth')&&l.type==='line'&&ROADRE.test(l.id)&&!SKIP.test(l.id)&&(!/track/.test(l.id)||/service_track/.test(l.id))); }
 function asphaltColour(id){ if(/_casing$/.test(id)) return /motorway|trunk/.test(id)?'#8a8b86':'#9a9a94';   // concrete curb / shoulder
   return /motorway/.test(id)?'#36383b':/trunk|primary/.test(id)?'#3b3d40':/secondary|tertiary/.test(id)?'#3f4144':/service/.test(id)?'#4c4e51':'#434548'; }
 function applyAsphalt(){ if(!map.isStyleLoaded||!map.getStyle()) return;
   for(const l of roadLayers()){ const id=l.id;
     if(!(id in RS.orig)) RS.orig[id]=map.getPaintProperty(id,'line-color');
-    safe('asphalt',()=>map.setPaintProperty(id,'line-color',RS.asphalt?asphaltColour(id):RS.orig[id])); }
+    safe('asphalt',()=>map.setPaintProperty(id,'line-color',RS.asphalt?(/track/.test(id)?['match',['get','class'],'track',RS.orig[id],asphaltColour(id)]:asphaltColour(id)):RS.orig[id])); }
   for(const l of map.getStyle().layers) if(/^tx-asph-/.test(l.id)) safe('asphalt grain',()=>map.setPaintProperty(l.id,'line-opacity',RS.asphalt?.22:.45));
   safe('lots',()=>{ if(window.TXLOT) TXLOT.apply(); });
   safe('walk tones',walkTones);

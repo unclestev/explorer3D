@@ -89,12 +89,12 @@ function addTextureLayers(){
   safe('tx-asphalt',()=>{
     const cur=map.getStyle().layers.map(l=>l.id);
     all.filter(l=>l['source-layer']==='transportation'&&l.type==='line'&&l.paint&&l.paint['line-width']&&!l.paint['line-dasharray']&&
-        !/casing|rail|path|pedestrian|arrow|tunnel|ferry|aeroway|pier|transit|cable|track|shadow/.test(l.id)&&
+        !/casing|rail|path|pedestrian|arrow|tunnel|ferry|aeroway|pier|transit|cable|shadow/.test(l.id)&&(!/track/.test(l.id)||/service_track/.test(l.id))&&
         !/^(mk|tx|sg|nav|trail|lu|lc)-/.test(l.id))                    // only the style's own roads, not our markings
       .forEach(l=>{ const i=cur.indexOf(l.id), next=cur[i+1];
         const c={id:'tx-asph-'+l.id,type:'line',source:l.source,'source-layer':l['source-layer'],minzoom:Math.max(l.minzoom||0,14),
           layout:{'line-cap':(l.layout&&l.layout['line-cap'])||'butt','line-join':'round'},paint:{'line-pattern':'tx-asphalt','line-width':l.paint['line-width'],'line-opacity':.45}};
-        if(l.filter) c.filter=l.filter; if(l.maxzoom) c.maxzoom=l.maxzoom;
+        if(l.filter) c.filter=/service_track/.test(l.id)?['all',l.filter,['!=',['get','class'],'track']]:l.filter; if(l.maxzoom) c.maxzoom=l.maxzoom;
         add(c,next&&map.getLayer(next)?next:undefined); });
   });
 }
