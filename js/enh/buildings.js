@@ -91,6 +91,15 @@ function addCaps(){
     map.addLayer({id:'roof-3d',type:'fill-extrusion',source:'roofs',
       paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-base':['min',['+',['get','b'],up],gt],'fill-extrusion-height':['min',['+',['get','h'],up],gt],'fill-extrusion-vertical-gradient':false}},before);
   }
+  // after dark, a soft warm pool of light on the ground under each lit porch / garage light (owner 2026-11-23). Radius
+  // in metres: prop r is metres / cos(latitude), turned into pixels by zoom (a map pixel is 2x smaller each zoom level)
+  if(!map.getSource('porch-glow')){
+    map.addSource('porch-glow',{type:'geojson',data:{type:'FeatureCollection',features:[]},maxzoom:19,tolerance:0});
+    const ppm=z=>512*2**z/40075017, rad=['interpolate',['exponential',2],['zoom'],12,['*',['get','r'],ppm(12)],22,['*',['get','r'],ppm(22)]];
+    map.addLayer({id:'porch-glow',type:'circle',source:'porch-glow',minzoom:15,layout:{visibility:night&&!POWER?'visible':'none'},
+      paint:{'circle-radius':rad,'circle-color':'#ffcf80','circle-opacity':.42,'circle-blur':1,'circle-pitch-alignment':'map','circle-pitch-scale':'map'}},
+      map.getLayer('wall-3d')?'wall-3d':'roof-3d');
+  }
 }
 
 /* ---------- geometry helpers (local metres around a reference point) ---------- */
@@ -214,7 +223,7 @@ function build(){
   if(CACHE.size>4000) CACHE.clear();
   // new work is limited by time (not count) per tick, so the phone never stalls; results are only sent to the map
   // when the set of buildings shown actually changed, and at most every 2.5 s while still catching up
-  const out=[], sig=[], reg=[], t0=performance.now(), tb=POWER?6:10; let nh=0, nb=0, nf=0, budget=1e9, near=0; R.pending=false;
+  const out=[], sig=[], reg=[], glow=[], t0=performance.now(), tb=POWER?6:10; let nh=0, nb=0, nf=0, budget=1e9, near=0; R.pending=false;
   // roofs are stacked slices (map extrusions can't slope): the nearest houses get thin slices, so up close the slope reads
   // as a smooth roof rather than a staircase (owner 2026-11-23: "sharpen the roofs so that they don't look like jagged shapes")
   const fine=Q3(14,20,26), nFine=Q3(20,35,50);
@@ -227,12 +236,13 @@ function build(){
     if(!C.fac&&nf<maxFac){ if(performance.now()-t0>tb){ R.pending=true; } else { safe('facades',()=>facades(P,kx,ky,C,sl===fine)); if(!C.fac) C.fac=[]; tagId(C.fac,P); } }
     if(C.house){ if(nh>=maxHouses) continue; nh++; } else if(C.feats.length||C.fac&&C.fac.length){ if(nb>=maxBig) continue; nb++; }
     for(const f of C.feats) out.push(f);
-    let w=0; if(C.fac&&C.fac.length&&nf<maxFac){ nf++; w=1; for(const f of C.fac) out.push(f); if(C.bld) reg.push(C.bld); }
+    let w=0; if(C.fac&&C.fac.length&&nf<maxFac){ nf++; w=1; for(const f of C.fac) out.push(f); if(C.bld) reg.push(C.bld); if(C.glow) for(const g of C.glow) glow.push(g); }
     if(C.feats.length||w) sig.push(key+w);
   }
   const now=performance.now(), key=sig.join(';');
   if(key!==R.last&&!(R.pending&&R.count&&now-(R.setT||0)<2500)){
-    const s=map.getSource('roofs'); if(s) s.setData({type:'FeatureCollection',features:out}); R.last=key; R.setT=now; R.count=out.length; }
+    const s=map.getSource('roofs'); if(s) s.setData({type:'FeatureCollection',features:out});
+    const g=map.getSource('porch-glow'); if(g) safe('porch glow',()=>g.setData({type:'FeatureCollection',features:glow})); R.last=key; R.setT=now; R.count=out.length; }
   R.at=[S.lng,S.lat]; R.t=now; R.n=destroyed.length; R.tiles=false; R.reg=reg;
 }
 // roof pieces carry rf:1 (js/enh/snowcover.js whitens only those when snow settles); every roof / facade piece carries its own building's key (prop bk, its middle), so walking inside one can hide just
@@ -300,6 +310,7 @@ function roofParts(P,kx,ky,slices){
    say where real windows and doors are, so placement is a sensible guess. After dark about half the windows glow. */
 let DRIVES=[];
 const SHUTTER=['#2b3440','#1f2a24','#3a2622','#2a2a2c','#4a3a2c','#33465a','#5a3030','#f1efe9'];
+const LAMP=['#1d1e20','#1d1e20','#3a2c22','#2e3236','#ece9e2'], LGL='#e6dfc8';   // porch / garage light fixtures: black, bronze, charcoal, white; frosted glass
 const GLASS='#27313e', FRAME='#eef0f1', DOORS=['#6b2f2a','#2f3e55','#3a3a3c','#5a4632','#f1efe9','#4d5b45'], GARAGE=['#f1efe9','#e5dfd3','#d8d3c9','#c9c2b6'];
 function streetDir(P){                                            // unit vector from the building toward its nearest road
   if(typeof roadGeo==='undefined'||typeof rebuildRoadGeo!=='function') return null;
@@ -374,6 +385,18 @@ function facades(P,kx,ky,res,rich){
   if(house){
     const floors=P.h<5.2?1:P.h<8.6?2:3, fh=Math.min(3.1,(P.h-.4)/floors), busy=new Map(), occupy=(E,a,b)=>{ let l=busy.get(E); if(!l) busy.set(E,l=[]); l.push([a,b]); };
     const free=(E,a,b)=>!(busy.get(E)||[]).some(z=>b>z[0]&&a<z[1]);
+    /* porch and garage lights (owner 2026-11-23): one carriage-lantern style per house, so the porch light matches the
+       ones beside the garage door; about 9 houses in 10 have them on after dark (lit 2), the rest are dark */
+    const fx=LAMP[Math.floor(hash(seed,93)*LAMP.length)], on=hash(seed,97)<.9, cl=Math.cos(P.cy*Math.PI/180); res.glow=[];
+    const lamp=(E,s,z,o,r)=>{ if(!frames||s-.13<.05||s+.13>E.L-.05) return;
+      put(E,s-.07,s+.07,0,.03,z-.24,z+.2,fx);                       // wall plate
+      put(E,s-.1,s+.1,.03,.21,z-.17,z-.13,fx);                      // lantern bottom
+      put(E,s-.085,s+.085,.045,.195,z-.13,z+.1,LGL,on?2:0);         // glass
+      if(fine) for(const d of [-.09,.07]) put(E,s+d,s+d+.02,.04,.2,z-.13,z+.1,fx);   // corner posts
+      put(E,s-.125,s+.125,.02,.235,z+.1,z+.15,fx);                  // roof
+      put(E,s-.035,s+.035,.1,.135,z+.15,z+.21,fx);                  // finial
+      if(on){ const x=E.a[0]+E.ux*s+E.nx*o, y=E.a[1]+E.uy*s+E.ny*o;
+        res.glow.push({type:'Feature',properties:{r:+(r/cl).toFixed(2)},geometry:{type:'Point',coordinates:toLL([x,y])}}); } };
     const trim=hash(seed,61)<.18?'#3b3f44':FRAME, shut=hash(seed,67)<.38?SHUTTER[Math.floor(hash(seed,71)*SHUTTER.length)]:null;
     // garage: where the driveway meets the house, else (most houses) at one end of the street side
     const ds=driveSpot(P,edges,q=>[(q[0]-P.cx)*kx,(q[1]-P.cy)*ky]);
@@ -392,7 +415,8 @@ function facades(P,kx,ky,res,rich){
         if(fine&&!(wins&&k===3)) for(const z of [k*ph+ph*.22,k*ph+ph*.78-.04]){ put(E,s0+.12,s0+gw-.12,.1,.112,z,z+.04,shade(gcol,-.12)); rp(); } }   // raised panel edges
       if(wins){ const n=gw>4?8:4, ww=(gw-.5)/n; for(let i=0;i<n;i++){ const x=s0+.25+i*ww; put(E,x+.06,x+ww-.06,.1,.115,3*ph+.14,3*ph+.4,GLASS); rp(); } }
       if(fine){ put(E,s0-.14,s0,.0,.06,0,GT+.12,trim); put(E,s0+gw,s0+gw+.14,.0,.06,0,GT+.12,trim); put(E,s0-.14,s0+gw+.14,.0,.06,GT,GT+.12,trim);   // trim round the opening
-        for(const x of [s0-.45,s0+gw+.3]) if(x>.1&&x+.15<E.L-.1) put(E,x,x+.15,.02,.16,1.85,2.15,'#2a2b2d',1); }                       // coach lights (they glow after dark)
+      }
+      for(const x of [s0-.42,s0+gw+.42]) lamp(E,x,1.95,1.1,2);                                                     // a light on each side of the garage door
       occupy(E,s0-.6,s0+gw+.6); }
     // front door on the street side, in the free part of the wall
     { const E=front, fr=(busy.get(E)||[])[0], span=fr?(fr[0]>E.L/2?[.8,fr[0]-.3]:[fr[1]+.3,E.L-.8]):[.8,E.L-.8];
@@ -402,9 +426,9 @@ function facades(P,kx,ky,res,rich){
         putD(E,s-.48,s+.48,.02,.09,0,2.1,dc,dk);
         if(fine){ for(const z of [[.25,.95],[1.15,1.85]]) for(const x of [[-.38,-.06],[.06,.38]]) put(E,s+x[0],s+x[1],.09,.105,z[0],z[1],shade(dc,.14));   // four raised panels
           put(E,s+.3,s+.36,.09,.15,.98,1.04,'#c9a64a');                                                                      // brass knob
-          put(E,s-.9,s+.9,.0,1.15,0,.17,'#c4c1ba');                                                                          // concrete stoop
-          put(E,s+.78,s+.92,.02,.15,1.75,2.0,'#2a2b2d',1); }                                                                 // porch light
-        occupy(E,s-1,s+1); } }
+          put(E,s-.9,s+.9,.0,1.15,0,.17,'#c4c1ba'); }                                                                        // concrete stoop
+        lamp(E,s+.9,1.9,1.3,2.4);                                                                                          // porch light, matching the garage ones
+        occupy(E,s-1,s+1.15); } }
     for(const E of edges) for(let f=0;f<floors;f++){
       const n=Math.floor((E.L-1.2)/2.9); if(n<1) continue; const step=(E.L)/(n+1), big=E===front&&f===0;
       for(let i=1;i<=n;i++){ const s=i*step, w=big?1.4:.95, b=f*fh+.9, h=b+(big?1.4:1.25);
@@ -434,10 +458,11 @@ function facades(P,kx,ky,res,rich){
 // after dark, the windows marked lit glow warm (a paint switch, nothing is rebuilt)
 let night=null, openDk=null;
 function paintRoofs(){ if(!map.getLayer('roof-3d')) return;
-  let c=night?['case',['==',['get','lit'],1],'#ffd27f',['get','c']]:['get','c'];
+  let c=night?['match',['coalesce',['get','lit'],0],1,'#ffd27f',2,'#fff4cf',['get','c']]:['get','c'];   // 1: lit windows, 2: porch / garage lights
   if(openDk!=null) c=['case',['==',['coalesce',['get','dk'],-1],openDk],'#16181b',c];          // an open doorway: dark inside
   safe('roof colours',()=>map.setPaintProperty('roof-3d','fill-extrusion-color',c)); }
-function setNight(on){ if(on===night||!map.getLayer('roof-3d')) return; night=on; paintRoofs(); }
+function setNight(on){ if(on===night||!map.getLayer('roof-3d')) return; night=on; paintRoofs(); glowVis(); }
+function glowVis(){ if(map.getLayer('porch-glow')) safe('porch glow',()=>map.setLayoutProperty('porch-glow','visibility',night&&!POWER?'visible':'none')); }
 function openDoor(dk){ dk=dk==null?null:dk; if(dk===openDk) return; openDk=dk; paintRoofs(); }
 onTick(2000,function litTick(){ const A=YD.AT; setNight(!!(A&&A.k>.55)); });
 
@@ -448,11 +473,11 @@ onReady(function buildings(){
 });
 onTick(700,function roofTick(){
   if(!map.getSource('roofs')) return;
-  if(mode==='glider'){ if(R.count){ safe('roofs off',()=>map.getSource('roofs').setData({type:'FeatureCollection',features:[]})); R.count=0; R.at=null; R.last=''; } return; }
+  if(mode==='glider'){ if(R.count){ safe('roofs off',()=>{ map.getSource('roofs').setData({type:'FeatureCollection',features:[]}); const g=map.getSource('porch-glow'); if(g) g.setData({type:'FeatureCollection',features:[]}); }); R.count=0; R.at=null; R.last=''; } return; }
   const moved=R.at?meters(R.at[1],R.at[0],S.lat,S.lng):1e9, age=performance.now()-R.t;
   if(moved>(POWER?160:120)||destroyed.length!==R.n||(R.tiles&&age>(POWER?8000:5000))||R.pending) safe('roofs',build);
 });
 const prev=window.onPowerChange;
-window.onPowerChange=(on)=>{ if(prev) prev(on); R.at=null; R.last=''; R.parts=null; CACHE.clear(); W.cache.clear(); W.sig=''; };   // also: wall textures off in battery saver   // slice count / unit count change
+window.onPowerChange=(on)=>{ if(prev) prev(on); R.at=null; R.last=''; R.parts=null; CACHE.clear(); W.cache.clear(); W.sig=''; glowVis(); };   // also: wall textures off in battery saver   // slice count / unit count change
 window.ROOFS={build,state:R,walls:W,doorsNear:()=>R.reg||[],openDoor};
 })();
