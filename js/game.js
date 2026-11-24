@@ -1400,6 +1400,9 @@ function step(now){
   // the wheel's pedals as an automatic: gas drives the way the selector says, the brake only ever brakes (js/enh/wheel.js)
   let wBrake=0; const WA=!!(WH&&WH.ok&&!WH.cal&&Math.abs(kG)<.05&&Math.abs(tGas)<.05&&mode!=='walk'&&mode!=='glider');
   if(WA){ wBrake=WH.brake||0; gas=WH.sel==='D'?WH.pedal:WH.sel==='R'?-WH.pedal:0; S.sel=WH.sel; } else S.sel=null;
+  // Park Assist (js/enh/park.js, Explorer / Expedition): while you hold the park button it steers, drives and brakes itself
+  if(window.PARK&&PARK.active){ const pc=PARK.control(dt,{st:Math.max(Math.abs(kS),Math.abs(tSteer))>.05?(Math.abs(kS)>.05?kS:tSteer):0,gas:Math.max(0,WA?(WH.pedal||0):gas),brake:Math.max(wBrake,WA?0:-Math.min(0,gas))});
+    if(pc){ st=pc.st; gas=pc.gas; wBrake=pc.brake||0; if(WA) S.sel=gas<-.01?'R':gas>.01?'D':S.sel; if(window.FFB) FFB.cmd=pc.st; } }
   // autopilot (js/enh/autopilot.js) drives until you touch the steering, gas or handbrake
   // with the wheel motor (js/enh/ffb.js) the wheel turns itself, so only the keys / touch steering count here; holding
   // the wheel away from where autopilot is steering hands over in ffb.js
@@ -1450,7 +1453,7 @@ function step(now){
   // steering (bicycle model, less lock at speed)
   // a racing wheel steers like a real car: fixed ratio (900° wheel → ±29° at the road wheels, ~15.5:1), no speed-dependent
   // shrinking; keys / touch / autopilot keep the assisted lock that eases off with speed
-  const wheelIn=!!(WH&&WH.ok)&&Math.abs(kS)<.05&&Math.abs(tSteer)<=.05&&!(window.AUTO&&AUTO.on)&&!boat;
+  const wheelIn=!!(WH&&WH.ok)&&Math.abs(kS)<.05&&Math.abs(tSteer)<=.05&&!(window.AUTO&&AUTO.on)&&!(window.PARK&&PARK.active)&&!boat;
   const lock=boat?rad(30)/(1+Math.abs(S.v)/12):wheelIn?rad(450/15.5):steerLock(S.v);
   S.steer+=(st*lock-S.steer)*Math.min(1,dt*(wheelIn?24:9));
   let skid=0;
