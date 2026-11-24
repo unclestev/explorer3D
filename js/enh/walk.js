@@ -292,7 +292,7 @@ function roomLook(r,SH){
    tall black acoustic panels, tall narrow windows high up, a black wall pad, banners, a flag, folded bleachers along a wall, a
    scoreboard, a maple floor with the court lines, hoops, and white steel roof trusses with round high-bay lights hung from them */
 function gymDecor(g,p,HC,r,TH2){
-  const o=TH2+.014, tan=[], stripe=[], panel=[], pad=[], win=[], ban=[], gold=[];
+  const o=TH2+.014, tan=[], stripe=[], panel=[], pad=[], win=[], ban=[], gold=[], dfr=[], dgl=[];
   const gaps=i=>(r.doors||[]).filter(d=>d.ei===i).map(d=>[d.s0-.15,d.s1+.15]).sort((a,b)=>a[0]-b[0]);
   let best=0, bi=0, minx=1e9,maxx=-1e9,miny=1e9,maxy=-1e9, cx=0, cy=0;
   for(const q of p){ minx=Math.min(minx,q[0]); maxx=Math.max(maxx,q[0]); miny=Math.min(miny,q[1]); maxy=Math.max(maxy,q[1]); cx+=q[0]; cy+=q[1]; } cx/=p.length; cy/=p.length;
@@ -305,12 +305,15 @@ function gymDecor(g,p,HC,r,TH2){
     const free=(s0,s1)=>(r.doors||[]).every(d=>d.ei!==i||s1<d.s0-.3||s0>d.s1+.3);
     for(let s=2.4,k=0;s+1.3<L-1;s+=4.2,k++){ if(!free(s,s+1.3)) continue; quad(panel,at(s,o+.004),at(s+1.3,o+.004),3.5,PH);                        // the tall black panels
       if(k%2===0&&s+3.4<L-1&&free(s+2.1,s+3.3)) quad(win,at(s+2.1,o+.004),at(s+3.3,o+.004),4.2,PH-.2); }                                       // a tall window between a pair of them
+    if(i===bi||i===(bi+2)%p.length) for(const f of [.28,.72]){ const s=L*f-1; if(!free(s-.3,s+2.3)) continue;                                      // the pair of red-framed glass doors, on both long sides (as in the photo)
+      for(const k of [0,1]){ const a0=s+k*1.05; quad(dfr,at(a0,o+.016),at(a0+.95,o+.016),0,2.15); quad(dgl,at(a0+.09,o+.024),at(a0+.86,o+.024),.1,2.05); quad(dfr,at(a0+.09,o+.03),at(a0+.86,o+.03),1.05,1.14); } }
     if(i===bi){ const m=L/2; quad(pad,at(m-6,o+.004),at(m+6,o+.004),.15,2.7); }                                                                  // the black wall pad
     if(i===(bi+2)%p.length||i===bi) for(let s=3;s+.9<L-2;s+=1.7) if(free(s,s+.9)){ quad(ban,at(s,o+.006),at(s+.9,o+.006),3.5,4.6); quad(gold,at(s+.2,o+.008),at(s+.7,o+.008),3.85,4.3); }   // black and gold banners
   }
   const mk=(arr,col,emi)=>{ if(arr.length) g.add(meshOf(arr,rmat('gym'+col,col,emi||0x000000))); };
   mk(tan,0xc9a468,0x4a3c20); mk(stripe,0x1d2026,0x08090b); mk(panel,0x14161a,0x040405); mk(pad,0x111317,0x030304);
   if(win.length){ const m=new THREE.MeshBasicMaterial({color:0xc9def0,side:THREE.DoubleSide}); g.add(meshOf(win,m)); }                              // daylight in the windows
+  mk(dfr,0x8a2020,0x2a0808); mk(dgl,0x27383d,0x0c1316);
   mk(ban,0x15171b,0x050506); mk(gold,0xd7b24a,0x4a3c10);
   // the floor: court lines on the maple, along the room's long side
   const W=maxx-minx, Hh=maxy-miny, a0=p[bi], a1=p[(bi+1)%p.length], ang=Math.atan2(a1[1]-a0[1],a1[0]-a0[0]), CL=Math.min(28,best-4), CW=Math.min(15,(Math.min(W,Hh)>0?Math.min(W,Hh):15)-3);
