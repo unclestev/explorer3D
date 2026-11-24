@@ -161,14 +161,16 @@ const at=key=>{ if(!key) return null; const e=ST.list.find(s=>s.key===key); if(e
 function ownRec(s){ const kx=111320*Math.cos(s.cy*Math.PI/180), ky=111320;
   let p=s.ring.slice(0,-1).map(q=>[(q[0]-s.cx)*kx,(q[1]-s.cy)*ky]); let a=0; for(let i=0,j=p.length-1;i<p.length;j=i++) a+=(p[j][0]-p[i][0])*(p[j][1]+p[i][1]); if(a<0) p.reverse();   // counter-clockwise
   const E=frontOf(s,p); if(!E) return null; const sm=E.L/2;
-  const d={ei:E.ei,s0:sm-.95,s1:sm+.95,x0:E.a[0]+E.ux*(sm-.95),y0:E.a[1]+E.uy*(sm-.95),x1:E.a[0]+E.ux*(sm+.95),y1:E.a[1]+E.uy*(sm+.95),nx:E.nx,ny:E.ny,dk:9e8+ST.list.indexOf(s)};
+  // two pairs of glass doors either side of a tall pillar (owner's photo of the Oswego Meijer: entrance on the left, exit on the right)
+  const mk=(s0,s1,k)=>({ei:E.ei,s0,s1,x0:E.a[0]+E.ux*s0,y0:E.a[1]+E.uy*s0,x1:E.a[0]+E.ux*s1,y1:E.a[1]+E.uy*s1,nx:E.nx,ny:E.ny,dk:9e8+ST.list.indexOf(s)*2+k});
+  const d=mk(sm-2.6,sm-.5,0), d2=mk(sm+.5,sm+2.3,1);       // the left pair a little wider, as in the photo
   // the doors js/enh/buildings.js drew on the store's pieces work too, where they lie on the outline
-  const doors=[d], base=window.ROOFS&&ROOFS.st0?ROOFS.st0():[];
+  const doors=[d,d2], base=window.ROOFS&&ROOFS.st0?ROOFS.st0():[];
   for(const r of base){ if(!covers(r)) continue;
     for(const q of r.doors||[]){ const mx=(q.x0+q.x1)/2, my=(q.y0+q.y1)/2, lng=r.cx+mx/r.kx, lat=r.cy+my/r.ky, X=(lng-s.cx)*kx, Y=(lat-s.cy)*ky, hw=Math.hypot(q.x1-q.x0,q.y1-q.y0)/2;
       for(let i=0;i<p.length;i++){ const a=p[i], b=p[(i+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1]); if(L<2) continue; const ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L;
         const t=(X-a[0])*ux+(Y-a[1])*uy, off=(X-a[0])*uy-(Y-a[1])*ux; if(t<hw+.2||t>L-hw-.2||Math.abs(off)>.8) continue;
-        if(doors.some(o=>o.ei===i&&Math.abs((o.s0+o.s1)/2-t)<2.5)) break;
+        if(doors.some(o=>o.ei===i&&Math.abs((o.s0+o.s1)/2-t)<3.5)) break;
         doors.push({ei:i,s0:t-hw,s1:t+hw,x0:a[0]+ux*(t-hw),y0:a[1]+uy*(t-hw),x1:a[0]+ux*(t+hw),y1:a[1]+uy*(t+hw),nx:uy,ny:-ux,dk:q.dk}); break; } } }
   return {key:s.key,keys:s.keys,id:s.id,cx:s.cx,cy:s.cy,kx,ky,p,h:s.h||hOf(s),house:false,doors,garages:[],bb:s.bb,store:true,brand:s.brand,E,sm}; }
 // the store's pieces come in as their tiles load: look again (at most every 4 s) and grow the outline to take them in
@@ -186,20 +188,43 @@ function recs(){ const out=[], kx0=111320*Math.cos(S.lat*Math.PI/180);
   return out; }
 function hOf(s){ let h=0; try{ for(const f of map.querySourceFeatures(bSrc,{sourceLayer:'building'})){ if(s.id==null||f.id!==s.id) continue; const pr=f.properties||{}; h=Math.max(h,+(pr.render_height||pr.height||0)); } }catch(e){} return h||8; }
 // the glass double doors on the map (dark frame, two glass leaves, push bars), like buildings.js draws its own
-function drawDoors(){ const feats=[];
+function drawDoors(){ const feats=[]; ST.cache=[];
   for(const r of recs()){ const E=r.E, sm=r.sm, toLL=q=>[+(r.cx+q[0]/r.kx).toFixed(7),+(r.cy+q[1]/r.ky).toFixed(7)];
-    const put=(s0,s1,o0,o1,b,h,c)=>{ const a=[E.a[0]+E.ux*s0,E.a[1]+E.uy*s0], z=[E.a[0]+E.ux*s1,E.a[1]+E.uy*s1];
+    const o=ST.op[r.key]||0; ST.cache.push({key:r.key,lng:r.cx+(E.a[0]+E.ux*sm)/r.kx,lat:r.cy+(E.a[1]+E.uy*sm)/r.ky});
+    const put=(s0,s1,o0,o1,b,h,c,g)=>{ if(s1-s0<.02) return; const a=[E.a[0]+E.ux*s0,E.a[1]+E.uy*s0], z=[E.a[0]+E.ux*s1,E.a[1]+E.uy*s1];
       const ring=[[a[0]+E.nx*o0,a[1]+E.ny*o0],[z[0]+E.nx*o0,z[1]+E.ny*o0],[z[0]+E.nx*o1,z[1]+E.ny*o1],[a[0]+E.nx*o1,a[1]+E.ny*o1]].map(toLL); ring.push(ring[0]);
-      feats.push({type:'Feature',properties:{c,b,h},geometry:{type:'Polygon',coordinates:[ring]}}); };
-    put(sm-1.15,sm+1.15,-.04,.05,0,2.65,'#3b4048');
-    for(const z of [-1,1]){ put(z<0?sm-.95:sm+.03,z<0?sm-.03:sm+.95,-.02,.03,.04,2.45,'#27313e'); put(z<0?sm-.45:sm+.1,z<0?sm-.1:sm+.45,.03,.07,1,1.06,'#c7ccd1'); }
-    put(sm-1.6,sm+1.6,-.04,.9,2.65,2.85,'#c9ccd0'); }                                                     // a little canopy edge over them
+      feats.push({type:'Feature',properties:{c,b,h,g:g?1:0},geometry:{type:'Polygon',coordinates:[ring]}}); };
+    const AL='#dfe2e4', GL='#27313e', BK='#16181b', YL='#f1d21c', PANEL='#d3d6d8', SEE='#9db4c6';          // SEE: clear glass, drawn on its own see-through layer
+    put(sm-2.75,sm+2.45,.04,.08,0,4.7,PANEL);                                                            // the white storefront, tall like the photo
+    for(const [a0,a1] of [[sm-2.6,sm-.55],[sm+.55,sm+2.3]]){ const m=(a0+a1)/2;
+      put(a0,a1,.08,.1,2.95,4.35,'#262e36'); put(a0,a1,.1,.12,2.95,4.35,SEE,1); put(m-.03,m+.03,.12,.15,2.95,4.35,AL); put(a0,a1,.12,.15,3.62,3.68,AL);   // two rows of dark glass with a mullion and a rail
+      put(a0,a1,.08,.14,2.62,2.95,PANEL); }                                                              // the grey band over the doors
+    put(sm-.5,sm+.5,.04,.2,0,4.7,'#c6c9cb');                                                             // the tall pillar between the pairs
+    // the automatic doors: each pair's two leaves slide apart towards the jambs as you come up, and close behind you
+    for(const [c0,c1] of [[sm-2.6,sm-.5],[sm+.5,sm+2.3]]){ const cm=(c0+c1)/2;
+      put(c0,c1,.08,.12,0,2.62,o>.02?'#0d0f12':'#6c737a');                                              // the doorway: dark once they open
+      put(cm-.2,cm+.2,.14,.2,2.5,2.6,BK);                                                                // the sensor over each pair
+      for(const z of [-1,1]){ const J=cm+z*(c1-c0)/2, lw=(c1-c0)/2-.02, F=J-z*lw*(1-.92*o), A=Math.min(J,F), B=Math.max(J,F);
+        put(A,B,.12,.15,.04,2.5,AL);                                                                     // white aluminium frame
+        if(B-A>.3){ put(A+.08,B-.08,.15,.17,.5,2.3,SEE,1); put(A+.04,B-.04,.17,.21,.82,.94,BK); put(A+.04,B-.04,.17,.21,.14,.32,BK);   // glass, then the two black bars
+          const mm=(A+B)/2; put(mm-.1,mm+.1,.17,.18,1.2,1.4,YL); } }                                      // and the yellow caution sticker
+      put(cm-.05,cm+.05,.2,.3,0,.95,BK); }                                                               // black post between each pair's doors
+    put(sm+.5,sm+.56,.1,1.9,0,1.05,BK); put(sm+2.3,sm+2.36,.1,1.9,0,1.05,BK);                            // the black gates in front of the exit doors
+    put(sm+.56,sm+2.3,1.84,1.9,0,1.05,BK);
+    put(sm-2.85,sm+2.85,.06,.9,4.7,4.9,'#c9ccd0'); }                                                     // a little canopy edge over them
   safe('stores',()=>{ const src=map.getSource('stores'); if(src) src.setData({type:'FeatureCollection',features:feats}); }); }
 function layers(){ safe('stores layer',()=>{ if(map.getSource('stores')) return;
   map.addSource('stores',{type:'geojson',data:{type:'FeatureCollection',features:[]},maxzoom:19,tolerance:0});
-  map.addLayer({id:'stores-3d',type:'fill-extrusion',source:'stores',minzoom:13,paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-base':['get','b'],'fill-extrusion-height':['get','h'],'fill-extrusion-vertical-gradient':false}},
+  map.addLayer({id:'stores-glass',type:'fill-extrusion',source:'stores',minzoom:13,filter:['==',['get','g'],1],paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-base':['get','b'],'fill-extrusion-height':['get','h'],'fill-extrusion-opacity':.3,'fill-extrusion-vertical-gradient':false}},
+    map.getLayer('hn-big')?'hn-big':undefined);                                                       // the glass: see-through
+  map.addLayer({id:'stores-3d',type:'fill-extrusion',source:'stores',minzoom:13,filter:['==',['get','g'],0],paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-base':['get','b'],'fill-extrusion-height':['get','h'],'fill-extrusion-vertical-gradient':false}},
     map.getLayer('hn-big')?'hn-big':undefined); }); }
 
+// the doors are automatic: a sensor within 5 m opens every Meijer entrance, in about half a second, and they shut again when you leave
+ST.op={}; ST.cache=[]; let lastDraw=0;
+FRAME_HOOKS.push(function storeDoors(dt){ if(!ST.cache.length) return false; let ch=false;
+  for(const c of ST.cache){ const near=meters(c.lat,c.lng,S.lat,S.lng)<8, o0=ST.op[c.key]||0, o=Math.max(0,Math.min(1,o0+(near?1:-1)*dt/.4)); if(o!==o0){ ST.op[c.key]=o; ch=true; } }
+  const now=performance.now(); if(ch&&now-lastDraw>45){ lastDraw=now; safe('store doors',drawDoors); } return false; });
 onReady(function stores(){ layers(); setTimeout(()=>safe('stores scan',()=>{ scanTiles(); drawDoors(); }),2500); });
 onTick(1500,function storeTick(){
   const moved=ST.at?meters(ST.at[1],ST.at[0],S.lat,S.lng):1e9;
