@@ -114,7 +114,9 @@ function details(F,P,kx,ky){
     put(a,u,n,s-hw+.8,s+hw-.8,.02,.06,0,2.9,DARK);                                                      // the dark recess on the wall
     for(const z of [-1,1]){ put(a,u,n,z<0?s-1.45:s+.1,z<0?s-.1:s+1.45,.06,.12,.05,2.65,RED); put(a,u,n,z<0?s-1.3:s+.25,z<0?s-.25:s+1.3,.12,.16,.45,2.45,GLASS); }   // two red glass doors flush on the wall
     put(a,u,n,s-hw+.9,s+hw-.9,.06,.12,2.95,3.5,GLASS);                                                  // a window over them
-    if(kind==='main'){ for(const z of [-1,1]){ put(a,u,n,s+z*(hw+.9)-.4,s+z*(hw+.9)+.4,D+.3,D+1.1,0,.8,'#b5603f'); put(a,u,n,s+z*(hw+.9)-.25,s+z*(hw+.9)+.25,D+.45,D+.95,.8,1.3,'#4d7a2c');   // terracotta planters with plants
+    if(kind==='main'){ put(a,u,n,s-hw-1.2,s-hw,.05,D,0,9,BRICKC); put(a,u,n,s+hw,s+hw+1.2,.05,D,0,9,BRICKC); put(a,u,n,s-hw-1.2,s+hw+1.2,.05,D,hh-.9,9,BRICKC);   // the tall brick frontispiece of the photo, wider piers up to a block over the opening
+      put(a,u,n,s-hw-1.2,s+hw+1.2,D-.05,D+.05,8.6,9.1,BAND); for(const k of [0,1,2]) put(a,u,n,s-hw+.2+k*.2,s+hw-.2-k*.2,D+.03,D+.09,7.7-k*.45,8.0-k*.45,'#2c2a28');   // red cap, and the dark lettering of the sign
+      for(const z of [-1,1]){ put(a,u,n,s+z*(hw+.9)-.4,s+z*(hw+.9)+.4,D+.3,D+1.1,0,.8,'#b5603f'); put(a,u,n,s+z*(hw+.9)-.25,s+z*(hw+.9)+.25,D+.45,D+.95,.8,1.3,'#4d7a2c');   // terracotta planters with plants
         put(a,u,n,s+z*(hw+3.6)-1,s+z*(hw+3.6)+1,D+.3,D+.8,0,.5,'#2b2f3a'); put(a,u,n,s+z*(hw+3.6)-1,s+z*(hw+3.6)+1,D+.3,D+.4,.5,1.1,'#2b2f3a'); }                                  // benches
       put(a,u,n,s+hw+6,s+hw+6.18,6,6.18,0,13,'#d6d8da'); put(a,u,n,s+hw+6.18,s+hw+8,6,6.05,11.2,12.6,'#b22234');                      // the flagpole and its flag
       for(const z of [-1,1]){ put(a,u,n,s+z*(hw+9)-.12,s+z*(hw+9)+.12,9,9.24,0,9,'#5a5f66'); put(a,u,n,s+z*(hw+9)-.9,s+z*(hw+9)+.9,8.9,9.3,9,9.35,'#2a2c30'); } }   // two tall parking-lot light poles with a double head
