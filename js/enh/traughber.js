@@ -68,17 +68,53 @@ function toLL(F,P,kx,ky,px,py){        // a photo-plan point -> lng/lat, through
   const [u,v]=t?[fy?1-pv:pv,fx?1-pu:pu]:[fx?1-pu:pu,fy?1-pv:pv], uu=u-.5, vv=v-.5;
   const x=F.R.cx+F.R.ux*uu*F.R.W+F.R.vx*vv*F.R.H, y=F.R.cy+F.R.uy*uu*F.R.W+F.R.vy*vv*F.R.H;
   return [+(P[0]+x/kx).toFixed(7),+(P[1]+y/ky).toFixed(7)]; }
-function polysOf(F,P,kx,ky){            // the plan's wings as lng/lat rings, with their heights
-  const out=[];
-  PLAN.forEach((b,k)=>{ const ring=[[b[0],b[3]],[b[2],b[3]],[b[2],b[1]],[b[0],b[1]]].map(c=>toLL(F,P,kx,ky,c[0],c[1]));
-    ring.push(ring[0]); out.push({ring,h:b[4]+k*.01}); });
+function polysM(F){                     // the plan's wings as rings in metres (from the school point), with their heights
+  const out=[], [t,fx,fy]=F.T8;
+  const back=(pu,pv)=>t?[fy?1-pv:pv,fx?1-pu:pu]:[fx?1-pu:pu,fy?1-pv:pv];    // the plan point -> the rectangle point (undoing tf)
+  PLAN.forEach((b,k)=>{ const n=norm(b), corners=[[n[0],n[1]],[n[2],n[1]],[n[2],n[3]],[n[0],n[3]]];
+    const ring=corners.map(([pu,pv])=>{ const [u,v]=back(pu,pv), uu=u-.5, vv=v-.5;
+      return [F.R.cx+F.R.ux*uu*F.R.W+F.R.vx*vv*F.R.H, F.R.cy+F.R.uy*uu*F.R.W+F.R.vy*vv*F.R.H]; });
+    out.push({ring,h:b[4]+k*.01,b}); });
   return out; }
-function winsOf(F,P,kx,ky){            // windows and doors standing a hand's width proud of the wall they are on
-  const out=[];
-  for(const [x0,x1,y,n,kind] of WINS){ const w=kind==='d'?9:6;
-    for(let i=0;i<n;i++){ const cx=n>1?x0+(x1-x0)*i/(n-1):(x0+x1)/2, ring=[[cx-w/2,y],[cx+w/2,y],[cx+w/2,y+1.4],[cx-w/2,y+1.4]].map(c=>toLL(F,P,kx,ky,c[0],c[1]));
-      ring.push(ring[0]); out.push(kind==='d'?{ring,b:0,h:2.4,c:'#3b2f2a'}:{ring,b:1.0,h:2.6,c:'#26323f'}); } }
-  return out; }
+function polysOf(F,P,kx,ky){            // ... as lng/lat rings
+  return polysM(F).map(o=>{ const ring=o.ring.map(([x,y])=>[+(P[0]+x/kx).toFixed(7),+(P[1]+y/ky).toFixed(7)]); ring.push(ring[0]); return {ring,h:o.h}; }); }
+
+/* the walls' details, after the owner's front photo (a Junior High of the same design): dark red-brick base, a red band under the
+   roof edge, rows of small square windows high on the walls (two rows on the two-storey wings), and three recessed entrances with
+   brick canopies and red doors on the parking-lot side. Drawn flat on the faces of the wings, and only where no other wing
+   covers the wall, so nothing floats. */
+const BASE='#6b3a30', BAND='#8a2f2a', GLASS='#1f2a36', RED='#8a1f26', DARK='#3a1a1a', BRICKC='#b98056';
+const PORTALS=[[9,.5,'main'],[11,.18,'aud'],[5,.14,'gym']];      // [wing, how far along its south side, kind]
+function details(F,P,kx,ky){
+  const W=polysM(F), feats=[], ll=([x,y])=>[+(P[0]+x/kx).toFixed(7),+(P[1]+y/ky).toFixed(7)];
+  const area=r=>{ let a=0; for(let i=0,j=r.length-1;i<r.length;j=i++) a+=(r[j][0]-r[i][0])*(r[j][1]+r[i][1]); return a; };
+  const cover=(x,y,self)=>{ let h=0; W.forEach((o,k)=>{ if(k!==self&&o.h>h&&inPoly(o.ring,x,y)) h=o.h; }); return h; };
+  const put=(a,u,n,s0,s1,o0,o1,b,h,c)=>{ if(s1-s0<.02||h-b<.02) return;           // a flat box on a wall: along s0..s1, out o0..o1, up b..h
+    const P4=[[s0,o0],[s1,o0],[s1,o1],[s0,o1]].map(([s,o])=>ll([a[0]+u[0]*s+n[0]*o,a[1]+u[1]*s+n[1]*o])); P4.push(P4[0]);
+    feats.push({type:'Feature',properties:{c,b,h},geometry:{type:'Polygon',coordinates:[P4]}}); };
+  W.forEach((w,k)=>{ const r=w.ring, ccw=area(r)<0, H=w.h;
+    for(let e=0;e<4;e++){ const a=r[e], b=r[(e+1)%4], L=Math.hypot(b[0]-a[0],b[1]-a[1]); if(L<6) continue;
+      const u=[(b[0]-a[0])/L,(b[1]-a[1])/L], n=ccw?[u[1],-u[0]]:[-u[1],u[0]];
+      const free=(s,hh)=>{ const c=cover(a[0]+u[0]*s+n[0]*.8,a[1]+u[1]*s+n[1]*.8,k); return c<hh-.3; };   // nothing taller (or as tall) in front of that bit of wall
+      for(let s=0;s<L;s+=2){ const s1=Math.min(L,s+2), m=(s+s1)/2;
+        if(free(m,.5)) put(a,u,n,s,s1,.02,.07,0,.9,BASE);                                              // the dark red-brick base
+        if(free(m,H-.5)) put(a,u,n,s,s1,.02,.08,H-.65,H-.3,BAND); }                                    // the red band under the roof edge
+      const cnt=Math.max(1,Math.floor((L-3.6)/3.8)+1), step=cnt>1?(L-3.6)/(cnt-1):0;
+      const rows=H<6?[[1.5,2.6]]:H<9?[[1.4,2.5],[4.6,5.7]]:[[H-3.3,H-2.3]];
+      for(let i=0;i<cnt;i++){ const s=cnt>1?1.8+i*step:L/2;
+        for(const [wb,wt] of rows) if(wt<H-.4&&free(s,wb+.1)) put(a,u,n,s-.5,s+.5,.02,.09,wb,wt,GLASS); }
+      if(H>=10&&L>20) for(const f of [.08,.14]) if(free(L*f,3)) put(a,u,n,L*f-.2,L*f+.2,.02,.09,2.2,7.4,GLASS);   // the tall slit windows at a gym's end
+    } });
+  for(const [wi,f,kind] of PORTALS){ const w=W[wi]; if(!w) continue; const r=w.ring, ccw=area(r)<0, a=r[0], b=r[1], L=Math.hypot(b[0]-a[0],b[1]-a[1]), u=[(b[0]-a[0])/L,(b[1]-a[1])/L], n=ccw?[u[1],-u[0]]:[-u[1],u[0]], s=L*f;
+    if(cover(a[0]+u[0]*s+n[0]*2.8,a[1]+u[1]*s+n[1]*2.8,wi)>0) continue;                              // something already stands there
+    const hw=kind==='main'?3.2:2.6, hh=kind==='main'?4.6:4;
+    put(a,u,n,s-hw,s+hw,.05,2.5,0,hh,BRICKC);                                                         // the brick portal sticking out of the wall
+    put(a,u,n,s-hw,s+hw,.05,2.52,hh,hh+.25,'#2c2e34');                                                 // its dark flat roof
+    put(a,u,n,s-hw+.1,s+hw-.1,2.5,2.56,hh-.55,hh-.2,BAND);                                             // red band over the opening
+    put(a,u,n,s-hw+.4,s+hw-.4,2.5,2.55,0,2.75,DARK);                                                   // the recess
+    for(const z of [-1,1]){ put(a,u,n,z<0?s-1.35:s+.1,z<0?s-.1:s+1.35,2.55,2.6,.05,2.6,RED); put(a,u,n,z<0?s-1.2:s+.25,z<0?s-.25:s+1.2,2.6,2.64,.45,2.4,GLASS); }   // two red doors with glass
+  }
+  return feats; }
 
 function layers(){ if(map.getSource('trj')) return;
   map.addSource('trj',{type:'geojson',data:{type:'FeatureCollection',features:[]},tolerance:0});
@@ -87,12 +123,15 @@ function layers(){ if(map.getSource('trj')) return;
   if(pat) wall['fill-extrusion-pattern']='hw-trj'; else wall['fill-extrusion-color']=WALL;
   map.addLayer({id:'trj-wall',type:'fill-extrusion',source:'trj',minzoom:12,paint:wall},map.getLayer('hn-big')?'hn-big':undefined);
   map.addSource('trjw',{type:'geojson',data:{type:'FeatureCollection',features:[]},tolerance:0});
+  map.addSource('trjd',{type:'geojson',data:{type:'FeatureCollection',features:[]},tolerance:0});
   map.addLayer({id:'trj-roof',type:'fill-extrusion',source:'trj',minzoom:12,paint:{'fill-extrusion-color':ROOF,'fill-extrusion-base':['get','h'],'fill-extrusion-height':['+',['get','h'],.4],'fill-extrusion-vertical-gradient':false}},map.getLayer('hn-big')?'hn-big':undefined);
-  map.addLayer({id:'trj-win',type:'fill-extrusion',source:'trjw',minzoom:12,paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-base':['get','b'],'fill-extrusion-height':['get','h'],'fill-extrusion-vertical-gradient':false}},map.getLayer('hn-big')?'hn-big':undefined); }
+  map.addLayer({id:'trj-win',type:'fill-extrusion',source:'trjw',minzoom:12,paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-base':['get','b'],'fill-extrusion-height':['get','h'],'fill-extrusion-vertical-gradient':false}},map.getLayer('hn-big')?'hn-big':undefined);
+  map.addLayer({id:'trj-det',type:'fill-extrusion',source:'trjd',minzoom:14,paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-base':['get','b'],'fill-extrusion-height':['get','h'],'fill-extrusion-vertical-gradient':false}},map.getLayer('hn-big')?'hn-big':undefined); }
 
 function apply(F,P,kx,ky){
   const feats=polysOf(F,P,kx,ky).map(o=>({type:'Feature',properties:{h:o.h},geometry:{type:'Polygon',coordinates:[o.ring]}}));
   layers(); map.getSource('trj').setData({type:'FeatureCollection',features:feats});
+  safe('trj details',()=>map.getSource('trjd').setData({type:'FeatureCollection',features:details(F,P,kx,ky)}));
   map.getSource('trjw').setData({type:'FeatureCollection',features:winsOf(F,P,kx,ky).map(o=>({type:'Feature',properties:{b:o.b,h:o.h,c:o.c},geometry:{type:'Polygon',coordinates:[o.ring]}}))});
   HIDE.pin=F.ids.slice(); applyHides(); if(window.ROOFS&&ROOFS.build) safe('trj rebuild',()=>ROOFS.build()); dirty=true; }
 
