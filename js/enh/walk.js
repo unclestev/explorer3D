@@ -296,18 +296,25 @@ function trofferTex(){ if(STX.trof) return STX.trof;
     x.fillStyle='#c9ccce'; x.fillRect(0,0,W,H);                                                   // trim
   x.fillStyle='#262a30'; x.fillRect(14,14,W-28,H-28);                                         // the gap inside the trim
   const m=22, cols=3, rows=10, cw=(W-2*m)/cols, ch=(H-2*m)/rows;
-  // every cell the same bright white (owner 2026-11-23: "make them all the same white"), with only a soft neutral shade
-  // toward the cell's edges and one gentle curved highlight, so the louvre still reads
-  for(let i=0;i<cols;i++) for(let j=0;j<rows;j++){ const X=m+i*cw, Y=m+j*ch;
-    x.save(); x.beginPath(); x.rect(X+1,Y+1,cw-2,ch-2); x.clip();
-    x.fillStyle='#f7f8fa'; x.fillRect(X,Y,cw,ch);
-    x.filter='blur(5px)'; x.strokeStyle='rgba(255,255,255,1)'; x.lineWidth=ch*.3; x.beginPath();
-    for(let k=0;k<=20;k++){ const t=k/20, xx=X+cw*t, yy=Y+ch*.42-Math.sin(t*Math.PI)*ch*.16; k?x.lineTo(xx,yy):x.moveTo(xx,yy); } x.stroke(); x.filter='none';
-    const sg=x.createLinearGradient(X,0,X+cw,0); sg.addColorStop(0,'rgba(150,152,156,.35)'); sg.addColorStop(.12,'rgba(150,152,156,0)'); sg.addColorStop(.88,'rgba(150,152,156,0)'); sg.addColorStop(1,'rgba(150,152,156,.35)');
-    x.fillStyle=sg; x.fillRect(X,Y,cw,ch);
-    const vg=x.createLinearGradient(0,Y,0,Y+ch); vg.addColorStop(0,'rgba(150,152,156,.25)'); vg.addColorStop(.15,'rgba(150,152,156,0)'); vg.addColorStop(.85,'rgba(150,152,156,0)'); vg.addColorStop(1,'rgba(150,152,156,.3)');
-    x.fillStyle=vg; x.fillRect(X,Y,cw,ch);
-    x.restore(); }
+  // each cell like the photo's: a curved mirror, pillow-shaped — bright white where it faces the tubes, a soft grey
+  // shadow sweeping into its lower corner, a faint crease down the middle where the two curved halves meet, and a
+  // bending highlight across it. Every cell drawn the same and in neutral white/grey (owner: "all the same white").
+  const cell=document.createElement('canvas'), CW=Math.round(cw), CH=Math.round(ch); cell.width=CW; cell.height=CH; const y=cell.getContext('2d');
+  y.fillStyle='#d9dbdf'; y.fillRect(0,0,CW,CH);                                              // the metal, in its own light
+  let g=y.createLinearGradient(0,0,CW,CH); g.addColorStop(0,'rgba(255,255,255,.55)'); g.addColorStop(.6,'rgba(160,164,172,.25)'); g.addColorStop(1,'rgba(95,100,110,.7)');
+  y.fillStyle=g; y.fillRect(0,0,CW,CH);                                                       // lit on one side, shadowed into the far corner
+  // the rippled reflections: bright white bands bending across the cell, grey between them
+  y.filter='blur(5px)';
+  const band=(y0,a,w,al)=>{ y.strokeStyle='rgba(255,255,255,'+al+')'; y.lineWidth=w; y.beginPath();
+    for(let k=0;k<=24;k++){ const t=k/24, xx=-CW*.05+CW*1.1*t, yy=y0-Math.sin(t*Math.PI*1.3+.3)*a+t*CH*.12; k?y.lineTo(xx,yy):y.moveTo(xx,yy); } y.stroke(); };
+  band(CH*.38,CH*.22,CH*.26,1); band(CH*.82,CH*.16,CH*.16,.9); band(CH*.1,CH*.1,CH*.1,.7);
+  y.strokeStyle='rgba(110,116,126,.55)'; y.lineWidth=CH*.08; y.beginPath();                  // the grey trough between the two big bands
+  for(let k=0;k<=24;k++){ const t=k/24, xx=-CW*.05+CW*1.1*t, yy=CH*.62-Math.sin(t*Math.PI*1.3+.3)*CH*.18+t*CH*.12; k?y.lineTo(xx,yy):y.moveTo(xx,yy); } y.stroke();
+  y.filter='blur(2px)'; y.strokeStyle='rgba(120,126,136,.5)'; y.lineWidth=2.5;                // the crease down the middle, where the two curved halves meet
+  y.beginPath(); y.moveTo(CW*.5,0); y.quadraticCurveTo(CW*.46,CH*.5,CW*.52,CH); y.stroke(); y.filter='none';
+  g=y.createLinearGradient(0,0,0,CH); g.addColorStop(0,'rgba(90,95,104,.5)'); g.addColorStop(.1,'rgba(90,95,104,0)'); g.addColorStop(.92,'rgba(90,95,104,0)'); g.addColorStop(1,'rgba(90,95,104,.45)');
+  y.fillStyle=g; y.fillRect(0,0,CW,CH);                                                       // the blades' shade top and bottom
+  for(let i=0;i<cols;i++) for(let j=0;j<rows;j++) x.drawImage(cell,m+i*cw,m+j*ch,cw,ch);
   // the blades between the cells: thin bright edges catching the light, with a dark line under each
   for(let j=0;j<=rows;j++){ const y=m+j*ch; x.fillStyle='rgba(120,122,126,.8)'; x.fillRect(m,y-1.5,W-2*m,3); }
   for(let i=0;i<=cols;i++){ const X=m+i*cw; x.fillStyle='rgba(120,122,126,.8)'; x.fillRect(X-1.5,m,3,H-2*m); }
