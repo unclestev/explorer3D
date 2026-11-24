@@ -289,11 +289,14 @@ function build(){
   let fs=[]; try{ fs=map.querySourceFeatures(bSrc,{sourceLayer:'building'}); }catch(e){ return; }
   const geo=fs.map(f=>f.geometry);
   if(map.getSource('walls')) safe('walls',()=>{ zones(kx,ky,radius+120); buildWalls(fs,geo,kx,ky,radius+60,gone); });
-  safe('driveways',()=>{ const ds=[]; for(const f of map.querySourceFeatures(bSrc,{sourceLayer:'transportation'})){ const pr=f.properties||{};
-      if(pr.class!=='service'||pr.service!=='driveway') continue; const g=f.geometry, ls=g.type==='LineString'?[g.coordinates]:g.type==='MultiLineString'?g.coordinates:[];
-      for(const l of ls){ if(l.length<2) continue; let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const q of l){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
-        if(Math.hypot(((x0+x1)/2-S.lng)*kx,((y0+y1)/2-S.lat)*ky)<radius+150) ds.push({l,bb:[x0,y0,x1,y1]}); } }
-    DRIVES=ds; });
+  safe('driveways',()=>{ const ds=[], wk=[]; for(const f of map.querySourceFeatures(bSrc,{sourceLayer:'transportation'})){ const pr=f.properties||{};
+      const walk=pr.class==='path'&&pr.subclass!=='cycleway', drv=pr.class==='service'&&(pr.service==='driveway'||(!pr.service&&true))||(pr.class==='path'&&pr.subclass==='footway'&&pr.service==='driveway');
+      if(!walk&&!drv) continue; const g=f.geometry, ls=g.type==='LineString'?[g.coordinates]:g.type==='MultiLineString'?g.coordinates:[];
+      for(const l of ls){ if(l.length<2) continue; let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9,len=0; for(let i=0;i<l.length;i++){ const q=l[i]; if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; if(i) len+=Math.hypot((q[0]-l[i-1][0])*kx,(q[1]-l[i-1][1])*ky); }
+        if(Math.hypot(((x0+x1)/2-S.lng)*kx,((y0+y1)/2-S.lat)*ky)>=radius+150) continue;
+        if(walk) wk.push({l,bb:[x0,y0,x1,y1]});
+        else if(pr.service==='driveway'||pr.class==='path'||len<=40) ds.push({l,bb:[x0,y0,x1,y1]}); } }    // an untagged short service way is most often a driveway
+    DRIVES=ds; WALKS=wk; });
   for(let i=0;i<fs.length;i++){ const f=fs[i];
     if(f.id!=null&&gone.has(f.id)) continue;
     const pr=f.properties||{}; if(pr.hide_3d) continue;
@@ -402,7 +405,7 @@ function roofParts(P,kx,ky,slices){
    facing the nearest road, if it's long enough — a garage door. Stores/schools (up to 12 m): a glass storefront with
    mullions on the street side. Taller buildings: a ribbon of windows on every floor of every wall. The map doesn't
    say where real windows and doors are, so placement is a sensible guess. After dark about half the windows glow. */
-let DRIVES=[];
+let DRIVES=[], WALKS=[];
 const SHUTTER=['#2b3440','#1f2a24','#3a2622','#2a2a2c','#4a3a2c','#33465a','#5a3030','#f1efe9'];
 const LAMP=['#1d1e20','#1d1e20','#3a2c22','#2e3236','#ece9e2'], LGL='#e6dfc8';   // porch / garage light fixtures: black, bronze, charcoal, white; frosted glass
 const GLASS='#27313e', FRAME='#eef0f1', DOORS=['#6b2f2a','#2f3e55','#3a3a3c','#5a4632','#f1efe9','#4d5b45'], GARAGE=['#f1efe9','#e5dfd3','#d8d3c9','#c9c2b6'];
@@ -426,6 +429,30 @@ function driveSpot(P,edges,toLoc){
       for(const E of edges){ const dx=q[0]-E.a[0], dy=q[1]-E.a[1], s=dx*E.ux+dy*E.uy, out=dx*E.nx+dy*E.ny;
         if(s<-1||s>E.L+1||out<-3||out>9) continue;                // in front of this wall (or just inside it)
         const d=Math.abs(out); if(!best||d<best.d) best={E,s,d}; } } }
+  return best;
+}
+/* where a mapped footpath (a sidewalk spur, a path across the lawn or from a parking lot) ends at a wall: that is where the
+   door is (owner 2026-11-24: "doors should be placed where sidewalks and driveway pads lead to the building"). Only a way's
+   END counts, and only if it runs toward the wall: a sidewalk that runs along the street or past the building says nothing.
+   Returns [{E,s,d}] nearest first (E: a wall from edges, s: metres along it, d: metres from the wall). */
+function endSpots(P,edges,toLoc,lines){
+  const m=14/111320, B=P.bb, res=[];
+  for(const D of lines){ const b=D.bb; if(b[2]<B[0]-m*1.4||b[0]>B[2]+m*1.4||b[3]<B[1]-m||b[1]>B[3]+m) continue;
+    const l=D.l; for(const [ei,pi] of [[0,1],[l.length-1,l.length-2]]){ const q=toLoc(l[ei]); let r=pi, pq=toLoc(l[r]);
+      for(let k=0;k<3&&Math.hypot(q[0]-pq[0],q[1]-pq[1])<3&&r+(pi?1:-1)>=0&&r+(pi?1:-1)<l.length;k++){ r+=pi?1:-1; pq=toLoc(l[r]); }   // look 3 m back along the way
+      const vx=q[0]-pq[0], vy=q[1]-pq[1], vl=Math.hypot(vx,vy)||1;
+      for(const E of edges){ if(E.L<2.2) continue; const dx=q[0]-E.a[0], dy=q[1]-E.a[1], s=dx*E.ux+dy*E.uy, out=dx*E.nx+dy*E.ny;
+        if(s<.4||s>E.L-.4||out<-1.5||out>7) continue;
+        if((vx*E.nx+vy*E.ny)/vl>-.35) continue;                      // not heading at this wall
+        res.push({E,s,d:Math.abs(out)}); } } }
+  return res.sort((a,b)=>a.d-b.d);
+}
+// the wall that faces a parking lot (js/enh/parking.js), if there is one: the lot is probed 4 and 9 m out from three spots on each wall
+function lotFront(P,edges,toLL,fallback){
+  if(!window.PARKING||!PARKING.at) return null; let best=null, bs=0;
+  for(const E of edges){ if(E.L<6) continue; let sc=0;
+    for(const f of [.25,.5,.75]) for(const o of [4,9]){ const q=toLL([E.a[0]+E.ux*E.L*f+E.nx*o,E.a[1]+E.uy*E.L*f+E.ny*o]); if(PARKING.at(q[0],q[1])) sc+=1; }
+    sc+=Math.min(E.L,40)/400; if(sc>bs&&sc>=1.1){ bs=sc; best=E; } }
   return best;
 }
 /* a spot in the front yard (js/enh/snowmen.js): between the street-side wall and the road, clear of the garage, the
@@ -540,6 +567,8 @@ function facades(P,kx,ky,res,rich){
   if(P.f.id!=null) res.bld={key:P.cx.toFixed(6)+','+P.cy.toFixed(6),id:P.f.id,cx:P.cx,cy:P.cy,kx,ky,p,h:P.h,house,doors,garages,bb:P.bb,zone,area:A,win:wins,gym:school&&isGym(P.cx,P.cy)};
   const sd=(window.STORES&&STORES.list.length&&STORES.frontDir(P.cx,P.cy))||streetDir(P);   // a Meijer faces its parking lot (js/enh/stores.js)
   let front=edges[0]; for(const E of edges){ const sc=(sd?E.nx*sd[0]+E.ny*sd[1]:0)+.02*Math.min(E.L,12), fs=(sd?front.nx*sd[0]+front.ny*sd[1]:0)+.02*Math.min(front.L,12); if(sc>fs) front=E; }
+  const toLoc=q=>[(q[0]-P.cx)*kx,(q[1]-P.cy)*ky], wkSpots=endSpots(P,edges,toLoc,WALKS);       // footpaths that end at a wall
+  if(!house){ const lf=lotFront(P,edges,toLL); if(lf) front=lf; if(wkSpots.length&&wkSpots[0].E.L>=6&&!(lf&&lf!==wkSpots[0].E&&wkSpots[0].d>3)) front=wkSpots[0].E; }   // a store or school faces its parking lot, or the wall a path leads to
   let k=0;
   if(house){
     const floors=P.h<5.2?1:P.h<8.6?2:3, fh=Math.min(3.1,(P.h-.4)/floors), busy=new Map(), occupy=(E,a,b)=>{ let l=busy.get(E); if(!l) busy.set(E,l=[]); l.push([a,b]); };
@@ -578,8 +607,11 @@ function facades(P,kx,ky,res,rich){
       for(const x of [s0-.42,s0+gw+.42]) lamp(E,x,1.95,1.2,3.2);                                                     // a light on each side of the garage door
       occupy(E,s0-.6,s0+gw+.6); }
     // front door on the street side, in the free part of the wall
-    { const E=front, fr=(busy.get(E)||[])[0], span=fr?(fr[0]>E.L/2?[.8,fr[0]-.3]:[fr[1]+.3,E.L-.8]):[.8,E.L-.8];
-      if(span[1]-span[0]>=1.6){ const s=(span[0]+span[1])/2+(fr?0:(hash(seed,41)-.5)*E.L*.3);
+    { let E=front, s=null;
+      for(const w of wkSpots){ if(w.E.L<2.6) continue; const cs=Math.max(1.2,Math.min(w.E.L-1.2,w.s)); if(free(w.E,cs-1,cs+1.15)){ E=w.E; s=cs; break; } }   // where the front walk reaches the house
+      if(s==null){ const fr=(busy.get(E)||[])[0], span=fr?(fr[0]>E.L/2?[.8,fr[0]-.3]:[fr[1]+.3,E.L-.8]):[.8,E.L-.8];
+        if(span[1]-span[0]>=1.6) s=(span[0]+span[1])/2+(fr?0:(hash(seed,41)-.5)*E.L*.3); }
+      if(s!=null){
         const dk=door(E,s-.6,s+.6), dc=DORS(seed);
         if(frames){ put(E,s-.62,s+.62,-.04,.06,0,2.32,trim); put(E,s-.74,s+.74,-.04,.08,2.32,2.44,trim); }       // casing and head trim
         putD(E,s-.48,s+.48,-.04,.05,0,2.1,dc,dk);
@@ -611,6 +643,7 @@ function facades(P,kx,ky,res,rich){
       L.sort((u,v)=>u-v); const out=[]; for(const s0 of L) if(!out.length||s0-out[out.length-1]>7) out.push(s0); return out; };
     const byLen=edges.slice().sort((u,v)=>v.L-u.L);
     for(const E of byLen){ const L=doorsAt(E); if(gym&&nd>=2) break; const keep=[]; for(const s0 of L){ if(nd>=22||(gym&&nd>=2)) break; keep.push(s0); nd++; } if(keep.length) dpos.set(E,keep); }
+    if(!gym) for(const w of wkSpots.slice(0,6)){ const L=dpos.get(w.E)||[]; if(L.some(d=>Math.abs(d-w.s)<5)||nd>=22) continue; L.push(w.s); L.sort((u,v)=>u-v); dpos.set(w.E,L); nd++; }   // a door where a path leads in
     if(!dpos.size&&front.L>=6){ dpos.set(front,[mid]); }
     const nearDoor=(E,s0,m)=>(dpos.get(E)||[]).some(d=>Math.abs(d-s0)<m);
     for(const E of edges){ if(E.L<5) continue;
@@ -625,7 +658,7 @@ function facades(P,kx,ky,res,rich){
     if(s1-s0>2){ put(E,s0,s1,-.04,.03,.3,2.9,GLASS,hash(seed,5)<.8?1:0); wins.push({ei:E.ei,s0:+(s0+E.off).toFixed(2),s1:+(s1+E.off).toFixed(2),b:.3,h:2.9});
       if(frames) for(let s=s0;s<=s1+.01;s+=1.6) put(E,s-.05,s+.05,.03,.08,.3,2.9,'#b9bec4');
       put(E,s0-.2,s1+.2,.02,.5,2.9,3.2,'#d6d8da');                 // canopy fascia above the glass
-      if(s1-s0>=2.4) entrance(E,(s0+s1)/2); }                       // the way in, in the middle of the glass
+      if(s1-s0>=2.4){ const w=wkSpots.find(q=>q.E===E&&q.s>s0+1.4&&q.s<s1-1.4); entrance(E,w?w.s:(s0+s1)/2); } }                       // the way in, in the middle of the glass
     for(const F of edges){ if(F===E||F.L<12||hash(seed,F.L|0)<.5) continue;   // a few high windows on some side walls
       const n=Math.min(6,Math.floor(F.L/8)); for(let i=1;i<=n;i++) window1(F,i*F.L/(n+1),1.6,P.h*.55,P.h*.55+1,k++); }
     // accent lights, all on after dark: goosenecks over the sign band, wall packs at the corners and on the long walls
