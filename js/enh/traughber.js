@@ -200,10 +200,9 @@ function gymRec(F,P,kx,ky){
   // a pair of red-framed glass doors at 28% and 72% of both long sides, where they open to the outside (owner's photo)
   const bi=E.reduce((b,e)=>e.L>b.L?e:b,E[0]).i;
   for(const e of [E[bi],E[(bi+2)%4]]) for(const f of [.28,.72]){ const c=e.L*f; if(open(e,c-2.4,c+2.4,.1)) door(e,c,1); }
-  // a school gym always has several doors: add one or two on every other wall that is long enough, sliding along to the nearest open bit
-  for(const e of E){ if(e.L<14) continue;
-    const want=e.L>34?[.2,.5,.8]:[.5]; if(doors.filter(d=>d.ei===e.i).length>=want.length) continue;
-    for(const f of want){ for(let k=0;k<14;k++){ const c=e.L*f+(k%2?1:-1)*Math.ceil(k/2)*1.5; if(c>3&&c<e.L-3&&open(e,c-2.4,c+2.4,.1)&&door(e,c,1)) break; } } }
+  // a school gym always has several doors: top every wall up to 2 (3 on the long ones), sliding along to the nearest open bit
+  for(const e of E){ if(e.L<14) continue; const need=e.L>50?3:2; const have=()=>doors.filter(d=>d.ei===e.i).length;
+    for(const f of [.5,.2,.8,.35,.65]){ if(have()>=need) break; for(let k=0;k<14;k++){ const c=e.L*f+(k%2?1:-1)*Math.ceil(k/2)*1.5; if(c>3&&c<e.L-3&&open(e,c-2.4,c+2.4,.1)&&door(e,c,1)) break; } } }
   // tall windows high on the walls, the same ones inside (cut through the room's walls) and out (drawn on the brick)
   const win=[], wb=4.2, wt=Math.min(G.h-1.8,7.4);
   for(const e of E) for(let s=4.5;s+1.2<e.L-1;s+=8.4){ const s0=s, s1=s+1.2;
