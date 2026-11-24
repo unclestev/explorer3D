@@ -344,6 +344,12 @@ function buildRoom(r){
       const angC=Math.atan2(-to3(cdx,cdy)[1],cdx), angO=Math.atan2(-to3(-d.nx,-d.ny)[1],-d.nx);   // rotation.y for a leaf pointing along / in
       let dA=angO-angC; dA=((dA+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI;
       pv.rotation.y=angC; g.add(pv); ROOM.leaves.push({pv,angC,dA,d,o:0}); } }
+  // lit EXIT signs on the inside, over every way out (owner 2026-11-23). Unlit-material boxes: they are not part of ROOM.tro /
+  // ROOM.dimM, so the light switches never touch them — always on, like the real ones on their own circuit.
+  for(const d of r.doors){ const a=p[d.ei], b=p[(d.ei+1)%p.length], L=Math.hypot(b[0]-a[0],b[1]-a[1])||1, ux=(b[0]-a[0])/L, uy=(b[1]-a[1])/L, nx=uy, ny=-ux, t=(d.s0+d.s1)/2;
+    const [x3,z3]=to3(a[0]+ux*t-nx*(TH2+.026),a[1]+uy*t-ny*(TH2+.026)), [dx3,dz3]=to3(-nx,-ny), y3=Math.min(DH+.3,HC-.13), ry=Math.atan2(dx3,dz3);   // facing into the room
+    const sg=new THREE.Mesh(new THREE.BoxGeometry(.36,.16,.05),exitMats()); sg.position.set(x3,y3,z3); sg.rotation.y=ry; g.add(sg);
+    const gl=new THREE.Mesh(new THREE.PlaneGeometry(.95,.6),exitGlow()); gl.position.set(x3+dx3*.04,y3,z3+dz3*.04); gl.rotation.y=ry; gl.renderOrder=4; g.add(gl); }
   // the garage door: a panel across the opening that rolls up with the opener
   ROOM.gar=[];
   for(const q of r.garages||[]){ const [ax,az]=to3(q.x0-q.nx*.08,q.y0-q.ny*.08), [bx,bz]=to3(q.x1-q.nx*.08,q.y1-q.ny*.08), W0=Math.hypot(bx-ax,bz-az);
@@ -351,6 +357,19 @@ function buildRoom(r){
     m.position.set((ax+bx)/2,0,(az+bz)/2); m.rotation.y=-Math.atan2(bz-az,bx-ax); g.add(m); ROOM.gar.push({m,q}); }
   for(const o of g.children) o.traverse(c=>{ if(c.isMesh){ if(!c.renderOrder) c.renderOrder=1; c.frustumCulled=false; } });
   scene.add(g); ROOM.g=g; ROOM.key=r.key; ROOM.r=r; garUpdate(); }
+/* exit signs: a white-faced box with red EXIT letters and a faint red halo, drawn unlit so it glows in a dark room too */
+let EXM=null, EXG=null;
+function exitMats(){ if(EXM) return EXM;
+  const c=document.createElement('canvas'); c.width=256; c.height=112; const x=c.getContext('2d');
+  x.fillStyle='#f6f3ee'; x.fillRect(0,0,256,112); x.strokeStyle='#8f1d1d'; x.lineWidth=5; x.strokeRect(4,4,248,104);
+  x.fillStyle='#e0141b'; x.font='bold 84px Arial, Helvetica, sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText('EXIT',128,60);
+  const tex=new THREE.CanvasTexture(c); tex.anisotropy=4;
+  const side=new THREE.MeshBasicMaterial({color:0xb7b3ab}), face=new THREE.MeshBasicMaterial({map:tex,toneMapped:false});
+  EXM=[side,side,side,side,face,side]; return EXM; }
+function exitGlow(){ if(EXG) return EXG;
+  const c=document.createElement('canvas'); c.width=c.height=64; const x=c.getContext('2d'), gr=x.createRadialGradient(32,32,2,32,32,32);
+  gr.addColorStop(0,'rgba(255,40,40,.55)'); gr.addColorStop(.45,'rgba(255,30,30,.18)'); gr.addColorStop(1,'rgba(255,0,0,0)'); x.fillStyle=gr; x.fillRect(0,0,64,64);
+  EXG=new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false,side:THREE.DoubleSide}); return EXG; }
 /* store ceilings and lights (owner 2026-11-23, a photo of the lights inside Meijer): 2 x 2 ft speckled ceiling tiles in a
    white grid, and 2 x 4 ft parabolic-louvre troffers — a grid of deep shiny cells, bright where they catch the tubes and
    blue-grey in their shadows — in rows across the store */

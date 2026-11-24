@@ -146,6 +146,17 @@ function clean(ring){                                             // drop the cl
     return Math.abs(c)>.06; });
   return p;
 }
+/* windows, doors and rooms are placed on the outline, so it must stay on the real wall: clean() above drops corners that
+   turn less than ~3.4 degrees, which on a long wall (Meijer) moves the edge up to ~1 m off the wall — windows then sat
+   inside the wall or hung out from it (owner 2026-11-23). This one only drops a corner that lies within 4 cm of the line
+   between its neighbours, and never two in a row, so nothing can drift. */
+function cleanTight(ring){
+  let p=ring.slice(0,ring.length-1).filter((q,i,a)=>{ const r=a[(i+a.length-1)%a.length]; return Math.hypot(q[0]-r[0],q[1]-r[1])>.05; });
+  for(let pass=0;pass<4&&p.length>3;pass++){ let gone=false;
+    p=p.filter((q,i,a)=>{ if(gone){ gone=false; return true; } const r=a[(i+a.length-1)%a.length], t=a[(i+1)%a.length], ex=t[0]-r[0], ey=t[1]-r[1], l=Math.hypot(ex,ey);
+      if(!l||Math.abs((q[0]-r[0])*ey-(q[1]-r[1])*ex)/l>.04) return true; gone=true; return false; }); }
+  return p;
+}
 function obb(p){                                                  // smallest box aligned with one of the outline's edges
   let best=null;
   for(let i=0;i<p.length;i++){ const a=p[i], b=p[(i+1)%p.length], ang=Math.atan2(b[1]-a[1],b[0]-a[0]), c=Math.cos(ang), s=Math.sin(ang);
@@ -407,7 +418,7 @@ function yardSpot(P,E,sd,free,seed,kx,ky){
 }
 function facades(P,kx,ky,res,rich){
   if(P.b0>0) return;
-  let p=clean(P.ring.map(q=>[(q[0]-P.cx)*kx,(q[1]-P.cy)*ky])); if(p.length<3||p.length>400) return;                          /* was 80: a high school's outline has ~90 corners and got no windows or lights at all */
+  let p=cleanTight(P.ring.map(q=>[(q[0]-P.cx)*kx,(q[1]-P.cy)*ky])); if(p.length<3||p.length>400) return;                          /* was 80: a high school's outline has ~90 corners and got no windows or lights at all */
   if(area(p)<0) p.reverse();
   const A=area(p), house=P.h<=12&&A>=25&&A<=450, seed=(Math.floor(P.cx*1e5)^Math.floor(P.cy*1e5))>>>0, out=res.fac=[];
   if(!house&&A<80) return;                                        // sheds and kiosks: plain
@@ -419,11 +430,22 @@ function facades(P,kx,ky,res,rich){
     const ring=[[a[0]+E.nx*o0,a[1]+E.ny*o0],[z[0]+E.nx*o0,z[1]+E.ny*o0],[z[0]+E.nx*o1,z[1]+E.ny*o1],[a[0]+E.nx*o1,a[1]+E.ny*o1]].map(toLL); ring.push(ring[0]);
     const pr={c,b:+b.toFixed(2),h:+h.toFixed(2)}; if(lit!=null) pr.lit=lit; (arr||out).push({type:'Feature',properties:pr,geometry:{type:'Polygon',coordinates:[ring]}}); };
   const wins=[];                                                   // openings for the room inside (js/enh/walk.js cuts them in its walls)
-  const window1=(E,s,w,b,h,k,tc)=>{ wins.push({ei:p.indexOf(E.a),s0:+(s-w/2).toFixed(2),s1:+(s+w/2).toFixed(2),b:+b.toFixed(2),h:+h.toFixed(2)}); if(frames) put(E,s-w/2-.08,s+w/2+.08,.01,.05,b-.08,h+.08,tc||FRAME);
-    put(E,s-w/2,s+w/2,.02,.08,b,h,GLASS,hash(seed,k)<(house?.45:.7)?1:0); };
+  const window1=(E,s,w,b,h,k,tc)=>{ wins.push({ei:E.ei,s0:+(s-w/2+E.off).toFixed(2),s1:+(s+w/2+E.off).toFixed(2),b:+b.toFixed(2),h:+h.toFixed(2)}); if(frames) put(E,s-w/2-.08,s+w/2+.08,-.04,.06,b-.08,h+.08,tc||FRAME);
+    put(E,s-w/2,s+w/2,-.04,.03,b,h,GLASS,hash(seed,k)<(house?.45:.7)?1:0); };
+  /* walls shared with a neighbouring building (a Meijer is several map pieces; shops and townhouses share party walls)
+     are inside, not outside: nothing is drawn on them. Each edge is cut to the stretches that open to the outside. */
+  const nb=[]; { const m=1.5/111320;
+    for(const Q of R.parts||[]){ if(Q===P||Q.b0>0||(Q.cx===P.cx&&Q.cy===P.cy)) continue; const b=Q.bb; if(b[2]<P.bb[0]-m||b[0]>P.bb[2]+m||b[3]<P.bb[1]-m||b[1]>P.bb[3]+m) continue;
+      const r=Q.ring.slice(0,-1).map(q=>[(q[0]-P.cx)*kx,(q[1]-P.cy)*ky]); let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const q of r){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
+      nb.push({r,x0,y0,x1,y1}); } }
+  const shared=(x,y)=>{ for(const N of nb) if(x>=N.x0&&x<=N.x1&&y>=N.y0&&y<=N.y1&&inside(N.r,x,y)) return true; return false; };
   const edges=[];
   for(let i=0;i<p.length;i++){ const a=p[i], b=p[(i+1)%p.length], ex=b[0]-a[0], ey=b[1]-a[1], L=Math.hypot(ex,ey);
-    if(L<2.4) continue; edges.push({a,L,ux:ex/L,uy:ey/L,nx:ey/L,ny:-ex/L}); }   // outward normal (outline runs counter-clockwise)
+    if(L<2.4) continue; const ux=ex/L, uy=ey/L, nx=ey/L, ny=-ex/L;                    // outward normal (outline runs counter-clockwise)
+    if(!nb.length){ edges.push({a,L,ux,uy,nx,ny,ei:i,off:0}); continue; }
+    const n=Math.max(1,Math.ceil(L/.5)); let r0=null;                                  // walk along the wall: is a point just outside it inside a neighbour?
+    for(let k=0;k<=n;k++){ const t=Math.min(L,k*L/n), open=k<n&&!shared(a[0]+ux*(t+L/n/2)+nx*.35,a[1]+uy*(t+L/n/2)+ny*.35);
+      if(open&&r0===null) r0=t; if(!open&&r0!==null){ if(t-r0>=2.4) edges.push(r0<.01&&t>L-.01?{a,L,ux,uy,nx,ny,ei:i,off:0}:{a:[a[0]+ux*r0,a[1]+uy*r0],L:t-r0,ux,uy,nx,ny,ei:i,off:r0}); r0=null; } } } 
   if(!edges.length) return;
   if(edges.length>90){ for(let i=edges.length-1;i>=0;i--) if(edges[i].L<8) edges.splice(i,1); if(!edges.length) return; }   // very ragged outline: only the long walls
   /* accent lights (owner 2026-11-23): schools and commercial buildings, every one lit after dark. A fixture is a small
@@ -449,12 +471,12 @@ function facades(P,kx,ky,res,rich){
     gpt(E,s,zt-.1,1.4,0); };
   // the doors you can walk through (js/enh/walk.js): local metres around (cx,cy), on the outline p (counter-clockwise)
   const doors=[], garages=[]; let dn=0;
-  const door=(E,s0,s1)=>{ const d={ei:p.indexOf(E.a),s0,s1,x0:E.a[0]+E.ux*s0,y0:E.a[1]+E.uy*s0,x1:E.a[0]+E.ux*s1,y1:E.a[1]+E.uy*s1,nx:E.nx,ny:E.ny,dk:seed*8+(dn++)};
+  const door=(E,s0,s1)=>{ const d={ei:E.ei,s0:s0+E.off,s1:s1+E.off,x0:E.a[0]+E.ux*s0,y0:E.a[1]+E.uy*s0,x1:E.a[0]+E.ux*s1,y1:E.a[1]+E.uy*s1,nx:E.nx,ny:E.ny,dk:seed*8+(dn++)};
     doors.push(d); return d.dk; };
   // glass entrance doors (stores, lobbies): dark frame, two glass leaves, push bars
   const entrance=(E,s)=>{ const dk=door(E,s-.95,s+.95);
-    putD(E,s-.95,s+.95,.085,.105,0,2.45,'#3b4048',dk);
-    for(const z of [-1,1]){ putD(E,z<0?s-.87:s+.05,z<0?s-.05:s+.87,.1,.125,.06,2.37,GLASS,dk); putD(E,z<0?s-.4:s+.1,z<0?s-.1:s+.4,.125,.16,1,1.06,'#c7ccd1'); } };
+    putD(E,s-.95,s+.95,-.04,.05,0,2.45,'#3b4048',dk);
+    for(const z of [-1,1]){ putD(E,z<0?s-.87:s+.05,z<0?s-.05:s+.87,-.02,.03,.06,2.37,GLASS,dk); putD(E,z<0?s-.4:s+.1,z<0?s-.1:s+.4,.03,.07,1,1.06,'#c7ccd1'); } };
   const putD=(E,s0,s1,o0,o1,b,h,c,dk)=>{ put(E,s0,s1,o0,o1,b,h,c); if(dk!=null) out[out.length-1].properties.dk=dk; };
   if(P.f.id!=null) res.bld={key:P.cx.toFixed(6)+','+P.cy.toFixed(6),id:P.f.id,cx:P.cx,cy:P.cy,kx,ky,p,h:P.h,house,doors,garages,bb:P.bb,zone,area:A,win:wins};
   const sd=(window.STORES&&STORES.list.length&&STORES.frontDir(P.cx,P.cy))||streetDir(P);   // a Meijer faces its parking lot (js/enh/stores.js)
@@ -485,14 +507,14 @@ function facades(P,kx,ky,res,rich){
       // a garage you can open (js/enh/garage.js): the dark inside shows behind the panels as they roll up
       const gk=seed*4+1, a=[E.a[0]+E.ux*s0,E.a[1]+E.uy*s0], mx=a[0]+E.ux*gw/2, my=a[1]+E.uy*gw/2;
       let depth=0; for(const q of p) depth=Math.max(depth,-((q[0]-mx)*E.nx+(q[1]-my)*E.ny));
-      garages.push({ei:p.indexOf(E.a),s0,s1:s0+gw,x0:a[0],y0:a[1],x1:a[0]+E.ux*gw,y1:a[1]+E.uy*gw,nx:E.nx,ny:E.ny,gk,col:gcol,D:Math.max(4,Math.min(7.5,depth-.3))});
-      put(E,s0+.05,s0+gw-.05,.004,.016,0,GT-.05,'#141518');
+      garages.push({ei:E.ei,s0:s0+E.off,s1:s0+gw+E.off,x0:a[0],y0:a[1],x1:a[0]+E.ux*gw,y1:a[1]+E.uy*gw,nx:E.nx,ny:E.ny,gk,col:gcol,D:Math.max(4,Math.min(7.5,depth-.3))});
+      put(E,s0+.05,s0+gw-.05,-.04,-.02,0,GT-.05,'#141518');
       // four sectional panels with a thin dark joint between them; some doors have a row of windows in the top panel
       const ph=GT/4, wins=fine&&hash(seed,73)<.35, rp=(f)=>Object.assign(out[out.length-1].properties,{gk,gr:1.95,gt:GT});
-      for(let k=0;k<4;k++){ put(E,s0,s0+gw,.02,.1,k*ph+(k?.012:0),(k+1)*ph-.012,gcol); rp();
-        if(fine&&!(wins&&k===3)) for(const z of [k*ph+ph*.22,k*ph+ph*.78-.04]){ put(E,s0+.12,s0+gw-.12,.1,.112,z,z+.04,shade(gcol,-.12)); rp(); } }   // raised panel edges
-      if(wins){ const n=gw>4?8:4, ww=(gw-.5)/n; for(let i=0;i<n;i++){ const x=s0+.25+i*ww; put(E,x+.06,x+ww-.06,.1,.115,3*ph+.14,3*ph+.4,GLASS); rp(); } }
-      if(fine){ put(E,s0-.14,s0,.0,.06,0,GT+.12,trim); put(E,s0+gw,s0+gw+.14,.0,.06,0,GT+.12,trim); put(E,s0-.14,s0+gw+.14,.0,.06,GT,GT+.12,trim);   // trim round the opening
+      for(let k=0;k<4;k++){ put(E,s0,s0+gw,-.04,.06,k*ph+(k?.012:0),(k+1)*ph-.012,gcol); rp();
+        if(fine&&!(wins&&k===3)) for(const z of [k*ph+ph*.22,k*ph+ph*.78-.04]){ put(E,s0+.12,s0+gw-.12,.06,.072,z,z+.04,shade(gcol,-.12)); rp(); } }   // raised panel edges
+      if(wins){ const n=gw>4?8:4, ww=(gw-.5)/n; for(let i=0;i<n;i++){ const x=s0+.25+i*ww; put(E,x+.06,x+ww-.06,.06,.075,3*ph+.14,3*ph+.4,GLASS); rp(); } }
+      if(fine){ put(E,s0-.14,s0,-.04,.06,0,GT+.12,trim); put(E,s0+gw,s0+gw+.14,-.04,.06,0,GT+.12,trim); put(E,s0-.14,s0+gw+.14,-.04,.06,GT,GT+.12,trim);   // trim round the opening
       }
       for(const x of [s0-.42,s0+gw+.42]) lamp(E,x,1.95,1.2,3.2);                                                     // a light on each side of the garage door
       occupy(E,s0-.6,s0+gw+.6); }
@@ -500,10 +522,10 @@ function facades(P,kx,ky,res,rich){
     { const E=front, fr=(busy.get(E)||[])[0], span=fr?(fr[0]>E.L/2?[.8,fr[0]-.3]:[fr[1]+.3,E.L-.8]):[.8,E.L-.8];
       if(span[1]-span[0]>=1.6){ const s=(span[0]+span[1])/2+(fr?0:(hash(seed,41)-.5)*E.L*.3);
         const dk=door(E,s-.6,s+.6), dc=DORS(seed);
-        if(frames){ put(E,s-.62,s+.62,.0,.06,0,2.32,trim); put(E,s-.74,s+.74,.0,.08,2.32,2.44,trim); }       // casing and head trim
-        putD(E,s-.48,s+.48,.02,.09,0,2.1,dc,dk);
-        if(fine){ for(const z of [[.25,.95],[1.15,1.85]]) for(const x of [[-.38,-.06],[.06,.38]]) put(E,s+x[0],s+x[1],.09,.105,z[0],z[1],shade(dc,.14));   // four raised panels
-          put(E,s+.3,s+.36,.09,.15,.98,1.04,'#c9a64a');                                                                      // brass knob
+        if(frames){ put(E,s-.62,s+.62,-.04,.06,0,2.32,trim); put(E,s-.74,s+.74,-.04,.08,2.32,2.44,trim); }       // casing and head trim
+        putD(E,s-.48,s+.48,-.04,.05,0,2.1,dc,dk);
+        if(fine){ for(const z of [[.25,.95],[1.15,1.85]]) for(const x of [[-.38,-.06],[.06,.38]]) put(E,s+x[0],s+x[1],.05,.065,z[0],z[1],shade(dc,.14));   // four raised panels
+          put(E,s+.3,s+.36,.05,.11,.98,1.04,'#c9a64a');                                                                      // brass knob
           put(E,s-.9,s+.9,.0,1.15,0,.17,'#c4c1ba'); }                                                                        // concrete stoop
         lamp(E,s+.9,1.9,1.4,3.6);                                                                                          // porch light, matching the garage ones
         occupy(E,s-1,s+1.15); } }
@@ -512,7 +534,7 @@ function facades(P,kx,ky,res,rich){
       for(let i=1;i<=n;i++){ const s=i*step, w=big?1.4:.95, b=f*fh+.9, h=b+(big?1.4:1.25);
         if(f===0&&!free(E,s-w/2-(shut?.55:0),s+w/2+(shut?.55:0))) continue;
         window1(E,s,w,b,h,k++,trim);
-        if(fine){ put(E,s-.02,s+.02,.08,.1,b,h,trim); put(E,s-w/2,s+w/2,.08,.1,(b+h)/2-.02,(b+h)/2+.02,trim);          // muntins
+        if(fine){ put(E,s-.02,s+.02,.03,.05,b,h,trim); put(E,s-w/2,s+w/2,.03,.05,(b+h)/2-.02,(b+h)/2+.02,trim);          // muntins
           put(E,s-w/2-.14,s+w/2+.14,.0,.15,b-.14,b-.06,'#d9dbdc');                                                         // sill
           if(shut&&E===front&&!big) for(const z of [-1,1]){ const x=s+z*(w/2+.13); put(E,Math.min(x,x+z*.42),Math.max(x,x+z*.42),.02,.07,b-.02,h+.02,shut); } } } }
     if(res.bld) res.bld.yard=yardSpot(P,front,sd,free,seed,kx,ky);    // where a snowman could stand (js/enh/snowmen.js)
@@ -529,8 +551,8 @@ function facades(P,kx,ky,res,rich){
   } else if(P.h<=12){
     // storefront: glass band on the street side (the middle 60% of very long walls), mullions every ~1.6 m
     const E=front, s0=E.L>40?E.L*.2:1, s1=E.L>40?E.L*.8:E.L-1;
-    if(s1-s0>2){ put(E,s0,s1,.02,.08,.3,2.9,GLASS,hash(seed,5)<.8?1:0); wins.push({ei:p.indexOf(E.a),s0:+s0.toFixed(2),s1:+s1.toFixed(2),b:.3,h:2.9});
-      if(frames) for(let s=s0;s<=s1+.01;s+=1.6) put(E,s-.05,s+.05,.08,.12,.3,2.9,'#b9bec4');
+    if(s1-s0>2){ put(E,s0,s1,-.04,.03,.3,2.9,GLASS,hash(seed,5)<.8?1:0); wins.push({ei:E.ei,s0:+(s0+E.off).toFixed(2),s1:+(s1+E.off).toFixed(2),b:.3,h:2.9});
+      if(frames) for(let s=s0;s<=s1+.01;s+=1.6) put(E,s-.05,s+.05,.03,.08,.3,2.9,'#b9bec4');
       put(E,s0-.2,s1+.2,.02,.5,2.9,3.2,'#d6d8da');                 // canopy fascia above the glass
       if(s1-s0>=2.4) entrance(E,(s0+s1)/2); }                       // the way in, in the middle of the glass
     for(const F of edges){ if(F===E||F.L<12||hash(seed,F.L|0)<.5) continue;   // a few high windows on some side walls
@@ -545,7 +567,7 @@ function facades(P,kx,ky,res,rich){
     // taller buildings: a ribbon of windows on every floor of every wall
     const floors=Math.min(12,Math.max(2,Math.round(P.h/3.6))), fh=P.h/floors;
     for(const E of edges){ if(E.L<3) continue;
-      for(let f=0;f<floors;f++) put(E,.6,E.L-.6,.02,.08,f*fh+.9,f*fh+.9+Math.min(1.6,fh-1.2),GLASS,hash(seed+f,E.L|0)<.65?1:0); }
+      for(let f=0;f<floors;f++) put(E,.6,E.L-.6,-.04,.03,f*fh+.9,f*fh+.9+Math.min(1.6,fh-1.2),GLASS,hash(seed+f,E.L|0)<.65?1:0); }
     if(front.L>=3) entrance(front,front.L/2);                       // a lobby entrance on the street side
     if(front.L>=6){ const mid=front.L/2, gn=Math.min(12,Math.max(2,Math.floor(front.L/4.5))), st=(front.L-1.6)/gn;   // uplights along the base, a light each side of the lobby
       for(let i=0;i<=gn;i++){ const s=.8+i*st; if(Math.abs(s-mid)<1.4) continue; accent(front,s,.2,{up:4,sh:.55,bw:.1,ws:[.3,.7,1.2,1.8]}); }

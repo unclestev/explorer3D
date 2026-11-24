@@ -174,9 +174,9 @@ function drawDoors(){ const feats=[];
     const put=(s0,s1,o0,o1,b,h,c)=>{ const a=[E.a[0]+E.ux*s0,E.a[1]+E.uy*s0], z=[E.a[0]+E.ux*s1,E.a[1]+E.uy*s1];
       const ring=[[a[0]+E.nx*o0,a[1]+E.ny*o0],[z[0]+E.nx*o0,z[1]+E.ny*o0],[z[0]+E.nx*o1,z[1]+E.ny*o1],[a[0]+E.nx*o1,a[1]+E.ny*o1]].map(toLL); ring.push(ring[0]);
       feats.push({type:'Feature',properties:{c,b,h},geometry:{type:'Polygon',coordinates:[ring]}}); };
-    put(sm-1.15,sm+1.15,.06,.1,0,2.65,'#3b4048');
-    for(const z of [-1,1]){ put(z<0?sm-.95:sm+.03,z<0?sm-.03:sm+.95,.1,.13,.04,2.45,'#27313e'); put(z<0?sm-.45:sm+.1,z<0?sm-.1:sm+.45,.13,.17,1,1.06,'#c7ccd1'); }
-    put(sm-1.6,sm+1.6,.06,.9,2.65,2.85,'#c9ccd0'); }                                                     // a little canopy edge over them
+    put(sm-1.15,sm+1.15,-.04,.05,0,2.65,'#3b4048');
+    for(const z of [-1,1]){ put(z<0?sm-.95:sm+.03,z<0?sm-.03:sm+.95,-.02,.03,.04,2.45,'#27313e'); put(z<0?sm-.45:sm+.1,z<0?sm-.1:sm+.45,.03,.07,1,1.06,'#c7ccd1'); }
+    put(sm-1.6,sm+1.6,-.04,.9,2.65,2.85,'#c9ccd0'); }                                                     // a little canopy edge over them
   safe('stores',()=>{ const src=map.getSource('stores'); if(src) src.setData({type:'FeatureCollection',features:feats}); }); }
 function layers(){ safe('stores layer',()=>{ if(map.getSource('stores')) return;
   map.addSource('stores',{type:'geojson',data:{type:'FeatureCollection',features:[]},maxzoom:19,tolerance:0});
