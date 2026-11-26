@@ -341,5 +341,5 @@ function hiddenGeo(a,camX,camY,camH){ const dx=camX-a.px, dy=camY-a.py, D=Math.h
   for(let s=4;s<Math.min(D,260);s+=7){ const qx=a.px+ux*s, qy=a.py+uy*s, lng=qx/MLNG, lat=qy/MLAT, line=1+(camH-1)*s/D;
     for(const f of geoBlocks(lng,lat)){ const pr=f.properties||{}, h=+(pr.render_height??pr.height??6)||6; if(h>line&&contains(f.geometry,lng,lat)) return true; } }
   return false; }
-window.TRAFFIC={occMesh:()=>OCC.mesh,occRebuild:()=>{ OCC.dirty=true; OCC.job=null; safe('building blockers',buildOcc); },rescale:(r)=>{ for(const sg of T.segs||[]) sg.v*=r; for(const a of T.agents||[]) a.v*=r; },hidden:(o,x,y,h)=>{ try{ return hiddenByBuilding(o,x,y,h); }catch(e){ return false; } }, frame:(dt)=>{ try{ return frame(dt); }catch(e){ console.warn('traffic',e); return false; } }, state:T, setOn};
+window.TRAFFIC={buildGraph:()=>safe('traffic graph',build), occMesh:()=>OCC.mesh,occRebuild:()=>{ OCC.dirty=true; OCC.job=null; safe('building blockers',buildOcc); },rescale:(r)=>{ for(const sg of T.segs||[]) sg.v*=r; for(const a of T.agents||[]) a.v*=r; },hidden:(o,x,y,h)=>{ try{ return hiddenByBuilding(o,x,y,h); }catch(e){ return false; } }, frame:(dt)=>{ try{ return frame(dt); }catch(e){ console.warn('traffic',e); return false; } }, state:T, setOn};
 })();
