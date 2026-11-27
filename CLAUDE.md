@@ -90,6 +90,12 @@ Useful URL switches: `?hour=13&wx=0` (fixed daylight, clear), `?hour=22&wx=0` (n
 
 Start somewhere specific: set localStorage `ydTp` = `{"name":"…","lat":…,"lng":…}` and `ydStartOnce` = `tp`, reload.
 
+### Working without the G29 (the usual case on the PC Claude Code runs on)
+- Assume **no wheel is attached**. Don't plan live wheel/FFB tests; mark anything that touches `wheel.js`, `ffb.js` or the G29 drawing/button numbers as **"untested on the real wheel"** in the commit and the summary, and queue it for the next time he plugs it in.
+- Test wheel logic with fakes instead: node `vm` with `controls.js` + `wheel.js` and fake gamepads (addendum 6), or in a page override `navigator.getGamepads` and fire `gamepadconnected`. Feed fake axes (steering is axis 0, −1..1; pedals are calibrated at run time from each axis's rest/full values, so feed a rest value first, then a press) and check actions, steer lock and shifter gears.
+- Drive by hand with keyboard or the Xbox controller; steering feel (`steerLock(v)`, `feel.js`) is checked with simulated steering values at realistic pedal levels.
+- WebHID force feedback can't be exercised without the hardware; keep FFB changes small, guarded (a failure must never stop the game), and call them out for him to try.
+
 ### Checks before any commit
 - `bash tools/check.sh` — `node --check` on every JS file + checks that every JS/CSS file changed vs `origin/main` has a bumped `?v=` in index.html.
 - Physics/feel changes: simulate at realistic pedal values (a thumb press is ~0.5–0.7 gas), not only full pedal.
@@ -178,4 +184,5 @@ Load order (index.html): errors.js → update.js → **game.js** → `js/enh/` m
 - The README's module list is a little behind (e.g. it still says "battery saver"); keep it updated when adding modules.
 
 ## 8. Change log
+- 2026-11-27 — Added "Working without the G29" to §4 (wheel not usually attached; use fake-gamepad tests, flag wheel work as untested on hardware).
 - 2026-11-27 — Moved project management from claude.ai project notes to Claude Code: this CLAUDE.md, archived notes in `docs/claude-notes/`, `tools/check.sh`, `.claude/` settings and commands.
