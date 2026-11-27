@@ -6,7 +6,7 @@
      weather (?hour=13&wx=0), so every device drives exactly the same streets in the same light.
    - "Here" drives from where the car is now, in the current time and weather.
    The drive: wait for the map, roads and buildings to load, park 6 s, then drive the same route twice at 25 mph on the
-   speedo, first with 3D terrain off, then with it on (skipped in battery saver, where terrain is always off). The
+   speedo, first with 3D terrain off, then with it on (skipped on Graphics Low, which keeps terrain off: game.js POWER = Low). The
    route is built from the road network itself (js/enh/traffic.js graph): from the nearest road, mostly straight on at
    intersections with a fixed pattern of turns, never the same road twice, about 2 km. The car is placed on the road
    centre line each frame (no steering, collisions or physics), so the work is the same on every machine.
@@ -32,7 +32,7 @@ function buildRoute(){
   const x0=S.lng*MLNG, y0=S.lat*MLAT; let n=null, bd=1e9;
   for(const k of T.nodes){ if(!k.out.length) continue; const d=Math.hypot(k.x-x0,k.y-y0); if(d<bd){ bd=d; n=k; } }
   if(!n||bd>150) return null;
-  const R=rng(20261125), used=new Set(), pts=[[n.x,n.y]]; let len=0, inc=null, turns=0;
+  const R=rng(20261125), used=new Set(), pts=[[n.x,n.y]]; let len=0, inc=null, turns=0, straight=0, gap=300+R()*200;
   const ang=(s)=>Math.atan2(s.ux,s.uy);
   for(let guard=0;guard<4000&&len<LEN;guard++){
     let c=n.out.filter(s=>!used.has(s)&&s.cls!=='motorway'&&!(inc&&s.b===inc.a));
@@ -43,9 +43,9 @@ function buildRoute(){
     if(!inc||c.length===1) pick=c[0];
     else { const h=ang(inc), turn=s=>Math.abs(((ang(s)-h+3*Math.PI)%(2*Math.PI))-Math.PI);
       c.sort((a,b)=>turn(a)-turn(b));
-      const corner=n.deg>=3&&R()<.3; turns+=corner?1:0;
-      pick=corner&&c.length>1?c[1+Math.floor(R()*(c.length-1))]:c[0]; }
-    used.add(pick); const rev=pick.b.out.find(s=>s.b===pick.a); if(rev) used.add(rev);
+      const corner=straight>=gap&&c.length>1&&turn(c[1])>.6; if(corner){ turns++; straight=0; gap=300+R()*200; }   /* a real side road, not a bend */
+      pick=corner?c[1+Math.floor(R()*(c.length-1))]:c[0]; }
+    straight+=pick.len; used.add(pick); const rev=pick.b.out.find(s=>s.b===pick.a); if(rev) used.add(rev);
     pts.push([pick.b.x,pick.b.y]); len+=pick.len; inc=pick; n=pick.b; }
   if(len<600) return null;
   const cum=[0]; for(let i=1;i<pts.length;i++) cum.push(cum[i-1]+Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]));
@@ -57,7 +57,7 @@ function place(d){ const p=at(d), a=at(d-10), b=at(d+10);
   S.lng=p[0]/MLNG; S.lat=p[1]/MLAT; S.hdg=(Math.atan2(b[0]-a[0],b[1]-a[1])*180/Math.PI+360)%360; }
 
 /* ---------- measuring ---------- */
-function freshAcc(){ return {n:0,ran:0,iv:[],cost:0,costMax:0,map:0,mapN:0,gl:0,tri:0,glN:0,three:0,threeTri:0,threeN:0,layers:{},t0:performance.now(),last:0}; }
+function freshAcc(){ return {secs:{},n:0,ran:0,iv:[],cost:0,costMax:0,map:0,mapN:0,gl:0,tri:0,glN:0,three:0,threeTri:0,threeN:0,layers:{},t0:performance.now(),last:0}; }
 function wrap(){
   if(B.restore) return; const undo=[];
   const q=window.QUAL; if(q){ const f=q.frame; q.frame=function(now,ran,cost){ f(now,ran,cost); if(B.acc&&B.phase.startsWith('run')) safe('bench frame',()=>sample(now,ran,cost)); }; undo.push(()=>{ q.frame=f; }); }
@@ -72,6 +72,17 @@ function wrap(){
       const L=[...arguments].find(a=>a&&typeof a.id==='string'&&typeof a.type==='string'), t=performance.now();
       try{ return rl.apply(this,arguments); } finally{ if(L){ A.layers[L.id]=(A.layers[L.id]||0)+performance.now()-t; } } };
     undo.push(()=>{ P.renderLayer=rl; }); }
+  /* what makes the slow frames: each piece of a frame (and every background job) is timed; the report lists the
+     ones that ever took over 15 ms, with their worst time and how often */
+  const timeIt=(name,o,k)=>{ const f=o&&o[k]; if(typeof f!=='function'||f.__bench) return;
+    const w=function(){ const A=B.acc; if(!A||!B.phase.startsWith('run')) return f.apply(this,arguments); const t=performance.now();
+      try{ return f.apply(this,arguments); } finally{ const d=performance.now()-t, e=A.secs[name]||(A.secs[name]={max:0,n15:0,sum:0}); e.sum+=d; if(d>e.max) e.max=d; if(d>15) e.n15++; } };
+    w.__bench=1; o[k]=w; undo.push(()=>{ o[k]=f; }); };
+  for(const k of ['buildDecor','rebuildLandCache','updateHouseFilter','updatePlace','updateCompass','updateRoadX','nearRoadGeo','updateFx','landHere','applyHides']) timeIt(k,window,k);
+  timeIt('three.js render',renderer,'render'); timeIt('camera move',map,'jumpTo'); timeIt('traffic',window.TRAFFIC,'frame');
+  if(window.COCKPIT) timeIt('cockpit',COCKPIT,'render');
+  FRAME_HOOKS.forEach((f,i)=>{ if(f!==hook) timeIt('frame hook '+(f.name||i),FRAME_HOOKS,i); });
+  for(const t of YD.ticks||[]) timeIt('job '+(t.fn.name||'?'),t,'fn');
   B.restore=()=>{ for(const u of undo) try{ u(); }catch(e){} B.restore=null; };
 }
 function sample(now,ran,cost){ const A=B.acc; A.n++;
@@ -85,6 +96,7 @@ function summarise(name,A){ const sec=(performance.now()-A.t0)/1000, f=A.mapN||1
   return {name,sec:+sec.toFixed(1),fps:+(A.ran/sec).toFixed(1),p50:+pct(A.iv,.5).toFixed(1),p95:+pct(A.iv,.95).toFixed(1),p99:+pct(A.iv,.99).toFixed(1),
     worst:+Math.max(0,...A.iv).toFixed(0),stut:A.iv.filter(v=>v>50).length,frz:A.iv.filter(v=>v>100).length,
     game:+(A.ran?A.cost/A.ran:0).toFixed(1),gameMax:+A.costMax.toFixed(0),map:+(A.mapN?A.map/A.mapN:0).toFixed(1),
+    spikes:Object.entries(A.secs).filter(([k,v])=>v.max>15).sort((a,b)=>b[1].max-a[1].max).slice(0,10).map(([k,v])=>k+' '+v.max.toFixed(0)+' ms'+(v.n15>1?' ('+v.n15+'x)':'')),
     draws:Math.round(A.gl/f),tris:Math.round(A.tri/f),three:Math.round(A.threeN?A.three/A.threeN:0),threeTri:Math.round(A.threeN?A.threeTri/A.threeN:0),top}; }
 
 /* ---------- the run ---------- */
@@ -142,13 +154,14 @@ function stop(msg){ cleanup(); if(B.el){ B.el.remove(); B.el=null; } if(msg) toa
 function text(r){ const D=r.dev, L=['Yorkville Driver benchmark · '+D.when+' · build '+D.build,
     'Where: '+D.where+' · route '+D.route,
     'GPU: '+D.gpu, 'Device: '+D.os+' · '+D.cores+' cores'+(D.mem?' · '+D.mem+' GB':'')+' · screen '+D.screen+' · map canvas '+D.canvas,
-    'Graphics: '+D.gfx+' · sharpness '+D.sharp+(D.cap30?' · 30 fps cap':'')+(D.saver?' · battery saver':'')+' · traffic '+(D.traffic?'on':'off')+' · '+D.view+' view',
+    'Graphics: '+D.gfx+' · sharpness '+D.sharp+(D.cap30?' · 30 fps cap':'')+' · traffic '+(D.traffic?'on':'off')+' · '+D.view+' view',
     'Browser: '+D.ua];
   for(const p of r.phases) L.push('', '['+p.name+'] '+p.fps+' fps · frame ms median '+p.p50+' / 95% '+p.p95+' / 99% '+p.p99+' / worst '+p.worst,
     '  stutters >50ms: '+p.stut+' · freezes >100ms: '+p.frz+' · game code '+p.game+' ms (max '+p.gameMax+') · map draw '+p.map+' ms',
     '  map: '+p.draws+' draw calls, '+Math.round(p.tris/1000)+'k triangles · car layer: '+p.three+' calls, '+Math.round(p.threeTri/1000)+'k triangles',
-    '  slowest map layers (ms/frame): '+p.top.join(', '));
-  if(r.dev.saver) L.push('','(Battery saver keeps terrain off, so there is no terrain-on pass.)');
+    '  slowest map layers (ms/frame): '+p.top.join(', '),
+    '  slow pieces (>15 ms): '+(p.spikes.length?p.spikes.join(', '):'none'));
+  if(r.dev.saver) L.push('','(Graphics Low keeps terrain off, so there is no terrain-on pass. Pick Medium or High in ⚙️ Graphics to test terrain.)');
   return L.join('\n'); }
 function grade(p){ return p.fps>=50&&p.stut<5?'🟢 smooth':p.fps>=28&&p.stut<20?'🟡 playable':'🔴 struggling'; }
 let lastText='';
