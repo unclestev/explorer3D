@@ -1,0 +1,23 @@
+# Addendum 17 — real grass, lot islands, wall textures on every building, render savings (2026-11-23)
+
+Owner asked: grass texture for grassy areas, mowed grass in front of houses, grass on green space in parking lots, siding textures on all buildings (schools brick), and whether we draw more than can be seen / any optimizations. Branch `grass-siding` (test branch `claude-test-grass`, last 5b110bc), based on main 15c546b. NOT based on `snowmen` (addendum 16) — both touch buildings.js (different spots: snowmen adds `yardSpot`/`streetDir().d`; this adds `otherLook`/`zones`/`zoneAt` and the `pat` line in `buildWalls`) and both bump buildings.js ?v= (here 16) → merge and set ?v= past both. Files: textures.js ?v=14, game.js ?v=97, buildings.js ?v=16, parking.js ?v=5.
+
+## Why the grass looked flat
+- `lu-tint` (game.js, from before textures existed) laid 35% beige (#ebe4d8) over every residential polygon, pink over retail, grey over others — on top of the textures. Now filtered to classes with no ground texture (residential, commercial, retail, industrial, parking, pitch, track, stadium, cemetery, school, college, university, **education**, kindergarten, hospital, playground, park, railway, garages excluded). OpenMapTiles here also has class `education` (school grounds) — easy to miss.
+- `tx-grass` / `tx-lawn` redrawn (textures.js): at chase zoom a 128 px tile ≈ 14 m, so blades vanish; clumps (4–14 px blots) of several greens over dense 1 px grain read as grass. Lawn adds 16 px (~1.8 m) mowing stripes at ±8% and a few clover flecks.
+- Retail / commercial landuse → `tx-lawn` (was `tx-paved`): the ground between mapped lots and buildings is landscaping; industrial/railway/garages stay paved.
+
+## Lot islands (parking.js)
+- Vector tiles drop small polygons, so islands come from Overpass in the same query as lots: `landuse~grass|flowerbed`, `leisure=garden`. `addGreen` → `P.gRaw`; `sortGreen()` keeps polygons ≤ 6000 m² whose centroid / bbox middle / first vertex is in a lot (a big grass area with a lot inside must not cover the lot). Layers `pk-grass` (tx-lawn) + `pk-gcurb` (light curb), between `pk-padtx` and `pk-curb`; stall lines skip islands. Cache key now `ydPark2:` (elements carry `g:1` for green). Around Kendall Marketplace only 7 such areas are mapped — the retail-lawn change does most of the visible work.
+
+## Wall textures for every nearby building (buildings.js)
+- `otherLook(seed,h,zone)` → pattern id for non-houses: school → brick (`hw-br*`); towers >30 m glass curtain wall `cw-gl*`; 12–30 m brick or precast panels with window band `cw-pc*`; low industrial ribbed metal `cw-mt*` (60%) or block; other low buildings brick 35% / split-face block `cw-bk*` 35% / stucco-EIFS `cw-st*` 30%. Images drawn in `wallImages()` (32 px, pixelRatio 1). All walls now carry `pat` unless battery saver (`POWER`).
+- School detection `zoneAt(x,y,A,kx,ky)`: landuse school/college/university/kindergarten/education polygons (`zones()`, refreshed each build) OR, for buildings > 500 m², a school POI (class school/college/university/kindergarten) within max(40 m, 0.8·√A) — Yorkville Grade School's grounds aren't mapped as landuse but the POI is. Checked: its 1,831 m² building → `hw-br6`.
+- Far buildings (beyond the walls radius, ~260–380 m) keep flat colours on purpose: texture there is sub-pixel and only shimmers.
+
+## Render savings (measured, Kendall Marketplace, same view, 20 frames)
+Wrap `map.painter.renderLayer` (per-layer CPU ms) and `gl.drawElements` (draw calls / triangles) — snippet in this session; handy for any future "is it expensive?" question.
+- Before: 1,818 draws, 1.07 M triangles, ~73 ms layer CPU per frame (pane hidden → absolute ms inflated). After (with the new textures): 1,399 draws (−23%), 0.74 M triangles (−31%), ~57 ms.
+- `lc-detect` / `lu-detect` (opacity .01, only for the screen "what land am I on" check) cost ~230k triangles a frame. They're only needed when `QGEO()` is false (terrain off and not cockpit); game.js now sets them visibility none otherwise (checked every HUD update, since satellite.js restore can re-show them). The screen check's park layer is now `tx-park`.
+- Style fills fully covered by our opaque textures stop at zoom 13 (`setLayerZoomRange`, textures.js `UNDER_TX`): landuse_residential, landcover_grass/wood/wetland/sand, park, landuse_pitch/track/cemetery/school/hospital. Zoomed-out map unchanged.
+- Big remaining costs, not changed: `hillshade` (High only, ~4.6 ms), `lc-farm`, water drawn 3× (water, tx-water, water-shore), and the per-terrain-tile overhead of ~190 layers. Merging layers is the next lever if needed.

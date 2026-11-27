@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --check:*)",
+      "Bash(bash tools/check.sh:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git fetch:*)",
+      "Bash(git branch:*)",
+      "Bash(gh api repos/unclestev/explorer3D/pulls:*)",
+      "Bash(gh api repos/unclestev/explorer3D/actions/runs:*)",
+      "Bash(python3 -m http.server:*)"
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(gh api -X:*)",
+      "Bash(gh pr:*)",
+      "Bash(gh issue:*)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)"
+    ]
+  }
+}

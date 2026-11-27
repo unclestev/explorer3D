@@ -2,6 +2,8 @@
 
 Drive a Ford Explorer over a real map. Play it on GitHub Pages.
 
+Working on the code (people or Claude Code): read `CLAUDE.md` first. Project history: `docs/claude-notes/`.
+
 ## Files
 - `index.html` — page markup; loads everything below in order
 - `manifest.webmanifest`, `favicon.ico`, `icons/` — app name and icons (Yorkville Foxes logo) for the home-screen app and browser tab
